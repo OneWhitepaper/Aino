@@ -13,16 +13,10 @@
 
 import { useEffect, useState } from 'react'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertCircle, AlertTriangle, Check } from '@/lib/icons'
 
 import { deriveSyncStatusSummary, type SyncStatusSummary } from './sync-status'
-
-const LEVEL_STYLES: Record<SyncStatusSummary['level'], string> = {
-  ok: 'text-muted-foreground',
-  info: 'text-muted-foreground',
-  warn: 'text-amber-600 dark:text-amber-400',
-  error: 'text-destructive'
-}
 
 export function SyncStatusCard() {
   const [summary, setSummary] = useState<SyncStatusSummary | null>(null)
@@ -54,58 +48,55 @@ export function SyncStatusCard() {
     return null
   }
 
-  const tone = LEVEL_STYLES[summary.level]
+  const variant = summary.level === 'error' ? 'destructive' : summary.level === 'warn' ? 'warning' : 'default'
 
   return (
-    <div
-      className="grid gap-2 rounded-lg border border-border bg-muted/40 p-3 text-left"
+    <Alert
+      className="text-left"
       data-testid="sync-status-card"
+      role={summary.level === 'error' || summary.level === 'warn' ? 'alert' : 'status'}
+      variant={variant}
     >
-      <p className={`flex items-center gap-2 text-sm font-medium ${tone}`}>
-        {summary.level === 'error' || summary.level === 'warn' ? (
-          <AlertCircle aria-hidden className="size-4 shrink-0" />
-        ) : (
-          <Check aria-hidden className="size-4 shrink-0" />
+      {summary.level === 'error' || summary.level === 'warn' ? <AlertCircle aria-hidden /> : <Check aria-hidden />}
+      <AlertTitle>{summary.headline}</AlertTitle>
+      <AlertDescription className="text-[0.8125rem] leading-5">
+        {summary.needsFixing.length > 0 && (
+          <ul className="grid min-w-0 gap-1">
+            {summary.needsFixing.map(item => (
+              <li className="flex items-start gap-2" key={`needs-fixing-${item.plugin}`}>
+                <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0 text-(--ui-yellow)" />
+                <span className="min-w-0">
+                  {item.plugin}: {item.reason}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
-        {summary.headline}
-      </p>
 
-      {summary.needsFixing.length > 0 && (
-        <ul className="grid gap-1 text-xs text-foreground">
-          {summary.needsFixing.map(item => (
-            <li className="flex items-start gap-2" key={`needs-fixing-${item.plugin}`}>
-              <AlertTriangle aria-hidden className="mt-0.5 size-3 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="leading-snug">
-                {item.plugin}: {item.reason}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+        {summary.disabledPlugins.length > 0 && (
+          <ul className="grid min-w-0 gap-1">
+            {summary.disabledPlugins.map(item => (
+              <li className="flex items-start gap-2" key={`disabled-${item.plugin}`}>
+                <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0 text-(--ui-yellow)" />
+                <span className="min-w-0">
+                  {item.plugin}: {item.reason}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {summary.disabledPlugins.length > 0 && (
-        <ul className="grid gap-1 text-xs text-foreground">
-          {summary.disabledPlugins.map(item => (
-            <li className="flex items-start gap-2" key={`disabled-${item.plugin}`}>
-              <AlertTriangle aria-hidden className="mt-0.5 size-3 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="leading-snug">
-                {item.plugin}: {item.reason}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {summary.updatesAvailable.length > 0 && (
-        <ul className="grid gap-1 text-xs text-foreground">
-          {summary.updatesAvailable.map(item => (
-            <li className="leading-snug" key={`update-${item.name}`}>
-              {item.name}
-              {item.current && item.latest ? `: ${item.current} → ${item.latest}` : ''}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        {summary.updatesAvailable.length > 0 && (
+          <ul className="grid min-w-0 gap-1">
+            {summary.updatesAvailable.map(item => (
+              <li className="min-w-0" key={`update-${item.name}`}>
+                {item.name}
+                {item.current && item.latest ? `: ${item.current} → ${item.latest}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </AlertDescription>
+    </Alert>
   )
 }

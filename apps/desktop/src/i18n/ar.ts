@@ -18,11 +18,13 @@ import { cloudSync } from './cloud-sync'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
 
 const arBaseOverrides = {
+  notificationCenter: notificationCenterCopy['ar'],
   platformModels: {
     permanent: "بلا انتهاء",
     reauthorize: "إعادة تفويض هذا الجهاز",

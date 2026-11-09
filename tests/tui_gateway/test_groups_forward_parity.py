@@ -2,7 +2,8 @@
 
 A room handed to the gateway is fenced in the standalone store, so a room call this wire does
 not forward runs against the frozen copy and is refused ("managed by another gateway"). The
-forwarded set therefore follows the gateway route's own method table, never a hand list.
+forwarded set follows the gateway method table except model controls, whose managed tickets
+and responses require the native controller's persistent transport identity.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from tui_gateway import methods_groups, owner_forward
 MEMBERS = [{"member_id": "default", "profile": "default", "handle": "hermes"},
            {"member_id": "ops", "profile": "ops", "handle": "ops"}]
 ENDPOINT = object()
+NATIVE_MODEL_METHODS = {"groups.prepare_model", "groups.model_respond"}
 
 
 @pytest.fixture
@@ -67,14 +69,44 @@ def test_every_gateway_room_method_reaches_the_owning_gateway(home, monkeypatch)
         return {"methods": list(GROUP_METHODS)} if method == "groups.capabilities" else {}
     monkeypatch.setattr(owner_forward, "forward_rpc", forward_rpc)
 
-    for method in GROUP_METHODS:
+    carried = [method for method in GROUP_METHODS if method not in NATIVE_MODEL_METHODS]
+    for method in carried:
         assert method in METHODS, f"{method}: no contract on the standalone wire"
         reply = srv._methods[method](1, {"room_id": "room-desk"})
         assert "error" not in reply, (method, reply)
     capabilities = srv._methods["groups.capabilities"](2, {})["result"]
 
-    assert reached[:len(GROUP_METHODS)] == list(GROUP_METHODS)
-    assert capabilities["methods"] == list(GROUP_METHODS)  # what reaches the owner is advertised
+    assert reached[:len(carried)] == carried
+    assert capabilities["methods"] == carried  # what reaches the owner is advertised
+
+
+@pytest.mark.parametrize("gateway_state", ["absent", "ready"])
+def test_model_controls_require_the_persistent_native_controller(home, monkeypatch, gateway_state):
+    from gateway.session_group_controls import GROUP_METHODS
+    from tui_gateway.contracts.registry import CANONICAL_METHODS
+    from tui_gateway.methods_groups_forward import forward_bound
+    _gateway(monkeypatch, gateway_state)
+    reached = []
+
+    def forward_rpc(home, endpoint, method, params):
+        reached.append(method)
+        assert method == "groups.capabilities"
+        return {"methods": list(GROUP_METHODS)}
+    monkeypatch.setattr(owner_forward, "forward_rpc", forward_rpc)
+
+    for method in NATIVE_MODEL_METHODS:
+        assert method in CANONICAL_METHODS and method in GROUP_METHODS
+        params = ({"room_id": "room-desk", "member_id": "ops", "inspect_selection": True}
+                  if method == "groups.prepare_model" else
+                  {"room_id": "room-desk", "request_id": "request-1", "result": {"status": "unavailable"}})
+        assert forward_bound(1, method, params) is None
+        reply = srv._methods[method](1, params)
+        assert reply["error"]["code"] == 4127
+        assert reply["error"]["data"]["reason"] == "native_controller_required"
+        assert "hermes-gateway-v1" in reply["error"]["message"]
+    assert reached == []
+    capabilities = srv._methods["groups.capabilities"](2, {})["result"]
+    assert NATIVE_MODEL_METHODS.isdisjoint(capabilities["methods"])
 
 
 def test_a_file_attached_to_a_handed_room_lands_in_the_gateway_copy(home, monkeypatch):

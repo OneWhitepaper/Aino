@@ -70,7 +70,7 @@ export function preventCloseButtonAutoFocus(event: Event) {
 // The dialog's top-right X. Radix Close routes through the modal's
 // onOpenChange, same path as Escape. Exported for bespoke Radix shells (the
 // boot-failure overlay) that can't use DialogContent but want the same X.
-function DialogCloseButton() {
+function DialogCloseButton({ disabled = false }: { disabled?: boolean }) {
   const { t } = useI18n()
 
   return (
@@ -78,6 +78,7 @@ function DialogCloseButton() {
       <Button
         aria-label={t.common.close}
         className="absolute right-2.5 top-2.5 z-20 text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground"
+        disabled={disabled}
         size="icon-xs"
         variant="ghost"
       >
@@ -97,9 +98,14 @@ function DialogContent({
   blurBackdrop = true,
   banner,
   bannerTone = 'error',
+  header,
+  footer,
+  dismissDisabled = false,
   chrome,
   overlayClassName,
   onOpenAutoFocus,
+  onEscapeKeyDown,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -118,6 +124,14 @@ function DialogContent({
   // overflow. `className` styles the OUTER shell: position, size, border, and
   // background. The note on the shell below explains this split.
   bodyClassName?: string
+  /** Optional title region outside the scrolling body. */
+  header?: React.ReactNode
+  // Opt in to a fixed action area outside the one scrolling body. Existing
+  // forms keep their current layout until they supply this slot.
+  footer?: React.ReactNode
+  // Locks the shared close chrome, Escape and outside dismissal during work.
+  // Controlled roots still own whether application-driven closure is allowed.
+  dismissDisabled?: boolean
   // A dialog-level notice rendered as a banner flush to the bottom edge (tinted,
   // inherited bottom radius) so it reads as part of the dialog, not a floating
   // alert. Falsy → no banner. Tone picks the colour.
@@ -153,7 +167,39 @@ function DialogContent({
   // `onOpenAutoFocus={preventCloseButtonAutoFocus}` explicitly instead.
 
   // No tip on the X — the glyph is the label (DialogCloseButton keeps aria-label / sr-only).
-  const closeButton = showCloseButton ? <DialogCloseButton /> : null
+  const closeButton = showCloseButton ? <DialogCloseButton disabled={dismissDisabled} /> : null
+
+  const fixedHeader = header ? (
+    <div className="min-w-0 shrink-0 px-6 pt-[1.375rem] [overflow-wrap:anywhere]" data-slot="dialog-fixed-header">
+      {header}
+    </div>
+  ) : null
+
+  const fixedFooter = footer ? (
+    <div
+      className="min-w-0 shrink-0 border-t border-(--ui-stroke-tertiary) px-6 py-4 [overflow-wrap:anywhere]"
+      data-slot="dialog-fixed-footer"
+    >
+      {footer}
+    </div>
+  ) : null
+
+  const dismissalHandlers = {
+    onEscapeKeyDown: (event: KeyboardEvent) => {
+      if (dismissDisabled) {
+        event.preventDefault()
+      } else {
+        onEscapeKeyDown?.(event)
+      }
+    },
+    onInteractOutside: (event: Parameters<NonNullable<typeof onInteractOutside>>[0]) => {
+      if (dismissDisabled) {
+        event.preventDefault()
+      } else {
+        onInteractOutside?.(event)
+      }
+    }
+  }
 
   // With a banner, the border can't live on the scroll/clip box (it would draw a
   // line around the banner too). The paper body keeps its own bottom radius and
@@ -180,18 +226,23 @@ function DialogContent({
           onOpenAutoFocus={onOpenAutoFocus}
           ref={setContentNode}
           {...props}
+          {...dismissalHandlers}
         >
           <DialogPortalContainerContext.Provider value={contentNode}>
             {/* Scroll lives on an inner box so this shell keeps a painted bottom radius. */}
-            <div className="relative z-10 overflow-hidden rounded-(--aino-radius-panel) border border-b-0 border-(--stroke-nous) bg-(--ui-bg-elevated)">
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-(--aino-radius-panel) bg-(--ui-bg-elevated)">
+              {fixedHeader}
               <div
                 className={cn(
-                  'grid max-h-[calc(85vh-5rem)] min-h-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto p-5',
+                  'grid max-h-[calc(85vh-5rem)] min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overscroll-contain p-6',
+                  header && 'pt-4',
                   bodyClassName
                 )}
+                data-slot="dialog-body"
               >
                 {children}
               </div>
+              {fixedFooter}
             </div>
             <div
               className={cn(
@@ -224,7 +275,7 @@ function DialogContent({
           // a clipping ancestor crops them. The body box below owns the scroll,
           // so a tall dialog scrolls and a Select or Popover can still paint
           // past the edge of that box.
-          'fixed left-1/2 top-1/2 z-(--z-modal) pointer-events-auto flex max-h-[85vh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) text-[length:var(--aino-text-body)] text-foreground shadow-nous duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          'fixed left-1/2 top-1/2 z-(--z-modal) pointer-events-auto flex max-h-[85vh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-(--aino-radius-panel) bg-(--ui-bg-elevated) text-[length:var(--aino-text-body)] text-foreground shadow-nous duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           widthClass,
           layerClass,
           className
@@ -233,8 +284,10 @@ function DialogContent({
         onOpenAutoFocus={onOpenAutoFocus}
         ref={setContentNode}
         {...props}
+        {...dismissalHandlers}
       >
         <DialogPortalContainerContext.Provider value={contentNode}>
+          {fixedHeader}
           {/* The BODY: layout and scroll. `min-h-0` lets this box shrink inside
               the max-height of the shell. The overflow then scrolls here
               instead of pushing the shell past the viewport. The explicit
@@ -244,12 +297,15 @@ function DialogContent({
               scrollbar that clips the content instead of truncating it. */}
           <div
             className={cn(
-              'grid min-h-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto rounded-[inherit] p-5',
+              'grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overscroll-contain rounded-[inherit] p-6',
+              header && 'pt-4',
               bodyClassName
             )}
+            data-slot="dialog-body"
           >
             {children}
           </div>
+          {fixedFooter}
           {chrome}
           {closeButton}
         </DialogPortalContainerContext.Provider>
@@ -260,18 +316,14 @@ function DialogContent({
 
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <div
-      className={cn('flex flex-col gap-1 text-center sm:text-left', className)}
-      data-slot="dialog-header"
-      {...props}
-    />
+    <div className={cn('flex min-w-0 flex-col gap-1.5 text-left', className)} data-slot="dialog-header" {...props} />
   )
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn('flex min-w-0 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end', className)}
       data-slot="dialog-footer"
       {...props}
     />
@@ -292,7 +344,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       className={cn(
-        'text-[length:var(--aino-text-title)] font-semibold tracking-tight text-foreground',
+        'min-w-0 text-[length:var(--aino-text-dialog-title)] font-semibold tracking-tight text-foreground [overflow-wrap:anywhere]',
         Icon && 'flex items-center gap-2',
         className
       )}
@@ -309,7 +361,7 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
   return (
     <DialogPrimitive.Description
       className={cn(
-        'text-[length:var(--aino-text-ui)] leading-relaxed text-(--ui-text-secondary)',
+        'min-w-0 text-[length:var(--aino-text-ui)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]',
         className
       )}
       data-slot="dialog-description"

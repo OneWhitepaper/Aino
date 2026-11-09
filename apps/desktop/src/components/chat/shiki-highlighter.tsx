@@ -5,7 +5,7 @@ import { type FC, lazy, Suspense, useMemo } from 'react'
 
 import { hasHttpUrlHost } from '@/app/chat/composer/url-refs'
 import { referenceRe, unquoteReferenceValue } from '@/components/assistant-ui/reference-kinds'
-import { CodeCard, CodeCardBody } from '@/components/chat/code-card'
+import { CodeCard, CodeCardBody, CodeCardHeader } from '@/components/chat/code-card'
 import { ExpandableBlock } from '@/components/chat/expandable-block'
 // Theme constants live in shiki-config (dependency-free) so the lazy shiki
 // chunk can import them without pulling this module into the shiki bundle.
@@ -13,7 +13,7 @@ import { SHIKI_COLOR_REPLACEMENTS } from '@/components/chat/shiki-config'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useI18n } from '@/i18n'
 import { hostHas } from '@/lib/host-capabilities'
-import { isLikelyProseCodeBlock } from '@/lib/markdown-code'
+import { isLikelyProseCodeBlock, isMarkdownCodeLanguage } from '@/lib/markdown-code'
 
 import type { CachedShikiBlockProps } from './shiki-block'
 import { isChunkLoadError, ShikiChunkBoundary } from './shiki-chunk-boundary'
@@ -24,8 +24,9 @@ export { SHIKI_COLOR_REPLACEMENTS, SHIKI_THEME } from '@/components/chat/shiki-c
  * Streamdown's code adapter renders header + body as inline siblings, so we
  * own the wrapping `<CodeCard>` here and neutralize the upstream
  * `data-streamdown="code-block"` chrome from styles.css. The card is
- * background-only — no header row, no language label — so a fence reads as a
- * tinted slab of the reply; copy is a hover-reveal control in the corner.
+ * background-only for ordinary code, whose copy control reveals on hover.
+ * Explicit Markdown source gets a compact label and always-visible copy
+ * action so a document to reuse stays distinct from rendered chat prose.
  *
  * That control is inset 16px rather than hugging the corner: the card's
  * scroller (`ExpandableBlock` / `CodeCardBody`) spans its full width and
@@ -186,17 +187,25 @@ export const SyntaxHighlighter: FC<HermesSyntaxHighlighterProps> = ({
   }
 
   const plain = defer || exceedsHighlightBudget(content)
+  const markdownSource = isMarkdownCodeLanguage(language)
 
   return (
     <CodeCard data-streaming={defer ? 'true' : undefined}>
-      <CopyButton
-        appearance="inline"
-        className="absolute right-4 top-1.5 z-10 h-5 gap-0 rounded-md px-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
-        iconClassName="size-3"
-        label={t.assistant.tool.copyCode}
-        showLabel={false}
-        text={() => copyableCodeText(content)}
-      />
+      {markdownSource ? (
+        <CodeCardHeader>
+          <span>Markdown</span>
+          <CopyButton appearance="inline" label={t.common.copy} text={content} />
+        </CodeCardHeader>
+      ) : (
+        <CopyButton
+          appearance="inline"
+          className="absolute right-4 top-1.5 z-10 h-5 gap-0 rounded-md px-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
+          iconClassName="size-3"
+          label={t.assistant.tool.copyCode}
+          showLabel={false}
+          text={() => copyableCodeText(content)}
+        />
+      )}
       <CodeCardBody className="[&_pre]:px-3 [&_pre]:py-2.5">
         <ExpandableBlock>
           {/* In the browser host the fence is sized to its longest line, so

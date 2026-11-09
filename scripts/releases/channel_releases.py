@@ -19,7 +19,7 @@ from scripts.releases.channels import ChannelPublisher, R2ChannelStore
 from scripts.releases.progress import log
 from scripts.releases.versioning import parse_attempt_ref
 
-NATIVE_LEGS = ("darwin-arm64", "darwin-x64", "win32-arm64", "win32-x64", "windows-universal")
+from scripts.releases.desktop_targets import NATIVE_LEGS
 CANARY_NEEDS = ("validate", "build-win32-x64", "build-win32-arm64",
                 "build-darwin-arm64", "build-darwin-x64",
                 "build-linux-x64", "build-linux-arm64", "builds-table",

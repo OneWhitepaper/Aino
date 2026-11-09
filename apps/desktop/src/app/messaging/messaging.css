@@ -141,7 +141,7 @@
   min-width: 0;
   flex: 1;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-ui);
+  font-size: var(--aino-text-body);
   font-weight: 500;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -149,7 +149,7 @@
 .messaging-platform-badge {
   flex-shrink: 0;
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: var(--aino-radius-control);
   background: var(--ui-bg-quaternary);
   color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
@@ -188,7 +188,7 @@
   line-height: 1.5;
 }
 .messaging-pending-count {
-  border-radius: 4px;
+  border-radius: var(--aino-radius-control);
   padding: 2px 5px;
   background: color-mix(in srgb, var(--ui-yellow) 10%, transparent);
   color: var(--ui-yellow);

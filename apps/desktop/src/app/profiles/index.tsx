@@ -397,7 +397,7 @@ function ProfileDetail({ current, onClose, onRename, profile }: ProfileDetailPro
             {p.storageLocation}
             <Codicon name="chevron-down" size="0.75rem" />
           </summary>
-          <p className="mt-2 break-all font-mono text-[0.6875rem]">{displayPath(profile.path)}</p>
+          <p className="mt-2 break-all font-mono text-[length:var(--aino-text-caption)]">{displayPath(profile.path)}</p>
           {profile.has_env && <p className="mt-1">.env</p>}
         </details>
       </div>
@@ -494,7 +494,9 @@ function SoulEditor({ profileName }: { profileName: string }) {
             {missing ? p.soulMissing : p.soulDesc}
           </p>
         </div>
-        {dirty && <span className="text-[0.65rem] text-muted-foreground">{p.unsavedChanges}</span>}
+        {dirty && (
+          <span className="text-[length:var(--aino-text-caption)] text-muted-foreground">{p.unsavedChanges}</span>
+        )}
       </div>
 
       {loading ? (

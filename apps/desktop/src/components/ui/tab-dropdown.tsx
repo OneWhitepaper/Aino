@@ -62,7 +62,7 @@ export function TabDropdown({
           className={cn(
             'flex cursor-pointer items-center font-medium text-foreground [-webkit-app-region:no-drag]',
             variant === 'navigation'
-              ? 'h-10 gap-2 rounded-xl bg-(--ui-bg-tertiary) px-3 text-[length:var(--aino-text-ui)]'
+              ? 'h-10 gap-2 rounded-(--aino-radius-control) bg-(--ui-bg-tertiary) px-3 text-[length:var(--aino-text-ui)]'
               : 'h-7 gap-1.5 px-1 text-[length:var(--conversation-caption-font-size)]'
           )}
           type="button"

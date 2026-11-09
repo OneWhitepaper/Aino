@@ -107,13 +107,17 @@ export function useSystemResourcesStatusbarItem(): StatusbarItem {
   }, [shown])
 
   const hasGpu = Boolean(hardware?.gpu_name)
+
   const vramPercent =
     hardware?.vram_used_bytes != null && hardware.vram_total_bytes
       ? Math.round((hardware.vram_used_bytes / hardware.vram_total_bytes) * 100)
       : null
+
   const ramUsed = hardware ? hardware.ram_total_bytes - hardware.ram_available_bytes : null
+
   const ramPercent =
     hardware?.ram_total_bytes && ramUsed != null ? Math.round((ramUsed / hardware.ram_total_bytes) * 100) : null
+
   const label = hardware
     ? hasGpu
       ? `GPU ${hardware.gpu_util_percent ?? 0}%${
@@ -131,11 +135,16 @@ export function useSystemResourcesStatusbarItem(): StatusbarItem {
     menuAlign: 'end',
     menuClassName: 'w-64 p-0',
     menuContent: (
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3 text-[0.75rem]" data-slot="system-resources-panel">
+      <div
+        className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3 text-[length:var(--aino-text-caption)]"
+        data-slot="system-resources-panel"
+      >
         <div className="flex min-w-0 items-baseline justify-between gap-2">
           <p className="shrink-0 font-medium text-foreground">{copy.title}</p>
           {hardware?.gpu_name && (
-            <span className="min-w-0 truncate text-[0.6875rem] text-muted-foreground">{hardware.gpu_name}</span>
+            <span className="min-w-0 truncate text-[length:var(--aino-text-caption)] text-muted-foreground">
+              {hardware.gpu_name}
+            </span>
           )}
         </div>
         {hasGpu && (
@@ -157,7 +166,9 @@ export function useSystemResourcesStatusbarItem(): StatusbarItem {
           percent={ramPercent}
           value={`${gbLong(ramUsed)} / ${gbLong(hardware?.ram_total_bytes)}`}
         />
-        {hardware?.uma && <p className="text-[0.6875rem] text-muted-foreground">{copy.unifiedNote}</p>}
+        {hardware?.uma && (
+          <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{copy.unifiedNote}</p>
+        )}
       </div>
     ),
     toggleLabel: enabled ? copy.toggle : undefined,

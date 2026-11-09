@@ -15,6 +15,7 @@ import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { $defaultProfileRoute, refreshDefaultProfile } from '@/store/default-profile'
 import { $fleetRoster, refreshFleetRoster } from '@/store/fleet-roster'
 import { supersedeGatewaySwitch } from '@/store/gateway-switch'
+import { resetNotifications } from '@/store/notifications'
 import {
   $activeGatewayProfile,
   $freshSessionRequest,
@@ -122,6 +123,7 @@ const $activeConnectionProfile = computed(
 // backend the tags now name. `listen` (not `subscribe`) skips the mount-time
 // fire, and the computed dedupes equal ids, so this only runs on a real switch.
 $activeConnectionId.listen(() => {
+  resetNotifications()
   invalidateProfileScopedQueries()
   // The star map is a scan of one backend's skills and memory; same-named
   // profiles on two gateways are different graphs.

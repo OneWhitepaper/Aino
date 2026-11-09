@@ -68,8 +68,9 @@ import {
   updateGroupChat
 } from './group-chat'
 import { openGroupChat } from './group-chat-view'
+import { stickyGroupEngine } from './group-engine'
 import { groupWorkspaceOwnerKey } from './group-membership'
-import { groupOpenOrigin } from './group-panes'
+import { clearGroupComposerDrafts, groupOpenOrigin, groupOpenOwnerKey, groupOpenRoute } from './group-panes'
 import { annotateOrphanedGroupChatMembers } from './hygiene'
 import { BOTS_LOCALES } from './i18n'
 import { displayName, rosterConnectionLabel } from './labels'
@@ -115,6 +116,7 @@ function clearEditorOnAccountChange() {
 
     if (identity === undefined || identity !== nextIdentity) {
       $editingBot.set(null)
+      clearGroupComposerDrafts()
     }
 
     identity = nextIdentity
@@ -384,6 +386,7 @@ export default {
                     room.externalCursors && typeof room.externalCursors === 'object' ? room.externalCursors : {},
                   members: Array.isArray(room.members) ? room.members : [],
                   roomId: typeof room.roomId === 'string' && room.roomId ? room.roomId : null,
+                  ...stickyGroupEngine(room),
                   image: typeof room.image === 'string' && room.image ? room.image : null,
                   rosterOrder: Number.isFinite(room.rosterOrder) ? room.rosterOrder : undefined,
                   pinned: Boolean(room.pinned),
@@ -629,6 +632,7 @@ export default {
     if (typeof host.paneVisibility === 'function') {
       // The contribution-scoped pane id (`register` prefixes `${ID}:`).
       const $sidebarVisible = host.paneVisibility(`${ID}:pane`)
+      const $sessionsVisible = host.paneVisibility('sessions')
       let unregisterRoutines: null | (() => void) = null
       // Armed by each Bots-tab entry, spent by the first registration after it.
       let restoreDismissedOnRegister = true
@@ -655,7 +659,7 @@ export default {
         entryGeneration = null
 
         if (group) {
-          openGroupChat(group, groupOpenOrigin(group))
+          openGroupChat(group, groupOpenOrigin(group), groupOpenRoute(group))
         } else if (selected) {
           void openRosterBot(selected)
         }
@@ -711,7 +715,7 @@ export default {
           // the ordinary session usable until a real owner is selected.
           if (group) {
             setBotsWorkspaceOwner(
-              groupWorkspaceOwnerKey(group),
+              groupOpenOwnerKey(group) ?? groupWorkspaceOwnerKey(group),
               null,
               'New group conversations start in the group composer.'
             )
@@ -720,15 +724,20 @@ export default {
           }
         } else {
           entryGeneration = null
-          // Strand any owner wake still dialing. Its SDK open will fail the
-          // workspace token too; this plugin generation prevents that expected
-          // cancellation from showing an error after the user deliberately
-          // returned to Sessions.
-          bumpBotOpenGeneration()
-          host.setWorkspaceScope?.('sessions')
         }
 
         syncRoutinesPane()
+      })
+
+      // Hiding the navigation column keeps its conversation selected. Only
+      // the Sessions pane becoming visible expresses a workspace change;
+      // listen independently because either pane can publish visibility first.
+      const stopSessionsSync = $sessionsVisible.listen(visible => {
+        if (visible) {
+          entryGeneration = null
+          bumpBotOpenGeneration()
+          host.setWorkspaceScope?.('sessions')
+        }
       })
 
       const stopGroupSync = $groupChatWorkspace.listen(syncRoutinesPane)
@@ -835,9 +844,11 @@ export default {
         // the listeners need explicit teardown or they survive plugin disable.
         ctx.onDispose(() => {
           stopSidebarSync()
+          stopSessionsSync()
           stopEntrySelection()
           stopEntryRoster()
           entryGeneration = null
+          bumpBotOpenGeneration()
           stopGroupSync()
           stopFocusSync?.()
           stopReclaimSync?.()

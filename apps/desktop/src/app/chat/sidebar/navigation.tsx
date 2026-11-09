@@ -210,7 +210,7 @@ export function SidebarNavigation({
                     <span
                       aria-label={newSessionKbd.join(' ')}
                       className={cn(
-                        'ml-auto text-[0.6875rem] font-normal text-(--ui-text-quaternary) opacity-55',
+                        'ml-auto text-[length:var(--aino-text-caption)] font-normal text-(--ui-text-quaternary) opacity-55',
                         newSessionKbdFlash && 'opacity-100!'
                       )}
                     >

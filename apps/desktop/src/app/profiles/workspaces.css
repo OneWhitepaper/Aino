@@ -34,7 +34,7 @@
 }
 .workspace-count {
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.3125rem;
+  border-radius: var(--aino-radius-control);
   padding: 0.0625rem 0.375rem;
   color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
@@ -160,12 +160,12 @@
   align-items: center;
   gap: 6px;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-ui);
+  font-size: var(--aino-text-body);
   font-weight: 500;
 }
 .workspace-default-badge {
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: var(--aino-radius-control);
   padding: 1px 4px;
   color: var(--ui-text-tertiary);
   background: var(--ui-bg-quaternary);

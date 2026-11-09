@@ -172,6 +172,16 @@ describe('RealProfileConsentDialog', () => {
     expect(mocks.save).not.toHaveBeenCalled()
   })
 
+  it('keeps Escape as a soft refusal without writing a permission or permanent opt-out', () => {
+    render(<RealProfileConsentDialog tabId="tab-1" />)
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect($realProfilePromptMuted.get()).toBe(true)
+    expect($realProfilePromptDismissed.get()).toBe(false)
+    expect(mocks.save).not.toHaveBeenCalled()
+  })
+
   it('"Don\'t show again" persists the opt-out', () => {
     render(<RealProfileConsentDialog tabId="tab-1" />)
 

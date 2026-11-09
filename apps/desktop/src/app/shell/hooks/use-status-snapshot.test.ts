@@ -89,9 +89,9 @@ describe('useStatusSnapshot', () => {
         await vi.advanceTimersByTimeAsync(60_000)
       })
       expect(screen.getByText(warning)).toBeTruthy()
-      // Dismiss departs through the card stack (store row on a microtask, then the exit).
+      // Hide the summary without losing the notification-center entry.
       await act(async (): Promise<void> => {
-        fireEvent.click(screen.getByRole('button', { name: copy.notifications.dismiss }))
+        fireEvent.click(screen.getByRole('button', { name: copy.notificationCenter.hideSummary }))
         await vi.advanceTimersByTimeAsync(100)
       })
       expect(screen.queryByText(warning)).toBeNull()

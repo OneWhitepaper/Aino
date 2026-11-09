@@ -116,7 +116,26 @@ export function SharedMetricsConsentDialog({ enabled, profile, requestGateway }:
 
   return (
     <Dialog onOpenChange={open => $sharedMetricsDetailsOpen.set(open)} open>
-      <DialogContent className="max-w-md" onOpenAutoFocus={preventCloseButtonAutoFocus}>
+      <DialogContent
+        className="max-w-md"
+        footer={
+          <div className="grid min-w-0 gap-2">
+            {CHOICE_ORDER.map(choice => (
+              <Button
+                className="max-w-full whitespace-normal"
+                disabled={saving}
+                key={choice}
+                onClick={() => void choose(choice)}
+                type="button"
+                variant="outline"
+              >
+                {copy[choice]}
+              </Button>
+            ))}
+          </div>
+        }
+        onOpenAutoFocus={preventCloseButtonAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>{copy.dialogTitle}</DialogTitle>
           <DialogDescription>{copy.consentBody}</DialogDescription>
@@ -126,7 +145,7 @@ export function SharedMetricsConsentDialog({ enabled, profile, requestGateway }:
           <button
             aria-controls={detailsId}
             aria-expanded={expanded}
-            className="flex w-fit items-center gap-1 text-sm font-medium text-(--ui-text-secondary) hover:text-(--ui-text-primary)"
+            className="flex min-w-0 max-w-full items-start gap-1 text-left text-sm font-medium text-(--ui-text-secondary) [overflow-wrap:anywhere] hover:text-(--ui-text-primary)"
             onClick={() => setExpanded(value => !value)}
             type="button"
           >
@@ -135,7 +154,7 @@ export function SharedMetricsConsentDialog({ enabled, profile, requestGateway }:
           </button>
           {expanded ? (
             <div
-              className="rounded-lg bg-(--ui-bg-tertiary)/40 px-3 py-2.5 text-[0.8125rem] leading-5 text-(--ui-text-secondary)"
+              className="min-w-0 rounded-lg bg-(--ui-bg-tertiary)/40 px-3 py-2.5 text-[0.8125rem] leading-5 text-(--ui-text-secondary) [overflow-wrap:anywhere]"
               id={detailsId}
             >
               <ul className="list-disc space-y-0.5 pl-5">
@@ -151,19 +170,11 @@ export function SharedMetricsConsentDialog({ enabled, profile, requestGateway }:
           ) : null}
         </div>
 
-        <div className="grid gap-2 text-[0.8125rem] leading-5 text-(--ui-text-secondary)">
+        <div className="grid min-w-0 gap-2 text-[0.8125rem] leading-5 text-(--ui-text-secondary) [overflow-wrap:anywhere]">
           <p>{copy.sending}</p>
           <div>
             <DocsLink href={SHARED_METRICS_DOCS_URL}>{copy.readDocs}</DocsLink>
           </div>
-        </div>
-
-        <div className="grid gap-2">
-          {CHOICE_ORDER.map(choice => (
-            <Button disabled={saving} key={choice} onClick={() => void choose(choice)} type="button" variant="outline">
-              {copy[choice]}
-            </Button>
-          ))}
         </div>
       </DialogContent>
     </Dialog>

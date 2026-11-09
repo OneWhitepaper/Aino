@@ -51,8 +51,9 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
   const view = useSessionView()
   const modelSource = useStore($currentModelSource)
   const pinnedDraft = view.kind === 'primary' && !activeSessionId && modelSource === 'manual'
-  const currentModel = useStore(view.$model)
-  const currentProvider = useStore(view.$provider)
+  // Details, built-in checks and custom rows share the same authoritative pair:
+  // this surface's reported selection, then its session-scoped options response.
+  const { model: currentModel, provider: currentProvider } = controller.current
   const busy = useStore(view.$busy)
   const awaiting = useStore(view.$awaitingResponse)
   const closeMenu = useContext(ModelMenuCloseContext)

@@ -160,7 +160,7 @@ interface SessionTileDelegateParams {
   branchLoadedSession: ReturnType<typeof useSessionActions>['branchLoadedSession']
   branchStoredSession: (storedSessionId: string) => Promise<unknown>
   executeSlashCommand: ReturnType<typeof usePromptActions>['executeSlashCommand']
-  removeSession: (storedSessionId: string) => Promise<unknown>
+  removeSession: (storedSessionId: string, options?: { throwOnError?: boolean }) => Promise<unknown>
   requestGateway: GatewayRequester
   runtimeIdByStoredSessionIdRef: SessionStateCache['runtimeIdByStoredSessionIdRef']
   sessionStateByRuntimeIdRef: SessionStateCache['sessionStateByRuntimeIdRef']
@@ -265,7 +265,7 @@ export function useSessionTileDelegate({
         })
       },
       deleteSession: async storedSessionId => {
-        await removeSession(storedSessionId)
+        await removeSession(storedSessionId, { throwOnError: true })
       },
       executeSlash: async (rawCommand, sessionId, options) => {
         await executeSlashCommand(rawCommand, { sessionId, ...options })

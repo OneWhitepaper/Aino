@@ -223,7 +223,7 @@ function StatusColumn({
 function Line({ action, label }: { action?: ReactNode; label: string }) {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-(--ui-stroke-tertiary) px-3.5 py-1.5">
-      <span className="min-w-0 flex-1 text-[0.7rem] text-(--ui-text-tertiary)">{label}</span>
+      <span className="min-w-0 flex-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{label}</span>
       {action}
     </div>
   )
@@ -404,7 +404,7 @@ function ToolViewport({
   return (
     <div
       aria-label={label}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none] outline-none focus-visible:ring-[0.1875rem] focus-visible:ring-ring/50"
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none] focus-visible:outline-hidden focus-visible:ring-[0.1875rem] focus-visible:ring-ring/50"
       data-slot="tools-viewport"
       onKeyDown={onKeyDown}
       onScroll={event => setScrollTop(event.currentTarget.scrollTop)}

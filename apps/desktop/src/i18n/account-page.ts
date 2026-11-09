@@ -1,5 +1,5 @@
 import type { BundledLocale } from './types'
-import type { AccountPageTranslations } from './types_account_page'
+import type { AccountLoginCopy, AccountPageTranslations } from './types_account_page'
 
 export const accountPage = {
   en: {
@@ -222,3 +222,33 @@ export const accountPage = {
     viewOrder: 'Ver'
   }
 } satisfies Record<BundledLocale, AccountPageTranslations>
+
+export const accountLogin = {
+  en: {
+    loginHelp: 'Sign-in help'
+  },
+  zh: {
+    loginHelp: '登录说明'
+  },
+  'zh-hant': {
+    loginHelp: '登入說明'
+  },
+  ja: {
+    loginHelp: 'ログインのヘルプ'
+  },
+  de: {
+    loginHelp: 'Hilfe zur Anmeldung'
+  },
+  es: {
+    loginHelp: 'Ayuda para iniciar sesión'
+  },
+  fr: {
+    loginHelp: 'Aide à la connexion'
+  },
+  ar: {
+    loginHelp: 'مساعدة تسجيل الدخول'
+  },
+  ru: {
+    loginHelp: 'Помощь со входом'
+  }
+} satisfies Record<BundledLocale, AccountLoginCopy>

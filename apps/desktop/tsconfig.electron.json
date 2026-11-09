@@ -26,6 +26,7 @@
     "../shared/src/data-url-read-max.ts",
     "../shared/src/external-url.ts",
     "../shared/src/file-url.ts",
+    "../shared/src/hermes-cloud.ts",
     "../shared/src/translucency.ts",
     "../shared/src/json-rpc-gateway.ts",
     "../shared/src/json-rpc-channel.ts",

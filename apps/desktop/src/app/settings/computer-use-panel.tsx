@@ -36,7 +36,7 @@ function PermissionRow({ granted, label, hint }: { granted: boolean | null; labe
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/55 p-2.5">
       <div className="min-w-0">
         <span className="text-sm font-medium">{label}</span>
-        <p className="mt-0.5 text-[0.7rem] text-muted-foreground">{hint}</p>
+        <p className="mt-0.5 text-[length:var(--aino-text-caption)] text-muted-foreground">{hint}</p>
       </div>
       <Pill tone={tone(granted)}>
         <GrantIcon granted={granted} />
@@ -167,13 +167,15 @@ export function ComputerUsePanel({ onConfiguredChange }: ComputerUsePanelProps) 
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="min-w-0">
           {status.can_grant ? (
-            <p className="text-[0.72rem] text-muted-foreground">{c.identityNote}</p>
+            <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{c.identityNote}</p>
           ) : (
-            <p className="text-[0.72rem] text-muted-foreground">
+            <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">
               {status.platform === 'linux' ? c.linuxNote : status.platform === 'win32' ? c.windowsNote : ''}
             </p>
           )}
-          {status.version && <p className="text-[0.68rem] text-muted-foreground/80">{status.version}</p>}
+          {status.version && (
+            <p className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{status.version}</p>
+          )}
         </div>
         <Button onClick={() => void refresh()} size="sm" variant="text">
           <RefreshCw className="size-3.5" />
@@ -197,14 +199,14 @@ export function ComputerUsePanel({ onConfiguredChange }: ComputerUsePanelProps) 
       )}
 
       {failingChecks.map(c => (
-        <p className="px-1 text-[0.7rem] text-muted-foreground" key={c.label}>
+        <p className="px-1 text-[length:var(--aino-text-caption)] text-muted-foreground" key={c.label}>
           <AlertTriangle className="mr-1 inline size-3" />
           {c.label}: {c.message}
         </p>
       ))}
 
       {status.error && (
-        <p className="px-1 text-[0.7rem] text-muted-foreground">
+        <p className="px-1 text-[length:var(--aino-text-caption)] text-muted-foreground">
           <AlertTriangle className="mr-1 inline size-3" />
           {status.error}
         </p>

@@ -19,6 +19,8 @@ import { notify } from '@/store/notifications'
 import { clearAllPaneSizeOverrides } from '@/store/panes'
 import { isBrowserWindow, isSecondaryWindow } from '@/store/windows'
 
+import { $workspaceMode, $workspaceOwnerKey } from '../workspace-scope'
+
 import { enforceDockedPanes, type PaneDockHint } from './dock-policy'
 import {
   allPaneIds,
@@ -58,6 +60,9 @@ import {
   unifiedToolGroup
 } from './tool-panel-policy'
 import { $maximizedToolGroup } from './tool-panel-view'
+import { rememberWorkspacePane, watchWorkspaceActivePanes, workspaceActivePane,
+  workspaceAvailablePaneIds, workspaceSessionAnchor, workspaceShownPaneIds
+} from './workspace-presentation'
 
 // v2: v1 trees were saved against placeholder panes with index-order zone
 // assignment (chat could land in a corner cell). Retire them wholesale.
@@ -518,7 +523,7 @@ export const hostsSessionDropTarget = (paneIds: readonly string[]): boolean =>
  *  files must NOT retarget them — those zones fall through to main rather
  *  than letting ⌘T dock a session into the file tree. */
 function focusedSessionGroup(): GroupNode | null {
-  return tabTargetGroup(group => group.panes.some(isSessionStripPane))
+  return tabTargetGroup(group => shownPanesInGroup(group).some(isSessionStripPane))
 }
 
 /** The pane a NEW session tab should dock beside (⌘T): the focused chat zone's
@@ -527,13 +532,7 @@ function focusedSessionGroup(): GroupNode | null {
 export function focusedSessionTabAnchor(): null | string {
   const group = focusedSessionGroup()
 
-  if (!group) {
-    return null
-  }
-
-  const active = group.active
-
-  return active && isSessionStripPane(active) ? active : (group.panes.find(isSessionStripPane) ?? null)
+  return group ? workspaceSessionAnchor(group, shownPanesInGroup(group)) : null
 }
 
 /** ⌘W: close the FOCUSED tile zone's active tab, unless it's the uncloseable
@@ -544,7 +543,13 @@ export function focusedSessionTabAnchor(): null | string {
  *  MAIN chat instead. Returns false when there's nothing to close, so ⌘W
  *  stays a no-op — it never closes the window. */
 export function closeFocusedSessionTab(): boolean {
-  const active = tabTargetGroup(group => hostsPreviewToolTab(group) || group.panes.some(isMainStripPane))?.active
+  const group = tabTargetGroup(group => {
+    const shown = shownPanesInGroup(group)
+
+    return shown.length > 0 && (hostsPreviewToolTab(group) || shown.some(isMainStripPane))
+  })
+
+  const active = group ? workspaceActivePane(group, shownPanesInGroup(group)) : undefined
 
   if (!active || isUncloseablePane(active)) {
     return false
@@ -599,7 +604,7 @@ export function closeFocusedToolTab(): boolean {
  *  the tab menu's Close-others / Close-to-the-right verbs (and their enablement). */
 function closeableTreeSiblings(paneId: string): { others: string[]; right: string[] } {
   const tree = $layoutTree.get()
-  const panes = (tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? []
+  const panes = workspaceShownPaneIds((tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? [])
   const idx = panes.indexOf(paneId)
 
   return {
@@ -656,7 +661,7 @@ export function closeTreeTabsToRight(paneId: string): void {
 /** Close every closeable tab in `paneId`'s group (the uncloseable workspace stays). */
 export function closeAllTreeTabs(paneId: string): void {
   const tree = $layoutTree.get()
-  const panes = (tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? []
+  const panes = workspaceShownPaneIds((tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? [])
 
   panes.filter(id => !isUncloseablePane(id) && !isHideOnlyPane(id)).forEach(closeTabPane)
 }
@@ -706,42 +711,15 @@ export function treePanesWithPrefix(prefix: string): string[] {
  *  An atom so the strip re-renders when the action becomes available. */
 export const $newSessionTabAction = atom<(() => void) | null>(null)
 
-/**
- * Keyboard slots (⌘1…⌘9, ⌃Tab) must index the SAME tabs the strip paints —
- * chrome-hidden panes (files in Focus layout), unregistered ones, and
- * narrow-collapsed collapsibles stay in `group.panes` but aren't chips. Walking
- * the raw array made ⌘2 land on what the strip called tab 1 after a hidden
- * pane sat earlier in the list (classic after-⌘W-shift offset).
- */
+/** Keyboard slots index the same scoped, registered candidates as the header. */
 export function shownPanesInGroup(group: { panes: readonly string[] }): string[] {
-  const hidden = $hiddenTreePanes.get()
-  const registered = registry.getArea('panes')
-  const paneFor = (id: string) => registered.find(c => c.id === id)
-
-  return group.panes.filter(id => {
-    const pane = paneFor(id)
-
-    if (!pane) {
-      return false
-    }
-
-    if (hidden.has(id)) {
-      return false
-    }
-
-    // Match TreeGroup's paneShown for the narrow breakpoint — collapsible
-    // panes drop out of the strip when the viewport collapses them.
-    if (
-      typeof window !== 'undefined' &&
-      window.matchMedia?.(SIDEBAR_COLLAPSE_MEDIA_QUERY).matches &&
-      Boolean((pane.data as { collapsible?: boolean } | undefined)?.collapsible)
-    ) {
-      return false
-    }
-
-    return true
-  })
+  return workspaceAvailablePaneIds(
+    group.panes, $hiddenTreePanes.get(),
+    Boolean(typeof window !== 'undefined' && window.matchMedia?.(SIDEBAR_COLLAPSE_MEDIA_QUERY).matches)
+  )
 }
+
+watchWorkspaceActivePanes($layoutTree, commit)
 
 /** Is this zone showing a tab strip right now? The store's adapter over the
  *  shared resolver — TreeGroup answers the same question from its own render
@@ -806,8 +784,9 @@ export function cycleTreeTabInFocusedZone(direction: 1 | -1): null | string {
 
   // Active may itself be hidden (Files collapsed mid-cycle) — treat it as
   // missing so the step starts from a real chip rather than landing on a ghost.
-  const current = Math.max(0, panes.indexOf(group.active ?? ''))
-  const idx = panes.includes(group.active ?? '') ? current : 0
+  const active = workspaceActivePane(group, panes)
+  const current = Math.max(0, panes.indexOf(active))
+  const idx = panes.includes(active) ? current : 0
   const nextId = panes[(idx + direction + panes.length) % panes.length]
   activateTreePane(group.id, nextId)
 
@@ -1161,6 +1140,8 @@ export function revealTreePane(paneId: string) {
   const group = tree ? findGroupOfPane(tree, paneId) : null
 
   if (tree && group) {
+    rememberWorkspacePane(group.id, paneId)
+
     // A minimized zone must be restored — "reveal" means show the pane, not
     // just front its tab behind a collapsed rail. Without this, a tool panel
     // (terminal/logs) in a shared zone stays minimized after its toggle opens
@@ -1665,6 +1646,8 @@ export function activateTreePane(groupId: string, paneId: string) {
   const tree = $layoutTree.get()
 
   if (tree) {
+    rememberWorkspacePane(groupId, paneId)
+
     commit(setActivePaneOp(tree, groupId, paneId))
   }
 }
@@ -1681,11 +1664,18 @@ export function reorderTreePanes(groupId: string, paneIds: readonly string[], to
 }
 
 export function setTreeGroupMinimized(groupId: string, minimized: boolean) {
+  const tree = $layoutTree.get()
+  const group = tree ? findGroup(tree, groupId) : null
+
+  // The primary conversation must remain usable even when its workspace tab
+  // is hidden by the selected bot/group scope. All collapse entry points meet here.
+  if (minimized && group?.panes.some(isUncloseablePane)) {
+    return
+  }
+
   if (minimized && $maximizedToolGroup.get() === groupId) {
     $maximizedToolGroup.set(null)
   }
-
-  const tree = $layoutTree.get()
 
   if (tree) {
     commit(setGroupMinimized(tree, groupId, minimized))
@@ -1827,7 +1817,12 @@ export function isPaneVisible(paneId: string): boolean {
   const group = paneGroup(paneId)
   const side = treeSideOfPane(paneId)
 
-  return Boolean(group && !group.minimized && group.active === paneId && !(side && $collapsedTreeSides.get().has(side)))
+  return Boolean(
+    group &&
+      !group.minimized &&
+      workspaceActivePane(group, workspaceShownPaneIds(group.panes.filter(id => !$hiddenTreePanes.get().has(id)))) === paneId &&
+      !(side && $collapsedTreeSides.get().has(side))
+  )
 }
 
 /** Whether a physical side column is fully on screen (rather than hidden or
@@ -1851,7 +1846,11 @@ export function isTreeSideVisible(side: TreeSide): boolean {
 }
 
 const paneVisibleCache = new Map<string, ReadableAtom<boolean>>()
-const paneVisibleStores = [$layoutTree, $dismissedPanes, $hiddenTreePanes, $collapsedTreeSides]
+
+const paneVisibleStores = [
+  $layoutTree, $dismissedPanes, $hiddenTreePanes, $collapsedTreeSides,
+  $workspaceMode, $workspaceOwnerKey, $registryVersion
+]
 
 /** Reactive `isPaneVisible` for chrome that renders an on/off affordance
  *  (the statusbar's terminal button). Memoized per pane id so `useStore`

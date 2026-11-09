@@ -40,6 +40,16 @@ export interface AgentNoticePayload {
   detail?: string
 }
 
+export interface AgentNoticeOwner {
+  connectionId: string | null
+  profile: string
+  sessionId?: string | null
+}
+
+function scopedNoticeId(key: string, owner?: AgentNoticeOwner) {
+  return owner ? `agent-notice:${JSON.stringify([owner.connectionId, owner.profile, key])}` : key
+}
+
 /** `credits.window_limit` (agent/credits_tracker.py CREDITS_WINDOW_LIMIT_KEY). */
 const WINDOW_LIMIT_KEY = 'credits.window_limit'
 /** `model.large_notice` (tui_gateway/model_switch.py LARGE_MODEL_NOTICE_KEY): switched to a Large model. */
@@ -164,7 +174,10 @@ export function noticeAccent(payload: AgentNoticePayload | undefined): string | 
  *   REPLACES the prior toast — the credits 50→75→90 line escalates in place
  *   instead of stacking, and a key-matched `notification.clear` can dismiss it.
  */
-export function noticeToToast(payload: AgentNoticePayload | undefined): NotificationInput | null {
+export function noticeToToast(
+  payload: AgentNoticePayload | undefined,
+  owner?: AgentNoticeOwner
+): NotificationInput | null {
   const text =
     payload?.code === 'auxiliary_billing_override' && payload.billing_source
       ? translateNow('notifications.auxiliaryBillingSource', payload.billing_source)
@@ -185,7 +198,10 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
   // convention (Sonner/shadcn): the primary status is the message and the detail
   // drops to a muted second line, instead of inlining a `·` separator.
   const [primary, meta] = splitMeta(stripGlyph(text))
-  const detail = sanitizeNoticeDetail(payload?.detail)
+  // A separate reading panel can keep the complete diagnostic without truncation.
+  const detail = payload?.detail?.trim() || undefined
+  const lowDisk = payload?.key === 'sessions.auto_prune'
+  const key = payload?.key || payload?.id
 
   return {
     // Icon + text tint by usage band (muted → orange → red); undefined keeps
@@ -194,11 +210,54 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
     // sticky → 0 (never auto-dismiss); ttl with a ttl_ms → that value; a ttl
     // without a usable ttl_ms falls back to notify()'s per-kind default.
     durationMs: isTtl ? ttl : 0,
-    id: payload?.key || payload?.id,
+    id: key ? scopedNoticeId(key, owner) : undefined,
+    sourceKey: payload?.key,
     kind: LEVEL_TO_TOAST_KIND[payload?.level ?? 'info'] ?? 'info',
-    message: primary,
+    title: lowDisk ? translateNow('notificationCenter.diskTitle') : undefined,
+    message: lowDisk ? translateNow('notificationCenter.diskBody') : primary,
     meta: sanitizeNoticeDetail(meta),
-    ...(payload?.key === 'sessions.auto_prune' ? { action: RECOVERY_ACTIONS.openMaintenance() } : {}),
+    ...(lowDisk
+      ? {
+          action: {
+            ...RECOVERY_ACTIONS.openMaintenance(),
+            onClick: async () => {
+              if (owner) {
+                const { activeGatewayRoute } = await import('@/store/gateway')
+                const active = activeGatewayRoute()
+
+                if (active.connectionId !== owner.connectionId || active.profile !== owner.profile) {
+                  throw new Error(translateNow('notificationCenter.sourceUnavailable'))
+                }
+              }
+
+              RECOVERY_ACTIONS.openMaintenance().onClick()
+            }
+          }
+        }
+      : {}),
+    ...(lowDisk && owner?.sessionId
+      ? {
+          secondaryAction: {
+            label: translateNow('notificationCenter.snooze'),
+            onClick: async () => {
+              const { requestGatewayForAgent } = await import('@/store/gateway')
+
+              const result = await requestGatewayForAgent<{ output?: string }>(
+                owner.connectionId,
+                owner.profile,
+                'slash.exec',
+                { session_id: owner.sessionId, command: 'autoprune later' }
+              )
+
+              // This existing command returns prose, including refusals. A resolved RPC
+              // alone does not prove the snooze was saved.
+              if (!result.output?.includes("I'll ask again in a week")) {
+                throw new Error(result.output || translateNow('errors.genericFailure'))
+              }
+            }
+          }
+        }
+      : {}),
     ...(detail ? { detail } : {})
   }
 }
@@ -224,8 +283,8 @@ export function showLargeModelNotice(text: string): void {
 }
 
 /** Render a `notification.show` notice as a toast (no-op when it has no text). */
-export function showAgentNotice(payload: AgentNoticePayload | undefined): void {
-  const toast = noticeToToast(payload)
+export function showAgentNotice(payload: AgentNoticePayload | undefined, owner?: AgentNoticeOwner): void {
+  const toast = noticeToToast(payload, owner)
 
   if (toast) {
     notify(toast)
@@ -236,9 +295,9 @@ export function showAgentNotice(payload: AgentNoticePayload | undefined): void {
  * Dismiss the toast a `notification.clear` targets. The clear only ever names a
  * `key`, which we used as the toast id, so this is a key-matched dismissal.
  */
-export function clearAgentNotice(key: string | undefined): void {
+export function clearAgentNotice(key: string | undefined, owner?: AgentNoticeOwner): void {
   if (key) {
-    dismissNotification(key)
+    dismissNotification(scopedNoticeId(key, owner))
   }
 }
 

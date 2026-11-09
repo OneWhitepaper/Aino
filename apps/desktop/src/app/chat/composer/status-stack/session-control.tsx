@@ -56,12 +56,12 @@ export const SessionControlSections = memo(function SessionControlSections({
     <>
       {displayError && (
         <div
-          className="flex items-center justify-between gap-2 border-b border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
+          className="flex min-w-0 items-start justify-between gap-2 border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-(--ui-text-primary)"
           role="alert"
         >
-          <div className="flex items-center gap-1.5 truncate">
-            <Codicon className="shrink-0" name="error" size="0.85rem" />
-            <span className="truncate">{displayError}</span>
+          <div className="flex min-w-0 items-start gap-2">
+            <Codicon aria-hidden className="mt-1 shrink-0 text-destructive" name="error" size="0.85rem" />
+            <p className="min-w-0 leading-5 [overflow-wrap:anywhere]">{displayError}</p>
           </div>
           <Button
             aria-label={ctrl.dismissError}

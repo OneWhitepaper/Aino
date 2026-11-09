@@ -2,11 +2,12 @@ import '../auxiliary-surfaces.css'
 
 import { useEffect, useReducer, useRef } from 'react'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { controlVariants } from '@/components/ui/control'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { PRODUCT_NAME } from '@/lib/brand'
-import { CornerDownLeft } from '@/lib/icons'
+import { AlertCircle, CornerDownLeft } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import {
   initialQuickComposerState,
@@ -118,7 +119,7 @@ export function QuickEntryApp() {
         width: '100vw'
       }}
     >
-      <div className="aino-auxiliary-panel aino-quick-entry-panel">
+      <div className="aino-auxiliary-panel aino-quick-entry-panel max-h-full min-h-0 overflow-y-auto">
         <div className="aino-quick-entry-field">
           <Input
             aria-label={t.desktop.quickEntry.label}
@@ -170,8 +171,12 @@ export function QuickEntryApp() {
             }}
             value={state.target}
           >
-            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_CURRENT}>{t.desktop.quickEntry.currentChat}</option>
-            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_NEW}>{t.desktop.quickEntry.newSession}</option>
+            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_CURRENT}>
+              {t.desktop.quickEntry.currentChat}
+            </option>
+            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_NEW}>
+              {t.desktop.quickEntry.newSession}
+            </option>
             {state.sessions.map(session => (
               <option key={session.id} style={QUICK_TARGET_OPTION_STYLE} value={session.id}>
                 {session.title}
@@ -180,9 +185,10 @@ export function QuickEntryApp() {
           </select>
         </div>
         {state.error ? (
-          <div role="alert" style={{ color: 'var(--destructive, #ef4444)', fontSize: 11 }}>
-            {state.error}
-          </div>
+          <Alert className="shrink-0 gap-x-2 px-2 py-1.5" variant="destructive">
+            <AlertCircle aria-hidden />
+            <AlertDescription className="text-[0.8125rem] leading-5">{state.error}</AlertDescription>
+          </Alert>
         ) : null}
       </div>
     </div>

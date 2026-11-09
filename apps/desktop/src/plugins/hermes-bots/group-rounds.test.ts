@@ -1231,6 +1231,20 @@ describe('attachments', () => {
     expect(room.gateway.calls[0].prompt).toContain('notes.pdf')
     expect(room.gateway.calls[0].prompt).not.toContain('Attached files staged in your session workspace:')
   })
+
+  it('names an attachment failure with the readable member name from its own connection', async () => {
+    const error = new Error('Attachment upload interrupted')
+    const room = await loadRoom({ failAttach: { 'image.attach_bytes': error } })
+    const { $botMeta } = await import('./data')
+    const profile = 'u6d4b-u8bd5'
+    $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
+    room.rounds.sendToGroupChat('UploadFail', [{ name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }], 'Review this image', null, [IMG])
+    await settle(room, 'UploadFail')
+
+    expect(room.gateway.host.notifyError).toHaveBeenCalledWith(error, 'Could not attach screenshot.png for 工作室测试助手')
+    expect(room.gateway.calls).toHaveLength(1)
+    expect(room.gateway.calls[0].profile).toBe(profile)
+  })
 })
 
 // #93129: a bot told to stop must STAY stopped.

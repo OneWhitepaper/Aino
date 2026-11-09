@@ -113,6 +113,8 @@ class HostedRoomRuntime:
         prepare_room: Callable[[HostedRoomBinding], None] | None = None,
         publish_terminal: Callable[[HostedRoomBinding, Mapping[str, Any]], None] | None = None,
         pending_action: Callable[[str, str, Mapping[str, Any] | None], None] | None = None,
+        task_activity: Callable[[Mapping[str, Any], Mapping[str, Any] | None], None] | None = None,
+        task_progress: Callable[[str, str, int, Mapping[str, Any]], None] | None = None,
         clock: Callable[[], float] = time.time,
         lease_ttl_seconds: float = 30.0, poll_interval_seconds: float = 5.0,
         active_poll_interval_seconds: float = 0.25, turn_timeout_seconds: float = 1830.0,
@@ -137,7 +139,8 @@ class HostedRoomRuntime:
         self.db_path = Path(db_path)
         self.rpc, self.transport_resolver, self.turn_lock = rpc, transport_resolver, turn_lock
         self.prepare_room, self.publish_terminal = prepare_room, publish_terminal
-        self.pending_action, self.clock = pending_action, clock
+        self.pending_action, self.task_progress, self.clock = pending_action, task_progress, clock
+        self.task_activity = task_activity
         for name, value in positive.items():
             setattr(self, name, float(value))
         self.max_concurrent_rooms = max_concurrent_rooms
@@ -407,6 +410,12 @@ class HostedRoomRuntime:
 
     def _report_pending_action(
         self, task: Mapping[str, Any], *, session_id: str, info: Mapping[str, Any]) -> None:
+        if self.task_activity is not None:
+            self.task_activity(task, info)
+        if self.task_progress is not None:
+            # The member's current tool rides the same info poll as its pending approval.
+            self.task_progress(
+                task["identity"].room_id, task["identity"].task_id, int(task["execution_generation"]), info)
         if self.pending_action is None:
             return
         approval, action = info.get("pending_approval") or info.get("approval"), None
@@ -657,6 +666,8 @@ class HostedRoomRuntime:
             else:
                 self._settle_failure_if_current(attempt, exc)
         finally:
+            if self.task_activity is not None:
+                self.task_activity({**task, 'execution_generation': attempt.execution_generation}, None)
             with self._status_lock:
                 self._current_tasks.pop(binding.room_id, None)
                 # The task may have published a reply or exposed the next turn while this

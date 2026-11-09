@@ -1,19 +1,29 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createRef } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Search } from '@/lib/icons'
+import { Keyboard, Search, Sun } from '@/lib/icons'
 
 import { Codicon } from './codicon'
 
 afterEach(cleanup)
 
 describe('shared icon compatibility', () => {
-  it('keeps the existing SVG props, accessible title and ref contract', () => {
+  it.each([Search, Keyboard, Sun])('keeps SVG props, title, ref and events for %s', Icon => {
     const ref = createRef<SVGSVGElement>()
+    const onClick = vi.fn()
 
     const { rerender } = render(
-      <Search className="toolbar-search" color="red" ref={ref} role="img" size={18} stroke={2} title="Search files" />
+      <Icon
+        className="toolbar-search"
+        color="red"
+        onClick={onClick}
+        ref={ref}
+        role="img"
+        size={18}
+        stroke={2}
+        title="Search files"
+      />
     )
 
     const icon = screen.getByRole('img', { name: 'Search files' })
@@ -24,11 +34,13 @@ describe('shared icon compatibility', () => {
     expect(icon.getAttribute('stroke-width')).toBe('2')
     expect(icon.classList.contains('toolbar-search')).toBe(true)
     expect(icon.hasAttribute('aria-hidden')).toBe(false)
+    fireEvent.click(icon)
+    expect(onClick).toHaveBeenCalledOnce()
 
-    rerender(<Search aria-label="Search files" role="img" />)
+    rerender(<Icon aria-label="Search files" role="img" />)
     expect(screen.getByRole('img', { name: 'Search files' }).hasAttribute('aria-hidden')).toBe(false)
 
-    rerender(<Search aria-hidden aria-label="Search files" role="img" />)
+    rerender(<Icon aria-hidden aria-label="Search files" role="img" />)
     expect(screen.queryByRole('img', { name: 'Search files' })).toBeNull()
   })
 

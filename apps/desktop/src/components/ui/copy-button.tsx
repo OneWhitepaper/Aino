@@ -167,7 +167,7 @@ export function CopyButton({
         <button
           aria-label={ariaLabel}
           className={cn(
-            'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[0.75rem] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40',
+            'inline-flex items-center gap-1 rounded-(--aino-radius-control) px-1.5 py-0.5 text-[length:var(--aino-text-caption)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40',
             className
           )}
           disabled={disabled}
@@ -186,7 +186,7 @@ export function CopyButton({
         <button
           aria-label={ariaLabel}
           className={cn(
-            'grid size-6 place-items-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:bg-accent/55 hover:text-foreground focus-visible:opacity-100 group-hover/tool-row:opacity-100 disabled:opacity-40',
+            'grid size-6 place-items-center rounded-(--aino-radius-control) text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-accent/55 hover:text-foreground focus-visible:opacity-100 group-hover/tool-row:opacity-100 disabled:opacity-40',
             className
           )}
           disabled={disabled}

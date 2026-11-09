@@ -1249,6 +1249,42 @@
       }
     },
     {
+      "name": "groups.context",
+      "summary": "Set one hosted room's purpose and shared notes; members see them from the next message.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsContextParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsContextResult"
+        }
+      }
+    },
+    {
+      "name": "groups.continue",
+      "summary": "Grant a discussion paused at its cap (room.activity bounded) one more budget; writes room.continued.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsContinueParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsContinueResult"
+        }
+      }
+    },
+    {
       "name": "groups.create",
       "summary": "Create a hosted room idempotently; authority is this gateway's stable install identity.",
       "params": [
@@ -1357,6 +1393,24 @@
       }
     },
     {
+      "name": "groups.model_respond",
+      "summary": "Requires the persistent hermes-gateway-v1 controller; standalone returns native_controller_required.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsModelRespondParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsModelRespondResult"
+        }
+      }
+    },
+    {
       "name": "groups.peer.invite",
       "summary": "Mint one target-issued room/profile grant for a prospective room home.",
       "params": [
@@ -1407,6 +1461,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/GroupsPeerRevokeResult"
+        }
+      }
+    },
+    {
+      "name": "groups.prepare_model",
+      "summary": "Requires the persistent hermes-gateway-v1 controller; standalone returns native_controller_required.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsPrepareModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsPrepareModelResult"
         }
       }
     },
@@ -1713,6 +1785,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/ImageGenerateResult"
+        }
+      }
+    },
+    {
+      "name": "image.render",
+      "summary": "Lay out a local image for an inline terminal preview (kitty placeholders or half-blocks).",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ImageRenderParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ImageRenderResult"
         }
       }
     },
@@ -8446,6 +8536,74 @@
         "title": "CanonicalAttachment",
         "type": "object"
       },
+      "CanonicalBotCancelParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Author Id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "CanonicalBotCancelParams",
+        "type": "object"
+      },
+      "CanonicalBotCancelResult": {
+        "additionalProperties": false,
+        "description": "``gateway/session_bot_cancel.py``: ``cancelled`` (withdrawn before it ran, or its pending\nautomatic retry withdrawn), ``stopping`` (its running turn was told to stop), or ``finished``\n(nothing left to cancel); ``receipt_status`` is the delivery receipt's status after it.",
+        "properties": {
+          "delivery_id": {
+            "title": "Delivery Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "cancelled",
+              "stopping",
+              "finished"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "receipt_status": {
+            "title": "Receipt Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "delivery_id",
+          "status",
+          "receipt_status"
+        ],
+        "title": "CanonicalBotCancelResult",
+        "type": "object"
+      },
       "CanonicalBotDeliverParams": {
         "additionalProperties": false,
         "properties": {
@@ -8610,6 +8768,25 @@
             ],
             "default": null,
             "title": "Reason"
+          },
+          "target_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "idle",
+                  "working",
+                  "waiting_approval",
+                  "waiting_clarify",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target State"
           }
         },
         "required": [
@@ -8808,6 +8985,28 @@
             ],
             "default": null,
             "title": "Scope"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "normal",
+                    "fast",
+                    "auto",
+                    "cold",
+                    "ultrafast"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Options"
           }
         },
         "title": "CanonicalConfigGetResult",
@@ -14303,6 +14502,17 @@
             ],
             "default": null
           },
+          "launch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConnectionTargetLaunch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "tools": {
             "anyOf": [
               {
@@ -14774,6 +14984,60 @@
           "skill"
         ],
         "title": "ConnectionTargetKind",
+        "type": "string"
+      },
+      "ConnectionTargetLaunch": {
+        "additionalProperties": false,
+        "description": "What an MCP row will run (``stdio`` command line) or contact (``remote`` URL); scrubbed\ndisplay text, never env values or headers.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ConnectionTargetLaunchKind"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Env"
+          },
+          "cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cwd"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "ConnectionTargetLaunch",
+        "type": "object"
+      },
+      "ConnectionTargetLaunchKind": {
+        "enum": [
+          "remote",
+          "stdio"
+        ],
+        "title": "ConnectionTargetLaunchKind",
         "type": "string"
       },
       "ConnectionTargetState": {
@@ -16282,6 +16546,268 @@
           "status"
         ],
         "title": "ContextFileSource",
+        "type": "object"
+      },
+      "ConversationModel": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_source": {
+            "enum": [
+              "aino",
+              "provider"
+            ],
+            "title": "Model Source",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "model_id",
+          "model_source"
+        ],
+        "title": "ConversationModel",
+        "type": "object"
+      },
+      "ConversationModelParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "list",
+              "select",
+              "selection"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          }
+        },
+        "required": [
+          "session_id",
+          "action"
+        ],
+        "title": "ConversationModelParams",
+        "type": "object"
+      },
+      "ConversationModelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "list",
+              "select"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Room Id"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Member Id"
+          }
+        },
+        "required": [
+          "request_id",
+          "session_id",
+          "profile",
+          "action"
+        ],
+        "title": "ConversationModelRequest",
+        "type": "object"
+      },
+      "ConversationModelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "available",
+                  "selected",
+                  "scheduled",
+                  "not_found",
+                  "ambiguous",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConversationModel"
+                },
+                "maxItems": 2048,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Models"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "const": "next_message",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Effective"
+          }
+        },
+        "title": "ConversationModelResult",
         "type": "object"
       },
       "CorrectionStatus": {
@@ -20167,6 +20693,142 @@
         "title": "GroupsCapabilitiesResult",
         "type": "object"
       },
+      "GroupsContextParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "routing": {
+            "anyOf": [
+              {
+                "enum": [
+                  "everyone",
+                  "lead",
+                  "auto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Routing"
+          },
+          "lead_member_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lead Member Id"
+          }
+        },
+        "required": [
+          "room_id",
+          "event_id",
+          "purpose",
+          "notes"
+        ],
+        "title": "GroupsContextParams",
+        "type": "object"
+      },
+      "GroupsContextResult": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/RoomContext"
+          },
+          "event": {
+            "$ref": "#/components/schemas/RoomEvent"
+          }
+        },
+        "required": [
+          "context",
+          "event"
+        ],
+        "title": "GroupsContextResult",
+        "type": "object"
+      },
+      "GroupsContinueParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "discussion_event_id": {
+            "title": "Discussion Event Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id",
+          "discussion_event_id"
+        ],
+        "title": "GroupsContinueParams",
+        "type": "object"
+      },
+      "GroupsContinueResult": {
+        "additionalProperties": false,
+        "properties": {
+          "continued": {
+            "default": true,
+            "title": "Continued",
+            "type": "boolean"
+          },
+          "event": {
+            "$ref": "#/components/schemas/RoomEvent"
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "title": "GroupsContinueResult",
+        "type": "object"
+      },
       "GroupsCreateParams": {
         "additionalProperties": false,
         "properties": {
@@ -20589,6 +21251,55 @@
         "title": "GroupsLogResult",
         "type": "object"
       },
+      "GroupsModelRespondParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ConversationModelResult"
+          }
+        },
+        "required": [
+          "room_id",
+          "request_id",
+          "result"
+        ],
+        "title": "GroupsModelRespondParams",
+        "type": "object"
+      },
+      "GroupsModelRespondResult": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "title": "GroupsModelRespondResult",
+        "type": "object"
+      },
       "GroupsPeerInviteParams": {
         "additionalProperties": false,
         "properties": {
@@ -20865,6 +21576,190 @@
           }
         },
         "title": "GroupsPeerRevokeResult",
+        "type": "object"
+      },
+      "GroupsPrepareModelParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "follow_profile_config": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Follow Profile Config"
+          },
+          "inspect_selection": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inspect Selection"
+          },
+          "apply_selection": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Apply Selection"
+          }
+        },
+        "required": [
+          "room_id",
+          "member_id"
+        ],
+        "title": "GroupsPrepareModelParams",
+        "type": "object"
+      },
+      "GroupsPrepareModelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "session_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Ticket"
+          },
+          "follow_profile_config": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Follow Profile Config"
+          },
+          "managed_model_binding": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Model Binding",
+            "type": "integer"
+          },
+          "managed_model_context_window": {
+            "const": true,
+            "default": true,
+            "title": "Managed Model Context Window",
+            "type": "boolean"
+          },
+          "managed_image_binding": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Image Binding",
+            "type": "integer"
+          },
+          "managed_device_key": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Device Key",
+            "type": "integer"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "profile",
+          "session_id"
+        ],
+        "title": "GroupsPrepareModelResult",
         "type": "object"
       },
       "GroupsPromoteParams": {
@@ -21370,6 +22265,32 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RoomDriverStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "model_requests": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConversationModelRequest"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Requests"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomContext"
               },
               {
                 "type": "null"
@@ -21962,6 +22883,148 @@
           "available"
         ],
         "title": "ImageGenerateResult",
+        "type": "object"
+      },
+      "ImageRenderParams": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "cols": {
+            "title": "Cols",
+            "type": "integer"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "graphics": {
+            "default": false,
+            "title": "Graphics",
+            "type": "boolean"
+          },
+          "terminal": {
+            "default": "unicode",
+            "enum": [
+              "kitty",
+              "unicode"
+            ],
+            "title": "Terminal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "cols",
+          "rows"
+        ],
+        "title": "ImageRenderParams",
+        "type": "object"
+      },
+      "ImageRenderResult": {
+        "additionalProperties": false,
+        "description": "``mode`` follows ``display.inline_images``. ``kitty``: write ``transmit`` once, then paint\n``placeholder`` rows in ``color``. ``unicode``: paint ``cells`` (``[tr,tg,tb,ta, br,bg,bb,ba]``)\nas half-blocks. ``off``: inline images are disabled or the file is not a readable image.",
+        "properties": {
+          "mode": {
+            "enum": [
+              "kitty",
+              "unicode",
+              "off"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "cols": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cols"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rows"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Color"
+          },
+          "transmit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transmit"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Placeholder"
+          },
+          "cells": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cells"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "ImageRenderResult",
         "type": "object"
       },
       "InflightTurn": {
@@ -24233,6 +25296,11 @@
             ],
             "default": null,
             "title": "Plugin"
+          },
+          "needs_auth": {
+            "default": false,
+            "title": "Needs Auth",
+            "type": "boolean"
           }
         },
         "required": [
@@ -25419,6 +26487,11 @@
           "ultrafast": {
             "default": false,
             "title": "Ultrafast",
+            "type": "boolean"
+          },
+          "daybreak": {
+            "default": false,
+            "title": "Daybreak",
             "type": "boolean"
           },
           "reasoning": {
@@ -27143,6 +28216,15 @@
             "default": false,
             "title": "Graphics",
             "type": "boolean"
+          },
+          "terminal": {
+            "default": "unicode",
+            "enum": [
+              "kitty",
+              "unicode"
+            ],
+            "title": "Terminal",
+            "type": "string"
           }
         },
         "title": "PetCellsParams",
@@ -29244,6 +30326,59 @@
         "title": "PluginToolsetRow",
         "type": "object"
       },
+      "PluginUpdateAllRow": {
+        "additionalProperties": false,
+        "description": "One plugin ``update_all`` tried. ``needs_review``: nothing changed because the update widens the\nplugin or its scan returned caution; the plugin's own ``update`` walks that review.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PluginUpdateAllStatus"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "PluginUpdateAllRow",
+        "type": "object"
+      },
+      "PluginUpdateAllSkip": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "reason"
+        ],
+        "title": "PluginUpdateAllSkip",
+        "type": "object"
+      },
+      "PluginUpdateAllStatus": {
+        "enum": [
+          "updated",
+          "current",
+          "failed",
+          "needs_review"
+        ],
+        "title": "PluginUpdateAllStatus",
+        "type": "string"
+      },
       "PluginsAction": {
         "enum": [
           "list",
@@ -29256,7 +30391,9 @@
           "remove",
           "settings",
           "onboarding",
-          "presence"
+          "presence",
+          "update_all",
+          "auto_update"
         ],
         "title": "PluginsAction",
         "type": "string"
@@ -29316,7 +30453,7 @@
       },
       "PluginsManageParams": {
         "additionalProperties": false,
-        "description": "``toggle``: ``key``/``name`` + ``enable``; ``install``: ``identifier``/``repo`` or ``catalog_name``\n(+ ``force``, ``enable``, ``ref``, ``inspected_sha`` = the commit ``inspect`` read: a custom source with no\n``ref`` whose branch moved since is refused); ``inspect``: ``identifier``/``repo`` or ``catalog_name``;\n``install_desktop``: ``identifier``/``repo`` (any source ``install`` takes) or ``catalog_name``, always\nwith ``ref`` (the commit ``inspect`` read and the dialog showed; another commit is refused) (+ ``force``) \u2014 the desktop half onto\nthe host that serves this client; ``remove_desktop``: ``name``\n(+ ``force`` for a package's own half); ``update``: ``name`` (+ ``accept_capabilities`` to apply a re-pin\nthat widened the plugin after the user confirmed the ``delta``, + ``force`` to apply an update whose\nsecurity scan returned caution after the user saw the findings); ``remove``: ``name`` (user installs only);\n``settings``: ``key`` + ``values`` (``{setting_key: value}``, non-secret schema keys only);\n``presence``: ``names`` (catalog names, answered in that order).",
+        "description": "``toggle``: ``key``/``name`` + ``enable``; ``install``: ``identifier``/``repo`` or ``catalog_name``\n(+ ``force``, ``enable``, ``ref``, ``inspected_sha`` = the commit ``inspect`` read: a custom source with no\n``ref`` whose branch moved since is refused); ``inspect``: ``identifier``/``repo`` or ``catalog_name``;\n``install_desktop``: ``identifier``/``repo`` (any source ``install`` takes) or ``catalog_name``, always\nwith ``ref`` (the commit ``inspect`` read and the dialog showed; another commit is refused) (+ ``force``) \u2014 the desktop half onto\nthe host that serves this client; ``remove_desktop``: ``name``\n(+ ``force`` for a package's own half); ``update``: ``name`` (+ ``accept_capabilities`` to apply a re-pin\nthat widened the plugin after the user confirmed the ``delta``, + ``force`` to apply an update whose\nsecurity scan returned caution after the user saw the findings); ``remove``: ``name`` (user installs only);\n``settings``: ``key`` + ``values`` (``{setting_key: value}``, non-secret schema keys only);\n``presence``: ``names`` (catalog names, answered in that order); ``update_all``: no fields;\n``auto_update``: ``enable`` to set ``plugins.auto_apply`` (omit to read it).",
         "properties": {
           "profile": {
             "anyOf": [
@@ -29967,6 +31104,72 @@
             ],
             "default": null,
             "title": "Unpaired From"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PluginUpdateAllRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PluginUpdateAllSkip"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current"
+          },
+          "auto_apply": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Auto Apply"
+          },
+          "check_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Check Hours"
           }
         },
         "title": "PluginsManageResult",
@@ -35733,6 +36936,41 @@
         "title": "RoomAuthority",
         "type": "object"
       },
+      "RoomContext": {
+        "additionalProperties": false,
+        "description": "``gateway/hosted_room_context.py::room_context``: the purpose and shared notes every member's turn\nprompt carries (inside the user-role message).",
+        "properties": {
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "routing": {
+            "default": "everyone",
+            "enum": [
+              "everyone",
+              "lead",
+              "auto"
+            ],
+            "title": "Routing",
+            "type": "string"
+          },
+          "lead_member_id": {
+            "default": "",
+            "title": "Lead Member Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "notes"
+        ],
+        "title": "RoomContext",
+        "type": "object"
+      },
       "RoomDriverStatus": {
         "additionalProperties": false,
         "description": "``HostedRoomService.status(room_id)``; ``pending_actions`` rows are the exact attempt\n(``hosted_room_service.attempt_action``: ``kind`` + ``member_id``/``task_id``/``execution_generation``)\nor the driver's approval action (``kind: approval`` + run/session/approval context), or a stalled\nroom preparation's Retry (``task_id`` ``prepare:<room_id>``, ``member_id`` the members not woken).\n``member_activity`` lists live tasks in admission order (absent from older gateways).\n``last_error`` is this room's last preparation failure, null once one succeeds.",
@@ -35782,6 +37020,45 @@
             ],
             "default": null,
             "title": "Last Error"
+          },
+          "max_rounds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Rounds"
+          },
+          "max_continues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Continues"
+          },
+          "routing_modes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Routing Modes"
           },
           "peer_routes": {
             "items": {
@@ -36156,8 +37433,43 @@
       },
       "RoomMemberActivity": {
         "additionalProperties": false,
-        "description": "One live room task: ``status`` is ``queued``, ``running`` or ``stopping``.",
+        "description": "One live room task: ``status`` is ``queued``, ``running`` or ``stopping``. ``thread_id`` and\n``round_index`` name the thread and 0-based round it works in; ``started_at`` is when it began running;\n``tool`` (the tool it is in now) and ``progress_at`` (its last frame) come only from the process running\nthe turn.",
         "properties": {
+          "activity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomMemberActivityKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "execution_generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Generation"
+          },
           "member_id": {
             "title": "Member Id",
             "type": "string"
@@ -36165,6 +37477,66 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thread Id"
+          },
+          "round_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Round Index"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tool"
+          },
+          "progress_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress At"
           }
         },
         "required": [
@@ -36173,6 +37545,21 @@
         ],
         "title": "RoomMemberActivity",
         "type": "object"
+      },
+      "RoomMemberActivityKind": {
+        "enum": [
+          "thinking",
+          "reading",
+          "editing",
+          "searching",
+          "running_command",
+          "browser",
+          "image",
+          "replying",
+          "working"
+        ],
+        "title": "RoomMemberActivityKind",
+        "type": "string"
       },
       "RoomMemberInput": {
         "additionalProperties": true,
@@ -46246,6 +47633,18 @@
             ],
             "default": null,
             "title": "Labels"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Image Path"
           }
         },
         "required": [
@@ -50074,6 +51473,24 @@
       }
     },
     {
+      "name": "bot_relay.cancel",
+      "summary": "",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/CanonicalBotCancelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/CanonicalBotCancelResult"
+        }
+      }
+    },
+    {
       "name": "bot_relay.deliver",
       "summary": "",
       "params": [
@@ -50380,6 +51797,42 @@
       }
     },
     {
+      "name": "groups.model_respond",
+      "summary": "Answer the current room member model request with public model identities only.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsModelRespondParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsModelRespondResult"
+        }
+      }
+    },
+    {
+      "name": "groups.prepare_model",
+      "summary": "Prepare one served local member under the current room owner; issue its independent managed-model ticket.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsPrepareModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsPrepareModelResult"
+        }
+      }
+    },
+    {
       "name": "groups.retry",
       "summary": "",
       "params": [
@@ -50430,6 +51883,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/KanbanRunResult"
+        }
+      }
+    },
+    {
+      "name": "model.session",
+      "summary": "Ask the owning desktop for available models or schedule a conversation-only selection for the next message.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationModelResult"
         }
       }
     },
@@ -50990,6 +52461,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/ValueResult"
+        }
+      }
+    },
+    {
+      "name": "model.session",
+      "summary": "Resolve models from the current desktop account and configured providers without sending credentials.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationModelRequest"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationModelResult"
         }
       }
     },

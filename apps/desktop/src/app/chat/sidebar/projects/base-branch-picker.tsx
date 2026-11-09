@@ -173,7 +173,11 @@ export function BaseBranchPicker({
                       size="0.8rem"
                     />
                     <span className="truncate">{branch.name}</span>
-                    {branch.isDefault && <span className="shrink-0 text-[0.625rem] text-(--ui-text-tertiary)">★</span>}
+                    {branch.isDefault && (
+                      <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                        ★
+                      </span>
+                    )}
                     <CommandItemCheck checked={value === branch.name} />
                   </CommandItem>
                 ))}

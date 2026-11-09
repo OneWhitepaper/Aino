@@ -38,11 +38,11 @@ export function ConfirmHost() {
       title={shown.title}
     >
       {shown.details && (
-        <dl className="space-y-3 text-xs">
+        <dl className="min-w-0 space-y-3 text-[length:var(--aino-text-body)] leading-relaxed">
           {shown.details.map(({ label, value }) => (
-            <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3" key={label}>
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="m-0 whitespace-pre-wrap break-words text-foreground">{value}</dd>
+            <div className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] gap-3" key={label}>
+              <dt className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{label}</dt>
+              <dd className="m-0 min-w-0 whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">{value}</dd>
             </div>
           ))}
         </dl>

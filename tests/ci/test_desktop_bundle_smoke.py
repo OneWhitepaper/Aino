@@ -61,10 +61,16 @@ def transport_env(tmp_path, server, *, commit=False):
 
 
 @pytest.mark.parametrize('commit', [False, True])
-@pytest.mark.parametrize('platform,fmt', [('darwin', 'dmg'), ('darwin', 'zip'), ('win32', 'msix'), ('win32', 'msixbundle')])
-@pytest.mark.parametrize('arch', ['arm64', 'x64'])
+@pytest.mark.parametrize('platform,fmt,arch', [
+    ('darwin', 'dmg', 'arm64'), ('darwin', 'zip', 'arm64'),
+    ('darwin', 'dmg', 'x64'), ('darwin', 'zip', 'x64'),
+    ('win32', 'msix', 'arm64'), ('win32', 'msix', 'x64'),
+    ('win32', 'msixbundle', 'arm64'), ('win32', 'msixbundle', 'x64')])
 def test_public_smoke_fetches_the_receipt_bound_native_format(tmp_path, r2_server, commit, platform, fmt, arch):
     env = transport_env(tmp_path, r2_server, commit=commit)
+    validate = smoke_workflow()['jobs']['validate']['steps'][0]['run']
+    admitted = shell_step(tmp_path, r2_server, '', '', {**env, 'TARGET': f'{platform}/{arch}/{fmt}'}, script=validate)
+    assert admitted.returncode == 0, admitted.stdout + admitted.stderr
     release = tmp_path / 'apps/desktop/release'
     release.mkdir(parents=True)
     suffix = f'mac-{arch}.{fmt}' if platform == 'darwin' else ('win.msixbundle' if fmt == 'msixbundle' else f'win-{arch}.msix')

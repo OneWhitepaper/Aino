@@ -430,7 +430,9 @@ export const arChrome = {
       fastFailed: 'فشل تحديث الوضع السريع',
       multiAgent: 'تعاون متعدد الوكلاء',
 
-      multiAgentSends: (level: string) => `تعاون متعدد الوكلاء، يُرسل ${level}`
+      multiAgentSends: (level: string) => `تعاون متعدد الوكلاء، يُرسل ${level}`,
+      daybreak: 'Daybreak',
+      daybreakFailed: 'فشل تحديث Daybreak'
     },
     gatewayMenu: {
       gateway: 'البوابة',
@@ -498,6 +500,17 @@ export const arChrome = {
       turnRunning: 'الدور يعمل',
       contextUsage: 'استخدام السياق',
       compressions: count => `مرات الضغط: ${count}`,
+      contextUsagePanel: {
+        compact: {
+          action: 'ضغط المحادثة',
+          busyHint: 'أكمل الرد الحالي أو أوقفه أولًا',
+          confirm: 'ضغط',
+          hint: 'لخّص السياق القديم لإفساح المجال. تابع في هذه المحادثة نفسها.',
+          question: 'ضغط هذه المحادثة في ملخص؟',
+          questionNamed: title => `ضغط «${title}» في ملخص؟`,
+          working: 'جارٍ الضغط…'
+        }
+      },
       focusedSince: 'منذ التركيز',
       focusedSinceTitle: 'الوقت منذ تركيز هذه المحادثة — وليس مدة الدور',
       yoloOn: 'YOLO مفعل',
@@ -588,6 +601,7 @@ terminalDisconnectedBody:
       'انقطع اتصال الطرفية. اضغط Enter لبدء صدفة جديدة؛ يُحفظ سجل التمرير.'
 },
   zones: {
+    switchConversation: 'تبديل المحادثة',
     sidebarModeMenu: 'تبديل وضع المحادثة',
     sidebarSessionsDescription: 'المشاريع والملفات والمحادثات اليومية',
     showTabStrip: 'إظهار علامات التبويب',

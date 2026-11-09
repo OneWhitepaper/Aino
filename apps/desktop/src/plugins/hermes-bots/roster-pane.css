@@ -1,0 +1,222 @@
+/* Agent Hub's navigation stays on the host's resizable rail. Only its contents
+   own this spacing; the native title row and account footer stay host-owned. */
+.aino-bots-rail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-ui);
+  container: aino-bots-rail / inline-size;
+}
+.aino-roster-navigation {
+  padding: 4px 12px 12px;
+}
+.aino-roster-monitor {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.aino-roster-monitor > :last-child {
+  margin-inline-start: auto;
+}
+.aino-roster-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.aino-roster-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 10px 16px;
+  scrollbar-gutter: stable;
+}
+.aino-roster-content,
+.aino-roster-rows {
+  min-width: 0;
+}
+.aino-roster-rows {
+  display: grid;
+  gap: 3px;
+}
+.aino-roster-groups {
+  margin-block-end: 22px;
+  min-width: 0;
+}
+.aino-roster-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 8px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  font-weight: 500;
+}
+.aino-roster-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.aino-roster-inline-notice {
+  padding: 10px 8px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.aino-bots-rail .aino-group-roster-row,
+.aino-roster-bot-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 60px;
+  gap: 10px;
+  padding: 10px 8px;
+  overflow: hidden;
+  text-align: start;
+  border-radius: var(--aino-radius-row);
+  transition: background-color 100ms;
+}
+.aino-bots-rail .aino-group-roster-row:hover,
+.aino-roster-bot-row:hover {
+  background: var(--chrome-action-hover);
+  transition: none;
+}
+.aino-bots-rail .aino-group-roster-row[aria-current='true'],
+.aino-roster-bot-row[aria-current='true'] {
+  background: var(--ui-row-active-background);
+}
+.aino-roster-group-avatar {
+  display: grid;
+  grid-template-columns: repeat(2, 12px);
+  grid-auto-rows: 12px;
+  place-content: center;
+  gap: 2px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--aino-radius-control);
+  background: var(--ui-bg-elevated);
+}
+.aino-roster-group-avatar .aino-group-member-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.aino-roster-group-avatar .aino-group-member-avatar svg {
+  width: 100%;
+  height: 100%;
+}
+.aino-bots-rail .aino-group-roster-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--aino-radius-control);
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-secondary);
+}
+.aino-roster-group-copy,
+.aino-roster-bot-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.aino-bots-rail .aino-group-roster-name,
+.aino-roster-bot-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--aino-text-body);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.aino-roster-group-preview,
+.aino-roster-bot-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.5;
+  font-weight: 400;
+}
+.aino-roster-bot-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  position: relative;
+}
+.aino-roster-bot-avatar > svg,
+.aino-roster-bot-avatar > span:first-child svg {
+  width: 100%;
+  height: 100%;
+}
+.aino-roster-bot-status {
+  display: flex;
+  position: absolute;
+  inset-inline-end: -3px;
+  inset-block-end: -3px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ui-sidebar-surface-background);
+}
+.aino-roster-bot-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.aino-roster-bot-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.aino-roster-bot-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aino-roster-bot-preview > span:first-child:not(:last-child) {
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container aino-bots-rail (max-width: 220px) {
+  .aino-roster-search {
+    padding-inline: 12px;
+  }
+  .aino-roster-scroll {
+    padding-inline: 6px;
+  }
+  .aino-roster-bot-title > :last-child:not(:first-child) {
+    max-width: 4ch;
+    overflow: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aino-roster-bot-row {
+    transition: none;
+  }
+}

@@ -7,6 +7,7 @@ import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -25,6 +26,7 @@ import { zhHantFirstRun } from './zh-hant_first_run'
 import { zhHantSettings } from './zh-hant_settings'
 
 const zhHantBaseOverrides = {
+  notificationCenter: notificationCenterCopy['zh-hant'],
   appearancePage: appearancePage['zh-hant'],
   home: homeGuidance['zh-hant'],
   toolPanel: toolPanel['zh-hant'],

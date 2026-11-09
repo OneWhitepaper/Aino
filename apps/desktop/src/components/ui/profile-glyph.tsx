@@ -46,7 +46,9 @@ export function ProfileGlyph({
     <span
       className={cn(
         'grid shrink-0 place-items-center font-semibold uppercase leading-none',
-        size === 'lg' ? 'size-11 rounded-xl text-base' : 'size-4 rounded-[3px] text-[0.5rem]',
+        size === 'lg'
+          ? 'size-11 rounded-(--aino-radius-card) text-base'
+          : 'size-4 rounded-[3px] text-[length:var(--aino-text-caption)] leading-none',
         className
       )}
       style={{ backgroundColor: profileColorSoft(color ?? 'var(--ui-text-quaternary)', 22), color: color ?? undefined }}

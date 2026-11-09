@@ -70,6 +70,9 @@ def _resolve_policy_agent_runtime(runner, policy, *, source=None, fallback=True)
         identity = (binding.owner, binding.model_id, binding.model, binding.base_url, binding.api_mode)
 
         def current():
+            # Group grants are live room/member delegations: a captured key must not
+            # outlive membership or ownership revocation between HTTP requests.
+            managed_state(authority, sid)
             held = get_registry().get(key, state)
             if held is None or identity != (held.owner, held.model_id, held.model, held.base_url, held.api_mode):
                 raise RuntimeStoreError('awaiting_managed_credentials')
@@ -514,7 +517,8 @@ class GatewayTurnPrepareMixin:
         turn_sidecar_notes.append(context_note)
 
         try:
-            should_notify = reset_reason == "suspended"
+            from gateway.bot_peer_notices import automatic_notices_allowed
+            should_notify = reset_reason == "suspended" and automatic_notices_allowed(source)
             adapter = self._delivery_adapter_for(source) if should_notify else None
             if adapter:
                 notice = t("gateway.session.auto_reset_notice")

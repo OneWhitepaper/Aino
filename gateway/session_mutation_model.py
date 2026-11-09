@@ -161,22 +161,25 @@ async def prepare_model(authority, live, payload, prepared):
 
 def _prepare_managed_model(authority, payload, prepared):
     """Freeze a catalog identity; its credential is supplied by the managed session binding."""
-    from gateway.session_policy import bind_launch_key, restore_policy
-    from gateway.session_policy_credentials import recover_config_secrets
-
+    from gateway.session_policy import restore_policy
     old = restore_policy(prepared['snapshot']['receipt']['policy'])
     if old.source != 'gui':
         raise RuntimeStoreError('managed_binding_forbidden')
+    policy = managed_policy(authority, old, prepared['snapshot']['receipt']['session_id'], payload['model'])
+    return dict(prepared, policy=asdict(policy))
+
+
+def managed_policy(authority, old, sid, model_id):
+    """A catalog selection's existing policy projection; the caller owns surface authorization."""
+    from gateway.session_policy import bind_launch_key
+    from gateway.session_policy_credentials import recover_config_secrets
     frozen = old.config()
-    model_id = payload['model']
     frozen['model'] = {'provider': 'aino', 'default': model_id,
                        'model_source': 'aino', 'model_id': model_id}
     policy = replace(old, model=model_id, config_json=json.dumps(frozen), credential_ref=None)
     secrets = recover_config_secrets(authority, old, skip={'model', 'providers', 'custom_providers'}) \
         if old.config_secret_ref else {}
-    policy = bind_launch_key(authority, prepared['snapshot']['receipt']['session_id'], policy, None,
-                             config_secrets=secrets)
-    return dict(prepared, policy=asdict(policy))
+    return bind_launch_key(authority, sid, policy, None, config_secrets=secrets)
 def is_model_reset(payload):
     """``/model reset`` as a ``model`` mutation; with any other selection field it is refused, as on
     every surface (``parse_model_switch_args``)."""

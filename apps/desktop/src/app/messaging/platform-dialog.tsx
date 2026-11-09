@@ -59,7 +59,7 @@ export function PlatformDialog({ platform, onClose, actions, children, busy }: P
             </span>
             <span>
               <StatusDot tone={platformStatusTone(platform)} />
-              {platform.state
+              {platform.relay_exclusive ? t.messaging.relayLink.title : platform.state
                 ? t.messaging.states[platform.state] || platform.state.replace(/_/g, ' ')
                 : t.messaging.unknown}
             </span>

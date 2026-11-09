@@ -1,3 +1,4 @@
+import { accountLogin } from './account-page'
 import type { TranslationOverrides } from './define-locale'
 import { en } from './en'
 
@@ -14,6 +15,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
+        ...accountLogin.de,
+        phoneAutoRegister: 'Neue Nummern werden nach der Bestätigung automatisch registriert.',
         browserSessionOnly: 'Dieser Browser hält dich nur bis zum Schließen oder Neuladen dieses Tabs angemeldet.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
@@ -73,6 +76,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
+        ...accountLogin.es,
+        phoneAutoRegister: 'Los números nuevos se registran al verificarlos.',
         browserSessionOnly: 'La sesión de este navegador dura hasta que cierres o recargues esta pestaña.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
@@ -130,6 +135,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
+        ...accountLogin.fr,
+        phoneAutoRegister: 'Les nouveaux numéros sont inscrits après vérification.',
         browserSessionOnly: 'La connexion est conservée uniquement jusqu’à la fermeture ou au rechargement de cet onglet.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
@@ -189,7 +196,7 @@ export const runtimeFeatureCopy = {
       }
     },
     settings: {
-      account: { browserSessionOnly: 'このブラウザーのログインは、このタブを閉じるか再読み込みするまで有効です。' },
+      account: { ...accountLogin.ja, browserSessionOnly: 'このブラウザーのログインは、このタブを閉じるか再読み込みするまで有効です。' },
       model: {
         imageGeneration: {
           qualityTitle: '画像品質',
@@ -242,6 +249,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
+        ...accountLogin.ru,
+        phoneAutoRegister: 'Новые номера регистрируются после проверки.',
         browserSessionOnly: 'Вход в этом браузере сохраняется только до закрытия или перезагрузки этой вкладки.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
@@ -302,6 +311,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
+        ...accountLogin.ar,
+        phoneAutoRegister: 'تُسجَّل الأرقام الجديدة تلقائيًا بعد التحقق.',
         browserSessionOnly: 'يبقى تسجيل الدخول في هذا المتصفح حتى إغلاق علامة التبويب هذه أو إعادة تحميلها فقط.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
@@ -361,7 +372,7 @@ export const runtimeFeatureCopy = {
       }
     },
     settings: {
-      account: { browserSessionOnly: '此瀏覽器僅在目前分頁內保持登入，關閉或重新整理後需要重新登入。' },
+      account: { ...accountLogin['zh-hant'], browserSessionOnly: '此瀏覽器僅在目前分頁內保持登入，關閉或重新整理後需要重新登入。' },
       model: {
         imageGeneration: {
           qualityTitle: '出圖品質',

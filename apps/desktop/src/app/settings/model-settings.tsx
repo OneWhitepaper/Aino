@@ -211,8 +211,7 @@ interface StaleAuxWarningProps {
 // current main. Surfaces the silent credit-burn path (e.g. aux pinned to a
 // $0-balance provider after switching main away from it) and offers the
 // existing one-click reset rather than auto-clearing legitimate pins.
-// Sized to be read at a glance (#66740) with the theme-aware amber text the
-// app's warn badges use, so light mode keeps its contrast.
+// The warning uses the same neutral body and semantic icon as other notices.
 function StaleAuxWarning({ applying, onDismiss, onReset, slots, taskLabel }: StaleAuxWarningProps) {
   const { t } = useI18n()
   const m = t.settings.model
@@ -227,9 +226,9 @@ function StaleAuxWarning({ applying, onDismiss, onReset, slots, taskLabel }: Sta
   const providerMarker = allSameProvider ? provider : m.staleAuxOtherProviders
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
-      <AlertTriangle className="size-3.5 shrink-0" />
-      <span className="grow">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) px-3 py-2 text-[length:var(--aino-text-ui)] text-(--ui-text-secondary)">
+      <AlertTriangle className="size-4 shrink-0 text-(--ui-yellow)" />
+      <span className="min-w-0 grow [overflow-wrap:anywhere]">
         {m.staleAuxBefore(slots.length, names)}
         <span className="font-mono">{providerMarker}</span>
         {m.staleAuxAfter}
@@ -271,7 +270,9 @@ function ProviderKeyHint({ needsSetup, setupIsApiKey, selectedProviderRow }: Pro
   const { t } = useI18n()
 
   return needsSetup && setupIsApiKey && selectedProviderRow ? (
-    <p className="mt-2 text-xs text-muted-foreground">{t.settings.model.providerNeedsApiKey(selectedProviderRow.name)}</p>
+    <p className="mt-2 text-xs text-muted-foreground">
+      {t.settings.model.providerNeedsApiKey(selectedProviderRow.name)}
+    </p>
   ) : null
 }
 
@@ -928,7 +929,11 @@ export function ModelSettings({
         startProviderSetup={startProviderSetup}
         switchProvider={switchProvider}
       />
-      <ProviderKeyHint needsSetup={needsSetup} selectedProviderRow={selectedProviderRow} setupIsApiKey={setupIsApiKey} />
+      <ProviderKeyHint
+        needsSetup={needsSetup}
+        selectedProviderRow={selectedProviderRow}
+        setupIsApiKey={setupIsApiKey}
+      />
     </div>
   )
 
@@ -937,16 +942,7 @@ export function ModelSettings({
       {!showMain && errorNotice}
       {showMain && (
         <DefaultMainModel
-          appliedModelLabel={
-            defaultMain.appliedSource !== 'aino'
-              ? mainModel?.model || ''
-              : defaultMain.appliedPlatformModel?.display_name || defaultMain.appliedPlatformId
-          }
-          appliedSourceLabel={
-            defaultMain.appliedSource !== 'aino'
-              ? `${defaultMain.appliedSource === 'custom' ? sourceCopy.customSource : sourceCopy.providerSource} · ${findCatalogProvider(providers, mainModel?.provider || '')?.name || mainModel?.provider || ''}`
-              : m.defaultMain.builtIn
-          }
+          {...appliedModelLabels(defaultMain, mainModel, providers, sourceCopy, m.defaultMain.builtIn)}
           applying={applying}
           builtinControls={
             <PlatformModelSettings
@@ -1221,4 +1217,24 @@ export function ModelSettings({
       )}
     </div>
   )
+}
+
+function appliedModelLabels(
+  defaults: ReturnType<typeof useDefaultMainModel>,
+  main: Parameters<typeof useDefaultMainModel>[0],
+  providers: Parameters<typeof findCatalogProvider>[0],
+  copy: ReturnType<typeof modelSourceCopy>,
+  builtIn: string
+) {
+  if (defaults.appliedSource === 'aino') {
+    return {
+      appliedModelLabel: defaults.appliedPlatformModel?.display_name || defaults.appliedPlatformId,
+      appliedSourceLabel: builtIn
+    }
+  }
+
+  const source = defaults.appliedSource === 'custom' ? copy.customSource : copy.providerSource
+  const provider = findCatalogProvider(providers, main?.provider || '')?.name || main?.provider || ''
+
+  return { appliedModelLabel: main?.model || '', appliedSourceLabel: `${source} · ${provider}` }
 }

@@ -8,11 +8,8 @@
  */
 
 import {
-  Badge,
   Button,
   Checkbox,
-  cn,
-  Codicon,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -24,7 +21,6 @@ import {
   host,
   Input,
   queryClient,
-  RowButton,
   SearchField,
   SegmentedControl,
   Select,
@@ -33,34 +29,35 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-  Tip,
   useI18n,
   useValue
 } from '@hermes/plugin-sdk'
 import { useEffect, useRef, useState } from 'react'
 
-import { avatarColor, blobatarSvg, botAppearance, BotFace } from './avatar'
-import { isBackfilledFacePng } from './avatar-image'
+import { avatarColor, blobatarSvg, BotFace } from './avatar'
 import { AvatarPicker } from './avatar-picker'
-import { $selectedBot } from './bot-state'
-import { createCanonicalChat } from './canonical-chat'
 import {
+  botOnConnection,
+  connectionName,
+  groupCreationEngine,
   groupCreationSource,
   groupExecutionMode,
+  groupNeedsDesktopCourier,
   seatableGroupBots,
   useGroupCapability
 } from './canonical-group-capabilities'
-import type { GroupCapabilityState } from './canonical-group-capabilities'
-import { registerCanonicalGroup } from './canonical-group-registry'
+import type { GroupCapabilityState, GroupCreationEngine } from './canonical-group-capabilities'
+import { refreshGatewayGroupRooms, registerCanonicalGroup } from './canonical-group-registry'
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
-import { canonicalGroupRequest, createCanonicalGroup } from './canonical-groups'
+import { canonicalGroupCreateError, canonicalGroupRequest, createCanonicalGroup } from './canonical-groups'
 import type { CanonicalGroupRoute } from './canonical-groups'
-import { $botMeta, botHandle, botRosterKey, filterBots, ROSTER_KEY, saveBotMeta } from './data'
+import { $botMeta, $lastRoster, botRosterKey, filterBots, ROSTER_KEY, saveBotMeta } from './data'
 import { labeled, ResizableFrame } from './dialog-parts'
 import { GROUP_CHAT_MAX_MEMBERS, mintGroupRoomId, uniqueGroupChatName, updateGroupChat } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
 import { GroupImageControls } from './group-chat-parts'
-import { setGroupMembership } from './group-chat-view-members'
+import { memberMachineOffline, setGroupMembership } from './group-chat-view-members'
+import { GroupCreateMembers } from './group-create-members'
 import {
   botGroups,
   durableGroupChatMembers,
@@ -80,12 +77,29 @@ import type {
 } from './profile-config'
 import { CapabilitiesView, capabilitiesViewRoutesConnections, CheckList } from './profile-config'
 import { deleteBot } from './profile-ops'
+import { openRosterBot } from './roster-actions'
 import { botRosterMeta } from './routing'
+import { getBotOpenGeneration } from './shared'
 import { HubSkillsSection } from './skills-hub'
 import { composeSoul } from './soul'
 import type { BotMeta, ConnectionRow, RosterRow } from './types'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+
+// Native bottom-right resize stays within the viewport; scrolling keeps the
+// advanced options accessible after the user shrinks the dialog.
+const ADVANCED_DIALOG_STYLE = {
+  resize: 'both',
+  overflow: 'auto',
+  minWidth: 420,
+  minHeight: 360,
+  maxWidth: '95vw',
+  maxHeight: '90vh'
+} as const
+
+function activeCreationSource(): string {
+  return `${host.state?.connectionId?.get?.() || ''}\0${host.state?.profile?.get?.() || 'default'}`
+}
 
 /** Share one in-flight async operation across concurrent callers. Failures
  * clear the slot so a later attempt can retry. */
@@ -123,10 +137,86 @@ interface CapabilityCatalog {
 }
 interface CreateAgentDialogProps {
   onClose: () => void
+  /** Refresh the mounted roster before selecting a just-created owner. */
+  onRefreshRoster?: () => Promise<RosterRow[]>
   /** Opens the editor for a just-created local bot whose model is not ready. */
   onConfigureModel?: (bot: RosterRow) => void
   open: boolean
   roster: RosterRow[]
+}
+
+/** An explicit connection selection only routes remotely when it differs
+ * from the window's active gateway. */
+function creationTarget(targetConnection: string, connections: ConnectionRow[] | null) {
+  const activeConnectionId = String(host.state?.connectionId?.get?.() || '').trim()
+  const remoteTarget = Boolean(targetConnection) && targetConnection !== (activeConnectionId || 'local')
+
+  const targetLabel = remoteTarget
+    ? (connections || []).find(c => c.id === targetConnection)?.label || targetConnection
+    : ''
+
+  return { activeConnectionId, remoteTarget, targetLabel, createTarget: remoteTarget ? targetConnection : '' }
+}
+
+/** Capture the new row's source before profile creation can outlive navigation. */
+function createdBotRow(
+  identity: Pick<RosterRow, 'name' | 'description' | 'title'>,
+  roster: RosterRow[],
+  createTarget: string,
+  openingConnection: string,
+  remoteTarget: boolean
+): RosterRow {
+  const connectionId = createTarget || openingConnection || 'local'
+
+  const connectionKind =
+    roster.find(row => (row.connectionId || 'local') === connectionId)?.connectionKind ??
+    (connectionId === 'local' ? 'local' : 'remote')
+
+  return {
+    ...identity,
+    connectionId,
+    connectionKind,
+    sourceScoped: true,
+    ...(remoteTarget ? { remoteSource: true } : {})
+  }
+}
+
+type RuntimeReadiness = { error?: string; ok?: boolean; provider?: string } | null
+
+/** Report creation separately from whether its first model turn is ready. */
+function notifyCreatedBot(
+  readiness: RuntimeReadiness,
+  {
+    bot,
+    createdMessage,
+    editor,
+    onConfigureModel,
+    remoteTarget
+  }: {
+    bot: RosterRow
+    createdMessage: string
+    editor: ReturnType<typeof useBots>['editor']
+    onConfigureModel: CreateAgentDialogProps['onConfigureModel']
+    remoteTarget: boolean
+  }
+): boolean {
+  const needsModel = readiness?.ok === false
+  const platformUnavailable = needsModel && readiness?.provider === 'aino'
+  host.notify(
+    needsModel
+      ? {
+          kind: 'warning',
+          title: createdMessage,
+          message: platformUnavailable ? readiness.error || editor.modelSwitchFailed : editor.needsModel,
+          ...(!platformUnavailable ? { detail: readiness?.error } : {}),
+          ...(!platformUnavailable && !remoteTarget && onConfigureModel
+            ? { action: { label: editor.configureModel, onClick: () => onConfigureModel(bot) } }
+            : {})
+        }
+      : { kind: 'success', message: createdMessage }
+  )
+
+  return needsModel
 }
 
 function creationTabs(b: ReturnType<typeof useBots>, showCapabilities: boolean) {
@@ -176,7 +266,11 @@ function capabilityPayload(
  *  default backend, no gateway switch) or '' for the active gateway. */
 function requestOnTarget<T>(target: string, method: string, params: Record<string, unknown> = {}): Promise<T> {
   return target
-    ? host.requestProfile({ connectionId: target, mode: 'remote', profile: 'default', targetProfile: 'default' }, method, params)
+    ? host.requestProfile(
+        { connectionId: target, mode: 'remote', profile: 'default', targetProfile: 'default' },
+        method,
+        params
+      )
     : host.request(method, params)
 }
 
@@ -219,7 +313,15 @@ function useCapabilitiesDraft(ready: boolean, slug: string, draft: null | string
 
 /** New Bot's live Capabilities tab: a hint until the name is usable, a spinner
  *  until its draft profile exists, then the real surface pinned to that draft. */
-function CapabilitiesTab({ connection, draft, hint }: { connection?: string; draft: null | string; hint: null | string }) {
+function CapabilitiesTab({
+  connection,
+  draft,
+  hint
+}: {
+  connection?: string
+  draft: null | string
+  hint: null | string
+}) {
   const b = useBots()
   const note = 'px-2 py-3 text-center text-xs text-(--ui-text-tertiary)'
 
@@ -274,13 +376,14 @@ function useDraftProfile(
   const b = useBots()
   const draftGenRef = useRef(0)
   const draftTargetRef = useRef('')
+  const draftSourceRef = useRef<null | { identity: string; connectionId: string }>(null)
 
   const discardDraft = () => {
     const draft = createdRef.current
     draftGenRef.current += 1
     createdRef.current = flightRef.current = null
 
-    if (draft) {
+    if (draft && (draftTargetRef.current || draftSourceRef.current?.identity === activeCreationSource())) {
       discardDraftProfile(draft, draftTargetRef.current, b)
     }
   }
@@ -292,10 +395,16 @@ function useDraftProfile(
     []
   )
 
-  return { discardDraft, draftGenRef, draftTargetRef }
+  return { discardDraft, draftGenRef, draftTargetRef, draftSourceRef }
 }
 
-export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: CreateAgentDialogProps) {
+export function CreateAgentDialog({
+  open,
+  onClose,
+  onConfigureModel,
+  onRefreshRoster,
+  roster
+}: CreateAgentDialogProps) {
   const { t } = useI18n()
   const b = useBots()
   const [name, setName] = useState('')
@@ -308,7 +417,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
   // button + MCP setup buttons). Distinct from createdRef on purpose:
   // createdRef must stay a slug string for its sibling consumers.
   const flightRef = useRef<Promise<null | string> | null>(null)
-  const { discardDraft, draftGenRef, draftTargetRef } = useDraftProfile(createdRef, flightRef)
+  const { discardDraft, draftGenRef, draftTargetRef, draftSourceRef } = useDraftProfile(createdRef, flightRef)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   // Default shapes mode: deterministic blob face drawn from the agent's name
@@ -350,18 +459,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
       )
       .catch(() => setConnections([]))
   }, [open, connections])
-  const activeConnectionId = String(host.state?.connectionId?.get?.() || '').trim()
-  // Remote target = an explicitly picked registry connection that is not the
-  // one this window is already on.
-  const remoteTarget = Boolean(targetConnection) && targetConnection !== (activeConnectionId || 'local')
-
-  const targetLabel = remoteTarget
-    ? (connections || []).find(c => c.id === targetConnection)?.label || targetConnection
-    : ''
-
-  /** Where the profile is created right now: the picked connection id for a
-   *  remote target, '' for the active gateway. */
-  const createTarget = remoteTarget ? targetConnection : ''
+  const { activeConnectionId, remoteTarget, targetLabel, createTarget } = creationTarget(targetConnection, connections)
 
   /** Gateway RPC on the create target: the picked connection's default
    *  backend for remote targets, the active gateway otherwise. */
@@ -436,10 +534,17 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
   // switched must not key the preview (or the describe call) either.
   const capSource = cloneFrom === '__none__' || remoteTarget ? 'default' : cloneFrom
 
-  const materializeForCaps = () =>
+  const materializeForCaps = () => {
+    const source = activeCreationSource()
+
     void ensureAgentCreated()
-      .then(created => created && setCreatedForCaps(created))
+      .then(created => {
+        if (created && (createTarget || source === activeCreationSource())) {
+          setCreatedForCaps(created)
+        }
+      })
       .catch(err => host.notifyError(err, b.bot.createFailed))
+  }
 
   useCapabilitiesDraft(advTab === 'capabilities' && valid && !taken, slug, createdForCaps, materializeForCaps)
 
@@ -509,6 +614,12 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
   // in-flight creation promise so simultaneous MCP setup / Create clicks fire
   // ONE profiles.create. A failed flight clears its slot so a retry can run.
   const ensureAgentCreated = (): Promise<null | string> => {
+    // A materialized draft belongs to the source that created it. Leave it
+    // there if the ambient owner changed instead of adopting a same-name bot.
+    if (createdRef.current && !draftTargetRef.current && draftSourceRef.current?.identity !== activeCreationSource()) {
+      return Promise.resolve(null)
+    }
+
     // Renamed since the draft materialized? The old draft is orphaned —
     // discard it and create fresh under the new slug.
     if (createdRef.current && createdRef.current !== slug) {
@@ -529,6 +640,9 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
 
     const generation = draftGenRef.current
     const target = createTarget
+    const source = activeCreationSource()
+    const sourceConnection = String(host.state?.connectionId?.get?.() || '').trim() || 'local'
+    const sourceCurrent = () => Boolean(target) || source === activeCreationSource()
 
     const flight = singleFlight(flightRef, async () => {
       await requestForTarget('profiles.create', {
@@ -559,6 +673,14 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
           : {})
       })
 
+      // The create request already landed on its captured socket. A later
+      // ambient-source switch cannot authorize follow-up writes there or here.
+      if (!sourceCurrent()) {
+        createdRef.current = flightRef.current = null
+
+        return slug
+      }
+
       // Prefs a deleted profile left under this name must not become the new
       // bot's. Older builds without the door keep them, as before.
       if (typeof host.dropLeftoverProfilePrefs === 'function') {
@@ -574,6 +696,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
 
       createdRef.current = slug
       draftTargetRef.current = target
+      draftSourceRef.current = { identity: source, connectionId: target || sourceConnection }
 
       // Apply capability picks from the Advanced tabs (best-effort; the
       // profile exists either way and Edit Profile can finish the job).
@@ -588,6 +711,12 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
         }
       } catch {
         /* capability application is best-effort */
+      }
+
+      if (!sourceCurrent()) {
+        createdRef.current = flightRef.current = null
+
+        return slug
       }
 
       // Cancelled while configure ran: the discard already deleted the draft,
@@ -629,14 +758,17 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
           /* older remote gateway */
         }
       } else {
-        saveBotMeta(slug, {
-          shape,
-          color: color ?? undefined,
-          image,
-          imageKind: image ? 'photo' : 'shape',
-          title: botTitle,
-          created: Date.now()
-        })
+        saveBotMeta(
+          { name: slug, connectionId: sourceConnection, sourceScoped: true },
+          {
+            shape,
+            color: color ?? undefined,
+            image,
+            imageKind: image ? 'photo' : 'shape',
+            title: botTitle,
+            created: Date.now()
+          }
+        )
       }
 
       queryClient.invalidateQueries({
@@ -657,6 +789,23 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
     setBusy(true)
     setError(null)
 
+    // Creation may outlive this navigation. Capture its source before I/O,
+    // and never let completion take focus back from a newer user action.
+    const openingGeneration = getBotOpenGeneration()
+    const openingHash = window.location.hash
+    const openingConnection = String(host.state?.connectionId?.get?.() || '').trim()
+    const openingSource = activeCreationSource()
+
+    const bot = createdBotRow(
+      { name: slug, description: descriptionText, title: botTitle },
+      roster,
+      createTarget,
+      openingConnection,
+      remoteTarget
+    )
+
+    const openingStillCurrent = () => openingHash === window.location.hash && openingSource === activeCreationSource()
+
     try {
       const slugCreated = await ensureAgentCreated()
 
@@ -667,38 +816,33 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
         return
       }
 
+      const who = displayName({ name: slug, title: botTitle })
+      const createdMessage = remoteTarget ? b.editor.createdOn(who, targetLabel) : b.editor.created(who)
+
+      if (!remoteTarget && openingSource !== activeCreationSource()) {
+        host.notify({ kind: 'success', message: createdMessage })
+        reset()
+        onClose()
+
+        return
+      }
+
       // The intro turn is a real model call. Probe the new profile's route
       // first so a bot whose machine has no usable credential lands as
       // "created, needs a model" instead of a doomed "No LLM provider" turn.
       // Only an explicit `ok: false` counts; older gateways proceed as before.
-      const readiness = await requestForTarget<{ error?: string; ok?: boolean }>('setup.runtime_check', {
+      const readiness = await requestForTarget<RuntimeReadiness>('setup.runtime_check', {
         profile: slugCreated
       }).catch(() => null)
 
-      const needsModel = readiness?.ok === false
-      const who = displayName({ name: slug, title: botTitle })
-      const createdMessage = remoteTarget ? b.editor.createdOn(who, targetLabel) : b.editor.created(who)
+      const needsModel = notifyCreatedBot(readiness, {
+        bot,
+        createdMessage,
+        editor: b.editor,
+        onConfigureModel,
+        remoteTarget
+      })
 
-      const bot: RosterRow = {
-        name: slugCreated,
-        description: descriptionText,
-        title: botTitle,
-        ...(remoteTarget ? { connectionId: targetConnection, remoteSource: true } : {})
-      }
-
-      host.notify(
-        needsModel
-          ? {
-              kind: 'warning',
-              title: createdMessage,
-              message: b.editor.needsModel,
-              detail: readiness?.error,
-              ...(!remoteTarget && onConfigureModel
-                ? { action: { label: b.editor.configureModel, onClick: () => onConfigureModel(bot) } }
-                : {})
-            }
-          : { kind: 'success', message: createdMessage }
-      )
       const wasRemote = remoteTarget
       reset()
       onClose()
@@ -714,26 +858,30 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
         return
       }
 
-      $selectedBot.set(slug)
+      if (openingGeneration === getBotOpenGeneration() && openingStillCurrent()) {
+        if (onRefreshRoster) {
+          try {
+            const refreshed = await onRefreshRoster()
 
-      // Birth the bot's forever chat right away: it introduces itself as
-      // the first thing the user sees, and the pin exists from minute one.
-      try {
-        // Creates, pins, opens, and kicks off the intro in one flow. This is
-        // the ONE caller allowed to request the intro turn — genuine New
-        // Agent creation. Click-path resolution (openBotCanonicalChat) mints
-        // silently so a resolution miss never burns a turn (ScottFive).
-        const sid = await createCanonicalChat(slug, {
-          kickoff: !needsModel
-        })
+            if (!refreshed.some(row => botRosterKey(row) === botRosterKey(bot))) {
+              return
+            }
+          } catch (error) {
+            if (openingStillCurrent()) {
+              host.notifyError(error, b.bot.loadFailed)
+            }
 
-        if (!sid && typeof host.newChat === 'function') {
-          host.newChat(slug)
+            return
+          }
         }
-      } catch {
-        if (typeof host.newChat === 'function') {
-          host.newChat(slug)
+
+        if (openingGeneration !== getBotOpenGeneration() || !openingStillCurrent()) {
+          return
         }
+
+        // The row-click transaction owns selection, source routing and the
+        // visible Bot tab together. Its failure path never re-homes Sessions.
+        await openRosterBot(bot, { kickoff: !needsModel, openingStillCurrent })
       }
     } catch (err) {
       setBusy(false)
@@ -755,21 +903,8 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
       open={open}
     >
       <DialogContent
-        className={advanced ? 'max-w-3xl' : 'max-w-md'} // Native resize handle (bottom-right corner): the dialog becomes a
-        // window the user can grow/shrink. overflow:auto is required for CSS
-        // resize to engage; caps keep it on screen.
-        style={
-          advanced
-            ? {
-                resize: 'both',
-                overflow: 'auto',
-                minWidth: 420,
-                minHeight: 360,
-                maxWidth: '95vw',
-                maxHeight: '90vh'
-              }
-            : undefined
-        }
+        className={advanced ? 'max-w-3xl' : 'max-w-md'}
+        style={advanced ? ADVANCED_DIALOG_STYLE : undefined}
       >
         <DialogHeader>
           <DialogTitle>{b.bot.newTitle}</DialogTitle>
@@ -903,7 +1038,10 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                     ensureCaps()
                   }
                 }}
-                options={creationTabs(b, Boolean(CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections)))}
+                options={creationTabs(
+                  b,
+                  Boolean(CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections))
+                )}
                 value={advTab}
               />
               {advTab === 'general' ? (
@@ -973,7 +1111,9 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                 </div>
               ) : advTab === 'capabilities' ? (
                 <CapabilitiesTab
-                  connection={remoteTarget ? targetConnection : undefined}
+                  connection={
+                    createdForCaps ? draftSourceRef.current?.connectionId : remoteTarget ? targetConnection : undefined
+                  }
                   draft={createdForCaps === slug ? createdForCaps : null}
                   hint={!valid ? b.editor.nameFirstHint : taken ? b.editor.nameTakenHint : null}
                 />
@@ -1168,17 +1308,30 @@ export function GroupDialog({ bot, onClose }: GroupDialogProps) {
   const b = useBots()
   const meta = useValue($botMeta)
   const [name, setName] = useState('')
+  const connectionId = useValue(host.state.connectionId)
+  const roster: RosterRow[] = useValue($lastRoster)
   const current = botGroups(botRosterMeta(bot, meta))
   const groups = knownGroups(meta)
+  const botName = displayName(bot, botRosterMeta(bot, meta))
+  // Its groups[] also live on its own machine: a change saved while that
+  // machine is offline would land only here and be undone on reconnect.
+  const locked = memberMachineOffline(roster.find(row => botRosterKey(row) === botRosterKey(bot)) || bot, connectionId)
 
-  const setMembership = (group: string, enabled: boolean) => {
-    void setGroupMembership(bot, group, enabled)
+  const setMembership = async (group: string, enabled: boolean) => {
+    try {
+      await setGroupMembership(bot, group, enabled)
+    } catch (error) {
+      host.notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
+
+      return false
+    }
+
     host.notify({
       kind: 'info',
-      message: enabled
-        ? `${displayName(bot, botRosterMeta(bot, meta))} added to “${group}”`
-        : `${displayName(bot, botRosterMeta(bot, meta))} removed from “${group}”`
+      message: enabled ? `${botName} added to “${group}”` : `${botName} removed from “${group}”`
     })
+
+    return true
   }
 
   return (
@@ -1205,11 +1358,20 @@ export function GroupDialog({ bot, onClose }: GroupDialogProps) {
                   className="flex cursor-pointer items-center gap-2 rounded-(--aino-radius-row) px-2 py-1.5 text-sm hover:bg-(--chrome-action-hover)"
                   key={group}
                 >
-                  <Checkbox checked={enabled} onCheckedChange={checked => setMembership(group, checked === true)} />
+                  <Checkbox
+                    checked={enabled}
+                    disabled={locked}
+                    onCheckedChange={checked => void setMembership(group, checked === true)}
+                  />
                   <span>{group}</span>
                 </label>
               )
             })}
+          </div>
+        ) : null}
+        {locked ? (
+          <div className="text-xs text-(--ui-text-tertiary)" data-testid="group-dialog-locked">
+            {b.crossGateway.groupsOffline(connectionName(bot), botName)}
           </div>
         ) : null}
         <form
@@ -1218,30 +1380,35 @@ export function GroupDialog({ bot, onClose }: GroupDialogProps) {
             event.preventDefault()
             const trimmed = name.trim()
 
-            if (trimmed) {
-              setMembership(trimmed, true)
+            if (trimmed && !locked) {
+              void setMembership(trimmed, true)
               setName('')
             }
           }}
         >
           <Input
             autoFocus
+            disabled={locked}
             onChange={event => setName(event.target.value)}
             placeholder={groups.length ? b.group.newGroupPlaceholder : b.group.groupNameExample}
             value={name}
           />
-          <Button disabled={!name.trim()} size="sm" type="submit">
+          <Button disabled={locked || !name.trim()} size="sm" type="submit">
             {b.group.createAndJoin}
           </Button>
         </form>
         {current.length ? (
           <Button
             className="justify-self-start"
+            disabled={locked}
             onClick={() =>
               void (async () => {
-                // Sequential: each toggle patches groups[] from the current meta.
+                // Sequential: each toggle patches groups[] from the current meta;
+                // stop at the first one that did not land.
                 for (const group of current) {
-                  await setGroupMembership(bot, group, false)
+                  if (!(await setMembership(group, false))) {
+                    return
+                  }
                 }
               })()
             }
@@ -1261,6 +1428,93 @@ interface CreateGroupChatDialogProps {
   onCreated?: (group: string, origin: CanonicalGroupOrigin) => void
   open: boolean
   roster: RosterRow[]
+}
+
+/** Write a Desktop-driven room (every selection on a legacy gateway, or one
+ *  spanning connections) and return its unique name. Nothing is written once
+ *  `sourceCurrent` turns false. */
+function persistDesktopDrivenGroup(
+  base: string,
+  selected: RosterRow[],
+  allMeta: Record<string, BotMeta>,
+  image: null | string,
+  sourceCurrent: () => boolean,
+  unavailable: string,
+  connectionId: null | string
+): string {
+  // Creating a group is always a FRESH room. Without this, re-creating a
+  // group under an existing name (easy — the default name is just the
+  // member names) silently reopens the old room with its full log, which
+  // reads as "not a fresh group" (db's Aug 2026 report). Uniquify against
+  // both live rooms and any bot's current grouping, then mint a fresh
+  // roomId: member sessions are titled by that roomId, so a
+  // disbanded-and-recreated group with the SAME display name still gets
+  // new sessions instead of resuming the old room's by title.
+  const taken = new Set(liveGroupChatNames())
+
+  for (const meta of Object.values($botMeta.get() || {})) {
+    for (const existing of botGroups(meta)) {
+      taken.add(existing)
+    }
+  }
+
+  const groupName = uniqueGroupChatName(base, taken)
+  const roomId = mintGroupRoomId()
+
+  if (!sourceCurrent()) {
+    throw new Error(unavailable)
+  }
+
+  for (const bot of selected) {
+    void saveBotMeta(bot, groupMembershipPatch(botRosterMeta(bot, allMeta), groupName, true))
+  }
+
+  // Persist every machine identity, including today's active source. That
+  // member becomes remote after a source switch and cannot rely on the new
+  // gateway's name-keyed bot metadata to remain seated in this room.
+  const roomMembers = durableGroupChatMembers(selected)
+  updateGroupChat(groupName, (room: GroupChatRoom) => {
+    room.members = roomMembers
+    room.roomId = roomId
+
+    // Recorded once: later membership edits must not re-decide who drives it.
+    if (groupNeedsDesktopCourier(selected, connectionId)) {
+      room.engine = 'desktop'
+    }
+
+    if (image) {
+      room.image = image
+    }
+
+    return room
+  })
+
+  return groupName
+}
+
+interface GroupEngineNoteProps {
+  connectionId: null | string
+  engine: GroupCreationEngine | null
+  selected: RosterRow[]
+}
+
+/** Says, before creation, when a selection makes a Desktop-driven room or
+ *  cannot be created from this connection at all. */
+function GroupEngineNote({ connectionId, engine, selected }: GroupEngineNoteProps) {
+  const b = useBots()
+  const desktopDriven = engine === 'desktop' && groupNeedsDesktopCourier(selected, connectionId)
+
+  if (engine !== 'elsewhere' && !desktopDriven) {
+    return null
+  }
+
+  return (
+    <p className="text-xs text-(--ui-text-secondary)" data-group-engine={engine} role="note">
+      {engine === 'elsewhere'
+        ? b.crossGateway.selectionElsewhere(connectionName(selected[0]))
+        : b.crossGateway.desktopDriven}
+    </p>
+  )
 }
 
 async function revalidateGroupCreationMode(
@@ -1291,9 +1545,10 @@ async function revalidateGroupCreationMode(
 }
 
 /** Discord-style group chat creation: pick 2+ routable bots via checkboxes
- *  (with search), name the group, create. Legacy assignments append to each
- *  local bot's group membership list and sync through ui_meta; canonical groups
- *  keep members on their authority connection. */
+ *  (with search), name the group, create. A selection on the current connection
+ *  becomes a gateway-owned room there; one that reaches another connection (or
+ *  any selection on a legacy gateway) becomes a Desktop-driven room, whose
+ *  memberships append to each bot's group list and sync through ui_meta. */
 export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: CreateGroupChatDialogProps) {
   const { t } = useI18n()
   const b = useBots()
@@ -1304,6 +1559,8 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: Crea
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [name, setName] = useState('')
   const [image, setImage] = useState<null | string>(null)
+  const [pending, setPending] = useState(false)
+  const [createError, setCreateError] = useState('')
 
   // Reset per open so a cancelled draft doesn't leak into the next one.
   useEffect(() => {
@@ -1312,6 +1569,7 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: Crea
       setChecked({})
       setName('')
       setImage(null)
+      setCreateError('')
     }
   }, [open])
 
@@ -1319,6 +1577,11 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: Crea
   const selectableRoster = seatableGroupBots(roster, { connectionId, mode, seatable })
 
   const selected = selectableRoster.filter(bot => checked[botRosterKey(bot)])
+  // A selection spanning connections cannot be owned by one gateway: the room
+  // runs on this Desktop, which carries each member's turn home. A selection
+  // wholly on ANOTHER connection can be owned by neither side from here.
+  const engine = mode === 'canonical' || mode === 'legacy' ? groupCreationEngine(mode, selected, connectionId) : null
+  const spansConnections = selectableRoster.some(bot => !botOnConnection(bot, connectionId))
   const visible: RosterRow[] = filterBots(selectableRoster, allMeta, query)
   const atCap = selected.length >= GROUP_CHAT_MAX_MEMBERS
 
@@ -1326,240 +1589,179 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: Crea
     ? selected.map(bot => displayName(bot, botRosterMeta(bot, allMeta))).join(', ')
     : b.group.nameLabel
 
-  const canCreate = selected.length >= 2 && Boolean(name.trim() || selected.length) &&
-    (mode === 'canonical' || mode === 'legacy')
+  const canCreate =
+    selected.length >= 2 && Boolean(name.trim() || selected.length) && engine !== null && engine !== 'elsewhere'
 
   const creating = useRef(false)
 
   const create = async () => {
-    if (creating.current) {return}
-    creating.current = true
-
-    try {
-    const base = (name.trim() || placeholder).slice(0, 64)
-
-    if (selected.length < 2 || !base) {
+    if (creating.current) {
       return
     }
 
-    const route = observedRoute
+    creating.current = true
+    setPending(true)
+    setCreateError('')
 
-    if (!route) {
-      throw new Error(b.canonical.driverUnavailable)
-    }
+    try {
+      const base = (name.trim() || placeholder).slice(0, 64)
 
-    const { mode: currentMode, sourceCurrent } = await revalidateGroupCreationMode(route, capability, source, b.canonical.driverUnavailable)
+      if (selected.length < 2 || !base) {
+        return
+      }
 
-    if (!sourceCurrent()) {
-      throw new Error(b.canonical.driverUnavailable)
-    }
+      const route = observedRoute
 
-    if (currentMode === 'canonical') {
+      if (!route) {
+        throw new Error(b.canonical.driverUnavailable)
+      }
+
+      const { mode: currentMode, sourceCurrent } = await revalidateGroupCreationMode(
+        route,
+        capability,
+        source,
+        b.canonical.driverUnavailable
+      )
+
       if (!sourceCurrent()) {
         throw new Error(b.canonical.driverUnavailable)
       }
 
-      const created = await createCanonicalGroup(route, base, durableGroupChatMembers(selected))
+      const engine = groupCreationEngine(currentMode, selected, route.connectionId)
 
-      // Creation already succeeded; leave it on its owner without adopting a stale result.
-      if (!sourceCurrent()) {return}
-      const key = registerCanonicalGroup(route, created.room)
+      if (engine === 'elsewhere') {
+        throw new Error(b.crossGateway.selectionElsewhere(connectionName(selected[0])))
+      }
+
+      if (engine === 'gateway') {
+        const created = await createCanonicalGroup(route, base, durableGroupChatMembers(selected))
+
+        // Creation already succeeded; leave it on its owner without adopting a stale result.
+        if (!sourceCurrent()) {
+          return
+        }
+
+        const key = registerCanonicalGroup(route, created.room)
+        refreshGatewayGroupRooms()
+        onClose()
+        onCreated?.(key, 'key')
+
+        return
+      }
+
+      const groupName = persistDesktopDrivenGroup(
+        base,
+        selected,
+        allMeta,
+        image,
+        sourceCurrent,
+        b.canonical.driverUnavailable,
+        route.connectionId
+      )
+
+      host.notify({
+        kind: 'info',
+        message: b.group.createdWith(groupName, selected.length)
+      })
       onClose()
-      onCreated?.(key, 'key')
-
-      return
-    }
-
-    // Creating a group is always a FRESH room. Without this, re-creating a
-    // group under an existing name (easy — the default name is just the
-    // member names) silently reopens the old room with its full log, which
-    // reads as "not a fresh group" (db's Aug 2026 report). Uniquify against
-    // both live rooms and any bot's current grouping, then mint a fresh
-    // roomId: member sessions are titled by that roomId, so a
-    // disbanded-and-recreated group with the SAME display name still gets
-    // new sessions instead of resuming the old room's by title.
-    const taken = new Set(liveGroupChatNames())
-
-    for (const meta of Object.values($botMeta.get() || {})) {
-      for (const existing of botGroups(meta)) {
-        taken.add(existing)
-      }
-    }
-
-    const groupName = uniqueGroupChatName(base, taken)
-    const roomId = mintGroupRoomId()
-
-    if (!sourceCurrent()) {
-      throw new Error(b.canonical.driverUnavailable)
-    }
-
-    for (const bot of selected) {
-      void saveBotMeta(bot, groupMembershipPatch(botRosterMeta(bot, allMeta), groupName, true))
-    }
-
-    // Persist every machine identity, including today's active source. That
-    // member becomes remote after a source switch and cannot rely on the new
-    // gateway's name-keyed bot metadata to remain seated in this room.
-    const roomMembers = durableGroupChatMembers(selected)
-    updateGroupChat(groupName, (room: GroupChatRoom) => {
-      room.members = roomMembers
-      room.roomId = roomId
-
-      if (image) {
-        room.image = image
-      }
-
-      return room
-    })
-    host.notify({
-      kind: 'info',
-      message: b.group.createdWith(groupName, selected.length)
-    })
-    onClose()
-    onCreated?.(groupName, 'name')
+      onCreated?.(groupName, 'name')
     } catch (error) {
-      host.notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
-    } finally { creating.current = false }
+      const message = canonicalGroupCreateError(error, b.canonical)
+      setCreateError(message)
+      host.notify({ kind: 'error', message })
+    } finally {
+      creating.current = false
+      setPending(false)
+    }
   }
 
   return (
     <Dialog
       onOpenChange={value => {
-        if (!value) {
+        if (!value && !creating.current) {
           onClose()
         }
       }}
       open={open}
     >
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md aino-group-create-dialog">
         <DialogHeader>
           <DialogTitle>{b.group.newTitle}</DialogTitle>
           <DialogDescription>{b.group.newDescription(GROUP_CHAT_MAX_MEMBERS)}</DialogDescription>
         </DialogHeader>
         {mode === 'unavailable' && <p role="status">{b.canonical.driverUnavailable}</p>}
+        <GroupEngineNote connectionId={connectionId} engine={engine} selected={selected} />
         {/* TODO(bot-mode-types): this search box never takes focus when the dialog
             opens — SearchField accepts no `autoFocus` prop and forwards no extra
             props, so the `autoFocus` that used to sit here was inert. */}
-        <SearchField
-          aria-label={b.group.searchToAdd}
-          containerClassName="w-full"
-          inputClassName="w-full"
-          onChange={setQuery}
-          placeholder={b.group.searchToAddPlaceholder}
-          value={query}
-        />
-        {selected.length ? (
-          <div className="flex flex-wrap gap-1">
-            {selected.map(bot => (
-              <Badge
-                asChild
-                className="rounded-full bg-(--chrome-action-hover) pl-2 pr-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-secondary) transition-colors hover:text-foreground"
-                key={botRosterKey(bot)}
-                variant="muted"
-              >
-                <Tip label={b.group.removeFromSelection}>
-                  <RowButton
-                    onClick={() =>
-                      setChecked(prev => ({
-                        ...prev,
-                        [botRosterKey(bot)]: false
-                      }))
-                    }
-                  >
-                    {displayName(bot, botRosterMeta(bot, allMeta))}
-                    <Codicon className="text-[0.6rem]" name="close" />
-                  </RowButton>
-                </Tip>
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-        <div className="max-h-64 min-h-0 overflow-y-auto overscroll-contain">
-          <div className="grid gap-0.5 pr-2">
-            {visible.length ? (
-              visible.map(bot => {
-                const meta = botRosterMeta(bot, allMeta)
-                const { shape, color, image } = botAppearance(bot.name, meta)
-                const isChecked = Boolean(checked[botRosterKey(bot)])
-                const disabled = !isChecked && atCap
-                const currentGroups = botGroups(meta)
-
-                return (
-                  <label
-                    className={cn(
-                      'flex min-w-0 cursor-pointer items-center gap-2 rounded-(--aino-radius-row) px-1.5 py-1 transition-colors hover:bg-(--chrome-action-hover)',
-                      disabled && 'cursor-not-allowed opacity-50'
-                    )}
-                    key={botRosterKey(bot)}
-                  >
-                    <BotFace
-                      color={avatarColor(color, bot.name)}
-                      image={image && !isBackfilledFacePng(image) ? image : null}
-                      name={bot.name}
-                      shape={shape}
-                      size={24}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs text-foreground">{displayName(bot, meta)}</div>
-                      <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                        {[
-                          currentGroups.length
-                            ? `@${botHandle(bot.name, bot)} · in ${currentGroups.map(group => `“${group}”`).join(', ')}`
-                            : `@${botHandle(bot.name, bot)}`,
-                          bot.remoteSource && bot.connectionLabel ? ` · ${bot.connectionLabel}` : ''
-                        ].join('')}
-                      </div>
-                    </div>
-                    <Checkbox
-                      checked={isChecked}
-                      disabled={disabled}
-                      onCheckedChange={value =>
-                        setChecked(prev => ({
-                          ...prev,
-                          [botRosterKey(bot)]: Boolean(value)
-                        }))
-                      }
-                    />
-                  </label>
-                )
-              })
-            ) : (
-              <div className="px-1.5 py-3 text-center text-xs text-(--ui-text-tertiary)">
-                {query.trim() ? b.group.noBotsMatch(query.trim()) : b.group.noBotsYet}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="grid gap-2">
-          <GroupImageControls
-            image={image}
-            onImage={setImage}
-            seedMembers={selected.map(bot => displayName(bot, botRosterMeta(bot, allMeta)))}
-            seedName={name.trim() || (selected.length ? placeholder : '')}
-          />
-          <form
-            onSubmit={event => {
-              event.preventDefault()
-              create()
+        <fieldset className="aino-group-create-fields" disabled={pending}>
+          <SearchField
+            aria-label={b.group.searchToAdd}
+            containerClassName="w-full"
+            inputClassName="w-full"
+            onChange={value => {
+              if (!pending) {
+                setQuery(value)
+              }
             }}
-          >
-            <Input
-              aria-label={b.group.nameLabel}
-              maxLength={64}
-              onChange={event => setName(event.target.value)}
-              placeholder={placeholder}
-              value={name}
+            placeholder={b.group.searchToAddPlaceholder}
+            value={query}
+          />
+          <GroupCreateMembers
+            allMeta={allMeta}
+            atCap={atCap}
+            checked={checked}
+            disabled={pending}
+            onToggle={(key, value) => setChecked(prev => ({ ...prev, [key]: value }))}
+            query={query}
+            selected={selected}
+            visible={visible}
+          />
+          <div className="grid gap-2">
+            <GroupImageControls
+              image={image}
+              onImage={setImage}
+              seedMembers={selected.map(bot => displayName(bot, botRosterMeta(bot, allMeta)))}
+              seedName={name.trim() || (selected.length ? placeholder : '')}
             />
-          </form>
-        </div>
+            <form
+              onSubmit={event => {
+                event.preventDefault()
+                create()
+              }}
+            >
+              <Input
+                aria-label={b.group.nameLabel}
+                disabled={pending}
+                maxLength={64}
+                onChange={event => setName(event.target.value)}
+                placeholder={placeholder}
+                value={name}
+              />
+            </form>
+          </div>
+        </fieldset>
+        {createError && (
+          <p className="aino-group-create-error" role="alert">
+            {createError}
+          </p>
+        )}
         <DialogFooter>
-          <Button onClick={onClose} variant="secondary">
+          <Button disabled={pending} onClick={onClose} variant="secondary">
             {t.common.cancel}
           </Button>
-          <Button
-            disabled={!canCreate}
-            onClick={create}
-          >{`${b.group.newTitle}${selected.length ? ` (${selected.length})` : ''}`}</Button>
+          <Button aria-busy={pending} disabled={pending || !canCreate} onClick={create}>
+            {pending ? (
+              <>
+                <span aria-hidden="true">
+                  <GlyphSpinner />
+                </span>
+                {b.editor.creating}
+              </>
+            ) : (
+              `${b.group.newTitle}${selected.length ? ` (${selected.length})` : ''}`
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

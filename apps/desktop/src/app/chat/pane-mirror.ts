@@ -17,6 +17,7 @@ import {
   removeTreePane,
   treePanesWithPrefix
 } from '@/components/pane-shell/tree/store'
+import type { WorkspacePaneScope } from '@/components/pane-shell/workspace-scope'
 import type { MenuKit } from '@/components/ui/actions-menu'
 import { registry } from '@/contrib/registry'
 import type { TileDock } from '@/store/session-states'
@@ -28,6 +29,7 @@ interface DockHint {
 }
 
 export interface PaneMirror<T> {
+  workspaceScope?: (key: string) => WorkspacePaneScope | undefined
   toolPanel?: boolean
   /** Reactive source list. */
   source: ReadableAtom<T[]>
@@ -102,6 +104,7 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
 
   // The tile's tab hooks, bound to its key (absent when the mirror has none).
   const tabChrome = (key: string) => ({
+    workspaceScope: cfg.workspaceScope ? () => cfg.workspaceScope!(key) : undefined,
     tabActions: cfg.tabActions ? () => cfg.tabActions!(key) : undefined,
     // returns boolean (handled) — see PaneChrome.tabDrag
     tabDrag: cfg.tabDrag

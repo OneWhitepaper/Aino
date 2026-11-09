@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from hermes_state_common import (
+    CONVERSATION_MODEL_SELECTION_KEY,
     _BOUNDARY_END_REASONS, _COMPRESSION_LOCK_ROW_SQL as _LOCK_ROW_SQL, _ENDED_ROW_SQL, _ended_by_compression,
     _RESET_CHILD_SQL, _non_continuation_child_sql, _sql_json_extract, _sql_session_last_active,
     is_automatic_end_reason)
@@ -86,7 +87,7 @@ _CHAIN_CAP = 1000
 # carries them onto the child (per-segment keys such as usage anchors stay behind).
 # ``prompt_refresh_epoch`` too: without it a rotated child looks older than any past
 # ``hermes sessions refresh-prompts`` request and rebuilds its prompt once more after eviction.
-_CONVERSATION_MODEL_CONFIG_KEYS = ("onboarding_run", "prompt_refresh_epoch")
+_CONVERSATION_MODEL_CONFIG_KEYS = ("onboarding_run", "prompt_refresh_epoch", CONVERSATION_MODEL_SELECTION_KEY)
 _MANAGED_MODEL_CONFIG_KEYS = ("model_source", "platform_owner", "model_id", "model", "api_mode", "provider")
 
 

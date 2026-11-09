@@ -1,6 +1,10 @@
-"""Canonical runtime identity for Hermes.
+"""Hermes core compatibility and the Aino distribution's runtime identity.
 
-Resolution order:
+The public ``base_version`` is the upstream core actually merged into this tree.
+Distribution/display/update provenance is resolved independently and retained in
+``distribution_base_version``, ``derived_version`` and the commit/stamp fields.
+
+Distribution identity resolution order:
 1. Install stamp (``install-stamp.json``) — written at build time by
    ``scripts/write_install_stamp.py`` for every packager (Docker, Nix, and
    the desktop app). The stamp is authoritative
@@ -14,7 +18,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, cast
 
@@ -33,15 +37,18 @@ class VersionInfo:
     dirty: bool = False
     commit_date: int | None = None
     distribution: Literal["docker", "nix", "desktop-app"] | None = None
+    # Filled by the public resolver. Raw git/stamp readers retain their original base_version.
+    distribution_base_version: str | None = None
 
     @property
     def display_version(self) -> str:
         """``<base>+<distance>`` when a release is known, else the derived identity.
         Keep a tagless checkout's ``git.<sha>`` rather than reducing it to unknown.
         """
-        if self.base_version == "unknown":
+        base = self.distribution_base_version if self.distribution_base_version is not None else self.base_version
+        if base == "unknown":
             return self.derived_version
-        return _derived_version(self.base_version, self.distance)
+        return _derived_version(base, self.distance)
 
 
 def _derived_version(
@@ -290,7 +297,7 @@ def _stamp_or_none() -> VersionInfo | None:
 
 
 def get_version_info() -> VersionInfo:
-    """Return cached provenance from install stamp, git, or unknown."""
+    """Return core compatibility plus unchanged distribution provenance from stamp/git."""
     global _cached_version_info
     if _cached_version_info is not None:
         return _cached_version_info
@@ -308,6 +315,8 @@ def get_version_info() -> VersionInfo:
     if info is None:
         info = VersionInfo("unknown", "unknown", None, None, None, "unknown")
 
+    from hermes_cli.upstream_compatibility import UPSTREAM_VERSION
+    info = replace(info, base_version=UPSTREAM_VERSION, distribution_base_version=info.base_version)
     _cached_version_info = info
     return info
 
@@ -343,7 +352,7 @@ def get_code_identity(refresh: bool = False) -> dict:
     return {
         "sha": info.commit,
         "short_sha": info.commit[:8] if info.commit else None,
-        "version": info.base_version,
+        "version": info.distribution_base_version if info.distribution_base_version is not None else info.base_version,
         "source": info.source,
         "commit_date": info.commit_date,
     }

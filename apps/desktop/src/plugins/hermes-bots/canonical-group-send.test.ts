@@ -10,13 +10,14 @@ vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 // exercising the real atomic-file implementation in this Node fixture.
 const nativeModule = '../../../electron/prepared-submissions'
 const { preparedJournal } = await import(/* @vite-ignore */ nativeModule)
-import { prepareCanonicalGroupSend, readCanonicalGroupSend, retireCanonicalGroupSend } from './canonical-group-send'
+import { abandonCanonicalGroupSend, prepareCanonicalGroupSend, readCanonicalGroupSend, retireCanonicalGroupSend } from './canonical-group-send'
 
 const binding = { connectionId: 'remote-a', profile: 'profile-a', roomId: 'room-a' }
 afterEach(() => vi.unstubAllGlobals())
 
 test('uncertain sends reopen with exact identity and attachments, isolated by authority, until matching ACK retirement', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'group-send-journal-'))
+
   const reopen = () => {
     const journal = preparedJournal(dir, 'http://localhost:5174')
     vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: {
@@ -24,10 +25,12 @@ test('uncertain sends reopen with exact identity and attachments, isolated by au
       update: async (key: string, entry: string | null) => journal.update(key, entry === null ? null : JSON.parse(entry)),
       compareAndSet: async (key: string, expected: string | null, entry: string | null) => {
         const { applied, current } = journal.compareAndSet(key, expected && JSON.parse(expected), entry && JSON.parse(entry))
+
         return { applied, current: current === null ? null : JSON.stringify(current) }
       }
     } } })
   }
+
   try {
     reopen()
     const payload = { text: 'Ω\n  exact', attachments: [{ path: '/owner/cache/image.png', mime_type: 'image/png' }] }
@@ -39,9 +42,11 @@ test('uncertain sends reopen with exact identity and attachments, isolated by au
     reopen() // The server ACK was lost; no retirement has happened.
     expect(await readCanonicalGroupSend(binding)).toEqual(expected)
     expect(await prepareCanonicalGroupSend(binding, { text: 'new draft must not replace uncertain input' })).toEqual(expected)
+
     for (const other of [{ ...binding, profile: 'other' }, { ...binding, roomId: 'other' }, { ...binding, connectionId: 'other' }]) {
       expect(await readCanonicalGroupSend(other)).toBeUndefined()
     }
+
     await retireCanonicalGroupSend(binding, 'stale-ack')
     expect(await readCanonicalGroupSend(binding)).toEqual(expected)
     await retireCanonicalGroupSend(binding, expected.params.event_id)
@@ -56,11 +61,14 @@ test('native journal acknowledgement gates send and a failed write cannot downgr
   let entered!: () => void
   const writing = new Promise<void>(resolve => { entered = resolve })
   const gate = new Promise<void>(resolve => { acknowledge = resolve })
+
   const native = { read: async () => '{}', compareAndSet: vi.fn(async (_key: string, _expected: string | null, entry: string | null) => {
     entered()
     await gate
+
     return { applied: true, current: entry }
   }) }
+
   const browserWrite = vi.fn()
   vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: native }, localStorage: { setItem: browserWrite } })
   const send = vi.fn()
@@ -74,4 +82,36 @@ test('native journal acknowledgement gates send and a failed write cannot downgr
   await expect(prepareCanonicalGroupSend(binding, { text: 'blocked' }).then(send)).rejects.toThrow('disk full')
   expect(send).toHaveBeenCalledOnce()
   expect(browserWrite).not.toHaveBeenCalled()
+})
+
+
+test('abandonment compares the whole confirmed legacy snapshot once at the native journal owner', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'group-abandon-journal-'))
+  const journal = preparedJournal(dir, 'http://localhost:5174')
+
+  const compare = vi.fn(async (key: string, expected: string | null, entry: string | null) => {
+    const result = journal.compareAndSet(key, expected && JSON.parse(expected), entry && JSON.parse(entry))
+
+    return { ...result, current: result.current === null ? null : JSON.stringify(result.current) }
+  })
+
+  vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: {
+    read: async () => JSON.stringify(journal.read()), compareAndSet: compare
+  } } })
+
+  try {
+    const prepared = await prepareCanonicalGroupSend(binding, { text: 'Unknown delivery' })
+    const key = Object.keys(journal.read())[0]
+    const legacy = { binding: prepared.binding, params: prepared.params }
+    journal.update(key, legacy)
+    const confirmation = await readCanonicalGroupSend(binding)
+    journal.update(key, { ...legacy, attempts: 1 })
+    compare.mockClear()
+    expect(await abandonCanonicalGroupSend(confirmation!)).toBe(false)
+    expect(compare).toHaveBeenCalledOnce()
+    expect(journal.read()[key]).toEqual({ ...legacy, attempts: 1 })
+    journal.update(key, legacy)
+    expect(await abandonCanonicalGroupSend(confirmation!)).toBe(true)
+    expect(journal.read()).toEqual({})
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })

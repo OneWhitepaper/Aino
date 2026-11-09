@@ -3,9 +3,12 @@
  */
 
 import { type CanonicalGroupMessages } from './canonical-group-locales'
+import { type CrossGatewayGroupMessages } from './cross-gateway-locales'
 
 export type BotsMessages = {
   canonical: { [K in keyof CanonicalGroupMessages]: string }
+  /** Group chats seating bots from more than one connected machine. */
+  crossGateway: { [K in keyof CrossGatewayGroupMessages]: CrossGatewayGroupMessages[K] }
   /** Left rail: the bot + group-chat roster. */
   editor: {
     fullConfigHint: string
@@ -190,6 +193,7 @@ export type BotsMessages = {
     openChatFailedTitle: (botName: string) => string
     openChatFailedMessage: string
     openModelUnavailableMessage: string
+    openModelSettingsSourceMismatch: string
     openGateways: string
     /** Stands under the bot's name in a chat it has not spoken in yet. */
     chatEmpty: string

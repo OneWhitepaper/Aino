@@ -51,14 +51,12 @@ import { canOpenBrowserWindow, isBrowserWindow } from '@/store/windows'
 
 import { placeAnnotateCard, PreviewAnnotateCard } from './preview-annotate-card'
 import {
-  bindPreviewExecuteJavaScript,
   captureAnnotateCrop,
+  createPreviewAnnotateGuest,
   hideAnnotateDraft,
   installAnnotateOverlay,
-  type PreviewAnnotateGuest,
   showAnnotateDraft,
   syncAnnotatePins,
-  teardownAnnotateOverlay,
   waitAnnotateEvent
 } from './preview-annotate-host'
 import { ArtifactPreview } from './preview-artifact'
@@ -74,7 +72,7 @@ import {
 } from './preview-console'
 import { type ConsoleEntry } from './preview-console-state'
 import { previewConsoleState } from './preview-console-store'
-import { usePreviewDriveChannels } from './preview-drive-channels'
+import { runPreviewGuestScript, usePreviewDriveChannels, withPreviewDeadline } from './preview-drive-channels'
 import { LocalFilePreview, PreviewEmptyState, PreviewModeSwitcher } from './preview-file'
 import { canRenderHtmlPreview, FilePreviewActions } from './preview-file-actions'
 import { usePreviewGuestOffscreen } from './preview-guest-offscreen'
@@ -252,9 +250,13 @@ function PreviewLoadError({
             {compactUrl(error.url)}
             {error.code ? ` (${error.code})` : ''}
           </a>
-          <div className="mt-1 text-[0.6875rem] text-muted-foreground/70">{error.description}</div>
+          <div className="mt-1 text-[length:var(--aino-text-caption)] text-muted-foreground/70">
+            {error.description}
+          </div>
           {isRemoteLoopbackUrl(error.url) && (
-            <div className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground/70">{copy.remoteLoopback}</div>
+            <div className="mt-2 text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground/70">
+              {copy.remoteLoopback}
+            </div>
           )}
         </>
       }
@@ -326,7 +328,7 @@ export function PreviewPane({
   const [annotate, setAnnotate] = useState(emptyAnnotateSession)
   const [draftNote, setDraftNote] = useState('')
   const annotateRef = useRef(annotate)
-  const annotateLoopRef = useRef(0)
+  const annotateLoopRef = useRef<AbortController | null>(null)
   const annotateConversationRef = useRef(selectedStoredSessionId)
   annotateRef.current = annotate
 
@@ -471,67 +473,23 @@ export function PreviewPane({
     }
   }, [isWebPreview])
 
-  const annotateGuest = useCallback((): null | PreviewAnnotateGuest => {
-    const webview = webviewRef.current
+  const annotateGuest = useCallback(() => createPreviewAnnotateGuest(webviewRef.current), [])
 
-    if (!webview?.executeJavaScript) {
-      return null
-    }
-
-    return {
-      capture: async rect => {
-        const webContentsId = webview.getWebContentsId?.()
-
-        if (typeof webContentsId !== 'number') {
-          throw new Error('preview guest has no webContents')
-        }
-
-        const viewport = (await bindPreviewExecuteJavaScript(webview)(
-          '({ width: window.innerWidth, height: window.innerHeight })'
-        )) as { height: number; width: number }
-
-        const dataUrl = await window.hermesDesktop.capturePreview?.({ rect, viewport, webContentsId })
-
-        if (!dataUrl) {
-          throw new Error('preview capture is unavailable')
-        }
-
-        return dataUrl
-      },
-      executeJavaScript: bindPreviewExecuteJavaScript(webview)
-    }
-  }, [])
-
-  const stopAnnotate = useCallback(async () => {
-    annotateLoopRef.current += 1
-    const guest = annotateGuest()
-
-    if (guest) {
-      await teardownAnnotateOverlay(guest).catch(() => undefined)
-    }
-
+  const stopAnnotate = useCallback(() => {
+    annotateLoopRef.current?.abort()
     setDraftNote('')
     setAnnotate(endAnnotateMode)
-  }, [annotateGuest])
+  }, [])
 
   // Not an atom mirror: the ref records the last conversation the annotate
   // stack was reset for, so the reset runs once per switch. Extracted into a
   // callback so the effect body carries no `.current` writes (lint contract).
-  const resetAnnotateForConversation = useCallback(
-    (sessionId: typeof selectedStoredSessionId) => {
-      annotateConversationRef.current = sessionId
-      annotateLoopRef.current += 1
-      setDraftNote('')
-      setAnnotate(emptyAnnotateSession())
-
-      const guest = annotateGuest()
-
-      if (guest) {
-        void teardownAnnotateOverlay(guest).catch(() => undefined)
-      }
-    },
-    [annotateGuest]
-  )
+  const resetAnnotateForConversation = useCallback((sessionId: typeof selectedStoredSessionId) => {
+    annotateConversationRef.current = sessionId
+    annotateLoopRef.current?.abort()
+    setDraftNote('')
+    setAnnotate(emptyAnnotateSession())
+  }, [])
 
   useEffect(() => {
     if (annotateConversationRef.current !== selectedStoredSessionId) {
@@ -633,11 +591,13 @@ export function PreviewPane({
       return
     }
 
-    const generation = ++annotateLoopRef.current
+    annotateLoopRef.current?.abort()
+    const lifetime = new AbortController()
+    annotateLoopRef.current = lifetime
     setAnnotate(beginAnnotateMode)
 
     try {
-      await installAnnotateOverlay(guest)
+      await installAnnotateOverlay(guest, lifetime.signal)
       await syncAnnotatePins(
         guest,
         annotateRef.current.stack.pins.map(pin => ({
@@ -648,13 +608,18 @@ export function PreviewPane({
         }))
       )
     } catch (error) {
+      if (lifetime.signal.aborted) {
+        return
+      }
+
+      lifetime.abort()
       setAnnotate(endAnnotateMode)
       notifyError(error, copy.annotateFailed)
 
       return
     }
 
-    while (annotateLoopRef.current === generation) {
+    while (!lifetime.signal.aborted) {
       let event
 
       try {
@@ -663,7 +628,7 @@ export function PreviewPane({
         break
       }
 
-      if (annotateLoopRef.current !== generation) {
+      if (lifetime.signal.aborted) {
         break
       }
 
@@ -688,9 +653,13 @@ export function PreviewPane({
       let imageDataUrl = ''
 
       try {
-        imageDataUrl = await captureAnnotateCrop(guest, event.rect)
+        imageDataUrl = await captureAnnotateCrop(guest, event.rect, lifetime.signal)
       } catch {
         imageDataUrl = ''
+      }
+
+      if (lifetime.signal.aborted) {
+        break
       }
 
       const draft = {
@@ -871,20 +840,29 @@ export function PreviewPane({
       return
     }
 
-    return registerPreviewPageReader(tabId, async () => {
+    const lifetime = new AbortController()
+    const unregister = registerPreviewPageReader(tabId, async () => {
       const webview = webviewRef.current
 
       if (!webview?.executeJavaScript) {
         throw new Error('preview webview is not ready')
       }
 
-      const text = await webview.executeJavaScript('document.body ? document.body.innerText : ""')
+      const text = await withPreviewDeadline(
+        signal => runPreviewGuestScript(webview, 'document.body ? document.body.innerText : ""', signal),
+        lifetime.signal
+      )
 
       return {
         text: typeof text === 'string' ? text : '',
         ...guestPage(webview)
       }
     })
+
+    return () => {
+      lifetime.abort()
+      unregister()
+    }
   }, [tabId, usesWebview])
 
   usePreviewDriveChannels(webviewRef, tabId, usesWebview)
@@ -1198,6 +1176,14 @@ export function PreviewPane({
     const onNavigate = (event: Event) => {
       const detail = event as Event & { url?: string }
 
+      // Downloads and cancelled loads can keep the old document alive.
+      // End its annotation session only when a new document actually commits.
+      if (event.type === 'did-navigate') {
+        annotateLoopRef.current?.abort()
+        setDraftNote('')
+        setAnnotate(endAnnotateMode)
+      }
+
       if (detail.url) {
         setLoadError(null)
         setCurrentUrl(detail.url)
@@ -1361,7 +1347,7 @@ export function PreviewPane({
     webviewRef.current = webview
 
     return () => {
-      annotateLoopRef.current += 1
+      annotateLoopRef.current?.abort()
 
       if (navigationRef.current === webview) {
         navigationRef.current = null
@@ -1413,13 +1399,7 @@ export function PreviewPane({
       return
     }
 
-    annotateLoopRef.current += 1
-    const guest = annotateGuest()
-
-    if (guest) {
-      void teardownAnnotateOverlay(guest).catch(() => undefined)
-    }
-
+    annotateLoopRef.current?.abort()
     setDraftNote('')
     setAnnotate(emptyAnnotateSession())
     setLoadError(null)
@@ -1434,7 +1414,7 @@ export function PreviewPane({
       })
       setLoading(false)
     })
-  }, [annotateGuest, consoleState, copy.unreachableDescription, isRemoteHtml, isWebPreview, target.url])
+  }, [consoleState, copy.unreachableDescription, isRemoteHtml, isWebPreview, target.url])
 
   return (
     <aside

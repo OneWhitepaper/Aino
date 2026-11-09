@@ -3,6 +3,7 @@
 import { useStore } from '@nanostores/react'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,10 +19,10 @@ import { LogView } from '@/components/ui/log-view'
 import { useI18n } from '@/i18n'
 import { isMissingPendingPromptRequest } from '@/lib/gateway-rpc'
 import { triggerHaptic } from '@/lib/haptics'
-import { KeyRound, Loader2, Lock, ShieldLock } from '@/lib/icons'
+import { AlertCircle, KeyRound, Loader2, Lock, ShieldLock } from '@/lib/icons'
 import { $gateway } from '@/store/gateway'
 import { reconnectAction } from '@/store/gateway-reconnect'
-import { notifyError } from '@/store/notifications'
+import { type NotificationAction, readableError } from '@/store/notifications'
 import {
   clearSecretRequest,
   clearSudoRequest,
@@ -49,11 +50,115 @@ import { respondToServerRequest } from '@/store/server-requests'
 // fire a second `*.respond` alongside onOpenChange (double-send) or block the
 // backdrop-dismiss path.
 
+interface PromptOwner {
+  requestId: string
+  sessionId: string | null
+}
+
+interface PromptFailureState {
+  owner: PromptOwner
+  title: string
+  message: string
+  detail?: string
+  action?: NotificationAction
+}
+
+/** Error feedback belongs to the exact delivered request object, including
+ *  replacements that reuse an id on another session/connection. */
+function usePromptFailure(request: PromptOwner | null) {
+  const [failure, setFailure] = useState<PromptFailureState | null>(null)
+
+  useEffect(() => setFailure(null), [request])
+
+  const clearFailure = useCallback(() => setFailure(null), [])
+
+  const reportFailure = useCallback(
+    (error: unknown, title: string, action?: NotificationAction) => {
+      if (request) {
+        const readable = readableError(error, title)
+        setFailure({
+          owner: request,
+          title,
+          message: readable.message,
+          detail: readable.detail,
+          action: action ?? readable.action
+        })
+      }
+    },
+    [request]
+  )
+
+  const recover = useCallback(() => {
+    if (!failure?.action) {
+      return
+    }
+
+    const failed = (error: unknown) =>
+      setFailure(current => {
+        if (current !== failure) {
+          return current
+        }
+
+        const readable = readableError(error, current.title)
+
+        return { ...current, message: readable.message, detail: readable.detail }
+      })
+
+    try {
+      void Promise.resolve(failure.action.onClick()).catch(failed)
+    } catch (error) {
+      failed(error)
+    }
+  }, [failure])
+
+  return { clearFailure, reportFailure, failure: failure?.owner === request ? failure : null, recover }
+}
+
+function PromptFailure({ failure, onRecovery }: { failure: PromptFailureState | null; onRecovery: () => void }) {
+  const { t } = useI18n()
+
+  if (!failure) {
+    return null
+  }
+
+  return (
+    <Alert variant="destructive">
+      <AlertCircle aria-hidden />
+      <AlertTitle>{failure.title}</AlertTitle>
+      <AlertDescription>
+        <p>{failure.message}</p>
+        {failure.detail && (
+          <details className="min-w-0 w-full text-[0.8125rem]">
+            <summary className="w-fit cursor-pointer rounded-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              {t.notifications.details}
+            </summary>
+            <LogView className="mt-2 overflow-visible text-[0.8125rem] text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+              {failure.detail}
+            </LogView>
+          </details>
+        )}
+        {failure.action && (
+          <Button
+            className="max-w-full whitespace-normal text-left"
+            onClick={onRecovery}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {failure.action.label}
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 function SudoDialog({ sessionId }: { sessionId: string | null }) {
   const { t } = useI18n()
   const copy = t.prompts
   const $request = useMemo(() => sessionSudoRequest(sessionId), [sessionId])
   const request = useStore($request)
+  const { clearFailure, reportFailure, failure, recover } = usePromptFailure(request)
   const gateway = useStore($gateway)
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -69,8 +174,10 @@ function SudoDialog({ sessionId }: { sessionId: string | null }) {
         return
       }
 
+      clearFailure()
+
       if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.sudoSendFailed, { action: reconnectAction() })
+        reportFailure(new Error(copy.gatewayDisconnected), copy.sudoSendFailed, reconnectAction())
 
         return
       }
@@ -88,11 +195,11 @@ function SudoDialog({ sessionId }: { sessionId: string | null }) {
           return
         }
 
-        notifyError(error, copy.sudoSendFailed)
+        reportFailure(error, copy.sudoSendFailed)
         setSubmitting(false)
       }
     },
-    [copy.gatewayDisconnected, copy.sudoSendFailed, gateway, request]
+    [clearFailure, copy.gatewayDisconnected, copy.sudoSendFailed, gateway, reportFailure, request]
   )
 
   // Cancel → empty password. The backend treats an empty sudo response as a
@@ -125,6 +232,7 @@ function SudoDialog({ sessionId }: { sessionId: string | null }) {
           <DialogTitle icon={Lock}>{copy.sudoTitle}</DialogTitle>
           <DialogDescription>{request.description ?? copy.sudoDesc}</DialogDescription>
         </DialogHeader>
+        <PromptFailure failure={failure} onRecovery={recover} />
 
         {request.command?.trim() ? (
           <Field label={t.assistant.approval.command}>
@@ -171,6 +279,7 @@ function SecretDialog({ sessionId }: { sessionId: string | null }) {
   const copy = t.prompts
   const $request = useMemo(() => sessionSecretRequest(sessionId), [sessionId])
   const request = useStore($request)
+  const { clearFailure, reportFailure, failure, recover } = usePromptFailure(request)
   const gateway = useStore($gateway)
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -186,8 +295,10 @@ function SecretDialog({ sessionId }: { sessionId: string | null }) {
         return
       }
 
+      clearFailure()
+
       if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.secretSendFailed, { action: reconnectAction() })
+        reportFailure(new Error(copy.gatewayDisconnected), copy.secretSendFailed, reconnectAction())
 
         return
       }
@@ -205,11 +316,11 @@ function SecretDialog({ sessionId }: { sessionId: string | null }) {
           return
         }
 
-        notifyError(error, copy.secretSendFailed)
+        reportFailure(error, copy.secretSendFailed)
         setSubmitting(false)
       }
     },
-    [copy.gatewayDisconnected, copy.secretSendFailed, gateway, request]
+    [clearFailure, copy.gatewayDisconnected, copy.secretSendFailed, gateway, reportFailure, request]
   )
 
   const onOpenChange = useCallback(
@@ -240,6 +351,7 @@ function SecretDialog({ sessionId }: { sessionId: string | null }) {
           <DialogTitle icon={KeyRound}>{request.envVar || copy.secretTitle}</DialogTitle>
           <DialogDescription>{request.prompt || copy.secretDesc}</DialogDescription>
         </DialogHeader>
+        <PromptFailure failure={failure} onRecovery={recover} />
 
         <form className="grid gap-3" onSubmit={onSubmit}>
           <Input
@@ -272,6 +384,7 @@ function VaultUnlockDialog({ sessionId }: { sessionId: string | null }) {
   const copy = t.prompts
   const $request = useMemo(() => sessionVaultUnlockRequest(sessionId), [sessionId])
   const request = useStore($request)
+  const { clearFailure, reportFailure, failure, recover } = usePromptFailure(request)
   const gateway = useStore($gateway)
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -287,8 +400,10 @@ function VaultUnlockDialog({ sessionId }: { sessionId: string | null }) {
         return
       }
 
+      clearFailure()
+
       if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.vaultUnlockSendFailed, { action: reconnectAction() })
+        reportFailure(new Error(copy.gatewayDisconnected), copy.vaultUnlockSendFailed, reconnectAction())
 
         return
       }
@@ -308,13 +423,13 @@ function VaultUnlockDialog({ sessionId }: { sessionId: string | null }) {
           return
         }
 
-        notifyError(error, copy.vaultUnlockSendFailed)
+        reportFailure(error, copy.vaultUnlockSendFailed)
         setSubmitting(false)
       } finally {
         setValue('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultUnlockSendFailed, gateway, request]
+    [clearFailure, copy.gatewayDisconnected, copy.vaultUnlockSendFailed, gateway, reportFailure, request]
   )
 
   if (!request) {
@@ -328,6 +443,7 @@ function VaultUnlockDialog({ sessionId }: { sessionId: string | null }) {
           <DialogTitle icon={ShieldLock}>{copy.vaultUnlockTitle(request.displayName)}</DialogTitle>
           <DialogDescription>{copy.vaultUnlockDesc(request.displayName)}</DialogDescription>
         </DialogHeader>
+        <PromptFailure failure={failure} onRecovery={recover} />
 
         <form
           className="grid gap-3"
@@ -367,6 +483,7 @@ function VaultSaveLoginDialog({ sessionId }: { sessionId: string | null }) {
   const copy = t.prompts
   const $request = useMemo(() => sessionVaultSaveLoginRequest(sessionId), [sessionId])
   const request = useStore($request)
+  const { clearFailure, reportFailure, failure, recover } = usePromptFailure(request)
   const gateway = useStore($gateway)
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -384,8 +501,10 @@ function VaultSaveLoginDialog({ sessionId }: { sessionId: string | null }) {
         return
       }
 
+      clearFailure()
+
       if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.vaultSaveSendFailed, { action: reconnectAction() })
+        reportFailure(new Error(copy.gatewayDisconnected), copy.vaultSaveSendFailed, reconnectAction())
 
         return
       }
@@ -403,14 +522,14 @@ function VaultSaveLoginDialog({ sessionId }: { sessionId: string | null }) {
           return
         }
 
-        notifyError(error, copy.vaultSaveSendFailed)
+        reportFailure(error, copy.vaultSaveSendFailed)
         setSubmitting(false)
       } finally {
         setIdentifier('')
         setPassword('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultSaveSendFailed, gateway, request]
+    [clearFailure, copy.gatewayDisconnected, copy.vaultSaveSendFailed, gateway, reportFailure, request]
   )
 
   if (!request) {
@@ -426,6 +545,7 @@ function VaultSaveLoginDialog({ sessionId }: { sessionId: string | null }) {
           <DialogTitle icon={ShieldLock}>{copy.vaultSaveTitle(request.site)}</DialogTitle>
           <DialogDescription>{copy.vaultSaveDesc(request.origin)}</DialogDescription>
         </DialogHeader>
+        <PromptFailure failure={failure} onRecovery={recover} />
 
         <form
           className="grid gap-3"
@@ -481,6 +601,7 @@ function VaultCodeDialog({ sessionId }: { sessionId: string | null }) {
   const copy = t.prompts
   const $request = useMemo(() => sessionVaultCodeRequest(sessionId), [sessionId])
   const request = useStore($request)
+  const { clearFailure, reportFailure, failure, recover } = usePromptFailure(request)
   const gateway = useStore($gateway)
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -496,8 +617,10 @@ function VaultCodeDialog({ sessionId }: { sessionId: string | null }) {
         return
       }
 
+      clearFailure()
+
       if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.vaultCodeSendFailed, { action: reconnectAction() })
+        reportFailure(new Error(copy.gatewayDisconnected), copy.vaultCodeSendFailed, reconnectAction())
 
         return
       }
@@ -515,13 +638,13 @@ function VaultCodeDialog({ sessionId }: { sessionId: string | null }) {
           return
         }
 
-        notifyError(error, copy.vaultCodeSendFailed)
+        reportFailure(error, copy.vaultCodeSendFailed)
         setSubmitting(false)
       } finally {
         setCode('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultCodeSendFailed, gateway, request]
+    [clearFailure, copy.gatewayDisconnected, copy.vaultCodeSendFailed, gateway, reportFailure, request]
   )
 
   if (!request) {
@@ -537,6 +660,7 @@ function VaultCodeDialog({ sessionId }: { sessionId: string | null }) {
           <DialogTitle icon={ShieldLock}>{copy.vaultCodeTitle(request.site)}</DialogTitle>
           <DialogDescription>{copy.vaultCodeDesc(request.site)}</DialogDescription>
         </DialogHeader>
+        <PromptFailure failure={failure} onRecovery={recover} />
 
         <form
           className="grid gap-3"

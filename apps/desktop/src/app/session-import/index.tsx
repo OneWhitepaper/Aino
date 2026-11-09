@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useEffect, useRef, useState } from 'react'
 
 import { MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -10,6 +11,7 @@ import { Loader } from '@/components/ui/loader'
 import { SearchField } from '@/components/ui/search-field'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
+import { AlertCircle } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { setSessionOwnerHint } from '@/store/session'
 import type { SessionOwnerRoute } from '@/store/session-request-router'
@@ -134,7 +136,9 @@ export function SessionImportView({ owner, onClose, onOpenSession }: SessionImpo
     >
       <section aria-label={copy.title} className="session-import flex h-full min-h-0 flex-col">
         <header className="px-8 pb-6 pt-12">
-          <h1 className="text-[length:var(--aino-text-page-title)] font-semibold tracking-tight text-(--ui-text-primary)">{copy.title}</h1>
+          <h1 className="text-[length:var(--aino-text-page-title)] font-semibold tracking-tight text-(--ui-text-primary)">
+            {copy.title}
+          </h1>
           <p className="mt-2 text-sm text-(--ui-text-secondary)">{copy.subtitle}</p>
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-(--ui-text-secondary)">
             <span className="inline-flex items-center gap-2">
@@ -305,9 +309,12 @@ export function SessionImportView({ owner, onClose, onOpenSession }: SessionImpo
                     <Codicon name="arrow-right" />
                   </Button>
                   {error && (
-                    <div className="w-full text-sm text-destructive" role="alert">
-                      {copy.importError} {error}
-                    </div>
+                    <Alert variant="destructive">
+                      <AlertCircle />
+                      <AlertDescription>
+                        {copy.importError} {error}
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </footer>
               </>

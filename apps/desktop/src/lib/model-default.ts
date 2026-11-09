@@ -10,7 +10,7 @@ import {
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { platformModelCatalog, PlatformSelectionError, readPlatformDefault } from '@/store/platform-models'
 
-import type { PlatformModel } from '../../shared/platform-contract'
+import { hasPlatformModelIdentity, type PlatformModel } from '../../shared/platform-contract'
 
 /** The saved preference is usable only while the catalog authorizes that model. */
 export function availablePlatformDefault(models: readonly PlatformModel[], preferredId: string | null) {
@@ -74,7 +74,7 @@ export async function resolveModelDefault(scope: ProfileScope, managedRoute?: Pl
   const platformDefault =
     managedSupported && state.phase === 'ready' ? availablePlatformDefault(state.models, preferredId) : undefined
 
-  if (account?.phase === 'signed_in' && managedSupported && !platformDefault) {
+  if (hasPlatformModelIdentity(account) && managedSupported && !platformDefault) {
     throw new PlatformSelectionError('model_unavailable')
   }
 
@@ -101,7 +101,7 @@ export async function evaluateModelDefaultReadiness(
 ): Promise<RuntimeReadinessResult> {
   const catalog = platformModelCatalog()
 
-  if (catalog.account.get()?.phase === 'signed_in') {
+  if (hasPlatformModelIdentity(catalog.account.get())) {
     try {
       const resolved = await resolveModelDefault(scope)
 

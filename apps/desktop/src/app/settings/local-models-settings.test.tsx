@@ -18,6 +18,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
+import { ConfirmHost } from '@/components/confirm-host'
 import { I18nProvider } from '@/i18n'
 import { queryClient } from '@/lib/query-client'
 import { localModelsKey, localModelsOwner, watchLocalRuntimeJobs } from '@/store/local-runtime-jobs'
@@ -655,6 +656,32 @@ describe('BrowseSection', () => {
 })
 
 describe('added-by-you rows', () => {
+  it('uses the shared delete confirmation, keeps failures visible, and refreshes after retry', async () => {
+    mocked.getLocalModelsStatus.mockResolvedValue({
+      ...BASE_STATUS,
+      runtime_installed: true,
+      models: [{ id: 'local-test', size_bytes: 1024, size_label: '1 KB' }]
+    })
+    mocked.getLocalCatalog.mockResolvedValue({ models: [] })
+    mocked.deleteLocalModel.mockRejectedValueOnce(new Error('Model file is locked')).mockResolvedValue({ ok: true })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter><I18nProvider><LocalModelsSettings /><ConfirmHost /></I18nProvider></MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete model' }))
+    expect(mocked.deleteLocalModel).not.toHaveBeenCalled()
+    const initialReads = mocked.getLocalModelsStatus.mock.calls.length
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete model' }))
+    expect(await screen.findByText('Model file is locked')).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete model' }))
+    await waitFor(() => expect(mocked.deleteLocalModel).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(mocked.getLocalModelsStatus.mock.calls.length).toBeGreaterThan(initialReads))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
   it('staged models outside the catalog get the full action set', async () => {
     vi.mocked(hermes.getLocalModelsStatus).mockResolvedValue({
       ...BASE_STATUS,

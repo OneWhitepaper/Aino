@@ -1,3 +1,61 @@
+---
+name: Aino Desktop
+description: Approved neutral desktop presentation, aligned to the 2026-11-09 interactive design.
+colors:
+  primary: "#353a49"
+  canvas: "#fcfcfd"
+  navigation: "#f6f7f9"
+  surface: "#ffffff"
+  soft: "#f0f1f4"
+  line: "#e4e6eb"
+  ink: "#252831"
+  secondary-ink: "#555d6b"
+  supporting-ink: "#677080"
+  warning: "#966419"
+  danger: "#b33e3e"
+  success: "#287054"
+typography:
+  body:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", emoji'
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.6
+  label:
+    fontSize: "13px"
+    fontWeight: 500
+    lineHeight: 1.5
+  caption:
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.6
+  title:
+    fontSize: "16px"
+    fontWeight: 600
+    lineHeight: 1.5
+  dialog-title:
+    fontSize: "18px"
+    fontWeight: 600
+    lineHeight: 1.4
+rounded:
+  control: "6px"
+  card: "14px"
+  menu: "12px"
+  panel: "16px"
+  composer: "20px"
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "32px"
+  notification-summary:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    padding: "16px"
+    width: "380px"
+---
+
 # Desktop Design System
 
 Conventions for the Electron desktop app (`apps/desktop`). Read this before
@@ -22,6 +80,33 @@ This doc contains two kinds of content, maintained differently:
 When a rule and the code disagree, fix whichever is wrong rather than forking a
 one-off at the call site.
 
+## Approved desktop alignment (2026-11-10)
+
+The user approved the notification prototype and then explicitly requested its
+visual language across **all app-owned desktop pages and components**. The visual
+authority is `aino-notifications-v2/style.css` and the supplied screenshot dated
+2026-11-09. Its neutral palette and component hierarchy replace the earlier
+lavender primary and independent compact page scales; existing operation and
+identity contracts below remain in force.
+
+ThemeProvider owns the default light/dark palette and remembered font choice.
+Body and navigation are 14px; actions/labels 13px; supporting text 12px; section
+headings 16px; modal headings 18px. Do not redefine the global ladder inside a
+settings page. Semantic syntax, diff, chart and status colors keep their roles.
+General-purpose icons use official Codicon geometry through the existing
+SVG/ref-compatible adapters. Eight compatibility symbols retain their original
+sources where Codicons has no equivalent; brand portraits, provider logos, file
+types and specialized geometry keep their identity.
+
+The notification summary is a 380px right-aligned card with its own footprint
+below the page header, 14px corners, restrained shadow and text actions. It never
+covers a transcript or composer. The primary workspace owns the visible frame;
+a shell fallback keeps notices reachable when that workspace is hidden or
+Settings is active. Hidden frames keep their children mounted and release timer
+readers. There is one existing notification queue and no duplicated action owner.
+While a shared dialog is open, CSS hides the summary and disables its pointer
+events while retaining its footprint; closing the dialog restores the summary.
+
 ## Approved Aino interface direction (2026-10-28)
 
 Aino adopts the reviewed AionUi-inspired presentation across every app-owned
@@ -34,13 +119,13 @@ that the mockup does not show.
 - The default primary rail is 260px, resizable and persisted through the existing
   layout store. Pale neutral navigation, soft selected rows, white reading and
   management surfaces, hairline seams and restrained shadows form one hierarchy.
-- Use the existing system sans stack and remembered font preference. UI and
-  reading and navigation roles are 14px, compact controls and labels 12–13px,
+- Use the existing system sans stack and remembered font preference. Reading
+  and navigation roles are 14px, controls and labels 13px,
   supporting copy 12px, section titles 16px and page titles 22–24px. Conversation
   scale is still applied exactly once. Code,
   terminal content, and embedded user documents retain their own typography.
 - Controls and rows use 6px corners, cards 14px, menus 12px, floating panels 16px,
-  and the composer 24px. Native circles (avatars, radio controls, send) remain circles.
+  and the composer 20px. Native circles (avatars, radio controls, send) remain circles.
 - `styles/aino-theme.css` owns shared surface/type roles; `aino-chat.css` owns
   home/transcript geometry; `aino-workbench.css` owns file/preview chrome.
   Extend existing primitives before styling a caller. Menus, tooltips, dialogs,
@@ -52,7 +137,7 @@ that the mockup does not show.
   Workspace selection still previews; only the explicit switch action activates it.
 - Native OS file pickers and third-party embedded documents keep their native
   presentation. Only app-owned surrounding chrome is themed.
-- The default Sessions/Agent Hub rail uses a shared 61px brand row below the
+- The default Sessions/Agent Hub rail uses a shared 56px brand row below the
   native window controls. Its current title (Aino or the contributed pane name)
   opens the existing dropdown menu, with descriptions and a checked current item.
   This two-option menu uses a compact 240px width capped by the viewport,
@@ -67,6 +152,69 @@ that the mockup does not show.
   approval policy; the off option and its trigger use the warning color. This
   setting does not grant filesystem/network access or bypass system permissions
   and safety rules. Keep the existing gateway configuration and approval flow.
+
+## Group conversations
+
+Group conversations are a named-member desktop chat surface, scoped to the
+contracts in [the group design system](../../docs-local/group-human-redesign/DESIGN.md).
+Robot messages stay on the left and human messages on the right, using existing
+32px avatars, 14px body text, 12px metadata and a 66ch maximum message measure.
+Historical human labels are preserved unless the current user's identity is
+known. Messages and composer share a centered 1120px maximum column with 40px
+horizontal gutters; actual chat containers at least 1400px use 48px, at most
+960px use 24px, and at most 480px use 16px. Container width owns these rules,
+including when files or group information reduce the available reading area.
+
+A main group has one shell-owned title. Its content begins with a compact
+54px-minimum participant toolbar: existing portraits, readable names and state,
+search and group information. Standalone and older in-rail fallback surfaces
+retain their own title and Back; loading and failure gates follow the same
+main-versus-fallback rule. The information panel is 320px wide beside workspaces
+at least 1100px wide and uses the existing accessible Dialog below that width.
+Members, Files and Manage are separate tabs of the same panel. Member actions
+focus the composer; narrow-dialog mentions close the dialog first. IDs remain
+available in ownership details without leading ordinary member actions.
+
+The mention picker leads with a portrait and readable name, provides one
+All members choice, searches names and handles, and reuses the portal Popover.
+Displayed names are projections of exact frozen addresses, never routing keys.
+Drafts and outbound requests keep their original canonical handles; edits,
+renames and same-name members cannot silently select a different recipient.
+Copy/cut exports readable plain text and private recipient metadata scoped to
+the exact source and room. Only validated same-scope metadata restores bindings;
+foreign or invalid metadata neutralizes ASCII @ and prompts reselection.
+Unbound recipient-looking text blocks a fresh send rather than becoming an
+accidental broadcast. Recipient summaries follow the runtime's actual raw-text
+parser, including its existing code/email rules; duplicate display names retain
+an explicit count instead of being deduplicated. Historical display and search
+may show names, but copying history and exact retries preserve original bytes.
+
+Agent Hub keeps its monitor and shared search above one scrolling Groups/Bots
+region. Existing remembered width, custom sections, hidden bots, filters, drag
+operations, context menus, notifications and host-owned account controls retain
+their owners. Group rows without real message previews show member information,
+never invented activity. Conversation navigation presents one current title
+with a compact switcher; ordinary, bot and group chats never form a horizontal
+list across the normal main surface. Each mode and exact workspace owner
+restores its own conversation and draft. Visibility, focus, menus and keyboard
+actions use the same eligible conversations; explicit splits retain independent
+current titles. Files, browser, review and terminal keep their tool tabs.
+Contributed group panes use captured room authority and workspaceScope metadata;
+renaming never changes identity or close/disband lifecycle callbacks.
+
+The reply strip above the composer shows the current member's real 24px avatar,
+name and response/approval/stopping state. Queued counts come from actual member
+activity. Completed replies require a committed member message and matching
+settlement for the same room, discussion and thread; cumulative task counts,
+missing activity and unscheduled members are not substitutes. Ambiguous
+concurrent discussions omit the count. Stop this round appears only for genuine
+working/queued activity and disables repeat stop while stopping. Errors are
+compact expandable events; they do not claim a successful reply. Canonical and
+legacy rooms retain original send journals, thread ownership, attachments,
+approvals, discard confirmations and exact retry behavior. Message following
+uses use-stick-to-bottom and yields when the reader scrolls away. Group styling
+stays in canonical-group.css with shared theme and control primitives; no UI
+animation invents streamed reply text or rewrites historical facts.
 
 ## Principles
 
@@ -389,24 +537,22 @@ export, removal confirmation, size and roaming. Native tray and transparency
 availability continue to follow the existing platform capabilities.
 
 The approved reply style is also the system type and density ladder: 14px
-body copy at 1.6 line height, 14px normal controls, navigation and activity,
-12–13px compact controls and group labels, 12px supporting metadata, and 16px
-section/dialog headings. Conversation size aliases resolve
+body copy at 1.6 line height, 14px navigation,
+13px controls, activity and group labels, 12px supporting metadata, and 16px
+section headings and 18px dialog headings. Conversation size aliases resolve
 from these existing Aino roles. Conversation text defaults to 100% (14px),
-with a 1.65 reading line height, 18px/16px first/second-level reply headings,
+with a 1.6 reading line height, 18px/16px first/second-level reply headings,
 and 13px code and reasoning text. These sizes scale together with the reader's
 saved chat preference; metadata and surrounding navigation remain independent.
-Settings applies a deliberate compact reading
-scope (13px rows/navigation, 12px supporting labels, 16px sections, 22px page
-titles) without enlarging its content above the navigation; body portals retain
-the shared base roles. Named Tailwind utilities (`text-xs`, `text-sm`, `text-base`,
+Settings inherits the same 14px reading/navigation role, 13px form labels,
+12px supporting labels, 16px sections and 22px page titles; body portals inherit
+the same shared base roles. Named Tailwind utilities (`text-xs`, `text-sm`, `text-base`,
 `text-lg`) resolve to the same caption/UI/body/title roles. Project names,
-recent-session titles, model and reasoning selectors use the 14px UI role;
+recent-session titles use the 14px body role; model and reasoning selectors use the 13px UI role;
 timestamps and other secondary metadata use the 12px caption role. Do not
 shrink primary actionable labels to caption size or introduce 9–11px microcopy.
 Compact navigation and dense data can retain their explicit UI
-or caption role. The existing bubble fill and shared table-header fill carry
-the faint semantic blue; status, syntax and diff colors keep their meaning.
+or caption role. The existing bubble and shared table-header fills use neutral soft surfaces; status, syntax and diff colors keep their meaning.
 User bubbles still consume `--dt-user-bubble` and the existing
 `--user-bubble-keep` preference. At full transparency the fill disappears and
 the outline remains; changing the visual palette must not bypass that setting.
@@ -418,7 +564,7 @@ filters, pagination, copying, selection and horizontal scrolling stay with
 their existing owners. Guest HTML, embedded catalog pages, diagrams
 and terminal output retain their own content styling.
 
-Shared `DialogContent` owns its 20px body padding and 16px gap. The outer
+Shared `DialogContent` owns its 24px body padding and 16px gap. The outer
 shell stays unclipped because nested select/popover portals live there; only
 the existing inner body scrolls. Reply billing follows this same contract,
 without a caller-specific scroll container.
@@ -446,7 +592,9 @@ for the added insets; narrower groups stack. Use shared stroke tokens in
 both brightness modes, without flattening native Glass surfaces.
 
 My account uses one profile card, a wallet/subscription overview and a ledger
-section, followed by a collapsed device-authorisation section. Profile editing
+section, followed by a collapsed device-authorisation section. Its direct-child
+cloud-sync card has a 24px top margin and 16px vertical / 18px horizontal padding,
+scoped to the account page. Profile editing
 uses the existing dialog; sign-out reuses the shared confirmation and pending
 state. Wallet display may round its decimal string to two places, with the full
 authoritative amount available in the adjacent disclosure. Account changes
@@ -478,13 +626,13 @@ results. Chat reply receipts retain their compact layout. Purpose filters follow
 the server's advertised supported values; old servers retain the legacy set.
 Historical auxiliary calls without finer attribution stay visibly unclassified.
 
-The reference light palette is a `#f9fafb` page canvas, `#f2f3f5` navigation,
-`#ffffff` content and `#e5e6eb` seams. Primary, secondary and supporting ink are
-`#252831`, `#454d5f` and `#8b909b`; the restrained brand accent is `#7583b2`.
+The reference light palette is a `#fcfcfd` page canvas, `#f6f7f9` navigation,
+`#ffffff` content and `#e4e6eb` seams. Primary, secondary and supporting ink are
+`#252831`, `#555d6b` and `#677080`; primary actions use `#353a49`.
 These seeds, including their explicit dark counterparts, belong to ThemeProvider's
 fixed Aino palette (`monoTheme`); `aino-theme.css` aliases existing `--theme-*`
 and `--dt-*` values into shared `--ui-*` roles. Do not maintain a second raw
-light/dark palette in route CSS. Primary actions use the contrast-adjusted accent
+light/dark palette in route CSS. Primary actions use the contrast-adjusted neutral
 roles; semantic error/success/warning, syntax and diff colors retain their meaning.
 Landing, sidebar, body portals and native Glass resolve through those same roles.
 Use the normal UI font for labels; reserve monospace for code, commands, paths
@@ -519,7 +667,7 @@ Drag affordances may use tokenized
 dashed targets and local blur. These are semantic surface classes, not licenses
 for call-site shadow or border inventions.
 
-`PopoverContent variant="card"` provides a 320px floating card with 20px corners,
+`PopoverContent variant="card"` provides a 320px floating card with 14px corners,
 zero outer padding and the shared `shadow-nous` / `--stroke-nous` elevation.
 Its content owns internal spacing and viewport limits. `showArrow={false}` omits
 the pointer for toolbar cards; other popovers keep their existing arrow.
@@ -582,7 +730,7 @@ renderer and Electron's first window paint.
 | `--theme-primary`, `--ui-accent` | brand/accent |
 | `--aino-action-bg / -fg / -hover` | muted brand primary action and contrast-safe inverse; shared by button, switch and checkbox |
 | `--aino-radius-control / -row / -panel` | 6px controls and selected rows, 16px floating panels |
-| `--aino-text-caption / -label / -ui / -body / -title / -page-title` | 12 / 13 / 14 / 14 / 16 / 24px base roles; settings uses its compact scope and 22px page title |
+| `--aino-text-caption / -label / -ui / -body / -title / -page-title` | 12 / 13 / 13 / 14 / 16 / 24px base roles; settings shares these roles and uses a 22px page title |
 | `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
 | `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
@@ -608,7 +756,8 @@ trigger with a soft open fill; `icon-titlebar` uses the shared control radius).
 **Sizes:** `default`, `xs`, `sm`, `lg`, `inline` (flush, zero box — for buttons
 that sit inside a heading/sentence; replaces `h-auto px-0 py-0`), `micro`
 (status-stack/table-footers), and the icon family `icon` / `icon-xs` /
-`icon-sm` / `icon-lg` / `icon-titlebar`.
+`icon-sm` / `icon-lg` / `icon-titlebar`. `icon-send` is the 32px circular send
+control; its chrome belongs to Button rather than a consumer override.
 `touch` provides a 44px minimum target for compact mobile navigation.
 
 **Tooltips only when hover teaches something new.** `<Tip>` is for discovery,
@@ -734,11 +883,15 @@ blurred backdrop.
 ## Form controls
 
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
-  `Input` / `Textarea` / `SelectTrigger`: 6px corners, 14px normal UI text and
+  `Input` / `Textarea` / `SelectTrigger`: 6px corners, 13px normal UI text and
   padding-driven size with a 32px normal / 28px extra-small minimum. New
   text-entry controls compose it. Fields have neutral
   fill/hairlines, accent-only focus and a semantic invalid state; grouped fields
   inherit the same font size as bare controls. No page-specific control overrides.
+- **`Textarea appearance="composer"`** is a plain, 14px multiline editor when
+  the surrounding composer owns the fill, border and focus indication. It keeps
+  native editing, disabled and placeholder semantics; the default `field`
+  appearance and shared form-control sizing remain unchanged.
 - **`SearchField`** — borderless, underline-on-focus, auto-width. The only
   search input. Don't build boxed search bars; don't wrap it in a bordered tile.
   Empty lists hide their search field.
@@ -891,6 +1044,11 @@ Lower panels keep local headers. Empty header space moves the window;
 tabs and actions remain no-drag, with native-control space reserved from the
 existing traffic-light and Window Controls Overlay measurements.
 
+On macOS, native traffic lights use a 12-point left inset in every titled window.
+Keep the renderer's startup fallback insets aligned with that position so the
+adjacent toolbar and panel reservations do not jump when native state arrives.
+Windows/Linux retain their previous toolbar startup fallback until native state arrives.
+
 The left cluster shows sidebar, settings, layout editor, and HUD controls. Flip
 and the right-sidebar toggle sit on the right; haptics remain in settings.
 In Simple interface mode only sidebar, settings and the layout editor render,
@@ -940,11 +1098,46 @@ so glass and message-bubble transparency do not reveal scrolling text.
   that wants the answer inline instead of a mounted dialog calls `confirm()`
   from `src/store/confirm.ts`, which renders this same primitive through the
   single `ConfirmHost` at the shell — the way `notify()` backs notifications.
-- **Notifications:** `NotificationStack` places errors, warnings and actionable
-  cards at the top right; ordinary success feedback stays at the bottom right.
-  Both reuse `CardStack`, shared panel corners and theme tokens. Actionable
-  cards use a light severity tint, readable neutral body text and collapsed
-  details. Backend maintenance notices omit shell commands from their details.
+- **Notifications:** `NotificationStack` owns a right-aligned summary card below
+  the current page header and a dedicated reading panel beside the workspace. Main, HUD and
+  popped-out Browser each mount this same frame inside their actual shell;
+  there are no competing corner stacks or over-modal toast portals. Only one
+  concise summary appears; the notification/status button keeps every pending
+  entry reachable. Hiding a summary preserves its recovery entry. Short feedback
+  expires after five seconds unless its caller specifies otherwise; pointer,
+  keyboard and detail readers independently pause the remaining time. Actions
+  await their real callback, stay single-flight across same-ID updates and retain
+  failures for retry. Dispatching a restart intent means only that it was started,
+  not that the service recovered. Native OS notification chrome remains OS-owned.
+  Long details wrap in one panel-body scroll region, with header and actions
+  fixed. On narrow windows the panel temporarily owns the workspace area while
+  its conversation and draft stay mounted and inert. Account/source resets
+  retire callbacks and the reading epoch; an ID reused by another owner cannot
+  inherit old details or hidden state. Backend notices are keyed by connection,
+  profile and notice code. Maintenance/snooze actions retain their source and
+  never operate on a different foreground workspace. Disk suggestions do not
+  promise that history cleanup can solve low disk space; raw diagnostics are
+  available separately, never truncated or executed by the UI.
+- **Inline alerts:** `Alert`/`AlertDescription` use the shared 14px body role,
+  neutral readable text, semantic icons and a complete min-width/anywhere-wrap
+  chain. A long title is readable; only compact notification summaries clamp,
+  with their full content available in the reading panel. Group, account,
+  connection, install and model-form errors reuse this presentation without
+  changing their data owner or recovery action.
+- **Dialog reading and actions:** `DialogContent.header` and `.footer` are optional
+  fixed title and action regions outside its sole `dialog-body` scroller. Existing
+  form layouts retain their default body when omitted. `dismissDisabled` locks the shared X,
+  Escape and outside dismissal; controlled callers still own programmatic close.
+  `ConfirmDialog` keeps its title and footer fixed, keeps errors visible in its body and
+  synchronously locks double activation before React paints its disabled state.
+  Failure keeps the decision open; success closes only after its real operation.
+  Upload consent retains its existing choice to close during upload, clearly
+  explaining that this does not cancel an already-started transfer. Required
+  update/install gates keep their explicit non-dismissable semantics and focus
+  ownership. Root-crash recovery mounts the existing diagnostic consent/upload
+  host above the crash shell; the action remains usable after the app host unmounts,
+  with the original privacy choice and one in-flight upload. See
+  `docs-local/notification-redesign/implementation.md` for coverage.
 
 ## Chat typography
 
@@ -954,12 +1147,12 @@ is a separate desktop-local multiplier (100% by
 default) on conversation text and the composer editor, including floating and
 inline-edit composers.
 It does not resize the sidebar, settings, toolbars, media, or pane geometry.
-Navigation, session/project titles and the account name use the shared 14px UI
+Navigation, session/project titles and the account name use the shared 14px body
 role. Dates and supporting metadata retain the 12px caption role. Maximizing the
 window changes available space; the remembered global scale controls its size.
 Conversation size and line-height tokens are derived inside the transcript/editor
 from their root base tokens; do not multiply the global tokens or nest CSS zoom.
-`aino-theme.css` owns those base tokens through the existing 14/14/12px roles;
+`aino-theme.css` owns those base tokens through the existing 14/13/12px roles;
 the inner transcript/editor derives scaled values from them. Do not override only
 the final aliases on an outer chat surface: inner scopes recalculate them.
 
@@ -997,16 +1190,20 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   and result counts live in the existing detail disclosure. Public paragraphs
   use regular weight and comfortable line height; compact tool rows use
   regular weight and the shared line-height and glyph columns. At the normal
-  desktop scale, prose and user bubbles are 14px, activity is 14px with a 24px
-  line height, and glyphs are 14px in a 16px cell. Prose uses 1.6 line height;
-  headings scale from the reading size (22/18/14px for h1/h2/h3 at that scale).
-  The approved reply presentation uses a faint semantic-blue user bubble and
-  table header and continuous unboxed prose. Disclosure carets sit immediately
+  desktop scale, prose and user bubbles are 14px, activity uses the 13px UI role
+  and shared conversation line height, and glyphs are 14px in a 16px cell.
+  Prose uses 1.6 line height; headings scale from the reading size
+  (18/16/14px for h1/h2/h3 at that scale). The approved reply presentation uses a
+  neutral soft user bubble, a faint shared table-header fill and continuous
+  unboxed prose. Disclosure carets sit immediately
   after their label, with width reserved while hidden. They appear on that
   toggle's hover or keyboard focus; touch inputs retain a visible affordance.
   Independent row actions stay outside the toggle. Native thinking keeps
   its full content behind a fine vertical guide; code surfaces use a hairline
   border and retain their copy, scrolling and expansion controls. Markdown
+  source fences (`md` / `markdown`) keep their literal syntax in the shared
+  code card, with a compact Markdown header and a visible, localized copy action.
+  Copy preserves the source document verbatim. Rendered Markdown
   tables keep declared alignment, horizontal scrolling and column resizing;
   visual styling never guesses numeric columns or rewrites model content.
   Reply diagnostics start collapsed behind the existing usage disclosure;
@@ -1073,9 +1270,9 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   top of the input instead of a second fixed workspace button below it.
   The home order is localized heading and subtitle → project selector above the input →
   composer controls → the four existing quick tasks. The centered composition
-  caps at 864px; the home composer starts at 192px high, uses 24px corners, and
-  quick tasks use 14px corners. Quick-task titles use the 14px UI role and their
-  descriptions the 13px label role; the home editor starts at 16px and retains
+  caps at 864px; the home composer starts at 192px high, uses 20px corners, and
+  quick-task actions use 6px control corners. Quick-task labels use the 13px UI
+  role; the home editor starts at 14px and retains
   the saved chat text scale. Its project footer has a 44px minimum height and
   13px labels, with inline padding aligned to the editor. Short windows use a
   160px composer and tighter cards.
@@ -1273,11 +1470,14 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 
 ## Iconography & brand
 
-- **IconPark outline** is the approved application/chrome vocabulary, matching
-  the interface prototype (48-unit viewBox, 1.7-unit stroke). Import the existing
-  curated aliases and `iconSize` scale from `src/lib/icons.ts`; feature code must
-  not import another icon package. Static paths and their license live in
-  `src/assets/aino-icons/`; navigation masks use the same source.
+- **Codicons** supplies 128 official SVG geometries from `@vscode/codicons`
+  0.0.45 for application/chrome icons. Eight symbols without a semantic
+  equivalent retain their IconPark source, normalized into the same 16-unit
+  viewport with one-pixel optical strokes at 16px; they are not official Codicons.
+  Import the existing curated aliases and `iconSize` scale from `src/lib/icons.ts`;
+  feature code must not import another icon package. Static paths, licenses and
+  exact source mappings live in `src/assets/aino-icons/`, including
+  `codicon-provenance.json`; navigation masks use that same geometry.
 - **`Codicon`** preserves the editor/plugin name API. Common application names
   render the same approved SVGs through `src/components/ui/codicon.tsx`, including
   `codiconIcon()` for component-shaped consumers. Specialized editor/Git names
@@ -1290,10 +1490,16 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   small vector mark, softly rounded and identical in light/dark. Use it for
   explicit brand moments and the approved sidebar mode selector. The home
   headline has no decorative app glyph. Do not reintroduce star/sparkle icons.
-- Account sign-in retains its existing `assets/aino-account/logo.png` artwork
-  and compact, centered layout with pill-shaped fields and actions. The home
-  headline glyph removal does not apply to sign-in; its scoped CSS shares
-  the app's color tokens without replacing that approved layout.
+- Account sign-in retains its existing `assets/aino-account/logo.png` artwork,
+  AINO heading, 80px logo and centered input/actions. Secondary login links
+  share a centered, wrapping footer row to avoid stacking three small actions.
+  Keep the established form order and control geometry. Phone registration
+  has one short visible hint; the existing-account binding explanation is
+  available through its small sign-in help button. The native 340 CSS-pixel
+  account window remains content-sized. Scope: simplify hints, preserve layout.
+  Switching methods clears old form errors while capability failures retain
+  recovery; auth loading locks navigation and TOTP Back returns to its entry.
+  See `docs-local/login-simplification/DESIGN.md`.
 
 ## Motion
 
@@ -1341,6 +1547,20 @@ long transcript or a busy terminal.
 
 - Keyboard ownership follows focus. The focused surface wins its keys; shell
   shortcuts must not steal a terminal's or editor's bindings.
+- Zone tabs have one keyboard entry point at the selected tab. Arrows follow
+  the strip's orientation; Home/End move focus, Enter/Space activate, and Tab
+  leaves the tabs. Delete invokes an available close action and retains focus
+  on a surviving sibling. Restoring a vertical rail retains its tab focus.
+  The collapsed rail keeps the zone context menu on its outer surface; its
+  inner tab list owns vertical keyboard navigation.
+- Tab-header focus belongs to navigation: session activation and queued composer
+  focus retries must not redirect it. Explicit composer focus still works.
+  Entering a split's tab strip selects its visible chat as the typing recipient
+  without moving focus into the editor; hidden tabs must not receive that input.
+- Sidebar keyboard stops are real controls: session title, reorder handle and
+  actions, not timestamps. Focus uses existing theme tokens, stays distinct from
+  selection, and reveals hover-only controls. Focused/open actions replace their
+  metadata tail; real metadata actions remain independently reachable.
 - Focusing the Sessions sidebar preserves the last active chat's visual emphasis.
   Dimming still distinguishes session panes; sidebar navigation must not desaturate
   the chat or transfer its active highlight to a hidden primary tab.
@@ -1388,9 +1608,22 @@ The detailed state contract lives in the scoped
 
 - `cursor-pointer` at the primitive level (Button, dropdown/select) — don't
   hardcode it per call site.
-- Quiet pointer focus; keyboard-focused controls retain the shared visible
-  focus outline. Titlebar actions have no active-background state, except an
-  open `titlebar-popover` trigger, which identifies its floating or docked card.
+- Keep keyboard focus visible through existing control primitives and theme
+  tokens; never globally suppress outlines or focus rings. Preserve native
+  focus indicators on controls without a themed replacement. Titlebar actions
+  have no active-background state.
+- Each control has one focus treatment: its existing ring, outline, or field
+  border. Suppress the native outline only when that replacement is visible.
+  In forced-colors mode, use one system-color outline on the focused control
+  (or its field wrapper); don't outline unfocused menu rows or containers.
+  Keep command-picker input and selected-row fallback outlines inset so scroll
+  and group clipping cannot cut off their edges.
+  Inline message editors delegate focus chrome to their card border, just like
+  the main composer; their inner contenteditable must not add a second outline.
+- Keyboard users can activate image viewers and return to their available
+  opener when the viewer closes. Composer focus-follow must preserve focus
+  returning from a floating layer while updating the owning chat surface.
+- An open `titlebar-popover` trigger identifies its floating or docked card.
 - `Esc` closes every dismissable overlay/dialog (install/onboarding excluded);
   close is an x-icon, not the word "Close".
 

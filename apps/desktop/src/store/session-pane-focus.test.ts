@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { paneMirror } from '@/app/chat/pane-mirror'
 import * as model from '@/components/pane-shell/tree/model'
 import * as tree from '@/components/pane-shell/tree/store'
+import { setWorkspaceScope } from '@/components/pane-shell/workspace-scope'
 import { registry } from '@/contrib/registry'
 import { applyDesktopOverlay } from '@/store/profile-share'
 import * as session from '@/store/session'
@@ -22,6 +23,11 @@ beforeAll(() => {
   tree.watchContributedPanes()
   paneMirror({
     source: states.$sessionTiles,
+    workspaceScope: id => {
+      const tile = states.$sessionTiles.get().find(item => item.storedSessionId === id)
+
+      return { mode: tile?.workspaceMode ?? 'sessions', ownerKey: tile?.workspaceOwnerKey }
+    },
     key: tile => tile.storedSessionId,
     prefix: 'session-tile',
     dir: () => 'center',
@@ -42,6 +48,7 @@ function resetState() {
   tree.$activePresetId.set('default')
   session.$selectedStoredSessionId.set(null)
   session.$lastReadAtBySessionId.set({})
+  setWorkspaceScope('sessions')
   window.localStorage.clear()
 }
 
@@ -56,6 +63,7 @@ function setup() {
     workspaceTabTitle: 'Bot Chat'
   }
 
+  setWorkspaceScope('bots', scope.workspaceOwnerKey)
   states.openSessionTile('canonical-chat', 'center', 'workspace', undefined, scope)
 
   return { model, scope, session, states, tree }

@@ -40,6 +40,7 @@ import { $todoProgressBySession } from '@/store/todos'
 import { SessionStatusDot } from '../session-status-dot'
 
 import {
+  SIDEBAR_FOCUS_VISIBLE,
   SIDEBAR_ROW_CARD_MIN_H,
   SIDEBAR_TRUNCATED_LEADING,
   SidebarRowCluster,
@@ -66,7 +67,7 @@ interface SidebarSessionRowProps extends React.ComponentProps<'div'> {
   unread: boolean
   onArchive: () => void
   onBranch?: () => void
-  onDelete: () => void
+  onDelete: () => Promise<void> | void
   onPin: () => void
   /** Toggle the persisted read-state watermark. */
   onToggleUnread: () => void
@@ -111,11 +112,10 @@ function disarmMarquee(event: React.PointerEvent<HTMLElement>) {
   delete event.currentTarget.dataset.marquee
 }
 
-// The last thing in the trailing slot hands its place to the ⋯ button on hover,
-// and is never narrower than the button that has to cover it. A PR chip is the
-// exception while the pointer is on it: it's a link, and the kebab sits
-// absolute over this space, so it has to stop taking clicks too, not just fade.
-const TAIL_HIDES = 'session-row-tail min-w-5 transition-opacity group-hover:opacity-0'
+// The last trailing figure yields its space to the actions button on hover or
+// keyboard focus. The sidebar's tail swap styles keep real PR actions visible
+// while they are hovered or focused.
+const TAIL_HIDES = 'session-row-tail min-w-5 transition-opacity'
 const KEBAB_YIELDS = 'session-row-kebab'
 
 function formatAge(seconds: number, r: Translations['sidebar']['row']): string {
@@ -146,9 +146,8 @@ function SessionRowFigures({ head, sep, showAge, figures, absoluteAge, age, time
           <Tip label={absoluteAge} side="top">
             <time
               aria-label={`${age}, ${absoluteAge}`}
-              className="pointer-events-auto focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+              className="pointer-events-auto"
               dateTime={timestampDate.toISOString()}
-              tabIndex={0}
             >
               {age}
             </time>
@@ -367,10 +366,11 @@ function SidebarSessionRowImpl({
         <Button
           aria-label={r.sessionActions}
           className={cn(
-            'size-5 rounded-[4px] bg-transparent text-transparent transition-colors duration-100 hover:bg-(--ui-control-active-background) hover:text-foreground focus-visible:bg-(--ui-control-active-background) focus-visible:text-foreground focus-visible:ring-0 data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground group-hover:text-(--ui-text-tertiary) [&_svg]:size-3.5!',
+            'size-5 rounded-[4px] bg-transparent text-transparent transition-colors duration-100 hover:bg-(--ui-control-active-background) hover:text-foreground focus-visible:bg-(--ui-control-active-background) focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground group-hover:text-(--ui-text-tertiary) [&_svg]:size-3.5!',
             trailing.length > 0 && 'absolute right-0',
             pr && KEBAB_YIELDS
           )}
+          data-session-actions
           size="icon"
           variant="ghost"
         >
@@ -464,9 +464,8 @@ function SidebarSessionRowImpl({
             keyboard reorder, #83617) and the ⋯ trigger must be SIBLINGS of
             the row's primary action, never nested inside it (axe
             nested-interactive). The title below is the row's real button:
-            its click bubbles to this div's handlers, so pointer users keep
-            click-anywhere-on-the-row, and keyboard users get one clean tab
-            stop per row instead of an ambiguous nested one. */}
+            its click bubbles to this div's handlers, preserving pointer
+            activation while the grabber and actions retain separate stops. */}
         <SidebarRowCluster
           // Every trailing figure lives in the actions slot, which the row
           // measures — so the title needs a gap from it and nothing else. Hover
@@ -574,7 +573,7 @@ function SidebarSessionRowImpl({
                         exactly as they did on the old full-row button. The
                         OverflowTip stays on the truncating label so its
                         scrollWidth measurement is unchanged. */}
-                    <RowButton className="block w-full text-left">
+                    <RowButton className={cn('block w-full rounded-sm text-left', SIDEBAR_FOCUS_VISIBLE)}>
                       <OverflowTip label={title} placement="row">
                         <SidebarRowLabel
                           className="aino-sidebar-session-label hover-marquee block font-normal group-hover:text-foreground group-data-[working=true]:text-foreground/90"
@@ -597,7 +596,7 @@ function SidebarSessionRowImpl({
                     {density !== 'compact' && details.metadata && (
                       <span
                         className={cn(
-                          'mt-0.5 block truncate text-[0.625rem] text-(--ui-text-tertiary)',
+                          'mt-0.5 block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                       >
@@ -607,7 +606,7 @@ function SidebarSessionRowImpl({
                     {density === 'detailed' && details.preview && (
                       <span
                         className={cn(
-                          'mt-1 block truncate text-[0.625rem] text-(--ui-text-quaternary)',
+                          'mt-1 block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                       >
@@ -632,7 +631,7 @@ function SidebarSessionRowImpl({
                   <SessionRowSlot area={SESSION_ROW_AREAS.leading} sessionId={sessionPinId(session)} />
                   <span
                     className={cn(
-                      'min-w-0 flex-1 truncate text-[0.6875rem] text-(--ui-text-tertiary)',
+                      'min-w-0 flex-1 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                       SIDEBAR_TRUNCATED_LEADING
                     )}
                   >
@@ -648,11 +647,11 @@ function SidebarSessionRowImpl({
                   {/* #38072 finding 3: the card's title line is the row's real
                       button (same contract as the flat row: no onClick of its
                       own — the click bubbles to the body div's resolver). */}
-                  <RowButton className="block w-full text-left">
+                  <RowButton className={cn('block w-full rounded-sm text-left', SIDEBAR_FOCUS_VISIBLE)}>
                     <OverflowTip label={title} placement="row">
                       <SidebarRowLabel
                         className={cn(
-                          'aino-sidebar-session-label hover-marquee text-[0.8125rem] font-medium text-(--ui-text-primary) group-data-[working=true]:text-foreground',
+                          'aino-sidebar-session-label hover-marquee text-[length:var(--aino-text-label)] font-medium text-(--ui-text-primary) group-data-[working=true]:text-foreground',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                         data-sidebar-session-label=""
@@ -666,7 +665,7 @@ function SidebarSessionRowImpl({
                   {session.preview && rowMeta.includes('preview') ? (
                     <span
                       className={cn(
-                        'min-w-0 truncate text-[0.625rem] text-(--ui-text-quaternary)',
+                        'min-w-0 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)',
                         SIDEBAR_TRUNCATED_LEADING
                       )}
                     >
@@ -677,7 +676,7 @@ function SidebarSessionRowImpl({
                 {model || size || todoProgress ? (
                   <span
                     className={cn(
-                      'flex min-w-0 items-baseline gap-2 text-[0.625rem] text-(--ui-text-tertiary)',
+                      'flex min-w-0 items-baseline gap-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                       SIDEBAR_TRUNCATED_LEADING
                     )}
                   >

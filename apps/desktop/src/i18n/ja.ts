@@ -27,12 +27,14 @@ import { jaNotices } from './ja_notices'
 import { jaNotifications } from './ja_notifications'
 import { jaOnboarding } from './ja_onboarding'
 import { jaPluginPreviewAccess } from './ja_plugin_preview_access'
+import { jaPluginUpdateAll } from './ja_plugin_update_all'
 import { jaPluginSettings, jaPluginsTab } from './ja_plugins'
 import { jaProjects } from './ja_projects'
 import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
 import { jaUpdateChannel } from './ja_update_channel'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -279,6 +281,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const jaBaseOverrides = {
+  notificationCenter: notificationCenterCopy['ja'],
   appearancePage: appearancePage.ja,
   home: homeGuidance.ja,
   toolPanel: toolPanel['ja'],
@@ -368,6 +371,7 @@ const jaBaseOverrides = {
   boot: jaBoot.boot,
 
   notifications: {
+    actions: { restartHermes: 'Aino を再起動', openKeys: 'ツールとキーを開く', openGateways: '接続設定を開く', openMaintenance: '整理の設定を確認' },
     sharedProfileWarning:
       '別の Hermes インストールがこのプロファイルを使用しています。両方が設定とデータを共有しているため、変更が競合する可能性があります。このまま続けるか、変更する前にもう一方を終了してください。',
     region: '通知',
@@ -460,6 +464,7 @@ const jaBaseOverrides = {
   ...jaNotices,
 
   sendDiagnostics: {
+    closeWhileUploadingHint: 'このウィンドウを閉じても、開始済みのアップロードは取り消されません。',
     title: 'Aino に診断情報を送信',
     privacyNotice:
       '非公開の診断パッケージを Aino アカウントのサービスに送信します。システム情報、設定状況（キー自体は含まない）、エージェント・ゲートウェイ・デスクトップのログ（各最大 512 KB）を含みます。ログには会話、ツール出力、ファイルパスが含まれる場合があります。キーは伏せられますが、他の機密情報が残る可能性があります。閲覧できるのは許可された Aino 管理者のみです。14 日後にアクセスが無効となり、その後 1 時間以内にオンラインデータを削除します。既存のバックアップには運用環境の保存方針が適用されます。',
@@ -1446,7 +1451,7 @@ const jaBaseOverrides = {
       existingAccount: '既存のアカウントでログイン',
       registerAccount: 'アカウントを作成',
       registrationClosed: '新規登録は現在受け付けていません。',
-      phoneAutoRegister: '未登録の電話番号は、認証に成功すると自動で登録されます。',
+      phoneAutoRegister: '未登録の番号は認証後に自動登録されます。',
       phoneLoginUnavailable: '電話番号でのログインは現在利用できません。既存のアカウントをご利用ください。',
       existingAccountPhoneHint:
         'ウェブサイトのアカウントをお持ちの場合は、先にログインして電話番号を連携してください。',
@@ -1519,7 +1524,7 @@ memoryLayers: jaMemoryLayers
 
   skillDeepLink: jaSkillDeepLink,
   skills: {
-    plugins: { ...jaPluginPreviewAccess, ...jaPluginsTab },
+    plugins: { ...jaPluginPreviewAccess, ...jaPluginsTab, ...jaPluginUpdateAll },
     hub: {
       search: '検索',
       searching: '検索中…',
@@ -1865,6 +1870,32 @@ memoryLayers: jaMemoryLayers
     restartNow: '今すぐ再起動',
     restarting: '再起動中…',
     restartFailedManual: 'ゲートウェイの再起動に失敗しました。手動で再起動し、ゲートウェイのログを確認してください。',
+    relayLink: {
+      title: 'Team Gateway',
+      badge: 'ボットトークン不要',
+      intro: (platform: string) => `${platform} は共有の Hermes ボット経由でこのエージェントに届きます。${platform} アカウントをリンクし、ボットにメッセージを送るとエージェントと話せます。`,
+      link: (platform: string) => `${platform} をリンク`,
+      linkAnother: (platform: string) => `別の ${platform} アカウントをリンク`,
+      linkedAccounts: 'リンク済みアカウント',
+      unlink: 'リンク解除',
+      unlinkFailed: 'アカウントのリンクを解除できませんでした',
+      stepOpen: (platform: string) => `1. スマートフォンでコードを読み取るか、${platform} でボットを開きます。`,
+      stepSend: '2. リンクしたいアカウントから、ボットに次のメッセージを送ります:',
+      open: (platform: string) => `${platform} を開く`,
+      copy: 'メッセージをコピー',
+      copied: 'コピーしました',
+      copyFailed: (command: string) => `コピーできませんでした。${command} と入力してください。`,
+      waiting: 'ボットがメッセージを受け取るのを待っています。コードは1回だけ使えます。',
+      linked: (platform: string) => `${platform} アカウントをリンクしました。ボットにメッセージを送るとエージェントと話せます。`,
+      expired: 'コードは使われる前に期限切れになりました。新しいコードを取得してもう一度お試しください。',
+      refused: (platform: string) => `${platform} がリンクを拒否しました。新しいコードを取得してもう一度お試しください。`,
+      qrAlt: (platform: string) => `共有 ${platform} ボットの QR コード`,
+      managed: 'Team Gateway が管理',
+      managedNote: (platform: string) => `このインスタンスではメッセージを Team Gateway が扱うため、ゲートウェイは起動のたびに ${platform} の直接接続をオフにします。リレーと併用するには、ゲートウェイの環境に GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true を設定してください（直接接続があるとインスタンスがゼロまでスケールダウンできず、メッセージが二重に届くことがあります）。`,
+      managedIntro: 'このエージェントのアカウントは Nous Portal からリンクします。',
+      openPortal: 'Nous Portal でアカウントをリンク',
+      noNewAccount: (platform: string) => `コードは無効になり、新しいアカウントは表示されませんでした。${platform} アカウントが一覧にない場合は、新しいコードを取得してもう一度お試しください。`
+    },
     telegramQr: {
       title: 'Telegram ボットの接続方法を選択',
       subtitle: 'どちらの方法でも、あなたが管理するボットを接続し、資格情報はこの Hermes にのみ保存されます。',
@@ -3248,7 +3279,9 @@ memoryLayers: jaMemoryLayers
       fastFailed: '高速モードの更新に失敗しました',
       multiAgent: 'マルチエージェント協働',
 
-      multiAgentSends: (level: string) => `マルチエージェント協働、${level} を送信`
+      multiAgentSends: (level: string) => `マルチエージェント協働、${level} を送信`,
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Daybreak の更新に失敗しました'
     },
     gatewayMenu: {
       gateway: 'ゲートウェイ',
@@ -3345,6 +3378,15 @@ memoryLayers: jaMemoryLayers
           subagent_definitions: 'サブエージェント定義',
           system_prompt: 'システムプロンプト',
           tool_definitions: 'ツール定義'
+        },
+        compact: {
+          action: '会話を圧縮',
+          busyHint: '先に実行中の応答を終了するか停止してください',
+          confirm: '圧縮',
+          hint: '古いコンテキストを要約して空きを作ります。同じ会話を続けられます。',
+          question: 'この会話を要約に圧縮しますか？',
+          questionNamed: title => `「${title}」を要約に圧縮しますか？`,
+          working: '圧縮中…'
         },
         empty: 'コンテキストデータはまだありません',
         detailsUnavailable: '分類の詳細を取得できません。現在の使用量は引き続き表示されます。',
@@ -3571,6 +3613,7 @@ terminalDisconnectedBody:
   },
 
   zones: {
+    switchConversation: '会話を切り替え',
     sidebarModeMenu: '会話モードを切り替え',
     sidebarSessionsDescription: 'プロジェクト、ファイル、日常の会話',
     showTabStrip: 'タブを表示',
@@ -3644,6 +3687,12 @@ terminalDisconnectedBody:
   },
 
   assistant: {
+    mcpSetup: {
+      launchCommand: target => `実行: ${target}`,
+      launchRemote: target => `接続先: ${target}`,
+      launchEnv: keys => `環境変数: ${keys}`,
+      launchCwd: dir => `作業ディレクトリ: ${dir}`
+    },
     catalogInstall: {
       preparing: 'インストールを準備中…',
       install: 'インストール',

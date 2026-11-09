@@ -8,7 +8,7 @@
 
 import { APPROVAL_RESPOND_TIMEOUT_MS, host, randomUuid } from '@hermes/plugin-sdk'
 
-import { noteBotAttention } from './data'
+import { $botMeta, noteBotAttention } from './data'
 import { groupFailureReason, recordGroupActivity } from './group-activity'
 import { $groupChats, $groupClarify, appendGroupChatEntry, updateGroupChat } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
@@ -31,7 +31,8 @@ import {
   formatFreshThreadRoomContext,
   GROUP_PROMPT_HEADER_PREFIX
 } from './group-round-prompt'
-import { botConnectionRoute, requestForBot } from './routing'
+import { displayName } from './labels'
+import { botConnectionRoute, botRosterMeta, requestForBot } from './routing'
 import type { Attachment, GroupMember, GroupPrompt, GroupPromptQuestion, ProfileRoute } from './types'
 
 /** "(pass)" (loosely: pass / (pass) / pass.) or empty = the member stayed silent. */
@@ -376,13 +377,13 @@ export async function ensureGroupChatSession(
           }
         }
       } catch (error: any) {
-        if (error?.code !== 4007) {
+        if (!isSessionAbsentError(error)) {
           const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
           throw new Error(
             `Could not check ${member?.name || 'member'}'s group session${detail} — not starting a new one`
           )
         }
-        /* genuinely doesn't exist (4007) — try the next target / fall through to create */
+        /* genuinely doesn't exist — try the next target / fall through to create */
       }
     }
 
@@ -521,6 +522,21 @@ interface GatewayErrorLike {
   code?: number
   data?: { reason?: unknown }
   message?: unknown
+}
+
+/** "This session does not exist" from either backend: 4007 from a `hermes serve`
+ *  socket, a 4001 refusal whose reason is `not_found` from the gateway that owns
+ *  local sessions (gateway/session_controls.py). Only this answer may lead to
+ *  minting a fresh member session; every other failure fails closed. The
+ *  gateway also answers `not_found` for a row this caller may not read
+ *  (gateway/session_local_title.py folds permission_denied into it); treating that as
+ *  absent is safe, since such a row could not be resumed by this caller anyway. */
+export function isSessionAbsentError(error: GatewayErrorLike | null | undefined): boolean {
+  if (error?.code === 4007) {
+    return true
+  }
+
+  return error?.code === 4001 && (error.data?.reason === 'not_found' || error.message === 'not_found')
 }
 
 /** 4001-class "the runtime session was reaped" failure. Distinct from 4007
@@ -948,7 +964,7 @@ async function stageGroupTurnAttachments(member: GroupMember, runtime: string, i
       }
     } catch (error) {
       failed.push(label)
-      host.notifyError?.(error, `Could not attach ${label} for ${member.title || member.name}`)
+      host.notifyError?.(error, `Could not attach ${label} for ${displayName(member, botRosterMeta(member, $botMeta.get()))}`)
     }
   }
 
@@ -1337,7 +1353,7 @@ export async function harvestStrandedGroupReply(group: string, member: GroupMemb
     } catch (error: any) {
       // A session that genuinely no longer exists has nothing to harvest, and a marker that can
       // never resolve would keep the member out of every round; only unreachability keeps it.
-      if (error?.code === 4007) {
+      if (isSessionAbsentError(error)) {
         updateGroupChat(group, (r: GroupChatRoom) => {
           const next = {
             ...(r.stranded || {})

@@ -59,6 +59,7 @@ def test_custom_install_probes_only_after_approval_and_persists_references(home,
         target = payload["targets"][0]
         assert target["mcp_config"]["command"] == "sample-mcp"
         assert target["mcp_config"]["env_keys"] == ["CUSTOM_MCP_TOKEN"]
+        assert target["launch"] == {"kind": "stdio", "target": "sample-mcp --stdio", "env": ["CUSTOM_MCP_TOKEN"]}
         assert target["required_env"][0]["name"] == "CUSTOM_MCP_TOKEN"
         _approve(payload, {"CUSTOM_MCP_TOKEN": "card-only-secret"})
 

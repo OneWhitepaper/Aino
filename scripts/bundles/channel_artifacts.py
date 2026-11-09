@@ -10,7 +10,9 @@ from hermes_cli.release_channels import ChannelError, build_prefix, canonical_js
 from scripts.bundles.release_artifacts import single, validate_windows_bundle, write_appinstaller
 
 
-ALL_TARGETS = tuple((platform, arch) for platform in ("macos", "windows") for arch in ("arm64", "x64"))
+from scripts.releases.desktop_targets import MANIFEST_TARGETS
+
+ALL_TARGETS = MANIFEST_TARGETS
 
 
 def _leg_sha512(root: Path, files: dict, arch: str) -> dict[str, str]:

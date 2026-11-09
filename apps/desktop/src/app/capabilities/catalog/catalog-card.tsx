@@ -57,36 +57,23 @@ export function CatalogImage({ src, className }: { src: string; className?: stri
   )
 }
 
-// Shared classes, not per-card inline custom properties: identical declarations
-// let the style engine reuse computed styles across cards. catalog.css paints them.
-export const CARD_ACCENTS = [
-  '[--catalog-accent:var(--ui-blue)]',
-  '[--catalog-accent:var(--ui-orange)]',
-  '[--catalog-accent:var(--ui-purple)]',
-  '[--catalog-accent:var(--ui-green)]',
-  '[--catalog-accent:var(--ui-red)]',
-  '[--catalog-accent:var(--ui-cyan)]',
-  '[--catalog-accent:var(--ui-yellow)]'
-]
-
 export type CatalogCardVariant = 'default' | 'hero' | 'showcase' | 'compact' | 'horizontal'
 
 interface CatalogCardProps {
   variant?: CatalogCardVariant
   entry: CatalogEntry
   action: ReactNode
-  accentIndex: number
   onOpen: (entry: CatalogEntry) => void
   style?: CSSProperties
 }
 
 /** Cards summarize a capability; full metadata and artwork remain in its detail. */
-export function CatalogCard({ entry, action, accentIndex, onOpen, variant = 'default', style }: CatalogCardProps) {
+export function CatalogCard({ entry, action, onOpen, variant = 'default', style }: CatalogCardProps) {
   const { t } = useI18n()
 
   return (
     <article
-      className={cn('catalog-card', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])}
+      className="catalog-card"
       data-catalog-card
       data-catalog-variant={variant}
       data-entry-id={entry.id}

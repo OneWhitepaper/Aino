@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
+import { SendDiagnosticsHost } from '@/components/send-diagnostics-dialog'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/ui/error-state'
 import { useI18n } from '@/i18n'
@@ -162,42 +163,55 @@ function RootErrorFallback({ error, reset }: ErrorBoundaryFallbackProps) {
   const { t } = useI18n()
 
   return (
-    <div
-      className="fixed inset-0 z-(--z-crash) grid place-items-center bg-(--ui-chat-surface-background) p-6"
-      // Masks a crashed app — must stay filled under window glass. Contract:
-      // `[data-glass-opaque]` in styles.css.
-      data-glass-opaque=""
-    >
-      <ErrorState
-        className="w-full max-w-[28rem]"
-        description={
-          <>
-            {t.errors.boundaryDesc}
-            {error.message ? (
-              <details className="mt-2 text-left text-xs text-muted-foreground">
-                <summary className="cursor-pointer select-none text-center">{t.errors.boundaryDetails}</summary>
-                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.6875rem]">
-                  {error.message}
-                </pre>
-              </details>
-            ) : null}
-          </>
-        }
-        title={t.errors.boundaryTitle}
+    <>
+      <div
+        className="fixed inset-0 z-(--z-crash) grid place-items-center bg-(--ui-chat-surface-background) p-4"
+        // Masks a crashed app — must stay filled under window glass. Contract:
+        // `[data-glass-opaque]` in styles.css.
+        data-glass-opaque=""
       >
-        <Button className="font-semibold" onClick={reset} size="lg">
-          {t.common.retry}
-        </Button>
-        <Button onClick={() => window.location.reload()} variant="text">
-          {t.errors.reloadWindow}
-        </Button>
-        <Button onClick={() => void window.hermesDesktop?.revealLogs()?.catch(() => undefined)} variant="text">
-          {t.errors.openLogs}
-        </Button>
-        <Button onClick={() => requestSendDiagnostics(error.stack || error.message)} variant="text">
-          {t.errors.sendDiagnostics}
-        </Button>
-      </ErrorState>
-    </div>
+        <section
+          aria-label={t.errors.boundaryTitle}
+          className="flex max-h-[85vh] w-full min-w-0 max-w-[28rem] flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated)"
+        >
+          <div className="min-w-0 shrink-0 px-5 pt-5" data-slot="crash-recovery-header">
+            <ErrorState className="min-w-0" title={t.errors.boundaryTitle} />
+          </div>
+          <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-5 pt-4" data-slot="crash-recovery-body">
+            <div className="w-full min-w-0 text-center text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+              <p>{t.errors.boundaryDesc}</p>
+              {error.message ? (
+                <details className="mt-4 text-left">
+                  <summary className="cursor-pointer select-none">{t.errors.boundaryDetails}</summary>
+                  <pre className="mt-2 whitespace-pre-wrap rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) p-3 font-mono text-[length:var(--aino-text-caption)] leading-relaxed [overflow-wrap:anywhere]">
+                    {error.message}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          </div>
+          <div
+            className="grid min-w-0 shrink-0 grid-cols-2 gap-2 border-t border-(--ui-stroke-tertiary) p-5 [&>button]:min-w-0 [&>button]:whitespace-normal [&>button]:[overflow-wrap:anywhere]"
+            data-slot="crash-recovery-footer"
+          >
+            <Button onClick={reset}>
+              {t.common.retry}
+            </Button>
+            <Button onClick={() => window.location.reload()} variant="secondary">
+              {t.errors.reloadWindow}
+            </Button>
+            <Button onClick={() => void window.hermesDesktop?.revealLogs()?.catch(() => undefined)} variant="ghost">
+              {t.errors.openLogs}
+            </Button>
+            <Button onClick={() => requestSendDiagnostics(error.stack || error.message)} variant="ghost">
+              {t.errors.sendDiagnostics}
+            </Button>
+          </div>
+        </section>
+      </div>
+      {/* The normal host was inside the failed tree. Keep consent and its
+          recovery available without mounting that tree again. */}
+      <SendDiagnosticsHost crashRecovery />
+    </>
   )
 }

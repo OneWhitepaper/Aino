@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gateway.session_contract import Principal
+from gateway.session_contract import SessionActor
 from gateway.session_controls import AuthorityConnection
 from hermes_constants import get_hermes_home
 
@@ -16,7 +16,7 @@ def connection(home, operator=True):
     peer = AuthorityConnection.__new__(AuthorityConnection)
     peer.authority = SimpleNamespace(profile_id=str(home), sessions={},
                                      runner=SimpleNamespace(config=SimpleNamespace(multiplex_profiles=True)))
-    peer.actor = Principal('test-viewer', str(home), frozenset({'session:operator'} if operator else {'session:read'}), 'test')
+    peer.actor = SessionActor('test-viewer', str(home), frozenset({'session:operator'} if operator else {'session:read'}), 'test')
     peer._identity, peer._operator, peer._siblings = {}, operator, {}
     return peer
 

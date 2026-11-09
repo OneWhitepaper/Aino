@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { BrandMark } from '@/components/brand-mark'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { ErrorIcon } from '@/components/ui/error-state'
@@ -17,7 +18,7 @@ import type {
 import { useI18n } from '@/i18n'
 import { HOME_DIR_NAME } from '@/lib/brand'
 import { writeClipboardText } from '@/lib/clipboard'
-import { AlertCircle, ChevronDown, ChevronRight, Globe, iconSize, Loader2, Monitor } from '@/lib/icons'
+import { ChevronDown, ChevronRight, Globe, iconSize, Loader2, Monitor } from '@/lib/icons'
 import { capitalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 
@@ -157,7 +158,11 @@ function StageRow({ descriptor, result, now }: StageRowProps) {
           </span>
           {state !== 'running' && <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>}
         </div>
-        {reason && state !== 'pending' && <p className="mt-0.5 truncate text-xs text-muted-foreground">{reason}</p>}
+        {reason && state !== 'pending' && (
+          <p className="mt-0.5 min-w-0 whitespace-pre-wrap text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            {reason}
+          </p>
+        )}
       </div>
       <span className="flex-shrink-0 text-xs tabular-nums text-muted-foreground">
         {state === 'running' ? (elapsed ? `${copy.stageStates[state]} · ${elapsed}` : copy.stageStates[state]) : null}
@@ -456,11 +461,13 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
     return (
       <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
-        <div className="w-full max-w-2xl rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) p-8 shadow-nous">
+        <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) p-5 shadow-nous">
           <div className="flex items-start gap-4">
             <BrandMark className="size-11 shrink-0" />
             <div className="min-w-0">
-              <h2 className="text-xl font-semibold tracking-tight">{copy.setupChoiceTitle}</h2>
+              <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+                {copy.setupChoiceTitle}
+              </h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {localState === 'none' ? copy.setupChoiceDesc : copy.setupChoiceDescLocal}
               </p>
@@ -513,14 +520,14 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
           </div>
 
           {localStartError ? (
-            <div className="mt-4 flex items-start gap-2 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              <span>{localStartError}</span>
-            </div>
+            <Alert className="mt-4" variant="destructive">
+              <ErrorIcon size="1rem" />
+              <AlertDescription>{localStartError}</AlertDescription>
+            </Alert>
           ) : null}
 
           {localPres.showInstallTo ? (
-            <div className="mt-6 text-xs text-muted-foreground">
+            <div className="mt-6 min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
               {copy.installTo}{' '}
               <code className="font-mono text-(--ui-text-secondary)">{state.setupChoice.activeRoot}</code>
             </div>
@@ -539,43 +546,46 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
     const platformLabel = ups.platform === 'darwin' ? 'macOS' : ups.platform === 'linux' ? 'Linux' : ups.platform
 
     return (
-      <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 backdrop-blur-md">
-        <div className="w-full max-w-xl rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) p-8 shadow-nous">
-          <h2 className="text-xl font-semibold tracking-tight">{copy.oneTimeTitle}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{copy.unsupportedDesc(platformLabel)}</p>
+      <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
+        <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
+          <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-5">
+            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+              {copy.oneTimeTitle}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">{copy.unsupportedDesc(platformLabel)}</p>
 
-          <div className="mt-4">
-            <div className="mb-1.5 text-xs font-medium text-muted-foreground">{copy.installCommand}</div>
-            <pre className="overflow-x-auto rounded-md border border-(--stroke-nous) px-3 py-2.5 font-mono text-[12px]">
-              <code>{ups.installCommand}</code>
-            </pre>
-            <div className="mt-2 flex items-center gap-2">
-              <Button
-                onClick={() => {
-                  void writeClipboardText(ups.installCommand).catch(() => {})
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                {copy.copyCommand}
-              </Button>
-              <Button
-                onClick={() => {
-                  window.hermesDesktop?.openExternal?.(ups.docsUrl)
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {copy.viewDocs}
-              </Button>
+            <div className="mt-4">
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">{copy.installCommand}</div>
+              <pre className="min-w-0 whitespace-pre-wrap rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) px-3 py-2.5 font-mono text-[length:var(--aino-text-caption)] [overflow-wrap:anywhere]">
+                <code>{ups.installCommand}</code>
+              </pre>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => {
+                    void writeClipboardText(ups.installCommand).catch(() => {})
+                  }}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {copy.copyCommand}
+                </Button>
+                <Button
+                  onClick={() => {
+                    window.hermesDesktop?.openExternal?.(ups.docsUrl)
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {copy.viewDocs}
+                </Button>
+              </div>
             </div>
           </div>
-
-          <div className="mt-6 flex items-center justify-between pt-2">
-            <span className="text-xs text-muted-foreground">
+          <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-(--ui-stroke-tertiary) p-5">
+            <span className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
               {copy.installTo} <code className="font-mono text-(--ui-text-secondary)">{ups.activeRoot}</code>
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => setRemoteOpen(true)} size="sm" variant="secondary">
                 <Globe className="size-4" />
                 {copy.connectExistingShort}
@@ -590,51 +600,38 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
     )
   }
 
-  const stages = state.manifest?.stages || []
-  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
-
-  const completedCount = stages.filter(
-    s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'
-  ).length
-
-  const totalCount = stages.length
-  const failed = Boolean(state.error)
-  // Main writes a plain lead sentence and keeps the raw installer error after
-  // "Details:" (electron/bootstrap-failure-copy.ts); show them as two lines.
-  const [failureLead, failureDetail] = splitFailureDetails(state.error)
-  // Count the running stage as half-done so the bar advances *during* a long
-  // stage instead of sitting frozen at the last completed step while its logs
-  // stream (e.g. "0 of 2" pinned at 0% for the whole first stage).
-  const progressUnits = completedCount + (!failed && currentStage ? 0.5 : 0)
-  const progressPct = totalCount > 0 ? Math.round((progressUnits / totalCount) * 100) : 0
-  const currentStartedAt = currentStage ? state.stages[currentStage]?.startedAt : null
-  const currentElapsed = typeof currentStartedAt === 'number' ? formatElapsed(now - currentStartedAt) : ''
+  const {
+    stages,
+    currentStage,
+    completedCount,
+    totalCount,
+    failed,
+    failureLead,
+    failureDetail,
+    progressPct,
+    currentElapsed
+  } = bootstrapProgress(state, now)
 
   return (
     <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 backdrop-blur-md p-4">
-      <div className="flex w-full max-w-2xl max-h-[90vh] flex-col rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
         {/* Header -- always visible, never scrolls */}
-        <div className="flex flex-shrink-0 items-start gap-4 p-8 pb-4">
-          {!failed && <BrandMark className="size-11 shrink-0" />}
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight">
-              {failed ? copy.failedTitle : state.active ? copy.settingUpTitle : copy.finishingTitle}
-            </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{failed ? copy.failedDesc : copy.activeDesc}</p>
-          </div>
-        </div>
+        <BootstrapProgressHeader active={state.active} failed={failed} />
 
         {/* Scrollable middle: progress, stages, error block, log */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-2">
+        <div
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4"
+          data-slot="desktop-install-body"
+        >
           {totalCount > 0 && (
             <div className="mb-4">
-              <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
+              <div className="mb-1 flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span className="min-w-0 [overflow-wrap:anywhere]">
                   {copy.progress(completedCount, totalCount)}
                   {currentStage && copy.currentStage(formatStageName(currentStage, copy.stageNames[currentStage]))}
                   {currentElapsed && ` (${currentElapsed})`}
                 </span>
-                <span className="tabular-nums">{progressPct}%</span>
+                <span className="shrink-0 tabular-nums">{progressPct}%</span>
               </div>
               <Progress
                 aria-label={copy.progress(completedCount, totalCount)}
@@ -653,18 +650,18 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
           )}
 
           {failed && state.error && (
-            <div className="mb-4 flex items-start gap-2 text-sm">
+            <Alert className="mb-4" variant="destructive">
               <ErrorIcon className="mt-0.5 shrink-0" size="1rem" />
-              <div className="min-w-0">
-                <div className="font-medium text-destructive">{copy.error}</div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/90">{failureLead}</p>
+              <AlertTitle>{copy.error}</AlertTitle>
+              <AlertDescription>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{failureLead}</p>
                 {failureDetail ? (
-                  <p className="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                  <p className="mt-1 min-w-0 whitespace-pre-wrap font-mono text-xs text-(--ui-text-secondary) [overflow-wrap:anywhere]">
                     {failureDetail}
                   </p>
                 ) : null}
-              </div>
-            </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           {stages.length > 0 && (
@@ -689,14 +686,14 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
             </Button>
 
             {logOpen && (
-              <LogView className={cn('mt-2', failed ? 'max-h-96' : 'max-h-64')}>
+              <LogView className="mt-2 min-w-0 overflow-visible text-(--ui-text-secondary) [overflow-wrap:anywhere]">
                 {state.log.length === 0 ? (
                   <div>{copy.noOutput}</div>
                 ) : (
                   <>
                     {state.log.map((entry, i) => (
-                      <div className={cn(entry.stream === 'stderr' && 'text-muted-foreground/70')} key={i}>
-                        {entry.stage ? <span className="text-muted-foreground/60">[{entry.stage}] </span> : null}
+                      <div key={i}>
+                        {entry.stage ? <span className="text-(--ui-text-secondary)">[{entry.stage}] </span> : null}
                         <span>{entry.line}</span>
                       </div>
                     ))}
@@ -710,7 +707,10 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
         {/* Active footer: let the user actually cancel a running install. */}
         {state.active && !failed && (
-          <div className="flex-shrink-0 bg-(--ui-bg-elevated) p-4">
+          <div
+            className="shrink-0 border-t border-(--ui-stroke-tertiary) bg-(--ui-bg-elevated) p-5"
+            data-slot="desktop-install-footer"
+          >
             <div className="flex items-center justify-end">
               <Button
                 disabled={cancelling}
@@ -735,13 +735,16 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
         {/* Footer -- always visible, never scrolls; only renders on failure */}
         {failed && (
-          <div className="flex-shrink-0 bg-(--ui-bg-elevated) p-4">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">
+          <div
+            className="min-w-0 shrink-0 border-t border-(--ui-stroke-tertiary) bg-(--ui-bg-elevated) p-5"
+            data-slot="desktop-install-footer"
+          >
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <span className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {copy.transcriptSaved}{' '}
                 <code className="font-mono text-(--ui-text-secondary)">%LOCALAPPDATA%\{HOME_DIR_NAME}\logs\</code>
               </span>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 flex-wrap gap-2">
                 <Button onClick={() => setState(EMPTY_STATE)} size="sm" variant="ghost">
                   {t.common.close}
                 </Button>
@@ -798,5 +801,57 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
         )}
       </div>
     </div>
+  )
+}
+
+function bootstrapProgress(state: DesktopBootstrapState, now: number) {
+  const stages = state.manifest?.stages || []
+  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
+
+  const completedCount = stages.filter(
+    s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'
+  ).length
+
+  const totalCount = stages.length
+  const failed = Boolean(state.error)
+  // Main writes a plain lead sentence and keeps the raw installer error after
+  // "Details:" (electron/bootstrap-failure-copy.ts); show them as two lines.
+  const [failureLead, failureDetail] = splitFailureDetails(state.error)
+  // Count the running stage as half-done so the bar advances *during* a long
+  // stage instead of sitting frozen at the last completed step while its logs
+  // stream (e.g. "0 of 2" pinned at 0% for the whole first stage).
+  const progressUnits = completedCount + (!failed && currentStage ? 0.5 : 0)
+  const progressPct = totalCount > 0 ? Math.round((progressUnits / totalCount) * 100) : 0
+  const currentStartedAt = currentStage ? state.stages[currentStage]?.startedAt : null
+  const currentElapsed = typeof currentStartedAt === 'number' ? formatElapsed(now - currentStartedAt) : ''
+
+  return {
+    stages,
+    currentStage,
+    completedCount,
+    totalCount,
+    failed,
+    failureLead,
+    failureDetail,
+    progressPct,
+    currentElapsed
+  }
+}
+
+function BootstrapProgressHeader({ failed, active }: { failed: boolean; active: boolean }) {
+  const { t } = useI18n()
+  const copy = t.install
+  return (
+        <div className="flex shrink-0 items-start gap-4 p-5 pb-4">
+          {!failed && <BrandMark className="size-11 shrink-0" />}
+          <div className="min-w-0">
+            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+              {failed ? copy.failedTitle : active ? copy.settingUpTitle : copy.finishingTitle}
+            </h2>
+            <p className="mt-1.5 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary)">
+              {failed ? copy.failedDesc : copy.activeDesc}
+            </p>
+          </div>
+        </div>
   )
 }

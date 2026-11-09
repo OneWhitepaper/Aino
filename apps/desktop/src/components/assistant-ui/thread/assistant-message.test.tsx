@@ -14,8 +14,8 @@ import type { ErrorCardCopy } from '@/i18n/types'
 import { applyProductBrand } from '@/lib/brand'
 import { $touchPointer } from '@/lib/touch-interaction'
 import { $displayTimestamps } from '@/store/display-timestamps'
-import { $activeSessionId } from '@/store/session'
-import { type SessionTileDelegate, setSessionTileDelegate } from '@/store/session-states'
+import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
+import { $botChatSessionIds, type SessionTileDelegate, setSessionTileDelegate } from '@/store/session-states'
 
 import { stubThreadEnvironment } from '../test-utils'
 
@@ -286,6 +286,34 @@ describe('merged hover timestamps and touch actions', () => {
 })
 
 describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
+  it('shows the Aino mark only for a known ordinary session, never a bot or unknown owner', async () => {
+    const previousActive = $activeSessionId.get()
+    const previousSelected = $selectedStoredSessionId.get()
+    const previousBots = $botChatSessionIds.get()
+
+    try {
+      $activeSessionId.set('brand-check-runtime')
+      $selectedStoredSessionId.set('ordinary-session')
+      $botChatSessionIds.set(new Set(['different-bot-session']))
+      const { container } = render(<Harness />)
+      await screen.findByText('done')
+      expect(container.querySelector('[data-slot="aui_assistant-brand"]')).toBeTruthy()
+
+      act(() => $botChatSessionIds.set(new Set(['ordinary-session'])))
+      expect(container.querySelector('[data-slot="aui_assistant-brand"]')).toBeNull()
+
+      act(() => {
+        $botChatSessionIds.set(new Set())
+        $selectedStoredSessionId.set(null)
+      })
+      expect(container.querySelector('[data-slot="aui_assistant-brand"]')).toBeNull()
+    } finally {
+      $activeSessionId.set(previousActive)
+      $selectedStoredSessionId.set(previousSelected)
+      $botChatSessionIds.set(previousBots)
+    }
+  })
+
   it('reloads once from either desktop or touch Refresh', async () => {
     $touchPointer.set(true)
     const onReload = vi.fn(async () => {})

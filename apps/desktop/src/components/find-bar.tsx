@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 
 import { appViewForPath, isRouteBlockingSurface } from '@/app/routes'
+import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { findBarKeyAction, formatMatchLabel } from '@/lib/find-in-page'
@@ -305,7 +307,7 @@ export function FindBar() {
         // inside the titlebar strip, underneath the native min/max/close
         // window-controls overlay on Windows/Linux.
         'pointer-events-auto fixed right-4 top-[calc(var(--titlebar-height,34px)+0.5rem)] z-50',
-        'flex items-center gap-2 rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-surface-background) px-2 py-1.5 shadow-md'
+        'flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-(--aino-radius-panel) bg-(--ui-bg-elevated) px-3 py-2 text-[length:var(--aino-text-ui)] shadow-nous'
       )}
       role="search"
       style={barStyle}
@@ -313,7 +315,7 @@ export function FindBar() {
       <input
         aria-label={t.keybinds.actions['view.findInPage'] ?? 'Find in page'}
         autoComplete="off"
-        className="h-6 w-40 bg-transparent text-xs text-(--ui-text-primary) outline-none placeholder:text-(--ui-text-tertiary)"
+        className="h-8 w-40 min-w-0 flex-1 bg-transparent text-[length:var(--aino-text-ui)] text-(--ui-text-primary) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring placeholder:text-(--ui-text-tertiary)"
         onChange={onInput}
         onKeyDown={onKeyDown}
         placeholder={t.keybinds.actions['view.findInPage'] ?? 'Find in page'}
@@ -323,47 +325,29 @@ export function FindBar() {
       />
 
       {matchLabel && (
-        <span aria-live="polite" className="min-w-[3rem] text-center text-[0.6875rem] text-(--ui-text-tertiary)">
+        <span
+          aria-live="polite"
+          className="min-w-[3rem] text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
+        >
           {matchLabel}
         </span>
       )}
 
       <Tip label={t.findInPage.previous}>
-        <button
-          aria-label={t.findInPage.previous}
-          className="flex h-7 w-7 items-center justify-center rounded text-(--ui-text-secondary) hover:bg-(--ui-control-hover-background)"
-          onClick={findPrevious}
-          type="button"
-        >
-          <svg height="14" viewBox="0 0 16 16" width="14">
-            <path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </button>
+        <Button aria-label={t.findInPage.previous} onClick={findPrevious} size="icon-sm" type="button" variant="ghost">
+          <Codicon name="chevron-up" size="1rem" />
+        </Button>
       </Tip>
 
       <Tip label={t.findInPage.next}>
-        <button
-          aria-label={t.findInPage.next}
-          className="flex h-7 w-7 items-center justify-center rounded text-(--ui-text-secondary) hover:bg-(--ui-control-hover-background)"
-          onClick={findNext}
-          type="button"
-        >
-          <svg height="14" viewBox="0 0 16 16" width="14">
-            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </button>
+        <Button aria-label={t.findInPage.next} onClick={findNext} size="icon-sm" type="button" variant="ghost">
+          <Codicon name="chevron-down" size="1rem" />
+        </Button>
       </Tip>
 
-      <button
-        aria-label={t.common.close}
-        className="flex h-7 w-7 items-center justify-center rounded text-(--ui-text-secondary) hover:bg-(--ui-control-hover-background)"
-        onClick={closeFindBar}
-        type="button"
-      >
-        <svg height="12" viewBox="0 0 12 12" width="12">
-          <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-      </button>
+      <Button aria-label={t.common.close} onClick={closeFindBar} size="icon-sm" type="button" variant="ghost">
+        <Codicon name="close" size="1rem" />
+      </Button>
     </div>
   )
 }

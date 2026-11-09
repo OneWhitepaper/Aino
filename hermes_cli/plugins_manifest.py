@@ -459,7 +459,7 @@ _VERSION_COMPARATOR_RE = re.compile(r"^\s*(>=|<=|==|!=|>|<)\s*(.+?)\s*$")
 
 
 def running_hermes_version() -> str:
-    """Base release version of the Hermes code that is running."""
+    """Merged upstream compatibility, independent of the Aino distribution's identity."""
     from hermes_cli.version_info import get_version_info
 
     return get_version_info().base_version

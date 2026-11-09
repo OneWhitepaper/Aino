@@ -12,6 +12,7 @@ import { useApprovalModeStatusbarItem } from '@/app/shell/approval-mode-menu'
 import { ContextMeterDetail, ContextUsagePanel } from '@/app/shell/context-usage-panel'
 import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
 import { useChangeWorkspaceItem } from '@/app/shell/hooks/use-change-workspace'
+import { useCompactConversation } from '@/app/shell/hooks/use-compact-conversation'
 import { useContextBreakdown } from '@/app/shell/hooks/use-context-breakdown'
 import { useFocusedSessionRow } from '@/app/shell/hooks/use-focused-session-row'
 import { useSystemResourcesStatusbarItem } from '@/app/shell/system-resources-statusbar'
@@ -37,13 +38,7 @@ import {
 } from '@/lib/icons'
 import { type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { resolveSessionTimerSince } from '@/lib/session-timer-since'
-import {
-  cacheHitLabel,
-  contextBarLabel,
-  LiveDuration,
-  tokensPerSecondLabel,
-  usageContextLabel
-} from '@/lib/statusbar'
+import { cacheHitLabel, contextBarLabel, LiveDuration, tokensPerSecondLabel, usageContextLabel } from '@/lib/statusbar'
 import { rollbackSentence } from '@/lib/update-copy'
 import { formatPercentUsed, formatResetsIn } from '@/lib/usage-percent'
 import { useStoreSelector } from '@/lib/use-session-slice'
@@ -51,6 +46,7 @@ import { cn } from '@/lib/utils'
 import { resolveVersionStatus } from '@/lib/version-status'
 import { requestGatewayForActiveRoute } from '@/store/active-route-request'
 import type { ApprovalModeRequester } from '@/store/approval-mode'
+import { $cloudOwnsUpdates } from '@/store/cloud-updates'
 import { sessionCompacting } from '@/store/compaction'
 import { copyFilePath, revealFile, shouldOfferLocalReveal } from '@/store/file-actions'
 import { $freeTierSignInOpen, $freeTierStatus, FREE_TIER_MODEL } from '@/store/free-tier'
@@ -76,12 +72,7 @@ import {
   idsShareLineage
 } from '@/store/session'
 import { $focusedStoredSessionId } from '@/store/session-focus'
-import {
-  $focusedRuntimeId,
-  $focusedSessionState,
-  $sessionTiles,
-  isSessionRemote
-} from '@/store/session-states'
+import { $focusedRuntimeId, $focusedSessionState, $sessionTiles, isSessionRemote } from '@/store/session-states'
 import { $statusbarHiddenIds } from '@/store/statusbar-prefs'
 import { $subagentsBySession, activeSubagentCount, failedSubagentCount } from '@/store/subagents'
 import { $gatewayRestarting } from '@/store/system-actions'
@@ -122,11 +113,12 @@ function versionItem(
   target: 'backend' | 'client',
   status: ReturnType<typeof resolveVersionStatus>,
   applying: boolean,
-  toggleLabel: string
+  toggleLabel: string,
+  hidden = false
 ): StatusbarItem {
   return {
     className: status.hasUpdate ? 'text-primary hover:text-primary' : undefined,
-    hidden: status.unknown,
+    hidden: status.unknown || hidden,
     icon: applying ? <Loader2 className="size-3 animate-spin" /> : <Hash className="size-3" />,
     id: `version-${target}`,
     label: status.label,
@@ -222,6 +214,7 @@ export function useStatusbarItems({
   const backendUpdateApply = useStore($backendUpdateApply)
   const desktopVersion = useStore($desktopVersion)
   const connection = useStore($connection)
+  const cloudOwnsUpdates = useStore($cloudOwnsUpdates)
 
   // The FOCUSED session (interacted tile, else the primary — the same
   // derivation the titlebar title follows): every session-scoped readout
@@ -234,9 +227,7 @@ export function useStatusbarItems({
   // Connections-tagged tile on a remote gateway inside a local-primary window
   // (and vice versa) is decided by the tile's owner route, falling back to the
   // ambient connection only when no owner is known (#115167).
-  const focusedWorkspaceRemote = useStoreSelector($sessionTiles, () =>
-    isSessionRemote(focusedStoredSessionId)
-  )
+  const focusedWorkspaceRemote = useStoreSelector($sessionTiles, () => isSessionRemote(focusedStoredSessionId))
 
   // `$focusedSessionState` is a projection of `$sessionStates`, which is
   // republished on EVERY message delta — tens of times a second during a turn.
@@ -244,10 +235,7 @@ export function useStatusbarItems({
   // instead of rebuilding all ~9 statusbar items per token.
   const focusedBusy = useStoreSelector($focusedSessionState, state => Boolean(state?.busy))
 
-  const focusedRuntimeStartedAt = useStoreSelector(
-    $focusedSessionState,
-    state => state?.runtimeStartedAt ?? null
-  )
+  const focusedRuntimeStartedAt = useStoreSelector($focusedSessionState, state => state?.runtimeStartedAt ?? null)
 
   const focusedTurnStartedAt = useStoreSelector($focusedSessionState, state => state?.turnStartedAt ?? null)
   // `usage` is an object, so it can't be compared as a scalar. It IS however
@@ -263,10 +251,7 @@ export function useStatusbarItems({
   // tab switch the runtime id can lag a frame behind the new selection — the
   // slice still describes the PREVIOUS chat. Gate live cwd on ownership so we
   // never paint session A's workspace while the tab already shows session B.
-  const focusedStateStoredId = useStoreSelector(
-    $focusedSessionState,
-    state => state?.storedSessionId?.trim() || null
-  )
+  const focusedStateStoredId = useStoreSelector($focusedSessionState, state => state?.storedSessionId?.trim() || null)
 
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const primaryFocused = !focusedStoredSessionId || focusedStoredSessionId === selectedStoredSessionId
@@ -284,8 +269,7 @@ export function useStatusbarItems({
   const turnStartedAt = primaryFocused ? primaryTurnStartedAt : focusedTurnStartedAt
 
   // A tile's stored row: cold/fallback start and cwd, and which backend it runs on.
-  const { focusedRowConnectionId, focusedRowCwd, focusedRowStartedAt } =
-    useFocusedSessionRow(focusedStoredSessionId)
+  const { focusedRowConnectionId, focusedRowCwd, focusedRowStartedAt } = useFocusedSessionRow(focusedStoredSessionId)
 
   const offerLocalReveal = shouldOfferLocalReveal(focusedRowConnectionId, connection?.mode === 'remote')
 
@@ -360,15 +344,13 @@ export function useStatusbarItems({
     busy,
     enabled: !contextItemHidden,
     identityKey: JSON.stringify([currentProvider, currentModel]),
-    refreshKey: JSON.stringify([
-      currentUsage.context_max,
-      currentUsage.context_used,
-      currentUsage.context_percent
-    ]),
+    refreshKey: JSON.stringify([currentUsage.context_max, currentUsage.context_used, currentUsage.context_percent]),
     requestGateway,
     sessionId: activeSessionId,
     suspended: compacting
   })
+
+  const compactConversation = useCompactConversation({ busy, sessionId: activeSessionId })
 
   // Share the composer's merge policy: cold reads restore occupancy without
   // a window, while live usage owns measured tokens and the known capacity.
@@ -450,7 +432,7 @@ export function useStatusbarItems({
   const gatewayClassName = inferenceReady
     ? undefined
     : gatewayDegraded
-      ? 'text-amber-600 hover:text-amber-600'
+      ? 'text-(--ui-yellow) hover:text-(--ui-yellow)'
       : 'text-destructive hover:text-destructive'
 
   const rollbackBody = t.settings.about.channel.rollbackBody
@@ -475,8 +457,10 @@ export function useStatusbarItems({
       version: desktopVersion?.appVersion
     })
 
-    return versionItem('client', status, applying, copy.toggleVersion)
+    // A Webapp served by Hermes Cloud: Cloud updates it, so there is no version/update pill to open.
+    return versionItem('client', status, applying, copy.toggleVersion, cloudOwnsUpdates.client)
   }, [
+    cloudOwnsUpdates.client,
     desktopVersion?.appVersion,
     connection?.mode,
     copy,
@@ -488,7 +472,8 @@ export function useStatusbarItems({
   ])
 
   const backendVersionItem = useMemo<StatusbarItem | null>(() => {
-    if (connection?.mode !== 'remote') {
+    // Hermes Cloud updates its agents itself: no backend pill, as outside remote mode.
+    if (connection?.mode !== 'remote' || cloudOwnsUpdates.backend) {
       return null
     }
 
@@ -509,6 +494,7 @@ export function useStatusbarItems({
 
     return versionItem('backend', status, applying, copy.toggleBackendVersion)
   }, [
+    cloudOwnsUpdates.backend,
     connection?.mode,
     statusSnapshot?.version,
     backendUpdateStatus,
@@ -573,7 +559,9 @@ export function useStatusbarItems({
         detail: (
           <span className="inline-flex items-center gap-2">
             {trialModel && (
-              <span className="font-mono text-[0.625rem] text-muted-foreground/70">{trialModel}</span>
+              <span className="font-mono text-[length:var(--aino-text-caption)] text-muted-foreground/70">
+                {trialModel}
+              </span>
             )}
             {/* The class merger drops Badge's own leading-none behind the size's
                 font-size class, so the badge grows to the inherited 1.5 leading and
@@ -737,6 +725,7 @@ export function useStatusbarItems({
         menuContent: (
           <ContextUsagePanel
             breakdown={contextBreakdown}
+            compact={compactConversation}
             compacting={compacting}
             loading={contextBreakdownLoading}
             onRetry={refetchContextBreakdown}
@@ -776,12 +765,7 @@ export function useStatusbarItems({
       },
       {
         // Window plans only: today's allowance (else the one that binds) at a glance; opens the account.
-        className:
-          planUsed >= 0.8
-            ? 'text-red-600 dark:text-red-400'
-            : planUsed >= 0.5
-              ? 'text-amber-600 dark:text-amber-400'
-              : undefined,
+        className: planUsed >= 0.8 ? 'text-destructive' : planUsed >= 0.5 ? 'text-(--ui-yellow)' : undefined,
         hidden: !planGauge,
         icon: <Activity className="size-3" />,
         id: 'plan-usage',
@@ -824,6 +808,7 @@ export function useStatusbarItems({
       chatOpen,
       clientVersionItem,
       compacting,
+      compactConversation,
       contextBar,
       contextBreakdown,
       contextBreakdownLoading,

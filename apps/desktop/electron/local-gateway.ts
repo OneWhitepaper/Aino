@@ -18,9 +18,12 @@ export function runGatewayEnsure(
   { timeoutMs = GATEWAY_ENSURE_PROTOCOL_DEADLINE_MS + GATEWAY_ENSURE_CLIENT_GRACE_MS, label = 'hermes gateway ensure' }: { timeoutMs?: number; label?: string } = {}
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    // The gateway this starts outlives a dev session and Desktop reaches it without an Origin
+    // (main-process HTTP, Origin-stripped socket dials): it never trusts the dev renderer.
+    const { HERMES_DESKTOP_DEV_SERVER: _devServer, ...env } = { ...parentEnv, ...backend.env, HERMES_HOME: home }
     // shell: true hands cmd.exe one command line it cuts at the first unquoted space,
     // so an install under `C:\Users\John Doe\...` must arrive quoted (#74064).
-    const child = spawn(windowsShellCommand(backend.command, Boolean(backend.shell)), backend.args, hiddenWindowsChildOptions({ cwd, env: { ...parentEnv, ...backend.env, HERMES_HOME: home }, shell: backend.shell, stdio: ['ignore', 'pipe', 'pipe'] }))
+    const child = spawn(windowsShellCommand(backend.command, Boolean(backend.shell)), backend.args, hiddenWindowsChildOptions({ cwd, env, shell: backend.shell, stdio: ['ignore', 'pipe', 'pipe'] }))
     let stdout = ''
     let stderr = ''
     let expired: Error | undefined
@@ -101,7 +104,7 @@ export async function runGatewayOwnerRestart(
   return result.code === 2 && /unrecognized arguments:.*--detach/.test(result.stderr) ? run(args) : result
 }
 
-/** One restart per (owner process, stale gateway, client) per Desktop process. An owner a restart cannot move
+/** One restart per (canonical owner home, stale gateway, client) per Desktop process. An owner a restart cannot move
  *  (a service unit pinned to another checkout) is then attached as-is instead of being restarted
  *  on every dial. */
 export function createStaleGatewayRestarter(
@@ -113,7 +116,10 @@ export function createStaleGatewayRestarter(
   const restarts = new Map<string, { done: boolean; promise: Promise<void> }>()
 
   return async (endpoint, stale) => {
-    const key = `${gatewayOwnerProfile(endpoint)}\n${stale.gateway}\n${stale.client}`.toLowerCase()
+    // Every account has a "default" profile, but each owns a different home.
+    // Served siblings share the multiplexer home; unrelated accounts do not.
+    const ownerHome = endpoint.control_home || endpoint.profile_id
+    const key = JSON.stringify([ownerHome, stale.gateway.toLowerCase(), stale.client.toLowerCase()])
     const pending = restarts.get(key)
 
     if (pending && !pending.done) {

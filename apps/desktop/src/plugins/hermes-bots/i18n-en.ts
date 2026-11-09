@@ -216,7 +216,9 @@ export const en: BotsMessages = {
     openChatFailedTitle: botName => `Could not open ${botName}’s chat`,
     openChatFailedMessage: 'Try again.',
     openModelUnavailableMessage:
-      'This bot has no usable model. Open Advanced in its settings to choose a provider and model.',
+      'This bot has no usable model. Choose an available model in its model settings, then try again.',
+    openModelSettingsSourceMismatch:
+      'Switch to this bot’s connection in connection settings, then open its model settings again.',
     openGateways: 'Open Gateways',
     chatEmpty: 'Say something to get started.',
     kickoff: 'Hey, tell me about yourself!',

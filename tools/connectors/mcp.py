@@ -861,8 +861,11 @@ def run_mcp_operation(
 
 
 def _install_target(name: str, action: str, configs: dict[str, dict[str, Any]]) -> Target:
+    from tools.connectors.mcp_launch import launch_for, launch_target
     if name not in configs:
-        return Target(name, "mcp", action)
+        return Target(name, "mcp", action, launch=launch_for(action, name))
     from tools.connectors.custom_mcp import public_config
 
-    return Target(name, "mcp", action, mcp_config=public_config(configs[name]))
+    cfg = configs[name]
+    launch = launch_target(cfg.get("url"), cfg.get("command"), cfg.get("args"), cfg.get("env"), cfg.get("cwd"))
+    return Target(name, "mcp", action, mcp_config=public_config(cfg), launch=launch)

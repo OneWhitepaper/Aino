@@ -1,5 +1,5 @@
 import { revealSessionWorkspace } from '@/app/open-session'
-import { $paneVisible, revealTreePane } from '@/components/pane-shell/tree/store'
+import { revealTreePane, treePanesWithPrefix } from '@/components/pane-shell/tree/store'
 import {
   $workspaceMode,
   rememberActivePane,
@@ -27,12 +27,14 @@ export function switchWorkspaceScope(
 
   const changed = setWorkspaceScope(mode, ownerKey, newSessionTarget)
 
-  if (changed && mode === 'sessions' && $paneVisible('sessions').get()) {
+  if (changed && mode === 'sessions') {
+    const present = new Set(treePanesWithPrefix('session-tile'))
+
     const candidates = [
       'workspace',
       ...$sessionTiles
         .get()
-        .filter(tile => tile.workspaceMode !== 'bots')
+        .filter(tile => tile.workspaceMode !== 'bots' && present.has(`${TILE_PANE_PREFIX}${tile.storedSessionId}`))
         .map(tile => `${TILE_PANE_PREFIX}${tile.storedSessionId}`)
     ]
 

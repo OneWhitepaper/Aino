@@ -35,7 +35,7 @@ vi.mock('@/hermes', () => ({
 }))
 vi.mock('@/lib/query-client', () => ({ invalidateProfileScopedQueries: vi.fn() }))
 vi.mock('@/store/starmap', () => ({ reloadOpenStarmapGraph: vi.fn(), resetStarmapGraph }))
-vi.mock('@/store/notifications', () => ({ notify: vi.fn(), notifyError }))
+vi.mock('@/store/notifications', () => ({ notify: vi.fn(), notifyError, resetNotifications: vi.fn() }))
 
 const { $activeGatewayProfile, newSessionInProfile, selectProfile } = await import('./profile')
 

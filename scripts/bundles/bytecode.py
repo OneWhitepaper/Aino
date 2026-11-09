@@ -12,10 +12,14 @@ stall on first launch. Baking turns that into a warm read:
   source validation and never rewritten, so staging-repack mtimes
   cannot invalidate it and a stale source cannot trigger a rewrite
   into the sealed tree;
-* baked pycs are read-only except on macOS, where Squirrel needs owner-write
-  permission to remove quarantine during an update. Unchecked hashes and
-  complete coverage still keep normal imports from rewriting signed caches;
-  cache directories stay writable for in-place payload rebuilds;
+* the baked pycs are chmodded owner-writable (0o644) BEFORE packaging:
+  Squirrel.Mac's ShipIt clears the quarantine attribute off every file
+  in the .app and aborts the whole update with EACCES on any read-only
+  one (#138659), and on Windows a read-only pyc stopped the next
+  prepare's rmtree (#137717). A read-only bit never blocked a rewrite
+  anyway: CPython replaces a pyc through its writable __pycache__ dir.
+  What keeps default imports (all the launcher does) off these pycs is
+  unchecked-hash plus the asserted coverage below;
 * the runtime's sys.pycache_prefix redirect is dropped when the baked
   marker is present (the prefix relocates READS too — see
   scripts/build/launcher_wrapper.py), so imports read the source-
@@ -30,8 +34,6 @@ invalid test data) are counted and skipped, not failed.
 
 import subprocess
 from pathlib import Path
-
-from hermes_platform.host.facts import os_family
 
 MARKER = ".hermes-baked-pycache"
 
@@ -83,7 +85,7 @@ def prepare_bytecode_permissions(root: Path) -> int:
     the app. Read-only pycs make that fail with EACCES and roll back the update.
     Only permissions change; unchecked-hash bytecode remains byte-identical.
     """
-    mode = 0o644 if os_family() == "darwin" else 0o444
+    mode = 0o644
     count = 0
     for source_root in _import_roots(root):
         for cache in source_root.rglob("__pycache__"):
@@ -95,8 +97,8 @@ def prepare_bytecode_permissions(root: Path) -> int:
 
 
 def bake_bytecode(root: Path, python: Path) -> dict:
-    """Compile every payload module with the staged interpreter and prepare
-    sealed caches. ``root`` is the payload root; ``python`` MUST be the
+    """Compile every payload module with the staged interpreter and seal the
+    caches owner-writable. ``root`` is the payload root; ``python`` MUST be the
     payload's own staged interpreter binary."""
     root = Path(root).resolve()
     python = Path(python).resolve()

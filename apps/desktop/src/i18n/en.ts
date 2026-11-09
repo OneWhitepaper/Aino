@@ -1,7 +1,7 @@
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { FIELD_DESCRIPTIONS, FIELD_LABELS } from '@/app/settings/constants'
 
-import { accountPage } from './account-page'
+import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
@@ -30,6 +30,7 @@ import { enNotifications } from './en_notifications'
 import { enOnboarding } from './en_onboarding'
 import { enPluginPreviewAccess } from './en_plugin_preview_access'
 import { enPluginUpdate } from './en_plugin_update'
+import { enPluginUpdateAll } from './en_plugin_update_all'
 import { enPreviewWeb } from './en_preview_web'
 import { enProfiles } from './en_profiles'
 import { enProjects } from './en_projects'
@@ -39,6 +40,7 @@ import { enThemePicker } from './en_theme_picker'
 import { enUninstallSection } from './en_uninstall_section'
 import { enUpdateChannel } from './en_update_channel'
 import { homeGuidance } from './home-guidance'
+import { notificationCenterCopy } from './notification-center'
 import { enAccountErrors } from './platform-account-errors'
 import { toolPanel } from './tool-panel'
 import type { Translations } from './types'
@@ -49,6 +51,7 @@ const configPageFieldLabels: Record<string, string> = FIELD_LABELS
 const configPageFieldDescriptions: Record<string, string> = FIELD_DESCRIPTIONS
 
 export const en: Translations = {
+  notificationCenter: notificationCenterCopy['en'],
   appearancePage: appearancePage.en,
   toolPanel: toolPanel['en'],
   workspacePage: workspacePage.en,
@@ -527,6 +530,7 @@ export const en: Translations = {
   ...enBilling,
 
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Closing this window will not cancel an upload that has already started.',
     title: 'Send diagnostics to Aino',
     privacyNotice:
       'This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.',
@@ -2363,7 +2367,7 @@ export const en: Translations = {
         }
       }
     },
-    account: {
+    account: { ...accountLogin.en,
       browserSessionOnly: 'This browser keeps you signed in only until this tab closes or reloads.',
       displayNameLabel: 'Nickname',
       editDisplayName: 'Edit nickname',
@@ -2385,7 +2389,7 @@ export const en: Translations = {
       existingAccount: 'Sign in to an existing account',
       registerAccount: 'Create an account',
       registrationClosed: 'Registration is currently closed.',
-      phoneAutoRegister: 'Verifying a new phone number automatically creates an account.',
+      phoneAutoRegister: 'New numbers register after verification.',
       phoneLoginUnavailable: 'Phone sign-in is currently unavailable. Use your existing account.',
       existingAccountPhoneHint: 'Already have a website account? Sign in to it before linking your phone number.',
       registrationReturnHint:
@@ -2621,6 +2625,7 @@ export const en: Translations = {
         `Pinned to commit ${sha}. Updates are refused until it is reinstalled with a new pin.`,
       pinnedBadge: (sha: string) => `pinned @ ${sha}`,
       ...enPluginUpdate,
+      ...enPluginUpdateAll,
       ...enPluginPreviewAccess,
       uninstall: 'Uninstall',
       uninstallTip: (name: string, profile: string) => `Uninstall ${name} from ${profile}`,
@@ -4529,7 +4534,9 @@ export const en: Translations = {
       fastFailed: 'Fast mode update failed',
       multiAgent: 'multi-agent',
 
-      multiAgentSends: (level: string) => `multi-agent, sends ${level}`
+      multiAgentSends: (level: string) => `multi-agent, sends ${level}`,
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Daybreak update failed'
     },
     gatewayMenu: {
       gateway: 'Gateway',
@@ -4650,6 +4657,15 @@ export const en: Translations = {
           subagent_definitions: 'Subagent definitions',
           system_prompt: 'System prompt',
           tool_definitions: 'Tool definitions'
+        },
+        compact: {
+          action: 'Compact conversation',
+          busyHint: 'Finish or stop the current reply first',
+          confirm: 'Compact',
+          hint: 'Summarize older context to make room. Continue in this same conversation.',
+          question: 'Compress this chat into a summary?',
+          questionNamed: title => `Compress “${title}” into a summary?`,
+          working: 'Compacting…'
         },
         empty: 'No context data yet',
         detailsUnavailable: 'Category details are temporarily unavailable. Current usage is still shown.',
@@ -5194,6 +5210,10 @@ tabActions: title => `Actions for ${title}`
       authorized: server => `Authorized ${server}`,
       failed: server => `Setup failed for ${server}`,
       toolCount: count => (count === 1 ? '1 tool' : `${count} tools`),
+      launchCommand: target => `Runs: ${target}`,
+      launchRemote: target => `Connects to: ${target}`,
+      launchEnv: keys => `Env: ${keys}`,
+      launchCwd: dir => `Working dir: ${dir}`,
       envRequired: 'Fill in the required credentials first',
       sendFailed: 'Could not send MCP setup response',
       reloadFailed: 'Server saved, but reloading MCP tools failed — they load next session',

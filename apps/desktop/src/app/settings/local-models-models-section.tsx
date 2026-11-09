@@ -73,7 +73,9 @@ export function LocalModelsModelsSection({
           ))}
       </div>
 
-      {lastError?.kind === 'model-download' && <p className="text-[0.75rem] text-destructive">{lastError.error}</p>}
+      {lastError?.kind === 'model-download' && (
+        <p className="text-[length:var(--aino-text-caption)] text-destructive">{lastError.error}</p>
+      )}
     </SettingsSection>
   )
 }

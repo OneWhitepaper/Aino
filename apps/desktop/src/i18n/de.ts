@@ -25,6 +25,7 @@ import { deNotifications } from './de_notifications'
 import { deOnboarding } from './de_onboarding'
 import { dePluginPreviewAccess } from './de_plugin_preview_access'
 import { dePluginUpdate } from './de_plugin_update'
+import { dePluginUpdateAll } from './de_plugin_update_all'
 import { dePreviewWeb } from './de_preview_web'
 import { deProjects } from './de_projects'
 import { deSharedMetrics } from './de_shared_metrics'
@@ -34,6 +35,7 @@ import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introDe } from './intro-de'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -319,6 +321,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const deBaseOverrides = {
+  notificationCenter: notificationCenterCopy['de'],
   platformModels: {
     permanent: "Ohne Ablaufdatum",
     reauthorize: "Dieses Gerät erneut autorisieren",
@@ -841,6 +844,7 @@ const deBaseOverrides = {
   },
   ...deNotices,
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Das Schließen dieses Fensters bricht einen bereits gestarteten Upload nicht ab.',
     title: 'Diagnosedaten an Aino senden',
     privacyNotice:
       'Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.',
@@ -2651,6 +2655,7 @@ memoryLayers: deMemoryLayers
         `An Commit ${sha} gepinnt. Updates werden abgelehnt, bis es mit einem neuen Pin neu installiert wird.`,
       pinnedBadge: sha => `gepinnt @ ${sha}`,
       ...dePluginUpdate,
+      ...dePluginUpdateAll,
       ...dePluginPreviewAccess,
       uninstall: 'Deinstallieren',
       uninstallTip: (name: string, profile: string) => `${name} aus ${profile} deinstallieren`,
@@ -3117,6 +3122,32 @@ memoryLayers: deMemoryLayers
       'Versuchen Sie den Neustart erneut; wenn er weiterhin fehlschlägt, öffnen Sie die Logs und senden Sie Diagnosedaten.',
     restartAgain: 'Erneut neu starten',
     openLogs: 'Logs öffnen',
+    relayLink: {
+      title: 'Team Gateway',
+      badge: 'Kein Bot-Token nötig',
+      intro: (platform: string) => `${platform} erreicht diesen Agenten über den gemeinsamen Hermes-Bot. Verknüpfe dein ${platform}-Konto damit und schreib dem Bot, um mit deinem Agenten zu sprechen.`,
+      link: (platform: string) => `${platform} verknüpfen`,
+      linkAnother: (platform: string) => `Weiteres ${platform}-Konto verknüpfen`,
+      linkedAccounts: 'Verknüpfte Konten',
+      unlink: 'Trennen',
+      unlinkFailed: 'Konto konnte nicht getrennt werden',
+      stepOpen: (platform: string) => `1. Scanne den Code mit dem Handy oder öffne den Bot in ${platform}.`,
+      stepSend: '2. Sende dem Bot diese Nachricht von dem Konto, das du verknüpfen willst:',
+      open: (platform: string) => `${platform} öffnen`,
+      copy: 'Nachricht kopieren',
+      copied: 'Kopiert',
+      copyFailed: (command: string) => `Kopieren fehlgeschlagen. Tippe stattdessen ${command}.`,
+      waiting: 'Warte darauf, dass der Bot deine Nachricht sieht. Der Code gilt einmal.',
+      linked: (platform: string) => `${platform}-Konto verknüpft. Schreib dem Bot, um mit deinem Agenten zu sprechen.`,
+      expired: 'Der Code ist abgelaufen, bevor er benutzt wurde. Hol dir einen neuen Code und versuch es erneut.',
+      refused: (platform: string) => `${platform} hat die Verknüpfung abgelehnt. Hol dir einen neuen Code und versuch es erneut.`,
+      qrAlt: (platform: string) => `QR-Code für den gemeinsamen ${platform}-Bot`,
+      managed: 'Von Team Gateway verwaltet',
+      managedNote: (platform: string) => `Team Gateway übernimmt auf dieser Instanz das Messaging, daher schaltet das Gateway die direkte ${platform}-Verbindung bei jedem Start ab. Um sie parallel zum Relay zu betreiben, setze GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true in der Umgebung des Gateways (eine direkte Verbindung verhindert das Herunterskalieren auf null und kann Nachrichten doppelt zustellen).`,
+      managedIntro: 'Die Konten dieses Agenten werden im Nous Portal verknüpft.',
+      openPortal: 'Konten im Nous Portal verknüpfen',
+      noNewAccount: (platform: string) => `Der Code ist nicht mehr aktiv und es ist kein neues Konto erschienen. Falls dein ${platform}-Konto nicht aufgeführt ist, hol dir einen neuen Code und versuche es erneut.`
+    },
     telegramQr: {
       title: 'Wählen Sie, wie Sie Ihren Telegram-Bot verbinden',
       subtitle:
@@ -4702,7 +4733,9 @@ memoryLayers: deMemoryLayers
       ultra: 'Ultra',
       sendsOnRoute: (level: string) => `sendet ${level} auf dieser Route`,
       updateFailed: 'Aktualisierung der Modelloptie schlug fehl',
-      fastFailed: 'Aktualisierung des Schnell-Modus schlug fehl'
+      fastFailed: 'Aktualisierung des Schnell-Modus schlug fehl',
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Aktualisierung von Daybreak schlug fehl'
     },
     gatewayMenu: {
       gateway: 'Gateway',
@@ -4812,6 +4845,15 @@ memoryLayers: deMemoryLayers
           subagent_definitions: 'Subagent-Definitionen',
           system_prompt: 'System-Prompt',
           tool_definitions: 'Tool-Definitionen'
+        },
+        compact: {
+          action: 'Unterhaltung verdichten',
+          busyHint: 'Beende oder stoppe zuerst die laufende Antwort',
+          confirm: 'Verdichten',
+          hint: 'Älteren Kontext zusammenfassen, um Platz zu schaffen. Dieses Gespräch wird fortgesetzt.',
+          question: 'Diese Unterhaltung zu einer Zusammenfassung verdichten?',
+          questionNamed: title => `„${title}“ zu einer Zusammenfassung verdichten?`,
+          working: 'Verdichte …'
         },
         empty: 'Noch keine Kontext-Daten',
         detailsUnavailable: 'Details sind vorübergehend nicht verfügbar. Die aktuelle Nutzung bleibt sichtbar.',
@@ -4975,6 +5017,7 @@ memoryLayers: deMemoryLayers
     }
   },
   zones: {
+    switchConversation: 'Gespräch wechseln',
     sidebarModeMenu: 'Gesprächsmodus wechseln',
     sidebarSessionsDescription: 'Projekte, Dateien und alltägliche Gespräche',
     showTabStrip: 'Tabs anzeigen',
@@ -5365,6 +5408,10 @@ memoryLayers: deMemoryLayers
       authorized: server => `${server} autorisiert`,
       failed: server => `Einrichtung für ${server} fehlgeschlagen`,
       toolCount: count => (count === 1 ? '1 Tool' : `${count} Tools`),
+      launchCommand: target => `Führt aus: ${target}`,
+      launchRemote: target => `Verbindet mit: ${target}`,
+      launchEnv: keys => `Umgebung: ${keys}`,
+      launchCwd: dir => `Arbeitsverzeichnis: ${dir}`,
       envRequired: 'Füllen Sie zuerst die erforderlichen Anmeldedaten aus',
       sendFailed: 'MCP-Einrichtungsantwort konnte nicht gesendet werden',
       reloadFailed:

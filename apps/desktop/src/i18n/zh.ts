@@ -1,13 +1,14 @@
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
-import { accountPage } from './account-page'
+import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZh } from './intro-zh'
+import { notificationCenterCopy } from './notification-center'
 import { zhAccountErrors } from './platform-account-errors'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -30,6 +31,7 @@ import { zhNotifications } from './zh_notifications'
 import { zhOnboarding } from './zh_onboarding'
 import { zhPluginPreviewAccess } from './zh_plugin_preview_access'
 import { zhPluginUpdate } from './zh_plugin_update'
+import { zhPluginUpdateAll } from './zh_plugin_update_all'
 import { zhPreviewWeb } from './zh_preview_web'
 import { zhProjects } from './zh_projects'
 import { zhSharedMetrics } from './zh_shared_metrics'
@@ -317,6 +319,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 export const zhOverrides = {
+  notificationCenter: notificationCenterCopy['zh'],
   appearancePage: appearancePage.zh,
   toolPanel: toolPanel['zh'],
   workspacePage: workspacePage.zh,
@@ -561,6 +564,7 @@ export const zhOverrides = {
   },
 
   notifications: {
+    actions: { restartHermes: '重启 Aino', openKeys: '打开工具与密钥', openGateways: '打开连接设置', openMaintenance: '查看整理选项' },
     sharedProfileWarning:
       '另一个 Hermes 安装实例正在使用此配置。两个实例共享此配置的设置和数据，因此更改可能发生冲突。你可以继续使用，也可以在更改前关闭另一个实例。',
     region: '通知',
@@ -670,6 +674,7 @@ export const zhOverrides = {
   },
 
   sendDiagnostics: {
+    closeWhileUploadingHint: '关闭窗口不会取消已经开始的上传。',
     title: '向 Aino 发送诊断信息',
     privacyNotice:
       '这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。',
@@ -2438,7 +2443,7 @@ export const zhOverrides = {
         }
       }
     },
-    account: {
+    account: { ...accountLogin.zh,
       browserSessionOnly: '此浏览器仅在当前标签页内保持登录，关闭或刷新后需要重新登录。',
       displayNameLabel: '昵称',
       editDisplayName: '修改昵称',
@@ -2460,7 +2465,7 @@ export const zhOverrides = {
       existingAccount: '已有账户登录',
       registerAccount: '注册账户',
       registrationClosed: '注册暂未开放。',
-      phoneAutoRegister: '未注册的手机号验证成功后将自动注册。',
+      phoneAutoRegister: '未注册手机号验证后自动注册。',
       phoneLoginUnavailable: '手机号登录暂未开放，请使用已有账户登录。',
       existingAccountPhoneHint: '已有网站账户？请先登录原账户，再绑定手机号。',
       registrationReturnHint: '注册完成后，使用同一邮箱和密码登录。网站与桌面共用一个账户。',
@@ -2679,13 +2684,8 @@ memoryLayers: zhMemoryLayers
       catalogProvenance: (sha: string) => `从 Hermes 目录安装${sha ? `，固定提交 ${sha}` : ''}。`,
       pinnedProvenance: (sha: string) => `已固定到提交 ${sha}。重新固定前将拒绝更新。`,
       pinnedBadge: (sha: string) => `固定 @ ${sha}`,
-      updateToPin: (sha: string) => `更新到 ${sha}`,
-      updateFailed: (name: string) => `无法更新 ${name}`,
-      updated: (name: string) => `${name} 已更新到当前目录固定提交。重启网关后生效。`,
-      updateConsentTitle: (name: string) => `${name} 请求增加功能`,
-      updateConsentBody: (name: string, sha: string) =>
-        `${name} 的新目录版本（${sha}）会增加当前安装版本没有的功能。仅在信任这些功能时应用更新：`,
-      updateConsentConfirm: '应用更新',
+      ...zhPluginUpdate,
+      ...zhPluginUpdateAll,
       uninstall: '卸载',
       uninstallTip: (name: string, profile: string) => `从 ${profile} 卸载 ${name}`,
       uninstallConfirmTitle: (name: string) => `卸载 ${name}？`,
@@ -4839,7 +4839,9 @@ notServedHere: '此处未提供'
       fastFailed: '快速模式更新失败',
       multiAgent: '多智能体协作',
 
-      multiAgentSends: (level: string) => `多智能体协作，发送 ${level}`
+      multiAgentSends: (level: string) => `多智能体协作，发送 ${level}`,
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Daybreak 更新失败'
     },
     gatewayMenu: {
       gateway: '运行服务',
@@ -4975,6 +4977,15 @@ notServedHere: '此处未提供'
           subagent_definitions: '子智能体定义',
           system_prompt: '系统提示词',
           tool_definitions: '工具定义'
+        },
+        compact: {
+          action: '压缩对话',
+          busyHint: '请先完成或停止当前回复',
+          confirm: '压缩',
+          hint: '总结较早的上下文以腾出空间，继续当前对话。',
+          question: '将此对话压缩为摘要？',
+          questionNamed: title => `将“${title}”压缩为摘要？`,
+          working: '正在压缩…'
         },
         empty: '暂无上下文数据',
         detailsUnavailable: '分类明细暂不可用，当前用量仍可参考。',
@@ -5659,6 +5670,10 @@ tabActions: title => `${title} 的操作`
       authorized: server => `已授权 ${server}`,
       failed: server => `${server} 设置失败`,
       toolCount: count => `${count} 个工具`,
+      launchCommand: target => `将运行：${target}`,
+      launchRemote: target => `将连接：${target}`,
+      launchEnv: keys => `环境变量：${keys}`,
+      launchCwd: dir => `工作目录：${dir}`,
       envRequired: '请先填写所需凭据',
       sendFailed: '无法发送 MCP 设置响应',
       reloadFailed: '服务器已保存，但重新加载 MCP 工具失败 — 将在下个会话加载',

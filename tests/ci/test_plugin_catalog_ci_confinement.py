@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = Path(os.environ.get(
     "CATALOG_CI_WORKFLOW", ROOT / ".github/workflows/plugin-catalog-ci.yml"))
 REPO_URL = "https://fixture.invalid/repo"
+UPSTREAM_URL = "https://github.com/NousResearch/hermes-agent.git"
+FIXTURE_RELEASE_TAG = "v1.2.3"
 
 
 def _step(name_prefix: str) -> str:
@@ -37,6 +39,9 @@ def _step(name_prefix: str) -> str:
                     text = re.sub(r"(?m)^UPSTREAM=[0-9a-f]{40}$", f"UPSTREAM={upstream}", text)
                 if catalog_tree := os.environ.get("CATALOG_CI_TREE"):
                     text = re.sub(r"(?m)^CATALOG_TREE=[0-9a-f]{40}$", f"CATALOG_TREE={catalog_tree}", text)
+                if tag_object := os.environ.get("CATALOG_CI_TAG_OBJECT"):
+                    text = re.sub(r"(?m)^REVIEWED_TAG=v[0-9.]+$", f"REVIEWED_TAG={FIXTURE_RELEASE_TAG}", text)
+                    text = re.sub(r"(?m)^REVIEWED_TAG_OBJECT=[0-9a-f]{40}$", f"REVIEWED_TAG_OBJECT={tag_object}", text)
                 return text
     raise LookupError(name_prefix)
 
@@ -366,6 +371,24 @@ def _import_merge(tmp_path: Path, *, changes=None, trim_catalog: bool = False) -
     return repo, release, base, catalog_tree
 
 
+def _reviewed_tag_source(tmp_path, repo, release, monkeypatch):
+    """An official annotated release tag missing from the fork's checkout."""
+    _git(repo, "tag", "-a", FIXTURE_RELEASE_TAG, "-m", "reviewed release", release)
+    tag_object = _git(repo, "rev-parse", f"refs/tags/{FIXTURE_RELEASE_TAG}")
+    upstream = tmp_path / "official.git"
+    _git(tmp_path, "clone", "--bare", str(repo), str(upstream))
+    _git(repo, "tag", "-d", FIXTURE_RELEASE_TAG)
+    monkeypatch.setenv("CATALOG_CI_TAG_OBJECT", tag_object)
+    return upstream, {
+        **os.environ,
+        "VALIDATION_REF": release,
+        "VALIDATION_CATALOG_TREE": _git(repo, "rev-parse", "HEAD:plugin-catalog"),
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": f"url.{upstream.as_uri()}.insteadOf",
+        "GIT_CONFIG_VALUE_0": UPSTREAM_URL,
+    }
+
+
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("trim_catalog", [False, True], ids=["release-catalog", "reviewed-whitespace-cleanup"])
 def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, trim_catalog):
@@ -379,21 +402,46 @@ def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, trim_ca
     assert res.returncode == 0, res.stdout + res.stderr
     output = out.read_text(encoding="utf-8")
     assert f"validation_ref={release}\n" in output
+    assert f"validation_catalog_tree={catalog_tree}\n" in output
     assert "plugin-catalog/imported.yaml\n" in output
     assert (repo / "aino.py").exists()
     assert (repo / "code.py").read_text() == "aino_compatibility = True\n"
+    _, checkout_env = _reviewed_tag_source(tmp_path, repo, release, monkeypatch)
     # Exercise the actual transition, including removal of untracked import
     # shadows, before setup-pm/Hermes consume anything from the checkout.
     (repo / "shadow.py").write_text("untrusted = True\n")
     checkout = _run(_step("Check out reviewed upstream"), tmp_path, repo,
-                    {**os.environ, "VALIDATION_REF": release})
+                    checkout_env)
     assert checkout.returncode == 0, checkout.stdout + checkout.stderr
     assert _git(repo, "rev-parse", "HEAD") == release
     assert (repo / "code.py").read_text() == "release = 1\n"
     assert not (repo / "aino.py").exists()
     assert not (repo / "shadow.py").exists()
     assert out.read_text(encoding="utf-8") == output
-    assert (repo / "plugin-catalog/imported.yaml").read_text() == "name: imported\n\n"
+    expected_entry = "name: imported\n" if trim_catalog else "name: imported\n\n"
+    assert (repo / "plugin-catalog/imported.yaml").read_text() == expected_entry
+    assert _git(repo, "write-tree", "--prefix=plugin-catalog/") == catalog_tree
+    # Exercise Hermes' real runtime identity resolution, which otherwise falls
+    # back to a fork's older CalVer release when upstream semver tags are absent.
+    from hermes_cli.version_info import _git_version_info
+
+    assert _git_version_info(repo).base_version == FIXTURE_RELEASE_TAG[1:]
+
+
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("mismatch", ["tag-object", "peeled-commit"])
+def test_reviewed_validation_tag_rejects_wrong_identity(tmp_path, monkeypatch, mismatch):
+    repo, release, base, _ = _import_merge(tmp_path)
+    upstream, checkout_env = _reviewed_tag_source(tmp_path, repo, release, monkeypatch)
+    target = base if mismatch == "peeled-commit" else release
+    _git(upstream, "tag", "-fa", FIXTURE_RELEASE_TAG, "-m", "changed release tag", target)
+    if mismatch == "peeled-commit":
+        # Accept this object's hash so only the release-commit guard can reject it.
+        monkeypatch.setenv("CATALOG_CI_TAG_OBJECT", _git(upstream, "rev-parse", FIXTURE_RELEASE_TAG))
+    checkout = _run(_step("Check out reviewed upstream"), tmp_path, repo, checkout_env)
+    assert checkout.returncode != 0, checkout.stdout + checkout.stderr
+    assert "official release tag does not match" in checkout.stdout
+    assert _git(repo, "tag", "--list", FIXTURE_RELEASE_TAG) == ""
 
 
 @pytest.mark.platforms("posix")

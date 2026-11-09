@@ -685,11 +685,9 @@ export function cancelRevert(): void {
   $reviewRevertTarget.set(undefined)
 }
 
-/** Confirm the pending revert (closes the dialog, then performs it). */
+/** Keep a failed revert's exact target available to retry in its confirmation. */
 export async function confirmRevert(): Promise<void> {
   const target = $reviewRevertTarget.get()
-
-  $reviewRevertTarget.set(undefined)
 
   if (!target) {
     return
@@ -707,6 +705,10 @@ export async function confirmRevert(): Promise<void> {
   }
 
   await revertReviewFile(target.path, target.cwd)
+
+  if ($reviewRevertTarget.get() === target) {
+    $reviewRevertTarget.set(undefined)
+  }
 }
 
 // ── Ship flow (commit / push / PR) ───────────────────────────────────────────

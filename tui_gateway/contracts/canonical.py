@@ -17,6 +17,7 @@ from .events import SkinPayload
 from .groups_bot_relay import RoomParams, RoomTaskReceipt
 from .prompt_voice import ClarifyLockParams, ClarifyLockResult
 from .registry import canonical_method, method
+from .model_session import ConversationModel, ConversationModelParams, ConversationModelResult
 
 # ── admissions ────────────────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,9 @@ canonical_method("prompt.resolve_unknown", params=PromptResolveUnknownParams, re
 
 
 # ── session ───────────────────────────────────────────────────────────────────────────────────
+
+canonical_method('model.session', params=ConversationModelParams, result=ConversationModelResult,
+                 doc='Ask the owning desktop for available models or schedule a conversation-only selection for the next message.')
 
 
 class SessionMutateParams(Params):
@@ -513,6 +517,56 @@ canonical_method("worker.persist", params=WorkerPersistParams, result=WorkerPers
 
 
 # ── hosted rooms ─────────────────────────────────────────────────────────────────────────────────
+
+
+from .aino_platform import PlatformOwner
+
+
+class GroupsPrepareModelParams(RoomParams):
+    member_id: str
+    model_id: str | None = None
+    owner: PlatformOwner | None = None
+    follow_profile_config: Literal[True] | None = None
+    inspect_selection: Literal[True] | None = None
+    apply_selection: Literal[True] | None = None
+
+
+class GroupsPrepareModelResult(Result):
+    profile: str
+    session_id: str
+    model_id: str | None = None
+    session_ticket: str | None = None
+    follow_profile_config: Literal[True] | None = None
+    managed_model_binding: Literal[1] = 1
+    managed_model_context_window: Literal[True] = True
+    managed_image_binding: Literal[1] = 1
+    managed_device_key: Literal[1] = 1
+    selection: ConversationModel | None = None
+
+
+canonical_method('groups.prepare_model', params=GroupsPrepareModelParams, result=GroupsPrepareModelResult,
+                 doc='Prepare one served local member under the current room owner; issue its independent managed-model ticket.')
+
+
+class GroupsModelRespondParams(RoomParams):
+    request_id: str
+    result: ConversationModelResult
+
+
+class GroupsModelRespondResult(Result):
+    accepted: bool
+
+
+canonical_method('groups.model_respond', params=GroupsModelRespondParams, result=GroupsModelRespondResult,
+                 doc='Answer the current room member model request with public model identities only.')
+
+# The standalone wire gives an explicit protocol refusal for these native controls; it never
+# forwards the request through a short-lived owner connection or advertises the capability.
+_NATIVE_GROUP_MODEL_REFUSAL = "Requires the persistent hermes-gateway-v1 controller; standalone returns native_controller_required."
+method('groups.prepare_model', params=GroupsPrepareModelParams, result=GroupsPrepareModelResult,
+       doc=_NATIVE_GROUP_MODEL_REFUSAL)
+method('groups.model_respond', params=GroupsModelRespondParams, result=GroupsModelRespondResult,
+       doc=_NATIVE_GROUP_MODEL_REFUSAL)
 
 
 class GroupsAttachmentUploadParams(RoomParams):

@@ -1,14 +1,14 @@
+import './notifications.css'
+
 import { useStore } from '@nanostores/react'
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { CardStack, type CardStackAction } from '@/components/ui/card-stack'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
-import { triggerHaptic } from '@/lib/haptics'
 import { AlertCircle, AlertTriangle, CheckCircle2, type IconComponent, Info } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { noticeIdForToast, recordFriction } from '@/store/desktop-metrics'
@@ -17,380 +17,470 @@ import {
   type AppNotification,
   clearNotifications,
   dismissNotification,
-  type NotificationKind
+  type NotificationKind,
+  pauseNotification,
+  resumeNotification,
+  runNotificationAction
 } from '@/store/notifications'
 
-type ToneVariant = 'default' | 'destructive' | 'warning' | 'success'
-
-/** A user dismissal (✕, swipe, clear all) is friction, counted by the toast's code-defined id only.
- *  Timers, action buttons and programmatic clears are not dismissals and go straight to the store. */
-function noteUserDismissed(id: string) {
-  recordFriction('notice_dismissed', noticeIdForToast(id))
+const tone: Record<NotificationKind, { icon: IconComponent; iconClass: string }> = {
+  error: { icon: AlertCircle, iconClass: 'text-destructive' },
+  warning: { icon: AlertTriangle, iconClass: 'text-(--ui-yellow)' },
+  info: { icon: Info, iconClass: 'text-muted-foreground' },
+  success: { icon: CheckCircle2, iconClass: 'text-(--ui-green)' }
 }
 
 function userDismiss(id: string) {
-  noteUserDismissed(id)
+  recordFriction('notice_dismissed', noticeIdForToast(id))
   dismissNotification(id)
 }
 
-const tone: Record<NotificationKind, { icon: IconComponent; iconClass: string; variant: ToneVariant }> = {
-  error: { icon: AlertCircle, iconClass: 'text-destructive', variant: 'destructive' },
-  warning: { icon: AlertTriangle, iconClass: 'text-(--ui-yellow)', variant: 'warning' },
-  info: { icon: Info, iconClass: 'text-muted-foreground', variant: 'default' },
-  success: { icon: CheckCircle2, iconClass: 'text-(--ui-green)', variant: 'success' }
+function summaryKey(notification: AppNotification) {
+  return JSON.stringify([notification.epoch, notification.instance, notification.id])
 }
 
-const STACK_SURFACE =
-  'pointer-events-auto border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated)/96 shadow-nous backdrop-blur-md'
+function NoticeIcon({ notification }: { notification: AppNotification }) {
+  const style = tone[notification.kind]
+  const Icon = style.icon
 
-// AionUi keeps short Message feedback visually quiet while persistent,
-// actionable Notification cards use a light severity wash. Keep the meaning
-// in the surface and icon together; the body text stays readable in both
-// themes and the card never becomes a saturated banner.
-const NOTIFICATION_SURFACE: Record<NotificationKind, string> = {
-  error: 'border-(--ui-red)/25 bg-(--ui-red)/8',
-  info: 'border-(--ui-stroke-secondary) bg-(--ui-bg-elevated)',
-  success: 'border-(--ui-green)/25 bg-(--ui-green)/8',
-  warning: 'border-(--ui-yellow)/25 bg-(--ui-yellow)/8'
+  return notification.icon ? (
+    <Codicon
+      className={style.iconClass}
+      name={notification.icon}
+      size="1rem"
+      style={notification.accentColor ? { color: notification.accentColor } : undefined}
+    />
+  ) : (
+    <Icon
+      className={cn('size-4 shrink-0', style.iconClass)}
+      style={notification.accentColor ? { color: notification.accentColor } : undefined}
+    />
+  )
 }
 
-function partitionNotifications(notifications: AppNotification[]) {
-  const defaultStack: AppNotification[] = []
-  const bottomRightStack: AppNotification[] = []
-
-  for (const notification of notifications) {
-    if (notification.placement === 'bottom-right') {
-      bottomRightStack.push(notification)
-    } else {
-      defaultStack.push(notification)
-    }
-  }
-
-  return { bottomRightStack, defaultStack }
-}
-
-export function NotificationStack() {
-  const notifications = useStore($notifications)
-  const { bottomRightStack, defaultStack } = partitionNotifications(notifications)
+function NoticeActions({ notification, compact = false }: { notification: AppNotification; compact?: boolean }) {
   const { t } = useI18n()
-  const lastNotificationIdRef = useRef<string | null>(null)
-  const [expanded, setExpanded] = useState(false)
-  const copy = t.notifications
+
+  return (
+    <div className="notification-actions">
+      {(['action', 'secondaryAction'] as const).map(slot => {
+        const action = notification[slot]
+
+        if (!action) {
+          return null
+        }
+
+        return (
+          <Button
+            disabled={Boolean(notification.pendingAction)}
+            key={slot}
+            onClick={() => void runNotificationAction(notification.id, slot)}
+            size="sm"
+            type="button"
+            variant={compact ? 'text' : slot === 'action' ? 'default' : 'ghost'}
+          >
+            {notification.pendingAction === slot ? t.common.loading : action.label}
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** In-flow desktop chrome: a bounded summary and a dedicated reading panel.
+ * The existing notification store remains the sole queue and action owner. */
+export function NotificationStack({ children, active = true }: { children?: ReactNode; active?: boolean }) {
+  const notifications = useStore($notifications)
+  const { t } = useI18n()
+  const copy = t.notificationCenter
+  const narrow = useMediaQuery('(max-width: 64rem)')
+  const [selection, setPanel] = useState<'list' | AppNotification | null>(null)
+
+  const { selectedItem, panel, panelKey, detailId } = notificationSelectionState(selection, notifications)
+
+  const [hiddenSummaries, setHiddenSummaries] = useState<Set<string>>(() => new Set())
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const readingId = focusedId ?? hoveredId
+  const trigger = useRef<HTMLButtonElement>(null)
+  const close = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const panelBody = useRef<HTMLDivElement>(null)
+  const available = notifications.filter(item => !hiddenSummaries.has(summaryKey(item)))
+  const summary = available.find(item => summaryKey(item) === readingId) ?? available[0]
+  const liveDetail = selectedItem
+  const summaryId = summary?.id
+  const panelOpen = active && Boolean(panel)
+  const actionError = liveDetail?.actionError
 
   useEffect(() => {
-    if (defaultStack.length <= 1) {
-      setExpanded(false)
+    if (actionError && panelBody.current) {
+      panelBody.current.scrollTop = 0
     }
-  }, [defaultStack.length])
+  }, [actionError])
 
-  // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
-    const latest = notifications[0]
-
-    if (!latest || latest.id === lastNotificationIdRef.current) {
+    if (!active || !panelKey) {
       return
     }
 
-    lastNotificationIdRef.current = latest.id
-
-    if (latest.kind === 'success') {
-      triggerHaptic('success')
-    } else if (latest.kind === 'error') {
-      triggerHaptic('error')
-    } else if (latest.kind === 'warning') {
-      triggerHaptic('warning')
-    }
-  }, [notifications])
-
-  return (
-    <>
-      <TopRightStack
-        copy={copy}
-        expanded={expanded}
-        notifications={defaultStack}
-        onToggleExpanded={() => setExpanded(v => !v)}
-      />
-      <BottomRightStack copy={copy} notifications={bottomRightStack} />
-    </>
-  )
-}
-
-// Portaled to <body> on the over-modal rung so a toast clears an open dialog.
-const REGION_BASE = 'pointer-events-none fixed z-(--z-over-modal) flex gap-2'
-
-// Primary stack: top-right, collapsed to the latest toast with a "+N more"
-// expander + clear-all — the noisy/important surface (errors, warnings,
-// action toasts). Without the portal it lives inside the React root subtree,
-// which any body-level dialog/overlay portal paints over — so a toast fired
-// while a dialog is open was invisible.
-function TopRightStack({
-  copy,
-  expanded,
-  notifications,
-  onToggleExpanded
-}: {
-  copy: ReturnType<typeof useI18n>['t']['notifications']
-  expanded: boolean
-  notifications: AppNotification[]
-  onToggleExpanded: () => void
-}) {
-  const older = notifications.slice(1)
-
-  return createPortal(
-    <div
-      aria-label={copy.region}
-      className={cn(
-        REGION_BASE,
-        'right-4 top-[calc(var(--titlebar-height,34px)+0.75rem)] w-[min(25rem,calc(100%-2rem))] flex-col p-1',
-        expanded && 'max-h-[70vh] overflow-y-auto overscroll-contain'
-      )}
-      role="region"
-    >
-      <NotificationDeck expanded={expanded} notifications={notifications} />
-      {older.length > 0 && (
-        <div className="pointer-events-auto flex min-h-8 items-center justify-between px-3 text-xs">
-          <Button className="-ml-2" onClick={onToggleExpanded} size="xs" type="button" variant="text">
-            {expanded ? copy.hide : copy.show} {copy.more(older.length)}
-          </Button>
-          <Button
-            className="-mr-2"
-            onClick={() => {
-              notifications.forEach(notification => noteUserDismissed(notification.id))
-              clearNotifications()
-            }}
-            size="xs"
-            type="button"
-            variant="text"
-          >
-            {copy.clearAll}
-          </Button>
-        </div>
-      )}
-    </div>,
-    document.body
-  )
-}
-
-// Ambient confirmations use the same bounded depth, rising from the corner.
-function BottomRightStack({
-  copy,
-  notifications
-}: {
-  copy: ReturnType<typeof useI18n>['t']['notifications']
-  notifications: AppNotification[]
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const older = notifications.slice(1)
+    close.current?.focus()
+  }, [active, panelKey])
 
   useEffect(() => {
-    if (!older.length) {
-      setExpanded(false)
+    if (active && narrow && panelOpen && !panelRef.current?.contains(document.activeElement)) {
+      close.current?.focus()
     }
-  }, [older.length])
+  }, [active, narrow, panelOpen])
 
-  return createPortal(
-    <div
-      aria-label={copy.region}
-      className={cn(
-        REGION_BASE,
-        'right-4 bottom-4 w-[min(24rem,calc(100%-2rem))] flex-col-reverse p-1',
-        expanded && 'max-h-[70vh] overflow-y-auto overscroll-contain'
-      )}
-      role="region"
-    >
-      {older.length > 0 && (
-        <div className="pointer-events-auto flex items-center justify-between px-2 text-xs">
-          <Button onClick={() => setExpanded(value => !value)} size="xs" variant="text">
-            {expanded ? copy.hide : copy.show} {copy.more(older.length)}
-          </Button>
-          <Button
-            onClick={() => notifications.forEach(notification => userDismiss(notification.id))}
-            size="xs"
-            variant="text"
-          >
-            {copy.clearAll}
-          </Button>
-        </div>
-      )}
-      <NotificationDeck expanded={expanded} notifications={notifications} />
-    </div>,
-    document.body
-  )
-}
+  useEffect(() => {
+    if (!active || !detailId) {
+      return
+    }
 
-export function NotificationDeck({
-  notifications,
-  expanded = false
-}: {
-  notifications: AppNotification[]
-  expanded?: boolean
-}) {
-  return (
-    <CardStack
-      expanded={expanded}
-      getKey={notification => notification.id}
-      items={notifications}
-      onSwipe={(notification, _side, action) => {
-        void action.depart(() => userDismiss(notification.id))
-      }}
-      surfaceClassName={cn(STACK_SURFACE, 'rounded-(--aino-radius-panel)')}
-      swipeDirections={['left', 'right']}
-    >
-      {(notification, action) => <NotificationItem notification={notification} stack={action} />}
-    </CardStack>
-  )
-}
+    pauseNotification(detailId, 'panel')
 
-// Emphasize only the leading money figure ("$16.00" — the amount used) with the
-// accent color (semibold), leaving the rest of the line in its default muted
-// tone. No accent, or no figure in the message → render the text untouched.
-function renderMessage(message: string, accent?: string): ReactNode {
-  const match = accent ? /\$\d+(?:\.\d{2})?/.exec(message) : null
+    return () => resumeNotification(detailId, 'panel')
+  }, [active, detailId])
 
-  if (!match) {
-    return message
+  useEffect(() => {
+    const id = summaryId
+
+    return () => {
+      if (id) {
+        resumeNotification(id, 'hover')
+        resumeNotification(id, 'focus')
+      }
+    }
+  }, [active, summaryId, panelOpen])
+
+  useEffect(() => {
+    if (selection && selection !== 'list' && !selectedItem) {
+      setPanel('list')
+    }
+  }, [selectedItem, selection])
+
+  useEffect(() => {
+    if (!active) {
+      setHoveredId(null)
+      setFocusedId(null)
+    }
+  }, [active])
+
+  function openPanel(next: 'list' | AppNotification) {
+    setHoveredId(null)
+    setFocusedId(null)
+    setPanel(next)
   }
 
-  const start = match.index
-  const end = start + match[0].length
+  function closePanel() {
+    setPanel(null)
+    trigger.current?.focus()
+  }
 
   return (
-    <>
-      {message.slice(0, start)}
-      <span className="font-semibold" style={{ color: accent }}>
-        {match[0]}
-      </span>
-      {message.slice(end)}
-    </>
+    <section className="notification-workspace" data-notification-workspace="">
+      {active && (notifications.length > 0 || panel) && (
+        <div className="notification-bar">
+          <Button
+            aria-expanded={Boolean(panel)}
+            aria-label={copy.title}
+            className="notification-trigger"
+            onClick={() => (panel ? closePanel() : openPanel('list'))}
+            ref={trigger}
+            size="sm"
+            variant="ghost"
+          >
+            <Codicon name="bell" size="1rem" />
+            <span>{copy.title}</span>
+            {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}
+          </Button>
+          {!panel && summary && (
+            <NotificationSummary
+              onFocusChange={setFocusedId}
+              onHide={() => setHiddenSummaries(current => new Set([...current, summaryKey(summary)]))}
+              onHoverChange={setHoveredId}
+              openPanel={openPanel}
+              summary={summary}
+            />
+          )}
+        </div>
+      )}
+      <div className="notification-workspace-row">
+        <div
+          aria-hidden={Boolean(panelOpen && narrow) || undefined}
+          className={cn('notification-workspace-content', panelOpen && narrow && 'notification-content-hidden')}
+          inert={Boolean(panelOpen && narrow)}
+        >
+          {children}
+        </div>
+        {active && panel && (
+          <NotificationPanel
+            close={close}
+            closePanel={closePanel}
+            liveDetail={liveDetail}
+            notifications={notifications}
+            openPanel={openPanel}
+            panel={panel}
+            panelBody={panelBody}
+            panelRef={panelRef}
+            setPanel={setPanel}
+          />
+        )}
+      </div>
+    </section>
   )
 }
 
-// AlertTitle defaults to a single-line clamp. Toast errors are often a full
-// sentence, so the toast wraps — then caps height and scrolls instead of
-// growing down the chat or clipping with an ellipsis.
-export function toastTitleClassName() {
-  return 'col-start-auto line-clamp-none max-h-[4.5em] overflow-y-auto overscroll-contain whitespace-normal wrap-break-word'
+interface NotificationPanelProps {
+  panel: 'list' | AppNotification
+  notifications: AppNotification[]
+  liveDetail: AppNotification | undefined
+  panelRef: RefObject<HTMLElement | null>
+  panelBody: RefObject<HTMLDivElement | null>
+  close: RefObject<HTMLButtonElement | null>
+  closePanel: () => void
+  openPanel: (value: 'list' | AppNotification) => void
+  setPanel: (value: 'list' | AppNotification | null) => void
 }
 
-function NotificationItem({ notification, stack }: { notification: AppNotification; stack: CardStackAction }) {
-  const styles = tone[notification.kind]
-  const Icon = styles.icon
-  const hasDetail = Boolean(notification.detail && notification.detail !== notification.message)
+function NotificationPanel({
+  panel,
+  notifications,
+  liveDetail,
+  panelRef,
+  panelBody,
+  close,
+  closePanel,
+  openPanel,
+  setPanel
+}: NotificationPanelProps) {
   const { t } = useI18n()
-  const copy = t.notifications
-
-  // Nudge the icon down to sit on the first text line, in `ch` so it tracks the
-  // toast's font size instead of a fixed rem. `accentColor` (when set) tints the
-  // icon + message as a severity ramp, overriding the kind's default color.
-  const accent = notification.accentColor
-  const iconStyle: CSSProperties = { marginTop: '0.42ch', ...(accent ? { color: accent } : {}) }
+  const copy = t.notificationCenter
 
   return (
-    <Alert
-      aria-live={!stack.active ? 'off' : notification.kind === 'error' ? 'assertive' : 'polite'}
-      className={cn(
-        'grid-cols-[auto_minmax(0,1fr)_auto] rounded-(--aino-radius-panel) border px-3.5 py-3 pr-2.5 text-xs shadow-none',
-        NOTIFICATION_SURFACE[notification.kind]
-      )}
-      role={notification.kind === 'error' ? 'alert' : 'status'}
-      variant={styles.variant}
+    <aside
+      aria-label={copy.title}
+      className="notification-panel"
+      onKeyDown={event => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          closePanel()
+        }
+      }}
+      ref={panelRef}
     >
-      {notification.icon ? (
-        <Codicon className={styles.iconClass} name={notification.icon} size="1rem" style={iconStyle} />
-      ) : (
-        <Icon className={styles.iconClass} style={iconStyle} />
-      )}
-      <div className="col-start-2 min-w-0">
-        {notification.title && (
-          <AlertTitle className={toastTitleClassName()} title={notification.title}>
-            {notification.title}
-          </AlertTitle>
+      <header className="notification-panel-header">
+        {panel !== 'list' && (
+          <Button aria-label={t.common.back} onClick={() => openPanel('list')} size="icon-sm" variant="ghost">
+            <Codicon name="arrow-left" size="1rem" />
+          </Button>
         )}
-        <AlertDescription className="col-start-auto text-(--ui-text-secondary)">
-          <p className="m-0 wrap-break-word">{renderMessage(notification.message, accent)}</p>
-          {notification.meta && <p className="m-0 text-xs text-muted-foreground tabular-nums">{notification.meta}</p>}
-          {hasDetail && <NotificationDetail detail={notification.detail || ''} />}
-          {(notification.action || notification.secondaryAction) && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {notification.action && (
-                <Button
-                  disabled={stack.busy || !stack.active}
-                  onClick={() => {
-                    void stack.depart(() => {
-                      notification.action?.onClick()
-                      dismissNotification(notification.id)
-                    })
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="default"
-                >
-                  {notification.action.label}
-                </Button>
-              )}
-              {notification.secondaryAction && (
-                <Button
-                  disabled={stack.busy || !stack.active}
-                  onClick={() => {
-                    void stack.depart(() => {
-                      notification.secondaryAction?.onClick()
-                      dismissNotification(notification.id)
-                    })
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {notification.secondaryAction.label}
-                </Button>
-              )}
-            </div>
-          )}
-        </AlertDescription>
+        <h2>{panel === 'list' ? copy.title : t.notifications.details}</h2>
+        <Button aria-label={t.common.close} onClick={closePanel} ref={close} size="icon-sm" variant="ghost">
+          <Codicon name="close" size="1rem" />
+        </Button>
+      </header>
+      <div className="notification-panel-body" key={panel === 'list' ? 'list' : panel.id} ref={panelBody}>
+        {panel === 'list' ? (
+          <>
+            <NotificationList notifications={notifications} openPanel={openPanel} />
+          </>
+        ) : (
+          <>
+            <NotificationDetail liveDetail={liveDetail} panel={panel} />
+          </>
+        )}
+      </div>
+      <footer className="notification-panel-footer">
+        {panel === 'list' ? (
+          <Button
+            disabled={!notifications.some(item => !item.persistent && !item.pendingAction)}
+            onClick={() => clearNotifications()}
+            size="sm"
+            variant="ghost"
+          >
+            {t.notifications.clearAll}
+          </Button>
+        ) : (
+          liveDetail && (
+            <>
+              <NoticeActions notification={liveDetail} />
+              <Button
+                disabled={Boolean(liveDetail.pendingAction)}
+                onClick={() => {
+                  userDismiss(liveDetail.id)
+                  setPanel('list')
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                {t.notifications.dismiss}
+              </Button>
+            </>
+          )
+        )}
+      </footer>
+    </aside>
+  )
+}
+
+interface NotificationSummaryProps {
+  summary: AppNotification
+  openPanel: (notification: AppNotification) => void
+  onFocusChange: (id: string | null) => void
+  onHoverChange: (id: string | null) => void
+  onHide: () => void
+}
+
+function NotificationSummary({ summary, openPanel, onFocusChange, onHoverChange, onHide }: NotificationSummaryProps) {
+  const { t } = useI18n()
+  const copy = t.notificationCenter
+
+  return (
+    <article
+      aria-live={summary.kind === 'error' ? 'assertive' : 'polite'}
+      className="notification-summary"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          resumeNotification(summary.id, 'focus')
+          onFocusChange(null)
+        }
+      }}
+      onFocus={() => {
+        pauseNotification(summary.id, 'focus')
+        onFocusChange(summaryKey(summary))
+      }}
+      onMouseEnter={() => {
+        pauseNotification(summary.id, 'hover')
+        onHoverChange(summaryKey(summary))
+      }}
+      onMouseLeave={() => {
+        resumeNotification(summary.id, 'hover')
+        onHoverChange(null)
+      }}
+      role={summary.kind === 'error' ? 'alert' : 'status'}
+    >
+      <NoticeIcon notification={summary} />
+      <div className="notification-summary-copy">
+        {summary.title && <strong>{summary.title}</strong>}
+        <p>{summary.message}</p>
+        {summary.actionError && <p role="alert">{summary.actionError}</p>}
+      </div>
+      <div className="notification-summary-footer">
+        {(summary.action || summary.secondaryAction) && <NoticeActions compact notification={summary} />}
+        <Button className="notification-summary-details" onClick={() => openPanel(summary)} size="xs" variant="text">
+          {t.notifications.details}
+        </Button>
       </div>
       <Button
-        aria-label={copy.dismiss}
-        className="col-start-3 -mr-1 text-muted-foreground"
-        disabled={stack.busy || !stack.active}
+        aria-label={copy.hideSummary}
+        className="notification-summary-hide"
+        disabled={Boolean(summary.pendingAction)}
         onClick={() => {
-          void stack.depart(() => userDismiss(notification.id))
+          resumeNotification(summary.id, 'focus')
+          resumeNotification(summary.id, 'hover')
+          onFocusChange(null)
+          onHoverChange(null)
+          onHide()
         }}
         size="icon-xs"
-        type="button"
         variant="ghost"
       >
         <Codicon name="close" size="0.875rem" />
       </Button>
-    </Alert>
+    </article>
   )
 }
 
-function NotificationDetail({ detail }: { detail: string }) {
+function NotificationDetail({
+  panel,
+  liveDetail
+}: {
+  panel: AppNotification
+  liveDetail: AppNotification | undefined
+}) {
   const { t } = useI18n()
-  const copy = t.notifications
+  const copy = t.notificationCenter
 
   return (
-    <details className="mt-2 text-xs text-muted-foreground">
-      <summary className="select-none font-medium text-muted-foreground hover:text-foreground">{copy.details}</summary>
-      <div className="mt-2 rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background)/70 p-2.5">
-        <pre
-          className="max-h-32 overflow-y-auto overscroll-contain whitespace-pre-wrap wrap-break-word font-mono text-[0.6875rem] leading-relaxed"
-          data-selectable-text="true"
-        >
-          {detail}
-        </pre>
-        <CopyButton
-          appearance="inline"
-          className="mt-1 rounded px-1.5 py-0.5 text-[0.6875rem]"
-          errorMessage={copy.copyDetailFailed}
-          iconClassName="size-3"
-          label={copy.copyDetail}
-          text={detail}
-        >
-          {copy.copyDetail}
-        </CopyButton>
+    <>
+      <div className="notification-detail-heading">
+        <NoticeIcon notification={panel} />
+        <h3>{panel.title ?? panel.message}</h3>
       </div>
-    </details>
+      {liveDetail?.actionError && (
+        <div className="notification-action-error" role="alert">
+          <p>{liveDetail.actionError}</p>
+          {liveDetail.actionErrorDetail && (
+            <details className="notification-technical">
+              <summary>{copy.technical}</summary>
+              <pre>{liveDetail.actionErrorDetail}</pre>
+              <CopyButton appearance="inline" label={t.notifications.copyDetail} text={liveDetail.actionErrorDetail}>
+                {t.notifications.copyDetail}
+              </CopyButton>
+            </details>
+          )}
+        </div>
+      )}
+      {panel.title && <p>{panel.message}</p>}
+      {panel.meta && <p className="notification-meta">{panel.meta}</p>}
+      {(panel.repeatCount ?? 0) > 1 && <p className="notification-meta">{copy.repeated(panel.repeatCount ?? 1)}</p>}
+      {panel.sourceKey === 'sessions.auto_prune' && (
+        <div className="notification-advice">
+          <p>{copy.diskAdvice}</p>
+          <p>{copy.diskLimits}</p>
+        </div>
+      )}
+      {panel.detail && panel.detail !== panel.message && (
+        <details className="notification-technical" open={panel.sourceKey !== 'sessions.auto_prune'}>
+          <summary>{copy.technical}</summary>
+          <pre data-selectable-text="true">{panel.detail}</pre>
+          <CopyButton
+            appearance="inline"
+            errorMessage={t.notifications.copyDetailFailed}
+            label={t.notifications.copyDetail}
+            text={panel.detail}
+          >
+            {t.notifications.copyDetail}
+          </CopyButton>
+        </details>
+      )}
+      {!liveDetail && <p className="notification-meta">{copy.empty}</p>}
+    </>
+  )
+}
+
+function NotificationList({
+  notifications,
+  openPanel
+}: {
+  notifications: AppNotification[]
+  openPanel: (notification: AppNotification) => void
+}) {
+  const { t } = useI18n()
+  const copy = t.notificationCenter
+
+  return (
+    <>
+      {!notifications.length && <p className="notification-empty">{copy.empty}</p>}
+      <ul className="notification-list">
+        {notifications.map(notification => (
+          <li key={notification.id}>
+            <button className="notification-list-item" onClick={() => openPanel(notification)} type="button">
+              <NoticeIcon notification={notification} />
+              <span>
+                <strong>{notification.title ?? notification.message}</strong>
+                {notification.title && <span>{notification.message}</span>}
+                {(notification.repeatCount ?? 0) > 1 && <small>{copy.repeated(notification.repeatCount ?? 1)}</small>}
+              </span>
+              <Codicon name="chevron-right" size="0.875rem" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
 
@@ -405,14 +495,26 @@ export function InlineNotice({
   children: ReactNode
   className?: string
 }) {
-  const styles = tone[kind]
-  const Icon = styles.icon
+  const Icon = tone[kind].icon
 
   return (
-    <Alert className={cn('min-w-0', className)} role={kind === 'error' ? 'alert' : 'status'} variant={styles.variant}>
-      <Icon />
+    <Alert className={cn('min-w-0', className)} role={kind === 'error' ? 'alert' : 'status'}>
+      <Icon className={tone[kind].iconClass} />
       {title && <AlertTitle>{title}</AlertTitle>}
       <AlertDescription className={cn(!title && 'row-start-1')}>{children}</AlertDescription>
     </Alert>
   )
+}
+
+function notificationSelectionState(selection: 'list' | AppNotification | null, notifications: AppNotification[]) {
+  const selectedItem =
+    selection && selection !== 'list'
+      ? notifications.find(
+          item => item.id === selection.id && item.epoch === selection.epoch && item.instance === selection.instance
+        )
+      : undefined
+
+  const panel = selection && selection !== 'list' ? (selectedItem ?? 'list') : selection
+
+  return { selectedItem, panel, panelKey: panel === 'list' ? 'list' : selectedItem?.id, detailId: selectedItem?.id ?? null }
 }

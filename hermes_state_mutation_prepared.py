@@ -4,6 +4,7 @@ from hermes_state_local import POLICY_PREFIX
 from hermes_state_local_lineage import validate_local_lineage
 from hermes_state_mutation_guards import require_target_advanceable
 from hermes_state_runtime import RuntimeStoreError
+from hermes_state_common import CONVERSATION_MODEL_SELECTION_KEY
 
 # A model pick made while a turn ran, committed at the next turn boundary (gateway/session_deferred_pick.py).
 DEFERRED_PICK_PREFIX = 'gateway.deferred_pick.v1.'
@@ -51,6 +52,15 @@ def model_in_transaction(db, conn, session_id, payload, prepared):
     # is a client/provider boundary, not an implicit reload of launch defaults.
     row = conn.execute('SELECT model_config FROM sessions WHERE id=?', (target,)).fetchone()
     model_config = json.loads(row[0] or '{}')
+    desired = model_config.get(CONVERSATION_MODEL_SELECTION_KEY) or {}
+    selected = desired.get('selection') if isinstance(desired, dict) else None
+    matches = (isinstance(selected, dict) and selected.get('model_id') == model
+               and selected.get('model_source') == config.get('model_source', 'provider')
+               and selected.get('provider') == config['provider'])
+    if prepared['policy'].get('source') != 'bot_room' and not matches:
+        # A newer picker supersedes a different desired route atomically. The same
+        # desired route survives so a failed native credential bind can be retried.
+        model_config.pop(CONVERSATION_MODEL_SELECTION_KEY, None)
     was_managed = model_config.get('model_source') == 'aino'
     model_config['provider'] = config['provider']
     for key in ('model_source', 'model_id', 'platform_owner', 'billing_source', 'model_status'):

@@ -93,4 +93,16 @@ describe('Command Center session delete confirmation (#99410)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(onDeleteSession).not.toHaveBeenCalled()
   })
+
+  it('keeps a failed delete in its confirmation and permits retry', async () => {
+    const onDeleteSession = vi.fn().mockRejectedValueOnce(new Error('Storage is read only')).mockResolvedValue(undefined)
+    renderCommandCenter(onDeleteSession)
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete session' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('Storage is read only')).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(onDeleteSession).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
 })

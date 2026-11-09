@@ -65,7 +65,11 @@ def managed_state(authority, sid, *, purpose='chat'):
     if purpose != 'chat':
         raise RuntimeStoreError('invalid_params')
     from gateway.session_policy import policy_for_source
-    selected = selection_for_policy(policy_for_source(authority.runner, live.source))
+    policy = policy_for_source(authority.runner, live.source)
+    if policy is not None and policy.source == 'bot_room':
+        from gateway.session_group_models import require_group_grant
+        require_group_grant(authority, sid)
+    selected = selection_for_policy(policy)
     if selected is None:
         raise RuntimeStoreError("managed_binding_forbidden")
     state = getattr(live, "managed_model_state", None)
@@ -84,6 +88,15 @@ def clear_managed_selection(authority, sid):
 
 
 def _owned(connection, ref, *, issuer=False, purpose='chat'):
+    live = connection.authority.sessions.get(ref.session_id)
+    from gateway.session_policy import policy_for_source
+    policy = policy_for_source(connection.authority.runner, live.source) if live else None
+    if policy is not None and policy.source == 'bot_room':
+        if issuer or purpose != 'chat':
+            raise RuntimeStoreError('managed_binding_forbidden')
+        from gateway.session_group_models import require_group_grant
+        require_group_grant(connection.authority, ref.session_id, connection=connection)
+        return _owned_state(connection, ref, live, purpose)
     if issuer:
         if ref.session_id not in connection.subscriptions:
             raise RuntimeStoreError("permission_denied")
@@ -91,10 +104,12 @@ def _owned(connection, ref, *, issuer=False, purpose='chat'):
     live = connection.authority.sessions.get(ref.session_id)
     if live is None:
         raise RuntimeStoreError("managed_binding_forbidden")
-    from gateway.session_policy import policy_for_source
-    policy = policy_for_source(connection.authority.runner, live.source)
     if policy is None or policy.source != "gui":
         raise RuntimeStoreError("managed_binding_forbidden")
+    return _owned_state(connection, ref, live, purpose)
+
+
+def _owned_state(connection, ref, live, purpose):
     state = managed_state(connection.authority, ref.session_id, purpose=purpose)
     from tui_gateway.managed_model_runtime import transport_principal
     try:

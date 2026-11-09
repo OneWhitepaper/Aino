@@ -13,7 +13,7 @@ import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/
 import { $activeGatewayProfile } from '@/store/profile'
 import { $connection } from '@/store/session'
 
-import type { PlatformModel } from '../../../shared/platform-contract'
+import { hasPlatformModelIdentity, type PlatformModel } from '../../../shared/platform-contract'
 
 import { ListRow } from './primitives'
 
@@ -79,8 +79,8 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
         }
         title={t.settings.model.model}
       />
-      <p className="default-main-model-connection" data-connected={catalog.account?.phase === 'signed_in' || undefined}>
-        {catalog.account?.phase === 'signed_in'
+      <p className="default-main-model-connection" data-connected={hasPlatformModelIdentity(catalog.account) || undefined}>
+        {hasPlatformModelIdentity(catalog.account)
           ? t.settings.model.defaultMain.ainoConnected
           : t.platformModels.not_authenticated}
       </p>

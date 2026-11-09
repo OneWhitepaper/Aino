@@ -14,7 +14,7 @@
 
 import type * as HermesSdk from '@hermes/plugin-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,14 +28,15 @@ interface CapabilitiesViewProps {
 }
 
 const mocks = vi.hoisted(() => ({
+  activeSource: { connectionId: '', profile: 'default' },
   connections: vi.fn(async () => [] as { id: string; label: string }[]),
-  createCanonicalChat: vi.fn(async () => 'session-1'),
   deleteBot: vi.fn(async () => undefined),
   dropLeftoverProfilePrefs: vi.fn(),
   /** Flipped off to model a desktop build that predates the live surface. */
   hasCapabilitiesView: { value: true },
   notify: vi.fn(),
   notifyError: vi.fn(),
+  openRosterBot: vi.fn(async () => true),
   request: vi.fn(),
   requestProfile: vi.fn(async () => ({})),
   saveBotMeta: vi.fn(),
@@ -59,6 +60,15 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
     ...original,
     host: {
       ...original.host,
+      agents: async () => {
+        throw new Error('no union roster')
+      },
+      profileRoutes: async () => [],
+      state: {
+        ...original.host.state,
+        connectionId: { ...original.host.state.connectionId, get: () => mocks.activeSource.connectionId },
+        profile: { ...original.host.state.profile, get: () => mocks.activeSource.profile }
+      },
       connections: mocks.connections,
       dropLeftoverProfilePrefs: mocks.dropLeftoverProfilePrefs,
       notify: mocks.notify,
@@ -79,8 +89,8 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
   return mocked
 })
 
-vi.mock('./canonical-chat', () => ({ createCanonicalChat: mocks.createCanonicalChat }))
-vi.mock('./profile-ops', () => ({ deleteBot: mocks.deleteBot }))
+vi.mock('./roster-actions', () => ({ openRosterBot: mocks.openRosterBot }))
+vi.mock('./profile-ops', () => ({ deleteBot: mocks.deleteBot, mergeServerMeta: vi.fn() }))
 vi.mock('./data', async importOriginal => {
   const original = await importOriginal<typeof DataModule>()
 
@@ -143,6 +153,8 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.activeSource.connectionId = ''
+  mocks.activeSource.profile = 'default'
   mocks.skillsView.length = 0
   mocks.connections.mockResolvedValue([])
   mocks.requestProfile.mockResolvedValue({})
@@ -163,8 +175,11 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  // Radix's focus scope dispatches its unmount event from a 0 ms timer; let it fire
+  // here, or it lands in the next test file's jsdom window and throws there.
+  await new Promise(resolve => setTimeout(resolve, 0))
 })
 
 describe('materializing the draft profile', () => {
@@ -188,8 +203,16 @@ describe('materializing the draft profile', () => {
       description: enteredName,
       name: profileName
     })
-    expect(mocks.saveBotMeta).toHaveBeenCalledWith(profileName, expect.objectContaining({ title: enteredName }))
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalledWith(profileName, { kickoff: true }))
+    expect(mocks.saveBotMeta).toHaveBeenCalledWith(
+      expect.objectContaining({ name: profileName }),
+      expect.objectContaining({ title: enteredName })
+    )
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: profileName }), {
+        kickoff: true,
+        openingStillCurrent: expect.any(Function)
+      })
+    )
   })
 
   it('creates it once when the Capabilities tab opens, pinned to the new slug', async () => {
@@ -205,7 +228,12 @@ describe('materializing the draft profile', () => {
     // Create Bot goes through the same helper — no duplicate profiles.create.
     fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
 
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalledWith('inbox-triage', { kickoff: true }))
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: 'inbox-triage' }), {
+        kickoff: true,
+        openingStillCurrent: expect.any(Function)
+      })
+    )
     expect(createCalls()).toHaveLength(1)
   })
 
@@ -333,7 +361,12 @@ describe('leftover prefs under the new bot name', () => {
     await renderDialog(true)
     fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
 
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalledWith('inbox-triage', { kickoff: true }))
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: 'inbox-triage' }), {
+        kickoff: true,
+        openingStillCurrent: expect.any(Function)
+      })
+    )
     expect(mocks.dropLeftoverProfilePrefs.mock.calls).toEqual([['inbox-triage', null]])
   })
 
@@ -398,7 +431,7 @@ describe('cancelling New Bot discards its draft profile', () => {
     await waitFor(() => expect(mocks.deleteBot).toHaveBeenCalledWith({ name: 'inbox-triage' }))
     // The abandoned draft is not configured or adopted as a finished bot.
     expect(mocks.saveBotMeta).not.toHaveBeenCalled()
-    expect(mocks.createCanonicalChat).not.toHaveBeenCalled()
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
   })
 
   // The draft lives where it was CREATED. Moving "Create on" afterwards must not
@@ -443,9 +476,13 @@ describe('cancelling New Bot discards its draft profile', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     await waitFor(() =>
-      expect(mocks.requestProfile).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'studio' }), 'cli.exec', {
-        argv: ['profile', 'delete', 'inbox-triage', '--yes']
-      })
+      expect(mocks.requestProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'studio' }),
+        'cli.exec',
+        {
+          argv: ['profile', 'delete', 'inbox-triage', '--yes']
+        }
+      )
     )
     expect(mocks.deleteBot).not.toHaveBeenCalled()
   })
@@ -499,7 +536,12 @@ describe('provider readiness before the intro turn', () => {
     await renderDialog(true, onConfigureModel)
     fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
 
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalledWith('inbox-triage', { kickoff: false }))
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: 'inbox-triage' }), {
+        kickoff: false,
+        openingStillCurrent: expect.any(Function)
+      })
+    )
     expect(mocks.request).toHaveBeenCalledWith('setup.runtime_check', { profile: 'inbox-triage' })
     expect(createCalls()).toHaveLength(1)
 
@@ -523,8 +565,42 @@ describe('provider readiness before the intro turn', () => {
     await renderDialog(true)
     fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
 
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalledWith('inbox-triage', { kickoff: true }))
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: 'inbox-triage' }), {
+        kickoff: true,
+        openingStillCurrent: expect.any(Function)
+      })
+    )
     expect(mocks.notify).toHaveBeenLastCalledWith({ kind: 'success', message: 'Bot "Inbox Triage" created' })
+  })
+
+  it('explains an Aino connection failure without asking for a third-party API key', async () => {
+    const base = mocks.request.getMockImplementation()!
+
+    const unavailable = {
+      ok: false,
+      provider: 'aino',
+      error_code: 'unsupported_gateway',
+      error: 'This gateway cannot use Aino built-in models. Update it and try again.'
+    }
+
+    mocks.request.mockImplementation(async (method: string, params?: unknown) =>
+      method === 'setup.runtime_check' ? unavailable : base(method, params)
+    )
+
+    await renderDialog(true, vi.fn())
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalled())
+    const toast = mocks.notify.mock.calls.at(-1)![0]
+
+    expect(toast.message).toBe(unavailable.error)
+    expect(toast.action).toBeUndefined()
+    expect(toast.detail).toBeUndefined()
+    expect(mocks.openRosterBot).toHaveBeenCalledWith(expect.objectContaining({ name: 'inbox-triage' }), {
+      kickoff: false,
+      openingStillCurrent: expect.any(Function)
+    })
   })
 
   it('checks a remote bot on its own machine and warns without an editor shortcut', async () => {
@@ -555,6 +631,184 @@ describe('provider readiness before the intro turn', () => {
   })
 })
 
+describe('creation navigation ownership', () => {
+  it.each(['ready', 'wrong source', 'failed'])(
+    'waits for the live roster query before selecting the created row: %s',
+    async outcome => {
+      const base = mocks.request.getMockImplementation()!
+      let profileCreated = false
+      let rosterFailed = false
+      let finishRoster = () => undefined as void
+      mocks.request.mockImplementation((method: string, params?: unknown) => {
+        if (method === 'profiles.create') {
+          profileCreated = true
+        }
+
+        if (method === 'profiles.list') {
+          if (rosterFailed) {
+            return Promise.reject(new Error('roster offline'))
+          }
+
+          return profileCreated
+            ? new Promise((resolve, reject) => {
+                finishRoster = () =>
+                  outcome === 'failed'
+                    ? ((rosterFailed = true), reject(new Error('roster offline')))
+                    : resolve({
+                        profiles: [
+                          ...roster,
+                          { name: 'inbox-triage', connectionId: outcome === 'ready' ? 'local' : 'other-machine' }
+                        ]
+                      })
+              })
+            : Promise.resolve({ profiles: roster })
+        }
+
+        return base(method, params)
+      })
+      vi.resetModules()
+      const { CreateAgentDialog } = await import('./create-dialog')
+      const { useRoster } = await import('./data')
+
+      function RosterCreation() {
+        const rosterQuery = useRoster()
+
+        return (
+          <>
+            <output>{rosterQuery.data?.profiles?.map(row => row.name).join(',')}</output>
+            <CreateAgentDialog
+              onClose={() => undefined}
+              onRefreshRoster={async () => {
+                return (await rosterQuery.refetch({ throwOnError: true })).data?.profiles ?? []
+              }}
+              open
+              roster={rosterQuery.data?.profiles ?? []}
+            />
+          </>
+        )
+      }
+
+      render(withQueryClient(<RosterCreation />))
+      await waitFor(() => expect(screen.getByRole('status', { hidden: true }).textContent).toBe('default'))
+      fireEvent.change(screen.getByPlaceholderText('inbox-triage'), { target: { value: 'inbox-triage' } })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+      })
+
+      expect(mocks.openRosterBot).not.toHaveBeenCalled()
+      await act(async () => {
+        finishRoster()
+      })
+
+      if (outcome === 'ready') {
+        await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalled())
+        expect(screen.getByRole('status', { hidden: true }).textContent).toContain('inbox-triage')
+      } else {
+        expect(mocks.openRosterBot).not.toHaveBeenCalled()
+        expect(mocks.deleteBot).not.toHaveBeenCalled()
+
+        if (outcome === 'failed') {
+          await waitFor(() => expect(mocks.notifyError).toHaveBeenCalled())
+        }
+      }
+    }
+  )
+
+  it.each(['Create Bot', 'Cancel'])(
+    'does not adopt or delete an old-source draft through the new source on %s',
+    async action => {
+      await renderDialog(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+      await waitFor(() => expect(mocks.skillsView.at(-1)).toMatchObject({ fixedProfile: 'inbox-triage' }))
+
+      mocks.activeSource.connectionId = 'another-machine'
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: action }))
+      })
+
+      expect(mocks.request).not.toHaveBeenCalledWith('setup.runtime_check', expect.anything())
+      expect(mocks.openRosterBot).not.toHaveBeenCalled()
+      expect(mocks.deleteBot).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not configure or probe the new ambient source after creation finishes on the previous source', async () => {
+    let finishCreate = () => undefined as void
+    const base = mocks.request.getMockImplementation()!
+    mocks.request.mockImplementation((method: string, params?: unknown) =>
+      method === 'profiles.create'
+        ? new Promise(resolve => {
+            finishCreate = () => resolve({ ok: true })
+          })
+        : base(method, params)
+    )
+    await renderDialog(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() => expect(createCalls()).toHaveLength(1))
+
+    mocks.activeSource.connectionId = 'another-machine'
+    await act(async () => {
+      finishCreate()
+    })
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalled())
+
+    expect(mocks.saveBotMeta).not.toHaveBeenCalled()
+    expect(mocks.request).not.toHaveBeenCalledWith('setup.runtime_check', expect.anything())
+    expect(mocks.request).not.toHaveBeenCalledWith('profiles.configure', expect.anything())
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+  })
+
+  it('opens the created bot through the same source-owned roster transaction as a row click', async () => {
+    await renderDialog(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'inbox-triage', connectionId: 'local', sourceScoped: true }),
+        { kickoff: true, openingStillCurrent: expect.any(Function) }
+      )
+    )
+  })
+
+  it.each(['another bot', 'another page'])(
+    'finishes creation without taking focus after opening %s',
+    async destination => {
+      let finishCreate = () => undefined as void
+      const base = mocks.request.getMockImplementation()!
+      mocks.request.mockImplementation((method: string, params?: unknown) =>
+        method === 'profiles.create'
+          ? new Promise(resolve => {
+              finishCreate = () => resolve({ ok: true })
+            })
+          : base(method, params)
+      )
+      const initialHash = window.location.hash
+
+      try {
+        await renderDialog(true)
+        fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+        await waitFor(() => expect(createCalls()).toHaveLength(1))
+
+        if (destination === 'another bot') {
+          const { bumpBotOpenGeneration } = await import('./shared')
+          bumpBotOpenGeneration()
+        } else {
+          window.location.hash = '#/settings'
+        }
+
+        await act(async () => {
+          finishCreate()
+        })
+        await waitFor(() => expect(mocks.notify).toHaveBeenCalled())
+
+        expect(mocks.openRosterBot).not.toHaveBeenCalled()
+      } finally {
+        window.location.hash = initialHash
+      }
+    }
+  )
+})
+
 describe('the clone-from default', () => {
   it('regression: reset restores the mounted default, not "fresh profile"', async () => {
     await renderDialog(true)
@@ -570,7 +824,7 @@ describe('the clone-from default', () => {
     expect(cloneFrom().textContent).toMatch(/Fresh profile/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
-    await waitFor(() => expect(mocks.createCanonicalChat).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalled())
 
     // Second open: the picker must read `default` again, or every agent after
     // the first silently starts from a bare profile.

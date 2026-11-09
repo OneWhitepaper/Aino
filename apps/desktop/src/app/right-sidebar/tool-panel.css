@@ -7,9 +7,9 @@
 }
 .aino-tool-chooser h2 {
   margin: 0 0 5px;
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -0.4px;
+  font-size: var(--aino-text-title);
+  font-weight: 600;
+  letter-spacing: normal;
 }
 .aino-tool-chooser > p {
   margin: 0 0 23px;
@@ -102,17 +102,17 @@
   height: 32px;
   min-width: 100px;
   max-width: 185px;
-  border: 1px solid transparent !important;
-  border-radius: 7px;
-  font-size: 12px;
-  font-family: var(--dt-font-sans);
+  border: 1px solid transparent;
+  border-radius: var(--aino-radius-control);
+  font-size: var(--aino-text-label);
+  font-family: var(--font-sans);
 }
 [data-pane-variant='tool'] [data-slot='pane-tab'][data-active='true'] {
-  border: 1px solid var(--ui-stroke-secondary) !important;
+  border: 1px solid var(--ui-stroke-secondary);
   background: var(--ui-bg-elevated);
 }
 [data-pane-variant='tool'] [data-slot='pane-tab-label'] {
-  font-size: 12px;
+  font-size: var(--aino-text-label);
 }
 [data-pane-variant='tool'] [data-slot='pane-tab'] > .pane-tab-content > span:first-child svg {
   width: 14px;

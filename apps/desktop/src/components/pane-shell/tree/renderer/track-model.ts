@@ -12,6 +12,7 @@ import type * as React from 'react'
 import type { MenuKit } from '@/components/ui/actions-menu'
 import type { Contribution } from '@/contrib/types'
 
+import type { WorkspacePaneScope } from '../../workspace-scope'
 import type { GroupNode, LayoutNode } from '../model'
 import { allPaneIds } from '../model'
 import { isToolPanelGroup } from '../tool-panel-policy'
@@ -57,6 +58,10 @@ export interface PaneSizing {
 
 /** Chrome behavior flags a pane contributes. Read via `paneChrome`. */
 interface PaneChrome extends PaneSizing {
+  /** Conversation owner, sampled at navigation time without remounting its body. */
+  workspaceScope?: WorkspacePaneScope | (() => WorkspacePaneScope | undefined)
+  /** Conversation workspaces use the same tab operations in a quieter, inset strip. */
+  tabPresentation?: 'conversation'
   toolPanel?: boolean
   /** Opt into the host's shared brand picker when docked with Sessions.
    *  The pane owns its localized description; selection still activates the

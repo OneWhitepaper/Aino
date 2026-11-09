@@ -320,7 +320,7 @@ def test_room_member_turns_cannot_block_on_an_unanswerable_clarify(hosted_owner,
     from model_tools import get_tool_definitions
 
     authority, loop, principal, _ = hosted_owner
-    monkeypatch.setattr(run, '_load_gateway_config', lambda: {
+    monkeypatch.setattr(run, '_load_gateway_config', lambda *args: {
         'model': {'default': 'fixture'}, 'platform_toolsets': {'cli': ['hermes-cli']}})
     rpc = HostedRoomAuthorityRPC(authority, loop, room_id='room', member_id='one', profile='default',
                                  principal=principal, authorize=lambda *args: True)

@@ -72,7 +72,7 @@ export function CatalogRating({ entry }: { entry: CatalogEntry }) {
   }
 
   return (
-    <span className="flex shrink-0 items-center gap-0.5 text-[0.65rem] text-(--ui-text-tertiary)">
+    <span className="flex shrink-0 items-center gap-0.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
       <Codicon name="star-full" size="0.65rem" />
       {compactNumber(entry.stars)}
     </span>
@@ -189,7 +189,10 @@ export function CatalogMetadata({ entry, onCategory, onTag, onSearch, onOpen, li
         </span>
       )}
       {commands.length > 0 && (
-        <span className="truncate font-mono text-[0.65rem] text-(--ui-text-tertiary)" data-catalog-commands>
+        <span
+          className="truncate font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
+          data-catalog-commands
+        >
           {commands.join('  ')}
         </span>
       )}
@@ -210,7 +213,7 @@ export function CatalogDates({ entry }: { entry: CatalogEntry }) {
   }
 
   return (
-    <span className="flex flex-wrap gap-x-2 gap-y-1 text-[0.65rem] text-(--ui-text-tertiary)">
+    <span className="flex flex-wrap gap-x-2 gap-y-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
       {dates.map(({ label, value }) => (
         <time dateTime={value} key={label} title={fmtDateTime.format(Date.parse(value))}>
           {label} {relativeTime(Date.parse(value))}

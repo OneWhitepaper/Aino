@@ -9,12 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tip } from '@/components/ui/tooltip'
 import { revokeGrantsIfUninstalled } from '@/contrib/plugin-files'
 import { localizedPluginMetadata } from '@/contrib/plugin-metadata'
-import {
-  $pluginRecords,
-  enablePackageDesktopHalf,
-  type PluginRecord,
-  setPluginEnabled
-} from '@/contrib/plugins-store'
+import { $pluginRecords, enablePackageDesktopHalf, type PluginRecord, setPluginEnabled } from '@/contrib/plugins-store'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { discoverRuntimePlugins, uninstallDiskPlugin } from '@/contrib/runtime-loader'
 import { pluginSettingsRouteHref, SETTINGS_PLUGINS_AREA } from '@/contrib/settings-pages'
@@ -58,6 +53,7 @@ import { PluginFolderAccess } from './plugin-folder-access'
 import { mergePluginPackages, type PackageKind, type PluginPackage } from './plugin-packages'
 import { PluginPageAccess } from './plugin-page-access'
 import { runPluginUpdate } from './plugin-update'
+import { PluginUpdateAllActions } from './plugin-update-all'
 
 /** Deep-link anchor for a package row (`/capabilities?tab=plugins&plugin=<key>`).
  *  Accepts the agent key, the agent name, or the desktop record id. */
@@ -167,7 +163,7 @@ function KindBadge({ kind }: { kind: PackageKind }) {
   const p = t.skills.plugins
 
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-(--ui-stroke-tertiary) px-1.5 py-px text-[0.65rem] text-(--ui-text-tertiary)">
+    <span className="inline-flex items-center gap-1 rounded border border-(--ui-stroke-tertiary) px-1.5 py-px text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
       {kind !== 'desktop' && <Package aria-hidden className="size-3" />}
       {kind !== 'agent' && <Monitor aria-hidden className="size-3" />}
       {kind === 'both' ? p.kindBoth : kind === 'agent' ? p.kindAgent : p.kindDesktop}
@@ -224,15 +220,7 @@ function ProvenancePill({ pkg }: { pkg: PluginPackage }) {
 }
 
 /** Controls for one installed plugin half in the detail pane. */
-function HalfCell({
-  label,
-  labelContent,
-  children
-}: {
-  label: string
-  labelContent?: ReactNode
-  children: ReactNode
-}) {
+function HalfCell({ label, labelContent, children }: { label: string; labelContent?: ReactNode; children: ReactNode }) {
   return (
     <div aria-label={label} className="flex w-full items-center gap-3" role="cell">
       <span className="min-w-0 flex-1 text-xs text-(--ui-text-tertiary)">{labelContent ?? label}</span>
@@ -318,9 +306,7 @@ function PackageRow({
   // the shortcut to that page (#46600, #87934).
   const settingsPages = useContributions(SETTINGS_PLUGINS_AREA)
 
-  const desktopSettings = Boolean(
-    desktop && settingsPages.some(page => page.source === `plugin:${desktop.id}`)
-  )
+  const desktopSettings = Boolean(desktop && settingsPages.some(page => page.source === `plugin:${desktop.id}`))
 
   const agentSettings = Boolean(agent?.key) && Boolean(agent?.settings_schema?.length)
   const hasSettings = desktopSettings || agentSettings
@@ -418,11 +404,7 @@ function PackageRow({
               <ProvenancePill pkg={pkg} />
               {agent?.portable && <Pill>{p.portableBadge}</Pill>}
               {agent?.servers?.map(server => (
-                <Pill
-                  data-testid={`server-pill-${server.name}`}
-                  key={server.name}
-                  tone={SERVER_TONE[server.state]}
-                >
+                <Pill data-testid={`server-pill-${server.name}`} key={server.name} tone={SERVER_TONE[server.state]}>
                   {server.name}: {p.serverStates[server.state]}
                 </Pill>
               ))}
@@ -466,12 +448,7 @@ function PackageRow({
           <span className="flex size-7 shrink-0 items-center justify-center">
             {hasSettings && (
               <Tip label={p.settingsToggle(metadata.name)}>
-                <Button
-                  aria-label={p.settingsToggle(metadata.name)}
-                  onClick={openSettings}
-                  size="icon"
-                  variant="ghost"
-                >
+                <Button aria-label={p.settingsToggle(metadata.name)} onClick={openSettings} size="icon" variant="ghost">
                   <Codicon name="settings-gear" size="0.85rem" />
                 </Button>
               </Tip>
@@ -498,7 +475,7 @@ function PackageRow({
             />
           ) : pkg.desktopMissing ? (
             <Tip label={remoteBackend ? p.desktopHalfRemoteTip : p.desktopHalfPendingTip}>
-              <span className="text-[0.65rem] text-(--ui-text-tertiary)">
+              <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                 {remoteBackend ? p.desktopHalfRemote : p.desktopHalfPending}
               </span>
             </Tip>
@@ -512,7 +489,7 @@ function PackageRow({
             <>
               {agent.update_available && (
                 <Button
-                  className="h-5 px-1.5 text-[0.65rem]"
+                  className="h-5 px-1.5 text-[length:var(--aino-text-caption)]"
                   disabled={busy}
                   onClick={() => onAgentUpdate(agent)}
                   size="xs"
@@ -538,14 +515,10 @@ function PackageRow({
               )}
             </>
           ) : pkg.agentMissingInProfile && desktop ? (
-            <Tip
-              label={
-                desktop.packageOrigin?.repo ? p.installAgentHereTip(scopeLabel) : p.installAgentHereNoOrigin
-              }
-            >
+            <Tip label={desktop.packageOrigin?.repo ? p.installAgentHereTip(scopeLabel) : p.installAgentHereNoOrigin}>
               <span>
                 <Button
-                  className="h-5 px-1.5 text-[0.65rem]"
+                  className="h-5 px-1.5 text-[length:var(--aino-text-caption)]"
                   disabled={!desktop.packageOrigin?.repo}
                   onClick={() => installAgentHalfHere(desktop, profile)}
                   size="xs"
@@ -592,20 +565,12 @@ export function PluginActions({ profile }: { profile: ProfileScope }) {
 
   return (
     <>
-      <Button
-        onClick={() => openPluginInstallRequest({ profile: scope, repo: '' })}
-        size="xs"
-        variant="textStrong"
-      >
+      <PluginUpdateAllActions scope={scope} />
+      <Button onClick={() => openPluginInstallRequest({ profile: scope, repo: '' })} size="xs" variant="textStrong">
         {d.installModal.installFromGit}
       </Button>
       <Tip label={d.openFolder}>
-        <Button
-          aria-label={d.openFolder}
-          onClick={() => void revealPluginsDir()}
-          size="icon-xs"
-          variant="ghost"
-        >
+        <Button aria-label={d.openFolder} onClick={() => void revealPluginsDir()} size="icon-xs" variant="ghost">
           <FolderOpen />
         </Button>
       </Tip>
@@ -876,19 +841,17 @@ export const PluginsTab = memo(function PluginsTab({
                 return
               }
 
-              void toggleAgentPlugin(requestGateway, row.key, enable, p.toggleFailed(row.name), scope).then(
-                ok => {
-                  // Turning a unified package on turns its desktop half on too
-                  // (unless the user switched that half off on purpose). Off
-                  // stays per half: the desktop half is app-wide, and another
-                  // profile may still run the agent half.
-                  const half = pkg.desktop?.packageName
+              void toggleAgentPlugin(requestGateway, row.key, enable, p.toggleFailed(row.name), scope).then(ok => {
+                // Turning a unified package on turns its desktop half on too
+                // (unless the user switched that half off on purpose). Off
+                // stays per half: the desktop half is app-wide, and another
+                // profile may still run the agent half.
+                const half = pkg.desktop?.packageName
 
-                  if (ok && enable && half) {
-                    void enablePackageDesktopHalf(half, { keepUserChoice: true })
-                  }
+                if (ok && enable && half) {
+                  void enablePackageDesktopHalf(half, { keepUserChoice: true })
                 }
-              )
+              })
             }}
             onAgentUpdate={row => {
               void runPluginUpdate(requestGateway, row, scope, p).then(outcome => {

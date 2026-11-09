@@ -5,9 +5,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * Rounded surface for fenced code (and any equivalent: diffs, raw payloads,
- * etc.) sized for the conversation column. Background only — no border, no
- * header, no language label — so a code block reads as a tinted slab of the
- * reply rather than an attached artifact.
+ * etc.) sized for the conversation column. Ordinary code stays compact;
+ * source documents can add the shared header for their label and actions.
  */
 function CodeCard({ className, ...props }: React.ComponentProps<'div'>) {
   return (
@@ -32,6 +31,19 @@ function CodeCardIcon({ className, ...props }: CodiconProps) {
   )
 }
 
+function CodeCardHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn(
+        'flex min-w-0 items-center justify-between gap-3 border-b border-(--ui-stroke-tertiary) px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground',
+        className
+      )}
+      data-slot="code-card-header"
+      {...props}
+    />
+  )
+}
+
 function CodeCardBody({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -45,4 +57,4 @@ function CodeCardBody({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-export { CodeCard, CodeCardBody, CodeCardIcon }
+export { CodeCard, CodeCardBody, CodeCardHeader, CodeCardIcon }

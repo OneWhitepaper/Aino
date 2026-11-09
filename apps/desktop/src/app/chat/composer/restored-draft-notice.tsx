@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react'
 
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { $restoredDraftNotice, dismissRestoredDraftNotice, undoRestoredDraft } from '@/store/composer'
 
@@ -30,14 +31,16 @@ export function RestoredDraftNotice({ freshDraft, onUndone, readLiveText }: Rest
 
   return (
     <div
-      className="flex items-center justify-between gap-2 rounded-lg border border-[color-mix(in_srgb,var(--dt-composer-ring)_32%,transparent)] bg-accent/18 px-2 py-1"
+      className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 rounded-lg border border-[color-mix(in_srgb,var(--dt-composer-ring)_32%,transparent)] bg-accent/18 px-3 py-2"
       data-slot="composer-restored-draft"
       role="status"
     >
-      <div className="min-w-0 text-[0.7rem] text-muted-foreground/88">{t.composer.restoredDraftNotice}</div>
-      <div className="flex shrink-0 items-center gap-1">
+      <p className="min-w-0 flex-1 basis-48 text-sm leading-5 text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+        {t.composer.restoredDraftNotice}
+      </p>
+      <div className="flex max-w-full flex-wrap items-center gap-1">
         <Button
-          className="h-6 rounded-md px-2 text-[0.68rem]"
+          className="min-h-7 max-w-full whitespace-normal rounded-md px-2 text-[length:var(--aino-text-label)] [overflow-wrap:anywhere]"
           onClick={() => {
             if (undoRestoredDraft(readLiveText())) {
               onUndone()
@@ -50,12 +53,12 @@ export function RestoredDraftNotice({ freshDraft, onUndone, readLiveText }: Rest
         </Button>
         <Button
           aria-label={t.common.close}
-          className="h-6 rounded-md px-2 text-[0.68rem]"
+          className="size-7 shrink-0 rounded-md p-0"
           onClick={dismissRestoredDraftNotice}
           type="button"
           variant="ghost"
         >
-          ×
+          <Codicon aria-hidden name="close" size="0.85rem" />
         </Button>
       </div>
     </div>

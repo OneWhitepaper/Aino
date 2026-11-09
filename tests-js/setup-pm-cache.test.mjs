@@ -70,6 +70,7 @@ const cacheUsers = workflow => Object.entries(workflow.jobs)
   .filter(([, job]) => (job.steps ?? []).some(step => step.uses === BUILD_CACHE))
 const targetOf = job => job.strategy.matrix.target.map(row => row.label)
 const desktopLegs = cacheUsers(desktop).filter(([, job]) => job.needs?.includes('validate'))
+const nativeDesktopTargets = ['darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64']
 
 it('standalone candidates can restore dependency inputs but cannot save to the release cache', () => {
   const candidates = cacheUsers(desktop).filter(([, job]) => !job.needs?.includes('validate'))
@@ -100,8 +101,7 @@ const payloadEvents = {
 
 it('finds a release and a commit leg for every native target, and the payload producer', () => {
   const legs = desktopLegs.map(([, job]) => `${targetOf(job)}:${job['cache-mode']}`).sort()
-  const targets = ['darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64']
-  expect(legs).toEqual(targets.flatMap(target => [`${target}:read`, `${target}:write`]).sort())
+  expect(legs).toEqual(nativeDesktopTargets.flatMap(target => [`${target}:read`, `${target}:write`]).sort())
   expect(cacheUsers(payload)).toHaveLength(1)
 })
 
@@ -174,7 +174,7 @@ it.each([
 it('each selection gate joins exactly one target\'s two trust branches after admission', () => {
   const legs = Object.fromEntries(desktopLegs.map(([id, job]) => [id, job]))
   const gates = Object.values(desktop.jobs).filter(job => job.env?.SELECTED_BUILD_SUCCEEDED)
-  expect(gates).toHaveLength(4)
+  expect(gates).toHaveLength(nativeDesktopTargets.length)
   for (const gate of gates) {
     const [admission, ...branches] = gate.needs
     expect(admission).toBe('validate')

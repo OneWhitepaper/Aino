@@ -62,6 +62,11 @@ export function renderRosterDialogs({
           void refetch()
         }}
         onConfigureModel={setEditing}
+        onRefreshRoster={async () => {
+          const result = await refetch({ throwOnError: true })
+
+          return result.data?.profiles ?? []
+        }}
         open={createOpen}
         roster={activeSourceRoster}
       />

@@ -6,10 +6,12 @@ import { expectDownloaded, observeDownloads } from './canonical-download-test-ut
 
 const request = vi.hoisted(() => vi.fn())
 vi.mock('@hermes/plugin-sdk', async () => {
+  const { pluginSdkMock, createGroupGateway } = await import('./group-test-utils')
   const { en } = await import('@/i18n/en')
-  const { Textarea } = await import('@/components/ui/textarea')
+  const { captureGroupRequests } = await import('./canonical-group-contract-test-utils')
+  const gateway = createGroupGateway()
 
-  return { Textarea, atom: (await import('nanostores')).atom, MessageTextContent: undefined, Streamdown: undefined, host: { requestProfile: request }, useI18n: () => ({ locale: 'en', t: en }),
+  return { ...await pluginSdkMock(gateway.host), host: { ...gateway.host, requestProfile: captureGroupRequests(request).request }, useI18n: () => ({ locale: 'en', t: en }),
     Button: (props: ComponentProps<'button'>) => <button {...props} />,
     Codicon: () => <span />, Tip: ({ children }: { children: ReactNode }) => <>{children}</> }
 })
@@ -20,6 +22,7 @@ vi.mock('./canonical-group-labels', async () => {
   return { useCanonicalGroupLabels: () => ({ ...CANONICAL_GROUP_LOCALES.en, refresh: 'Refresh', retry: 'Retry',
     send: 'Send', stop: 'Stop', download: 'Download', discard: 'Discard', cancel: 'Cancel' }) }
 })
+import { CANONICAL_GROUP_CAPABILITIES } from './canonical-group-contract-test-utils'
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
 
 const binding = { connectionId: 'owner-a', profile: 'reviewer', roomId: 'room-one' }
@@ -34,6 +37,8 @@ function setup() {
   let release!: (value: unknown) => void
   const held = new Promise(resolve => { release = resolve })
   request.mockImplementation(async (_route, method) => {
+    if (method === 'groups.capabilities') {return CANONICAL_GROUP_CAPABILITIES}
+
     if (method === 'groups.state') {return { room: { name: 'Room' } }}
 
     if (method === 'groups.log') {return { events: [{ seq: 1, room_id: binding.roomId, event_id: 'committed',
@@ -50,7 +55,7 @@ it('initiates the real user-facing download with exact bytes/name, never the com
   const { observed, cache, release } = setup()
   render(<CanonicalGroupWorkspace binding={binding} />)
   const history = within(screen.getByRole('log'))
-  fireEvent.click(await history.findByRole('button', { name: 'Download' }))
+  fireEvent.click(await history.findByRole('button', { name: /^Download\b/ }))
   await act(async () => release())
   await waitFor(() => expect(observed.downloads).toHaveLength(1), { timeout: 2000 })
   await expectDownloaded(observed, new Uint8Array([65]), attachment.name, attachment.mime)
@@ -63,7 +68,7 @@ it('initiates the real user-facing download with exact bytes/name, never the com
 it.each(['unmount', 'hidden', 'profile', 'connection', 'room'])('does not initiate a late download or cache write after %s', async change => {
   const { observed, cache, release } = setup()
   const view = render(<CanonicalGroupWorkspace binding={binding} />)
-  fireEvent.click(await within(screen.getByRole('log')).findByRole('button', { name: 'Download' }))
+  fireEvent.click(await within(screen.getByRole('log')).findByRole('button', { name: /^Download\b/ }))
   await waitFor(() => expect(request.mock.calls.some(call => call[1] === 'groups.attachment.download')).toBe(true))
 
   if (change === 'unmount') {view.unmount()}

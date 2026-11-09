@@ -3,11 +3,10 @@
  * bot inside Bot Mode. Owner keys are opaque exact strings supplied by callers;
  * this module never parses profile names or infers connections.
  *
- * This is a SIGNAL, not a filter: consumers adapt to it — the `+` routes a new
- * session at the selected bot's profile — but nothing here decides whether a
- * pane renders. Scoping panes by workspace is how the main zone came to vanish
- * when Bot Mode's last chat closed; bot chats are ordinary tabs in the main
- * strip, beside session tabs.
+ * Conversation navigation follows this scope without closing its retained
+ * panes. Tools remain shared; a main workspace with no matching conversation
+ * keeps its primary draft as a fallback, so closing the last bot never strands
+ * the window behind an empty main zone.
  *
  * No persistence here by design: the remembered active-pane map is window-local
  * memory so a switch away and back can restore where the user was, without any
@@ -20,6 +19,12 @@ import type { WorkspaceMode } from '../../contrib/types'
 
 /** Re-exported so workspace consumers can import it from here. */
 export type { WorkspaceMode } from '../../contrib/types'
+
+/** Presentation ownership; backend connection/profile authority stays on the session. */
+export interface WorkspacePaneScope {
+  mode: WorkspaceMode
+  ownerKey?: string | null
+}
 
 /** Default workspace mode when the host has not switched surfaces. */
 export const $workspaceMode = atom<WorkspaceMode>('sessions')

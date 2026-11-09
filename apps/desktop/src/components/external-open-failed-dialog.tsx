@@ -41,18 +41,28 @@ export function ExternalOpenFailedDialog() {
 
   return (
     <Dialog onOpenChange={open => (!open ? setFailure(null) : undefined)} open={Boolean(failure)}>
-      <DialogContent className="max-w-[30rem]" showCloseButton={false}>
+      <DialogContent
+        className="max-w-[30rem]"
+        footer={
+          <DialogFooter>
+            {failure ? <CopyButton text={failure.url}>{copy.copyUrl}</CopyButton> : null}
+            <Button onClick={() => setFailure(null)} type="button" variant="ghost">
+              {copy.close}
+            </Button>
+          </DialogFooter>
+        }
+        showCloseButton={false}
+      >
         <DialogHeader>
           <DialogTitle>{header.title}</DialogTitle>
           <DialogDescription>{header.message}</DialogDescription>
         </DialogHeader>
-        <div className="max-h-40 overflow-auto break-all rounded-md border bg-muted p-3 select-all">{failure?.url}</div>
-        <DialogFooter>
-          {failure ? <CopyButton text={failure.url}>{copy.copyUrl}</CopyButton> : null}
-          <Button onClick={() => setFailure(null)} variant="ghost">
-            {copy.close}
-          </Button>
-        </DialogFooter>
+        <div
+          className="min-w-0 whitespace-pre-wrap rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) p-3 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) select-all [overflow-wrap:anywhere]"
+          data-selectable-text="true"
+        >
+          {failure?.url}
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -192,7 +192,7 @@ function ConnectedProviderRow({
   const showHint = !canDisconnect && !terminalDisconnect
 
   return (
-    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-[6px] transition-colors hover:bg-(--ui-control-hover-background)">
+    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-(--aino-radius-control) transition-colors hover:bg-(--ui-control-hover-background)">
       <RowButton
         className="min-w-0 px-3 py-2.5 text-left"
         onClick={() => (terminalDisconnect ? onTerminalDisconnect(provider) : onSelect(provider))}
@@ -206,7 +206,7 @@ function ConnectedProviderRow({
         </div>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{t.onboarding.flowSubtitles[provider.flow]}</p>
         {showHint && (
-          <p className="mt-0.5 truncate text-[0.68rem] leading-5 text-muted-foreground/70">
+          <p className="mt-0.5 truncate text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)">
             {provider.flow === 'external' ? copy.removeExternalGeneric(title) : copy.removeKeyManaged(title)}
           </p>
         )}

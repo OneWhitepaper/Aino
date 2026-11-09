@@ -16,21 +16,7 @@ import type { MessageReaction } from '@/types/hermes'
 // should never phone a CDN to draw a picker.
 const EMOJIBASE_URL = './emojibase'
 
-// Slack tints its picker cells in a repeating palette (green, blue, yellow,
-// pink, brown, purple…) so long scrolls stay scannable. Same trick, in the
-// app's own accent idiom (bg-emerald-500/15 etc. are existing patterns).
-// Keyed off the emoji's codepoint — deterministic, and stable under
-// frimousse's virtualized rows (an index cycle would reshuffle on scroll).
-const CELL_TINTS = [
-  'hover:bg-emerald-500/15 data-[active]:bg-emerald-500/20',
-  'hover:bg-sky-500/15 data-[active]:bg-sky-500/20',
-  'hover:bg-amber-500/15 data-[active]:bg-amber-500/20',
-  'hover:bg-pink-500/15 data-[active]:bg-pink-500/20',
-  'hover:bg-orange-500/15 data-[active]:bg-orange-500/20',
-  'hover:bg-violet-500/15 data-[active]:bg-violet-500/20'
-] as const
-
-const cellTint = (emoji: string) => CELL_TINTS[(emoji.codePointAt(0) ?? 0) % CELL_TINTS.length]
+const CELL_HOVER_CLASS = 'hover:bg-(--ui-control-hover-background) data-[active]:bg-(--ui-control-active-background)'
 
 /** The full emoji picker, revealed behind the quick row's "+". Headless — styled here. */
 const FullEmojiPicker: FC<{ onSelect: (emoji: string) => void }> = ({ onSelect }) => {
@@ -47,7 +33,7 @@ const FullEmojiPicker: FC<{ onSelect: (emoji: string) => void }> = ({ onSelect }
           ("lol" → 😂), which frimousse handles natively. */}
       <EmojiPicker.Search
         autoFocus
-        className="mx-1 border-b border-(--ui-stroke-tertiary) bg-transparent px-1 pb-1 text-sm outline-hidden focus:border-(--ui-stroke-secondary)"
+        className="mx-1 border-b border-(--ui-stroke-tertiary) bg-transparent px-1 pb-1 text-sm focus:outline-hidden focus:border-(--ui-stroke-secondary)"
         placeholder={t.assistant.thread.emojiSearch}
       />
       <EmojiPicker.Viewport className="relative flex-1 outline-hidden">
@@ -62,7 +48,7 @@ const FullEmojiPicker: FC<{ onSelect: (emoji: string) => void }> = ({ onSelect }
           components={{
             CategoryHeader: ({ category, ...props }) => (
               <div
-                className="bg-(--ui-bg-elevated) px-1.5 pt-2 pb-1 text-[0.6875rem] text-(--ui-text-tertiary)"
+                className="bg-(--ui-bg-elevated) px-1.5 pt-2 pb-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
                 {...props}
               >
                 {category.label}
@@ -70,7 +56,7 @@ const FullEmojiPicker: FC<{ onSelect: (emoji: string) => void }> = ({ onSelect }
             ),
             Emoji: ({ emoji, ...props }) => (
               <button
-                className={cn('grid size-8 shrink-0 place-items-center rounded-md text-lg', cellTint(emoji.emoji))}
+                className={cn('grid size-8 shrink-0 place-items-center rounded-md text-lg', CELL_HOVER_CLASS)}
                 {...props}
               >
                 {emoji.emoji}
@@ -184,7 +170,7 @@ export const ReactionBadge: FC<{
 
   return (
     <span
-      className={cn('flex items-center gap-1 text-[0.8125rem] leading-none', className)}
+      className={cn('flex items-center gap-1 text-[length:var(--aino-text-label)] leading-none', className)}
       data-slot="aui_msg-reactions"
     >
       {reactions.map(reaction =>

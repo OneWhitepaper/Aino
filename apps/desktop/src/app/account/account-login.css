@@ -62,7 +62,7 @@
   background: var(--ui-bg-quaternary);
   box-shadow: none;
   text-align: center;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   line-height: 21px;
 }
 .aino-account-login .aino-account-input:focus {
@@ -75,7 +75,7 @@
 .aino-account-login .aino-account-code {
   height: 48px;
   font-size: 20px;
-  font-family: var(--dt-font-mono);
+  font-family: var(--font-mono);
   letter-spacing: 0;
   text-align: center;
 }
@@ -85,7 +85,7 @@
   padding: 9px 12px;
   margin-top: 14px;
   border-radius: var(--aino-radius-control);
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   line-height: 1.375rem;
   font-weight: 600;
   letter-spacing: 0;
@@ -95,7 +95,7 @@
   align-items: flex-start;
   gap: 6px;
   margin-top: 16px;
-  font-size: 12px;
+  font-size: var(--aino-text-caption);
   line-height: 18px;
   color: var(--ui-text-tertiary);
 }
@@ -108,18 +108,15 @@
   flex-shrink: 0;
   width: 15px;
   height: 15px;
-  border-radius: 7.5px;
+  border-radius: var(--aino-radius-control);
   margin-top: 1.5px;
 }
 .aino-account-login .aino-account-switch {
   margin-top: 18px;
-  font-size: 13px;
+  font-size: var(--aino-text-ui);
   line-height: 19.5px;
   font-weight: 400;
   color: var(--ui-text-tertiary);
-}
-.aino-account-login .aino-account-switch-compact {
-  margin-top: 8px;
 }
 .aino-account-remember {
   display: flex;
@@ -128,12 +125,12 @@
   gap: 8px;
   margin-top: 14px;
   color: var(--ui-text-tertiary);
-  font-size: 12px;
+  font-size: var(--aino-text-caption);
   line-height: 18px;
 }
 .aino-account-recipient {
   margin-bottom: 20px;
-  font-size: 13px;
+  font-size: var(--aino-text-ui);
   line-height: 19.5px;
   text-align: center;
   overflow-wrap: anywhere;
@@ -145,19 +142,19 @@
 }
 .aino-account-login .aino-account-resend {
   margin-top: 16px;
-  font-size: 13px;
+  font-size: var(--aino-text-ui);
   line-height: 19.5px;
   font-weight: 400;
 }
 .aino-account-login .aino-account-back {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--aino-text-caption);
   line-height: 18px;
   font-weight: 400;
 }
 .aino-account-wechat-title {
   margin-bottom: 24px;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   color: var(--ui-text-tertiary);
 }
 .aino-account-wechat-unavailable {
@@ -172,4 +169,45 @@
   line-height: 1.6;
   background: var(--ui-bg-quaternary);
   color: var(--ui-text-tertiary);
+}
+
+/* Login layout stays intact; only optional guidance is progressively disclosed. */
+.aino-account-login-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 12px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 18px;
+  text-align: center;
+}
+.aino-account-login-note p {
+  min-width: 0;
+}
+.aino-account-login-note button {
+  color: inherit;
+}
+.aino-account-login-help {
+  width: 260px;
+  padding: 12px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+
+/* Secondary sign-in links share one row instead of extending the form vertically. */
+.aino-account-login-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 18px;
+}
+.aino-account-login .aino-account-login-actions .aino-account-switch {
+  margin-top: 0;
+  color: var(--ui-text-secondary);
 }

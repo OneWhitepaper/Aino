@@ -1,3 +1,4 @@
+import { atom } from '@hermes/plugin-sdk'
 /**
  * The window-local state a group-chat room needs but never renders: the
  * per-composer drafts, and the registry of MAIN-window tabs a room is open in.
@@ -7,11 +8,13 @@
  * tab without any of those paths importing a view.
  */
 
-import { atom } from '@hermes/plugin-sdk'
-
+import type { CanonicalGroupAttachment } from './canonical-group-attachments'
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
+import type { CanonicalRoomMember } from './canonical-groups'
+import type { CanonicalGroupBinding, CanonicalGroupRoute } from './canonical-groups'
 import { $groupChatWorkspace, groupChatRoomKey } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
+import { ID } from './shared'
 import type { Attachment } from './types'
 
 // Group composer drafts are window-local UI state. They must survive pane
@@ -19,15 +22,28 @@ import type { Attachment } from './types'
 // metadata (where another Desktop would see half-typed text or attachment
 // bytes). Current rooms key by immutable roomId; legacy rooms fall back to the
 // display name until they are upgraded.
+export interface CanonicalDraftReply { member?: CanonicalRoomMember; name: string; quote: string; thread?: string }
+export interface CanonicalHeldDraft { text: string; attachments: CanonicalGroupAttachment[]; reply: CanonicalDraftReply | null }
 export interface GroupComposerDraft {
+  canonicalReply?: CanonicalDraftReply | null
+  canonicalHeld?: CanonicalHeldDraft | null
   activeReplyThread: null | string
   main: string
+  /** Gateway upload manifests stay local until this room explicitly sends. */
+  canonicalAttachments?: CanonicalGroupAttachment[]
   /** Keyed by thread id; the main composer parks under 'main'. */
   pendingAttachments: Record<string, Attachment[]>
   replies: Record<string, string>
   revision: number
 }
 const groupComposerDrafts = new Map<string, GroupComposerDraft | undefined>()
+/** One lifetime for the existing draft cache; account changes invalidate warm panes too. */
+export const $groupComposerDraftEpoch = atom(0)
+
+export function clearGroupComposerDrafts(): void {
+  groupComposerDrafts.clear()
+  $groupComposerDraftEpoch.set($groupComposerDraftEpoch.get() + 1)
+}
 
 function emptyGroupComposerDraft(): GroupComposerDraft {
   return {
@@ -40,7 +56,11 @@ function emptyGroupComposerDraft(): GroupComposerDraft {
 }
 
 export function groupComposerDraftKey(group: string, room: GroupChatRoom): string {
-  return groupChatRoomKey(group, room)
+  return JSON.stringify([$groupComposerDraftEpoch.get(), groupChatRoomKey(group, room)])
+}
+
+export function canonicalGroupComposerDraftKey(binding: CanonicalGroupBinding): string {
+  return JSON.stringify(['canonical', $groupComposerDraftEpoch.get(), binding.connectionId, binding.profile, binding.roomId])
 }
 
 export function groupComposerDraftSnapshot(key: string): GroupComposerDraft {
@@ -130,25 +150,64 @@ export const $groupMainTabsRev = atom(0)
 /** The origin each group string was last opened with (see CanonicalGroupOrigin),
  *  so the in-panel fallback renders the selected group the way it was opened.
  *  Unknown strings are names: a name never parses as a `canonical:` key. */
-const groupOpenOrigins = new Map<string, CanonicalGroupOrigin>()
+interface GroupOpenContext {
+  origin: CanonicalGroupOrigin
+  route?: CanonicalGroupRoute
+  paneId?: string
+  ownerKey?: string
+  views?: Map<string, { route?: CanonicalGroupRoute; close: () => void }>
+}
+const groupOpenOrigins = new Map<string, GroupOpenContext>()
 
-export function recordGroupOpenOrigin(group: string, origin: CanonicalGroupOrigin) {
-  groupOpenOrigins.set(group, origin)
+export function recordGroupOpenOrigin(group: string, origin: CanonicalGroupOrigin, context: Pick<GroupOpenContext, 'route' | 'paneId' | 'ownerKey'> = {}) {
+  const opened = { origin, ...context, views: groupOpenOrigins.get(group)?.views, ...(context.route ? { route: { ...context.route } } : {}) }
+  groupOpenOrigins.set(group, opened)
 }
 
 export function groupOpenOrigin(group: string): CanonicalGroupOrigin {
-  return groupOpenOrigins.get(group) ?? 'name'
+  return groupOpenOrigins.get(group)?.origin ?? 'name'
 }
 
-export function recordGroupMainTab(group: string, close: () => void) {
+export const groupOpenRoute = (group: string) => groupOpenOrigins.get(group)?.route
+export const groupOpenOwnerKey = (group: string) => groupOpenOrigins.get(group)?.ownerKey
+export const groupWorkspacePaneId = (group: string) =>
+  groupOpenOrigins.get(group)?.paneId ?? `plugin-workspace:${ID}:group:${encodeURIComponent(group)}`
+
+/** Include parked same-name views without closing the other source's current selection. */
+export function closeGroupMainViews(group: string, route: CanonicalGroupRoute): void {
+  for (const view of [...(groupOpenOrigins.get(group)?.views?.values() ?? [])]) {
+    if (view.route?.connectionId === route.connectionId && view.route.profile === route.profile) {view.close()}
+  }
+}
+
+export function recordGroupMainTab(group: string, close: () => void, paneId?: string) {
   groupChatMainTabs.set(group, close)
+  const opened = groupOpenOrigins.get(group)
+
+  if (paneId && opened) {
+    opened.views ??= new Map()
+    opened.views.set(paneId, { route: opened.route, close })
+  }
+
   $groupMainTabsRev.set($groupMainTabsRev.get() + 1)
 }
 
-export function dropGroupMainTab(group: string) {
-  if (groupChatMainTabs.delete(group)) {
+export function dropGroupMainTab(group: string, expected?: () => void): boolean {
+  const selected = expected ? groupChatMainTabs.get(group) === expected : groupChatMainTabs.has(group)
+  const views = groupOpenOrigins.get(group)?.views
+
+  if (expected && views) {
+    for (const [id, view] of views) {
+      if (view.close === expected) {views.delete(id)}
+    }
+  }
+
+  if (selected) {
+    groupChatMainTabs.delete(group)
     $groupMainTabsRev.set($groupMainTabsRev.get() + 1)
   }
+
+  return selected
 }
 
 /** The in-panel room is the FALLBACK surface, not a second copy: it renders

@@ -10,6 +10,13 @@ def build_model_parser(subparsers, *, cmd_model: Callable) -> None:
     model_parser = subparsers.add_parser(
         "model", help="Select default model and provider",
         description="Interactively select your inference provider and default model")
+    conversation = model_parser.add_mutually_exclusive_group()
+    conversation.add_argument('--list', dest='list_models', action='store_true',
+                              help='List models actually available to the current desktop conversation')
+    conversation.add_argument('--set', dest='set_model', metavar='MODEL',
+                              help='Select an available model for this conversation, from the next message')
+    model_parser.add_argument('--json', action='store_true', help='Print the conversation model result as JSON')
+    model_parser.add_argument('--provider', help='Use the provider from the available-model listing (aino for built-in models)')
     model_parser.add_argument(
         "--refresh", action="store_true",
         help="Wipe the model picker disk cache and re-fetch every provider's live /v1/models list.")

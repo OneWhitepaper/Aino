@@ -170,7 +170,8 @@ export function useCapabilityScope({
   return {
     canReloadActiveScope:
       (scopeConnectionId === null || scopeConnectionId === (activeGatewayConnectionId() ?? 'local')) &&
-      normalizeProfileKey(typeof scopeProfile === 'object' && scopeProfile ? scopeProfile.profile : scopeProfile) === normalizeProfileKey(activeProfile),
+      normalizeProfileKey(typeof scopeProfile === 'object' && scopeProfile ? scopeProfile.profile : scopeProfile) ===
+        normalizeProfileKey(activeProfile),
     crossBackend: scopeConnectionId !== null && scopeConnectionId !== (activeGatewayConnectionId() ?? 'local'),
     key: scopeKey,
     label: options.find(option => option.value === value)?.label,
@@ -209,7 +210,9 @@ export function CapabilityScopeSelector({
       )}
     >
       {!compact && (
-        <span className="text-[0.7rem] font-medium text-(--ui-text-tertiary)">{t.skills.configuringProfile}</span>
+        <span className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
+          {t.skills.configuringProfile}
+        </span>
       )}
       <Select onValueChange={scope.onChange} value={scope.value}>
         <SelectTrigger className={cn('text-xs', compact ? 'h-6 min-w-0 w-full px-2 truncate' : 'h-7 w-56')}>

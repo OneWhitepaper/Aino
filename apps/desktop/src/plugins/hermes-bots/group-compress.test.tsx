@@ -19,32 +19,16 @@ vi.mock('@hermes/plugin-sdk', async () => {
   const base = await pluginSdkMock(host)
   const Passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
 
-  const Button = ({
-    children,
-    disabled,
-    onClick,
-    'aria-label': label
-  }: {
-    'aria-label'?: string
-    children?: ReactNode
-    disabled?: boolean
-    onClick?: () => void
-  }) => (
-    <button aria-label={label} disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  )
-
   return {
     ...base,
-    Button,
-    RowButton: Button,
+    Button: base.Button,
+    RowButton: base.RowButton,
     cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
     Codicon: () => null,
     CopyButton: () => null,
     ToggleRow: () => null,
     ConfirmDialog: () => null,
-    Dialog: Passthrough,
+    Dialog: ({ children, open }: { children?: ReactNode; open?: boolean }) => open ? <>{children}</> : null,
     DialogContent: Passthrough,
     DialogDescription: Passthrough,
     DialogFooter: Passthrough,
@@ -127,21 +111,41 @@ it('compressGroupMemberHistory resumes each stored session for the member and co
 
 it('the room settings dialog offers Compress history per member and reports the result', async () => {
   Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+  Element.prototype.releasePointerCapture = vi.fn()
   const { $groupChats } = await import('./group-chat')
   const { GroupChatWorkspace } = await import('./group-chat-view')
   const mason = await seedMemberSession('mason', 'Group: room-1 · t1')
   $groupChats.set({ Build: { log: [], roomId: 'room-1', sessions: { 'thread:t1::mason': mason }, watermarks: {} } })
   const members = [{ name: 'mason' }, { name: 'critic' }] as never
 
-  const { getByLabelText } = render(<GroupChatWorkspace group="Build" members={members} />)
-  // The room paints once the async group-driver gate resolves to the legacy workspace.
-  await waitFor(() => expect(getByLabelText('Group settings for Build')).toBeTruthy())
-  fireEvent.click(getByLabelText('Group settings for Build'))
-  fireEvent.click(getByLabelText('Compress history: mason'))
+  const { findByRole, getByLabelText, getByRole, queryByLabelText } = render(<GroupChatWorkspace group="Build" members={members} />)
+  // The same named management entrance remains the door to the retained repair.
+  const groupInfo = await findByRole('button', { name: 'Group info' })
+  expect(queryByLabelText('Compress history: Mason')).toBeNull()
+  fireEvent.pointerDown(groupInfo, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  fireEvent.click(getByRole('menuitem', { name: 'Group settings' }))
+  fireEvent.click(getByLabelText('Compress history: Mason'))
 
   await waitFor(() => expect(state.gateway!.rpcFor('session.compress')).toHaveLength(1))
   const notify = state.gateway!.host.notify as ReturnType<typeof vi.fn>
   await waitFor(() => expect(notify).toHaveBeenCalled())
   // Only mason's session was touched — critic never had one and none was created.
   expect(state.gateway!.rpcFor('session.create')).toHaveLength(0)
+})
+
+it('labels the per-member repair with that connection current readable name', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { $botMeta } = await import('./data')
+  const { GroupChatWorkspace } = await import('./group-chat-view')
+  const profile = 'u6d4b-u8bd5'
+  $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
+  const members = [{ name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }]
+  const view = render(<GroupChatWorkspace group="Repair" members={members} />)
+  fireEvent.pointerDown(await view.findByRole('button', { name: 'Group info' }), { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  fireEvent.click(view.getByRole('menuitem', { name: 'Group settings' }))
+
+  expect(view.getByRole('button', { name: 'Compress history: 工作室测试助手' })).toBeTruthy()
+  expect(view.queryByRole('button', { name: `Compress history: ${profile}` })).toBeNull()
+  expect(view.queryByRole('button', { name: 'Compress history: 另一连接的助手' })).toBeNull()
 })

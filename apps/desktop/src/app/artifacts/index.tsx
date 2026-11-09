@@ -384,7 +384,7 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
                     total={visibleFileArtifacts.length}
                   />
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background)">
+                <div className="overflow-x-auto rounded-(--aino-radius-card) border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background)">
                   <ArtifactTable artifacts={pagedFileArtifacts} ctx={cellCtx} filter={kindFilter} />
                 </div>
               </section>
@@ -485,7 +485,7 @@ function ArtifactImageCard({ artifact, failedImage, onImageError, onOpenChat }: 
 
   return (
     <article
-      className="group/artifact overflow-hidden rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background)"
+      className="group/artifact overflow-hidden rounded-(--aino-radius-card) border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background)"
       data-tour="artifact-card"
     >
       <div
@@ -510,14 +510,16 @@ function ArtifactImageCard({ artifact, failedImage, onImageError, onOpenChat }: 
 
       <div className="space-y-1.5 p-2">
         <div className="min-w-0">
-          <div className="mb-0.5 flex items-center gap-1 text-[length:var(--aino-text-caption)] uppercase tracking-[0.08em] text-(--ui-text-tertiary)">
+          <div className="mb-0.5 flex items-center gap-1 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
             <FileImage className="size-3" />
             {kindLabel}
           </div>
           <div className="truncate text-[length:var(--conversation-caption-font-size)] font-medium">
             {artifact.label}
           </div>
-          <div className="mt-0.5 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{artifact.value}</div>
+          <div className="mt-0.5 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+            {artifact.value}
+          </div>
         </div>
 
         <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
@@ -682,7 +684,7 @@ function ArtifactTable({
       className="w-full min-w-176 table-fixed text-left text-[length:var(--conversation-caption-font-size)]"
       data-slot="aino-data-table"
     >
-      <thead className="border-b border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) text-[length:var(--aino-text-caption)] uppercase tracking-[0.08em] text-(--ui-text-tertiary)">
+      <thead className="border-b border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
         <tr>
           {ARTIFACT_COLUMNS.map(col => (
             <th className={cn(col.width(filter), 'px-2.5 py-1.5 font-medium')} key={col.id}>

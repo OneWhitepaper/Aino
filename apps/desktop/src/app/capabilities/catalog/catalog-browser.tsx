@@ -275,11 +275,11 @@ function CatalogFilteredCards({
   onMore
 }: {
   entries: CatalogEntry[]
-  card: (entry: CatalogEntry, accentIndex: number) => ReactNode
+  card: (entry: CatalogEntry) => ReactNode
   more: boolean
   onMore: () => void
 }) {
-  const cards = entries.map((entry, index) => card(entry, index))
+  const cards = entries.map(entry => card(entry))
 
   return (
     <div className="catalog-filtered-results pt-(--capabilities-gap-lead) pb-2">
@@ -364,7 +364,7 @@ interface CatalogResultsProps {
   discover: boolean
   actions?: ReactNode
   facets: CatalogFacets
-  card: (entry: CatalogEntry, index: number, variant?: CatalogCardVariant, placement?: React.CSSProperties) => ReactNode
+  card: (entry: CatalogEntry, variant?: CatalogCardVariant, placement?: React.CSSProperties) => ReactNode
   onCategory: (category: string) => void
   sortControl: ReactNode
 }
@@ -405,9 +405,8 @@ function CatalogResults({
     <div className="h-full min-h-0" data-catalog-list={kind}>
       <MasterDetail resizeId="capabilities-split" split="wide">
         <ListColumn>
-          {filtered.slice(0, limit).map((entry, index) => (
+          {filtered.slice(0, limit).map(entry => (
             <CatalogListRow
-              accentIndex={index}
               action={entryAction(entry)}
               entry={entry}
               key={entry.id}
@@ -457,9 +456,8 @@ function CatalogResults({
         </div>
       ) : (
         <div className="catalog-list" data-catalog-list={kind}>
-          {filtered.slice(0, limit).map((entry, index) => (
+          {filtered.slice(0, limit).map(entry => (
             <CatalogListRow
-              accentIndex={index}
               action={entryAction(entry)}
               entry={entry}
               key={entry.id}
@@ -579,14 +577,8 @@ export const CatalogBrowser = memo(function CatalogBrowser({
       />
     )
 
-  const card = (
-    entry: CatalogEntry,
-    accentIndex: number,
-    variant: CatalogCardVariant = 'default',
-    placement?: React.CSSProperties
-  ) => (
+  const card = (entry: CatalogEntry, variant: CatalogCardVariant = 'default', placement?: React.CSSProperties) => (
     <CatalogCard
-      accentIndex={accentIndex}
       action={entryAction(entry, variant === 'hero')}
       entry={entry}
       key={entry.id}

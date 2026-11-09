@@ -11,6 +11,7 @@ import { openWorktreeDialog } from '@/store/coding-status'
 import { copyPath, revealPath } from '@/store/projects'
 
 import {
+  SIDEBAR_FOCUS_VISIBLE,
   SIDEBAR_LEAD_ICON_SIZE,
   SidebarRowBody,
   SidebarRowLabel,
@@ -58,7 +59,10 @@ export function WorkspaceAddButton({ icon, label, onClick, onPointerDown }: Work
     <Tip label={label}>
       <button
         aria-label={label}
-        className="grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 focus-visible:opacity-100"
+        className={cn(
+          'grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100',
+          SIDEBAR_FOCUS_VISIBLE
+        )}
         onClick={onClick}
         onPointerDown={onPointerDown}
         type="button"
@@ -180,7 +184,10 @@ export function WorkspaceMenu({ path, onRemove }: { path: null | string; onRemov
     <ActionsMenu ariaLabel={p.menu} contentClassName="w-48" items={items}>
       <button
         aria-label={p.menu}
-        className="grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-quaternary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/workspace:opacity-100 data-[state=open]:opacity-100"
+        className={cn(
+          'grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-quaternary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+          SIDEBAR_FOCUS_VISIBLE
+        )}
         onClick={event => event.stopPropagation()}
         type="button"
       >
@@ -229,7 +236,10 @@ export function StartWorkButton({
     <Tip label={p.startWork}>
       <button
         aria-label={p.startWork}
-        className="grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-quaternary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/section:opacity-100 focus-visible:opacity-100"
+        className={cn(
+          'grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-quaternary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground group-hover/section:opacity-100 focus-visible:opacity-100',
+          SIDEBAR_FOCUS_VISIBLE
+        )}
         // Publish the intent. The one WorktreeDialog in the sidebar renders it.
         // This button pins its own repo, so it targets this section.
         // Another gateway's project: the worktree is cut on that machine.
@@ -267,15 +277,17 @@ export function WorkspaceHeader({
   return (
     <div
       className={cn(
-        'group/workspace flex min-h-6 items-center gap-1 px-2 pt-1 text-[0.6875rem]',
+        'group/workspace flex min-h-6 items-center gap-1 px-2 pt-1 text-[length:var(--aino-text-caption)]',
         emphasis ? 'font-semibold text-(--ui-text-secondary)' : 'font-medium text-(--ui-text-tertiary)'
       )}
       ref={ref}
       {...rest}
     >
       <button
+        aria-expanded={open}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-1.5 bg-transparent text-left',
+          'flex min-w-0 flex-1 items-center gap-1.5 rounded-sm bg-transparent text-left',
+          SIDEBAR_FOCUS_VISIBLE,
           emphasis ? 'hover:text-foreground' : 'hover:text-(--ui-text-secondary)'
         )}
         onClick={onToggle}
@@ -284,7 +296,7 @@ export function WorkspaceHeader({
         <SidebarRowLead>{icon}</SidebarRowLead>
         <LaneLabel label={label} title={title ? `${label}\n${title}` : label} />
         <DisclosureCaret
-          className="shrink-0 text-(--ui-text-tertiary) opacity-0 transition group-hover/workspace:opacity-100"
+          className="shrink-0 text-(--ui-text-tertiary) opacity-0 transition group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100"
           open={open}
         />
       </button>

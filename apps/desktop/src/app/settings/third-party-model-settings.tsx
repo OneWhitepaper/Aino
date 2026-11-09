@@ -3,7 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { $apiRequestScope, type ProfileScope, profileScopeKey } from '@/api/client'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getEnvVars, getGlobalModelOptions } from '@/hermes'
@@ -130,18 +132,22 @@ function ProviderConnectionForm({ scope, providerId, onConfigSaved }: ProviderCo
 
   if (loadError) {
     return (
-      <div className="grid gap-3" role="alert">
-        <p className="text-sm text-destructive">{readableError(loadError, copy.saveFailed).message}</p>
-        <Button
-          onClick={() => {
-            void catalog.refetch()
-            void credentials.refetch()
-          }}
-          variant="outline"
-        >
-          {t.common.retry}
-        </Button>
-      </div>
+      <Alert variant="destructive">
+        <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
+        <AlertDescription>
+          <p>{readableError(loadError, copy.saveFailed).message}</p>
+          <Button
+            className="max-w-full whitespace-normal text-left"
+            onClick={() => {
+              void catalog.refetch()
+              void credentials.refetch()
+            }}
+            variant="outline"
+          >
+            {t.common.retry}
+          </Button>
+        </AlertDescription>
+      </Alert>
     )
   }
 
@@ -201,14 +207,16 @@ function ProviderConnectionForm({ scope, providerId, onConfigSaved }: ProviderCo
         </label>
       )}
       {error && (
-        <p className="text-[length:var(--aino-text-label)] text-destructive" role="alert">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {resultCount !== null && (
-        <p aria-live="polite" className="text-[length:var(--aino-text-label)] text-(--ui-text-secondary)" role="status">
-          {resultCount ? copy.modelsReady(resultCount) : copy.noModels}
-        </p>
+        <Alert aria-live="polite" role="status" variant={resultCount ? 'success' : 'default'}>
+          <Codicon aria-hidden className="mt-0.5 text-(--ui-text-secondary)" name={resultCount ? 'check' : 'info'} />
+          <AlertDescription>{resultCount ? copy.modelsReady(resultCount) : copy.noModels}</AlertDescription>
+        </Alert>
       )}
       <ProviderConnectionSubmit apiKey={key} busy={busy} onConnect={() => void connect()} provider={selected} />
     </div>

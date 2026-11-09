@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 
+import { translateNow } from '@/i18n'
 import { setRuntimeI18nLocale } from '@/i18n'
 
 import {
@@ -109,7 +110,9 @@ test('sanitizes command-shaped maintenance detail before it reaches a desktop ca
   )
   expect(sanitizeNoticeDetail('$ hermes /autoprune\n/autoprune')).toBeUndefined()
   expect(sanitizeNoticeDetail("Hermes couldn't save the session data.")).toBe("Hermes couldn't save the session data.")
-  expect(noticeToToast({ text: '⚠ 磁盘空间不足', detail: '$ hermes /autoprune\n/autoprune' })?.detail).toBeUndefined()
+  expect(noticeToToast({ text: '⚠ 磁盘空间不足', detail: '$ hermes /autoprune\n/autoprune' })?.detail).toBe(
+    '$ hermes /autoprune\n/autoprune'
+  )
 })
 
 test('the backend low-disk notice offers Maintenance without exposing terminal instructions', () => {
@@ -130,13 +133,14 @@ test('the backend low-disk notice offers Maintenance without exposing terminal i
 
   expect(toast).toMatchObject({
     id: 'sessions.auto_prune',
-    message: 'Low disk (0.5 GB free)',
+    message: translateNow('notificationCenter.diskBody'),
+    title: translateNow('notificationCenter.diskTitle'),
     kind: 'warning',
     durationMs: 0
   })
   expect(toast?.meta).toBeUndefined()
   expect(toast?.detail).toContain('Something else is filling this disk.')
-  expect(toast?.detail).not.toMatch(/autoprune|hermes sessions optimize/)
+  expect(toast?.detail).toContain('/autoprune later')
   expect(toast?.action).toBeDefined()
   toast?.action?.onClick()
   expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')

@@ -8,7 +8,7 @@
   border-radius: 0.6875rem;
   background: var(--ui-chat-surface-background);
   color: var(--ui-text-primary);
-  font-family: var(--dt-font-sans);
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   line-height: 1.6;
 }
@@ -132,7 +132,7 @@
   border-radius: 0.3125rem;
   background: var(--ui-bg-quinary);
   color: var(--ui-text-tertiary);
-  font-family: var(--dt-font-mono);
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.6;
   white-space: pre-wrap;

@@ -99,7 +99,7 @@ describe('AccountLoginCard', () => {
 
     vi.stubGlobal('hermesDesktop', { openExternal })
     const { props, rerender } = renderCard({ onRequestPhoneCode: vi.fn().mockResolvedValue(null) })
-    expect(screen.getByText('未注册的手机号验证成功后将自动注册。')).toBeTruthy()
+    expect(screen.getByText('未注册手机号验证后自动注册。')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '注册账户' }))
     await screen.findByLabelText('邮箱')
     expect(openExternal).toHaveBeenCalledWith('https://accounts.example.test/register')
@@ -152,8 +152,9 @@ describe('AccountLoginCard', () => {
     })
 
     expect(screen.getByText('注册暂未开放。')).toBeTruthy()
-    expect(screen.getByText('手机号登录暂未开放，请使用已有账户登录。')).toBeTruthy()
-    expect(screen.queryByText('未注册的手机号验证成功后将自动注册。')).toBeNull()
+    expect(screen.getByLabelText('邮箱')).toBeTruthy()
+    expect(screen.queryByLabelText('手机号')).toBeNull()
+    expect(screen.queryByText('未注册手机号验证后自动注册。')).toBeNull()
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '注册账户' }).disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '注册账户' }))
     expect(openExternal).not.toHaveBeenCalled()
@@ -164,7 +165,7 @@ describe('AccountLoginCard', () => {
       </I18nProvider>
     )
     expect(screen.queryByRole('button', { name: '注册账户' })).toBeNull()
-    expect(screen.queryByText('未注册的手机号验证成功后将自动注册。')).toBeNull()
+    expect(screen.queryByText('未注册手机号验证后自动注册。')).toBeNull()
   })
 
   it('starts with the phone flow and does not require an email address', () => {
@@ -277,5 +278,17 @@ describe('AccountLoginCard', () => {
 
     expect(screen.getByText('微信登录')).toBeTruthy()
     expect(screen.getByText('微信登录暂未开放。')).toBeTruthy()
+  })
+
+  it('keeps account-linking guidance out of the form until login help is requested', async () => {
+    renderCard()
+    const guidance = TRANSLATIONS.zh.settings.account.existingAccountPhoneHint
+    expect(screen.getByText('未注册手机号验证后自动注册。')).toBeTruthy()
+    expect(screen.queryByText(guidance)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: TRANSLATIONS.zh.settings.account.loginHelp }))
+    expect(await screen.findByText(guidance)).toBeTruthy()
+    expect(screen.getByLabelText('手机号')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '发送验证码' })).toBeTruthy()
   })
 })

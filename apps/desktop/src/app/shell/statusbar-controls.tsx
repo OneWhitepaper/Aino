@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, memo, type ReactNode, useMemo, useState } from 'react'
+import { type ComponentProps, createContext, memo, type ReactNode, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import {
@@ -28,7 +28,19 @@ import {
 // Shared chrome styling for interactive statusbar items (button / link / menu
 // trigger). The 'text' variant intentionally omits hover/transition/disabled.
 const STATUSBAR_ACTION_CLASS =
-  'inline-flex h-full items-center gap-1 rounded-none px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45'
+  'inline-flex h-full items-center gap-1 rounded-none px-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45'
+
+/** Dismisses the open statusbar dropdown from inside element `menuContent`
+ *  (render-fn content gets `close()` as an argument instead). */
+export const StatusbarMenuCloseContext = createContext<() => void>(() => {})
+
+function renderMenuContent(content: NonNullable<StatusbarItem['menuContent']>, close: () => void): ReactNode {
+  if (typeof content === 'function') {
+    return content(close)
+  }
+
+  return <StatusbarMenuCloseContext.Provider value={close}>{content}</StatusbarMenuCloseContext.Provider>
+}
 
 export interface StatusbarMenuItem {
   id: string
@@ -274,9 +286,7 @@ export const StatusbarItemView = memo(function StatusbarItemView({
           sideOffset={8}
         >
           {item.menuContent
-            ? typeof item.menuContent === 'function'
-              ? item.menuContent(() => setMenuOpen(false))
-              : item.menuContent
+            ? renderMenuContent(item.menuContent, () => setMenuOpen(false))
             : (item.menuItems ?? [])
                 .filter(menuItem => !menuItem.hidden)
                 .map(menuItem => (
@@ -320,7 +330,7 @@ export const StatusbarItemView = memo(function StatusbarItemView({
       <Tip label={tooltipLabel}>
         <div
           className={cn(
-            'inline-flex h-full items-center gap-1 px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)',
+            'inline-flex h-full items-center gap-1 px-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
             item.className
           )}
         >

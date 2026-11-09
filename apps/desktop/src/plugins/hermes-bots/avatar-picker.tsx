@@ -168,7 +168,9 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
                             size={32}
                           />
                         ) : (
-                          <span className="text-[0.6rem] text-(--ui-text-tertiary)">{b.avatar.auto}</span>
+                          <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                            {b.avatar.auto}
+                          </span>
                         )}
                       </RowButton>
                     </Tip>
@@ -184,7 +186,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
                     type="button"
                     variant="ghost"
                   >
-                    <Codicon className="mr-1 text-[0.8rem]" name="refresh" />
+                    <Codicon className="mr-1 text-[length:var(--aino-text-ui)]" name="refresh" />
                     {b.avatar.randomize}
                   </Button>
                   <Button
@@ -193,7 +195,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
                     type="button"
                     variant="ghost"
                   >
-                    <Codicon className="mr-1 text-[0.8rem]" name={locked ? 'unlock' : 'lock'} />
+                    <Codicon className="mr-1 text-[length:var(--aino-text-ui)]" name={locked ? 'unlock' : 'lock'} />
                     {locked ? b.avatar.unlockFace : b.avatar.lockFace}
                   </Button>
                 </div>
@@ -259,14 +261,16 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
               variant="secondary"
             >
               {genBusy ? (
-                <GlyphSpinner className="mr-1 text-[0.8rem]" spinner="breathe" />
+                <GlyphSpinner className="mr-1 text-[length:var(--aino-text-ui)]" spinner="breathe" />
               ) : (
-                <Codicon className="mr-1 text-[0.8rem]" name="sparkle" />
+                <Codicon className="mr-1 text-[length:var(--aino-text-ui)]" name="sparkle" />
               )}
               {genBusy ? b.avatar.generating : b.avatar.generate}
             </Button>
             {describe.trim() ? null : (
-              <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.bot.descriptionHint}</div>
+              <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                {b.bot.descriptionHint}
+              </div>
             )}
           </div>
         ) : (
@@ -277,7 +281,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
       ) : null}
       {tab === 'upload' ? (
         <Button className="w-full justify-center" onClick={upload} type="button" variant="secondary">
-          <Codicon className="mr-1 text-[0.8rem]" name="device-camera" />
+          <Codicon className="mr-1 text-[length:var(--aino-text-ui)]" name="device-camera" />
           {b.editor.chooseImage}
         </Button>
       ) : null}

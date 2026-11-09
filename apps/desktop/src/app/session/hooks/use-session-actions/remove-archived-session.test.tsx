@@ -139,4 +139,16 @@ describe('removeSession × archived view store', () => {
 
     expect(vi.mocked(deleteSession)).toHaveBeenCalledWith('arch-1', 'sage')
   })
+
+  it('returns failures to an awaiting confirmation after rolling the archived row back', async () => {
+    $archivedSessions.set([archivedSession()])
+    vi.mocked(deleteSession).mockRejectedValue(new Error('Read only storage'))
+    const handle = await mountHarness()
+
+    await act(async () => {
+      await expect(handle.removeSession('arch-1', { throwOnError: true })).rejects.toThrow('Read only storage')
+    })
+
+    expect($archivedSessions.get().map(session => session.id)).toEqual(['arch-1'])
+  })
 })

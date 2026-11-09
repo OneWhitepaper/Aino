@@ -36,7 +36,7 @@ vi.mock('@/store/session', async (importOriginal): Promise<object> => {
     $defaultReasoningEffort: atom<string>('')
   }
 })
-vi.mock('@/store/notifications', (): object => ({ notify: vi.fn(), notifyError: vi.fn() }))
+vi.mock('@/store/notifications', (): object => ({ notify: vi.fn(), notifyError: vi.fn(), resetNotifications: vi.fn() }))
 
 import { setApiRequestConnection, setApiRequestProfile } from '@/api/client'
 import { LocalModelsSettings } from '@/app/settings/local-models-settings'

@@ -14,7 +14,9 @@ export function StepUpInlineAction({ flow }: { flow: ReturnType<typeof useStepUp
   if (flow.verification) {
     return (
       <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
-        <span className="font-mono text-[0.72rem] font-semibold text-foreground">{flow.verification.code}</span>
+        <span className="font-mono text-[length:var(--aino-text-caption)] font-semibold text-foreground">
+          {flow.verification.code}
+        </span>
         <Button onClick={flow.openVerification} size="sm" type="button" variant="outline">
           {copy.openVerification}
           <ExternalLink className="size-3.5" />

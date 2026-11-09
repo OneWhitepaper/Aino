@@ -1,3 +1,6 @@
+import { type CanonicalRoomLive, canonicalRoomLiveKey } from './canonical-group-details'
+import { canonicalMemberName } from './canonical-group-members'
+import type { GatewayGroupRoom } from './canonical-group-registry'
 import { botActivitySession } from './data'
 import { botRosterKey, filterBots, preferReachableSameNameRows } from './data'
 import type { $groupChats } from './group-chat'
@@ -23,9 +26,41 @@ export interface RosterGroupRow {
   active: boolean
   activity: number
   kind: 'group'
+  /** Set for a gateway-owned room; absent for a Desktop-driven one. */
+  gateway?: GatewayGroupRoom
   members: GroupMember[]
   name: string
   pinned: boolean
+}
+
+/** Gateway Group Chats as roster rows. They live on the active source, so a
+ *  gateway filter naming another source hides them. */
+function gatewayGroupRows(
+  { gatewayRooms: rooms, gatewayRoomLive, roster, allMeta, query, gatewayFilter, rowKindFilter, activityFilter }: RosterRowsInput
+): RosterGroupRow[] {
+  if (rowKindFilter === 'bots' || (gatewayFilter !== 'all' && rooms[0]?.binding.connectionId !== gatewayFilter)) {
+    return []
+  }
+
+  const needle = query.trim().toLowerCase().replace(/^@/, '')
+
+  return rooms
+    .filter(room => !needle || room.name.toLowerCase().includes(needle) ||
+      room.members.some(member => `${member.handle} ${canonicalMemberName(member, room.binding, roster, allMeta, room.binding.connectionId)}`.toLowerCase().includes(needle)))
+    .map((room): RosterGroupRow => ({
+      kind: 'group',
+      gateway: room,
+      name: room.name,
+      members: [],
+      pinned: false,
+      activity: room.updatedAt,
+      active: gatewayRoomActive(room, gatewayRoomLive[canonicalRoomLiveKey(room.binding, room.binding.roomId)])
+    }))
+    .filter(row => rosterActivityMatches(row, activityFilter))
+}
+
+function gatewayRoomActive(room: GatewayGroupRoom, live: CanonicalRoomLive | undefined): boolean {
+  return Boolean(live?.working || live?.needsYou) || Boolean(room.updatedAt && Date.now() - room.updatedAt <= ACTIVE_WINDOW_S * 1000)
 }
 
 interface RosterRowsInput {
@@ -36,13 +71,16 @@ interface RosterRowsInput {
   activityFilter: RosterActivityFilter
   rowKindFilter: RosterKindFilter
   groupRooms: ReturnType<typeof $groupChats.get>
+  gatewayRooms: GatewayGroupRoom[]
+  gatewayRoomLive: Record<string, CanonicalRoomLive>
   activeRosterKeys: Set<string>
   gatewayOptions: ReturnType<typeof rosterGatewayOptions>
   activityOf: (bot: RosterRow) => number
   isPinned: (bot: RosterRow) => boolean
 }
 
-export function deriveRosterRows({
+export function deriveRosterRows(input: RosterRowsInput) {
+  const {
   roster,
   allMeta,
   gatewayFilter,
@@ -50,11 +88,13 @@ export function deriveRosterRows({
   activityFilter,
   rowKindFilter,
   groupRooms,
+  gatewayRooms,
   activeRosterKeys,
   gatewayOptions,
   activityOf,
   isPinned
-}: RosterRowsInput) {
+  } = input
+
   const activeSourceRoster = roster.filter(bot => !bot.remoteSource)
   // Hidden rows remain fully alive and recoverable at the bottom. Every
   // non-display consumer continues to receive the complete roster.
@@ -104,6 +144,7 @@ export function deriveRosterRows({
         ) || row.members.some(member => activeRosterKeys.has(botRosterKey(member)))
     }))
     .filter(row => rowKindFilter !== 'bots' && rosterActivityMatches(row, activityFilter))
+    .concat(gatewayGroupRows(input))
 
   const botRows =
     rowKindFilter === 'groups'
@@ -126,7 +167,7 @@ export function deriveRosterRows({
     hiddenBots,
     visibleRoster,
     filteredHiddenBots,
-    groupNames,
+    groupNames: [...groupNames, ...gatewayRooms.map(room => room.name)],
     rosterRows,
     sortedGroupRows,
     gatewaySections,
@@ -173,8 +214,8 @@ export function deriveRosterPresentation({
   const allBotsHidden =
     !hasRosterConstraint && visibleRoster.length === 0 && groupNames.length === 0 && hiddenBots.length > 0
 
-  const showRosterSearch =
-    gatewayOptions.length > 1 || rosterItemCount >= BOT_ROSTER_SEARCH_THRESHOLD || Boolean(query.trim())
+  // Search is a stable navigation affordance, including small and empty rosters.
+  const showRosterSearch = true
 
   const showRosterFilters =
     gatewayOptions.length > 1 ||

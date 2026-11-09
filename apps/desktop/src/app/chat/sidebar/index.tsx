@@ -291,7 +291,7 @@ interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onLoadMoreSessions: () => Promise<void> | void
   onLoadMoreMessaging?: (platform: string) => Promise<void> | void
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
-  onDeleteSession: (sessionId: string) => void
+  onDeleteSession: (sessionId: string) => Promise<void> | void
   onArchiveSession: (sessionId: string) => void
   onBranchSession: (sessionId: string) => void
   onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean; owner?: AgentProfileRoute }) => void
@@ -1520,7 +1520,10 @@ export function ChatSidebar({
               labelMeta={
                 worktreeGroupingActive ? (
                   reposScanning && !projectsSkeletonVisible ? (
-                    <GlyphSpinner ariaLabel={s.loading} className="text-[0.6875rem] text-(--ui-text-quaternary)" />
+                    <GlyphSpinner
+                      ariaLabel={s.loading}
+                      className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                    />
                   ) : undefined
                 ) : undefined
               }
@@ -1605,23 +1608,7 @@ export function ChatSidebar({
             groups={displayAgentGroups}
             headerAction={
               <div className="flex shrink-0 items-center gap-0.5">
-                {unreadCount > 0 && (
-                  <Tip label={s.markAllRead}>
-                    <Button
-                      aria-label={s.markAllRead}
-                      className={HEADER_ACTION_BTN}
-                      onClick={event => {
-                        event.stopPropagation()
-                        markAllSessionsRead()
-                        ackAllSessionsRead()
-                      }}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <Codicon name="check-all" size="0.75rem" />
-                    </Button>
-                  </Tip>
-                )}
+                {unreadCount > 0 && <MarkAllReadButton label={s.markAllRead} />}
                 <SidebarSectionAddButton
                   ariaLabel={s.nav['new-session']}
                   onNewSessionSplit={onNewSessionSplit}
@@ -1734,4 +1721,24 @@ interface MessagingSection {
   sessions: SessionInfo[]
   total: number
   hasMore: boolean
+}
+
+function MarkAllReadButton({ label }: { label: string }) {
+  return (
+    <Tip label={label}>
+      <Button
+        aria-label={label}
+        className={HEADER_ACTION_BTN}
+        onClick={event => {
+          event.stopPropagation()
+          markAllSessionsRead()
+          ackAllSessionsRead()
+        }}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <Codicon name="check-all" size="0.75rem" />
+      </Button>
+    </Tip>
+  )
 }

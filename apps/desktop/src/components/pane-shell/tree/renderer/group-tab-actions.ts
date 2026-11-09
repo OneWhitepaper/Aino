@@ -5,6 +5,7 @@ import type { Translations } from '@/i18n'
 import type { GroupNode } from '../model'
 import { activateTreePane, closeTabPane, isCollapsePane, isSessionStripPane, restoreTreePane } from '../store'
 import { clearTabSelection } from '../tab-selection'
+import { isConversationPane } from '../workspace-presentation'
 
 import { paneChrome } from './track-model'
 
@@ -51,7 +52,7 @@ export function groupTabActions({
   panesWithCloser
 }: GroupTabPolicyInput & { panesWithCloser: ReadonlySet<string> }) {
   // Collapsing the uncloseable main workspace would strand the whole app.
-  const minimizable = !shown.some(id => paneChrome(paneFor(id)).uncloseable)
+  const minimizable = !node.panes.some(id => paneChrome(paneFor(id)).uncloseable)
 
   const isNavigationRail = shown.some(id => {
     const chrome = paneChrome(paneFor(id))
@@ -106,7 +107,7 @@ export function sessionHeaderVisible({
     !verticalCollapse &&
     !editMode &&
     shown.length > 0 &&
-    shown.every(isSessionStripPane) &&
+    shown.every(isConversationPane) &&
     !headerVeto
   )
 }

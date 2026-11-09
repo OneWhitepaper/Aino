@@ -96,7 +96,7 @@ export function KeysSettings({ embedded = false, view }: KeysSettingsProps) {
           const label = credentialRowLabel(key, info)
 
           return (
-            <div className="scroll-mt-6 rounded-[6px]" id={credentialElementId(key)} key={key}>
+            <div className="scroll-mt-6 rounded-(--aino-radius-control)" id={credentialElementId(key)} key={key}>
               <CredentialKeyCard
                 expanded={openKey === key}
                 info={info}

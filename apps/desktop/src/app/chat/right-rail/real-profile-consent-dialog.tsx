@@ -181,39 +181,54 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
       }}
       open
     >
-      <DialogContent className="max-w-md" showCloseButton={false}>
+      <DialogContent
+        className="max-w-md"
+        footer={
+          <DialogFooter className="items-start sm:justify-between">
+            <button
+              className="min-w-0 text-left text-[length:var(--aino-text-label)] text-(--ui-text-secondary) underline-offset-4 transition-colors [overflow-wrap:anywhere] hover:text-foreground hover:underline"
+              disabled={busy}
+              onClick={() => $realProfilePromptDismissed.set(true)}
+              type="button"
+            >
+              {prompt.dontShowAgain}
+            </button>
+            <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+              <Button
+                className="max-w-full whitespace-normal"
+                disabled={busy}
+                onClick={() => $realProfilePromptMuted.set(true)}
+                type="button"
+                variant="ghost"
+              >
+                {prompt.notNow}
+              </Button>
+              <Button
+                className="max-w-full whitespace-normal"
+                disabled={busy}
+                onClick={() => void enable()}
+                type="button"
+              >
+                {prompt.enable}
+              </Button>
+            </div>
+          </DialogFooter>
+        }
+        showCloseButton={false}
+      >
         <DialogHeader>
           <DialogTitle icon={Globe}>{prompt.title}</DialogTitle>
           <DialogDescription>{prompt.body}</DialogDescription>
         </DialogHeader>
 
-        <ul className="grid gap-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-secondary)">
+        <ul className="grid min-w-0 gap-2 text-[length:var(--aino-text-label)] leading-5 text-(--ui-text-secondary) [overflow-wrap:anywhere]">
           {bullets.map(bullet => (
             <li className="flex items-start gap-2" key={bullet}>
               <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
-              <span>{bullet}</span>
+              <span className="min-w-0">{bullet}</span>
             </li>
           ))}
         </ul>
-
-        <DialogFooter className="items-center sm:justify-between">
-          <button
-            className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary) underline-offset-4 transition-colors hover:text-foreground hover:underline"
-            disabled={busy}
-            onClick={() => $realProfilePromptDismissed.set(true)}
-            type="button"
-          >
-            {prompt.dontShowAgain}
-          </button>
-          <div className="flex gap-2">
-            <Button disabled={busy} onClick={() => $realProfilePromptMuted.set(true)} type="button" variant="ghost">
-              {prompt.notNow}
-            </Button>
-            <Button disabled={busy} onClick={() => void enable()} type="button">
-              {prompt.enable}
-            </Button>
-          </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -13,6 +13,24 @@ const LISTINGS = [
 ].map(lines => lines.join('\n'))
 
 describe('fenced code segmentation', () => {
+  it.each(['md', 'markdown'])('preserves explicit %s source throughout streaming', language => {
+    const body = '# 排查任务\n\n- **账号**：核对目录\n- **模型**：`GLM-5.3-Flash`\n\n保留 $5、items[0] 和 https://example.com。'
+
+    for (const suffix of ['', '\n```']) {
+      const source = `复制以下内容：\n\n\`\`\`${language}\n${body}${suffix}`
+
+      expect(preprocessMarkdown(source)).toBe(source)
+    }
+  })
+
+  it.each(['md', 'markdown'])('does not consume URL-only %s source as a preview handoff', language => {
+    for (const body of ['http://localhost:3000/', 'https://example.com/a\nhttps://example.com/b']) {
+      const source = `\`\`\`${language}\n${body}\n\`\`\``
+
+      expect(preprocessMarkdown(source)).toBe(source)
+    }
+  })
+
   it('keeps a listing that contains fence characters intact in chat markdown', () => {
     for (const listing of LISTINGS) {
       const output = preprocessMarkdown(`Example:\n\n${listing}\n\nAfter the example.`)

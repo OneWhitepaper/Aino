@@ -256,7 +256,7 @@ function ConnectionSwitcherTrigger({
       aria-label={activeConnection ? `${title}: ${activeConnectionLabel ?? activeConnection.label}` : title}
       className={cn(
         'w-full min-w-0 justify-between overflow-hidden px-1 text-(--ui-text-secondary) data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground',
-        compact && 'h-full min-h-0 rounded-none px-1.5 text-[0.6875rem] font-normal',
+        compact && 'h-full min-h-0 rounded-none px-1.5 text-[length:var(--aino-text-caption)] font-normal',
         triggerProps.className
       )}
       size="xs"

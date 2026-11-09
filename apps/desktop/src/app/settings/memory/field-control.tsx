@@ -24,7 +24,7 @@ export function FieldTitle({ field }: { field: MemoryProviderField }) {
     <span className="inline-flex items-center gap-1.5">
       {field.label}
       <Tip className="max-w-60 font-normal leading-snug whitespace-normal" label={field.info}>
-        <Info aria-label={t.settings.memory.fieldAbout(field.label)} className="size-3.5 text-muted-foreground/70" />
+        <Info aria-label={t.settings.memory.fieldAbout(field.label)} className="size-3.5 text-(--ui-text-tertiary)" />
       </Tip>
     </span>
   )
@@ -46,6 +46,7 @@ export function FieldControl({
 }) {
   const { t } = useI18n()
   const m = t.settings.memory
+
   const set = (next: string) => {
     onChange(next)
     onCommit?.(next)
@@ -113,7 +114,7 @@ export function FieldControl({
           value={value}
         />
         {field.is_set && (
-          <span className="inline-flex items-center gap-1 self-start font-mono text-[0.65rem] text-(--ui-text-tertiary)">
+          <span className="inline-flex items-center gap-1 self-start font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
             <Check className="size-3 text-(--ui-accent-secondary)" />
             {m.set}
           </span>

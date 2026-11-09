@@ -2,6 +2,7 @@
 from copy import deepcopy
 import logging
 import threading
+import time
 import uuid
 import weakref
 
@@ -11,6 +12,7 @@ from tui_gateway.transport import FanoutTransport
 
 class SessionEvents:
     def __init__(self):
+        from gateway.session_activity import ExecutionActivity
         self.lock = threading.RLock()
         self.fanout = FanoutTransport()
         # A private lifetime key prevents two profiles (or legacy TUI owners)
@@ -23,18 +25,46 @@ class SessionEvents:
         self.sequence = 0
         self._public_id = None
         self.execution = {}
+        self._activity = ExecutionActivity()
         # Synchronous same-thread recipients (API run projections): unlike fanout peers they
         # cannot lose a frame to a detach that races the writer thread.
         self.observers = set()
         # Set by the authority that attaches transports: retires the subscription of a
         # peer whose bounded backlog overflowed, so it cannot linger looking subscribed.
         self.on_overflow = None
+        # The running execution's open tool calls and its last frame time; a hosted room's info
+        # poll reports them so the room shows which tool a member is in (``progress_for``).
+        self._progress = None
+
+    def note_progress(self, generation, event_type, payload):
+        """Record one execution frame (the caller holds ``lock`` and passed the generation fence)."""
+        progress = self._progress
+        if progress is None or progress['generation'] != generation:
+            progress = self._progress = {'generation': generation, 'tools': {}}
+        payload = payload if isinstance(payload, dict) else {}
+        tool_id = str(payload.get('tool_id') or '')
+        if event_type == 'tool.start':
+            progress['tools'][tool_id] = str(payload.get('name') or '') or 'tool'
+        elif event_type == 'tool.complete':
+            progress['tools'].pop(tool_id, None)
+        progress['at'] = time.time()
+
+    def progress_for(self, generation):
+        """``{"tool", "progress_at"}`` for *generation*'s execution: the newest open tool call
+        (absent between tools) and its last frame time; ``{}`` before its first frame."""
+        with self.lock:
+            progress = self._progress
+            if progress is None or progress['generation'] != generation:
+                return {}
+            tools = list(progress['tools'].values())
+            return {'progress_at': progress['at'], **({'tool': tools[-1]} if tools else {})}
 
     def release(self):
         """The session ended with no viewer left (it may stay resumable): free its replay frames
         now. A later publish or attach finds them gone and starts a new epoch, as after eviction."""
         with self.lock:
             event_replay.release_key(self._key)
+            self._activity.clear()
 
     def watermark(self):
         with self.lock:
@@ -43,12 +73,25 @@ class SessionEvents:
                 # sequence in the old epoch, even if publication resumes later.
                 self.epoch = uuid.uuid4().hex
                 self.sequence = 0
+                self._activity.clear()
             return self.epoch, self.sequence
+
+    def activity_for(self, admission_id, generation):
+        """Read only this claim's sanitized activity, without subscribing or claiming delivery."""
+        with self.lock:
+            self.watermark()
+            if (self.execution.get('admission_id') != admission_id
+                    or self.execution.get('execution_generation') != generation):
+                return None
+            return self._activity.current(self.execution)
 
     def publish(self, session_id, payload, *, event_type="message.complete", execution=None):
         # ``execution`` stamps this frame alone; the shared stamp is read without the lock elsewhere.
         with self.lock:
             self.watermark()
+            stamp = self.execution if execution is None else execution
+            if stamp == self.execution:
+                self._activity.update(stamp, event_type, payload)
             frame = {'jsonrpc': '2.0', 'method': 'event', 'params': {
                 **(self.execution if execution is None else execution), 'type': event_type, 'session_id': self._key,
                 'payload': deepcopy(payload), 'replay_epoch': self.epoch}}

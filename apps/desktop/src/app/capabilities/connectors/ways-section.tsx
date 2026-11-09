@@ -93,7 +93,9 @@ export function WaysSection({ card, onChange, value, ...rest }: WaysSectionProps
 
       {bothWaysOn(card.ways) && rest.onServerToggle ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="min-w-0 flex-1 text-[0.7rem] text-(--ui-text-secondary)">{copy.dialog.bothOn(card.name)}</p>
+          <p className="min-w-0 flex-1 text-[length:var(--aino-text-caption)] text-(--ui-text-secondary)">
+            {copy.dialog.bothOn(card.name)}
+          </p>
           <Button onClick={() => rest.onServerToggle?.(false)} size="inline" variant="textStrong">
             {copy.dialog.turnOffLocal}
           </Button>
@@ -123,7 +125,7 @@ function HostedWay({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 flex-1 text-[0.7rem] text-(--ui-text-tertiary)">
+      <span className="min-w-0 flex-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
         {way.state === 'available'
           ? copy.dialog.wayNotConnected(name)
           : (reason ?? copy.card.state[hostedStateWord(way)])}
@@ -170,7 +172,9 @@ function LocalWay({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 flex-1 text-[0.7rem] text-(--ui-text-tertiary)">{sentence}</span>
+      <span className="min-w-0 flex-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+        {sentence}
+      </span>
 
       {way.serverEnabled !== true && onServerToggle ? (
         <Button onClick={() => onServerToggle(true)} size="xs">

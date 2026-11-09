@@ -34,7 +34,7 @@ import { purgeInFlightTurnJournals, recoverInFlightTurnJournal } from '@/lib/inf
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { latestSessionTodoSnapshot } from '@/lib/todos'
 import { setSessionYolo } from '@/lib/yolo-session'
-import { $clarifyRequests, clearClarifyRequest } from '@/store/clarify'
+import { $clarifyRequests } from '@/store/clarify'
 import { announceGoneSessionDraft, announceNewSessionDraftKey, freshDraftScope } from '@/store/composer'
 import { clearQueuedPrompts } from '@/store/composer-queue'
 import { resetSessionBackground } from '@/store/composer-status'
@@ -61,7 +61,6 @@ import {
 } from '@/store/profile'
 import { $projectScope } from '@/store/project-scope'
 import { projectProfile, resolveNewSessionCwd } from '@/store/projects'
-import { clearAllPrompts } from '@/store/prompts'
 import { clearStoredTranscriptReadOnly, markStoredTranscriptReadOnly } from '@/store/read-only-transcript'
 import {
   $connection,
@@ -146,6 +145,7 @@ import { type BranchMessage, selectBranchMessages, toBranchMessages } from './br
 import { type SessionCreateOverrides } from './create-overrides'
 import { desktopSessionCreateParams } from './create-params'
 import { markSessionCreatedThisRun, sessionCreatedThisRun } from './created-this-run'
+import { closeRuntimeBeforeSessionDeletion, sessionRemovalOwnerUnavailable } from './delete-session-runtime'
 import { captureDisplayHydration } from './display-hydration'
 import { resetFreshSessionSelection } from './fresh-session-selection'
 import { usePendingSessionCreate } from './pending-session-create'
@@ -2763,7 +2763,7 @@ export function useSessionActions({
   )
 
   const removeSession = useCallback(
-    async (storedSessionId: string) => {
+    async (storedSessionId: string, options?: { throwOnError?: boolean }) => {
       clearNotifications()
 
       // The row may live in the main list, the messaging/cron sidebar slices,
@@ -2785,12 +2785,15 @@ export function useSessionActions({
       // Listed profile-less row + multiple profiles + unresolved owner:
       // never fall through to the primary backend (fake already_absent).
       if (
-        listed &&
-        !stampedProfile &&
-        !profile?.trim() &&
-        $profiles.get().filter(item => item.name.trim()).length > 1
+        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
       ) {
-        notifyError(new Error(copy.sessionOwnershipUnavailable), copy.deleteFailed)
+        const error = new Error(copy.sessionOwnershipUnavailable)
+
+        if (options?.throwOnError) {
+          throw error
+        }
+
+        notifyError(error, copy.deleteFailed)
 
         return
       }
@@ -2845,49 +2848,14 @@ export function useSessionActions({
 
       try {
         if (closingRuntimeId) {
-          // Deleting a session must END its turn, not just drop the row.
-          // `session.close` tears down the runtime but does not walk the
-          // interrupt path that releases approval / clarify / sudo / secret
-          // waits, so a blocked run could outlive its sidebar row and surface a
-          // blocking prompt (and native notification) for a conversation that is
-          // gone (#75587). Mark the runtime interrupted first so a
-          // blocking-input request already queued on the transport is dropped
-          // instead of parking its overlay, then interrupt, then close.
-          let previousInterruptState: Pick<ClientSessionState, 'interrupted' | 'needsInput'> | null = null
-
-          updateSessionState(closingRuntimeId, state => {
-            previousInterruptState = { interrupted: state.interrupted, needsInput: state.needsInput }
-
-            return { ...state, interrupted: true, needsInput: false }
-          })
-
-          try {
-            await requestForSessionProfile(removedOwner, requestGateway, 'session.interrupt', {
-              session_id: closingRuntimeId
-            })
-          } catch (error) {
-            // A missing runtime has no turn left to stop. Any other failure means
-            // deletion cannot safely continue: restore the live state and let the
-            // outer rollback put the conversation back in the sidebar.
-            if (!isSessionGoneError(error)) {
-              updateSessionState(closingRuntimeId, state =>
-                previousInterruptState ? { ...state, ...previousInterruptState } : state
-              )
-              throw error
-            }
-          }
-
-          // Catch a blocking-input request already queued before the interrupted
-          // flag became visible to this renderer.
-          clearAllPrompts(closingRuntimeId)
-          clearClarifyRequest(undefined, closingRuntimeId)
-
-          await requestForSessionProfile(removedOwner, requestGateway, 'session.close', {
-            session_id: closingRuntimeId
-          }).catch(() => undefined)
+          await closeRuntimeBeforeSessionDeletion(closingRuntimeId, removedOwner, { requestGateway, updateSessionState })
         }
 
-        await deleteSession(storedSessionId, removedOwner)
+        const result = await deleteSession(storedSessionId, removedOwner)
+
+        if (!result.ok) {
+          throw new Error(copy.deleteFailed)
+        }
 
         dropTranscriptTailEverywhere(storedSessionId)
         // Only after the RPC lands — the optimistic eviction above can roll
@@ -2968,6 +2936,10 @@ export function useSessionActions({
           }
         }
 
+        if (options?.throwOnError) {
+          throw err
+        }
+
         notifyError(err, copy.deleteFailed)
       } finally {
         // Release the tombstone to the normal projects.tree prune now the RPC has
@@ -2999,10 +2971,7 @@ export function useSessionActions({
       const profile = stampedProfile || (await resolveSessionProfile(storedSessionId))
 
       if (
-        listed &&
-        !stampedProfile &&
-        !profile?.trim() &&
-        $profiles.get().filter(item => item.name.trim()).length > 1
+        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
       ) {
         notifyError(new Error(copy.sessionOwnershipUnavailable), copy.archiveFailed)
 

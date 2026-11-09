@@ -581,7 +581,7 @@ describe('revert confirm dialog', () => {
     expect($reviewRevertTarget.get()).toMatchObject({ cwd: '/repo', path: null })
   })
 
-  it('confirmRevert closes the dialog then performs the revert', async () => {
+  it('confirmRevert closes the dialog after a successful revert', async () => {
     const review = stubReview()
     requestRevert('a.ts')
 
@@ -589,6 +589,18 @@ describe('revert confirm dialog', () => {
 
     expect($reviewRevertTarget.get()).toBeUndefined()
     expect(review.revert).toHaveBeenCalledWith('/repo', 'a.ts')
+  })
+
+  it('retains the requested revert after failure so the same confirmation can retry', async () => {
+    const revert = vi.fn().mockRejectedValueOnce(new Error('File is locked')).mockResolvedValue(undefined)
+    stubReview({ revert })
+    requestRevert('a.ts')
+    const target = $reviewRevertTarget.get()
+    await expect(confirmRevert()).rejects.toThrow('File is locked')
+    expect($reviewRevertTarget.get()).toBe(target)
+    await confirmRevert()
+    expect(revert).toHaveBeenCalledTimes(2)
+    expect($reviewRevertTarget.get()).toBeUndefined()
   })
 
   it('confirmRevert is a no-op when nothing is pending', async () => {

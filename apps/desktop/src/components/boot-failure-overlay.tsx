@@ -3,7 +3,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { type ComponentProps, lazy, type ReactNode, Suspense, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { DialogCloseButton } from '@/components/ui/dialog'
+import { DialogCloseButton, DialogFooter } from '@/components/ui/dialog'
 import { DialogPortalContainerContext } from '@/components/ui/dialog-portal-context'
 import { ErrorIcon } from '@/components/ui/error-state'
 import { Loader } from '@/components/ui/loader'
@@ -15,25 +15,12 @@ import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { reestablishCloudAgentSession } from '@/lib/cloud-agent-session'
 import { DESKTOP_DOCS_URL } from '@/lib/docs'
 import { openExternalLink } from '@/lib/external-link'
-import {
-  ChevronLeft,
-  ExternalLink,
-  FileText,
-  Loader2,
-  LogIn,
-  RefreshCw,
-  SlidersHorizontal,
-  Wrench
-} from '@/lib/icons'
+import { ChevronLeft, ExternalLink, FileText, Loader2, LogIn, RefreshCw, SlidersHorizontal, Wrench } from '@/lib/icons'
 import { $desktopBoot } from '@/store/boot'
 import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
-import {
-  classifyLocalBootFailure,
-  type LocalBootFailureCopy,
-  localBootFailureCopy
-} from './boot-failure-cause'
+import { classifyLocalBootFailure, type LocalBootFailureCopy, localBootFailureCopy } from './boot-failure-cause'
 import type { RemoteReauth } from './boot-failure-reauth'
 import {
   deriveProviderShape,
@@ -118,14 +105,16 @@ function WebappSignInOverlay() {
 
   return (
     <BootFailureModal onDismiss={() => undefined}>
-      <div className="relative w-full max-w-[40rem] overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous">
+      <div className="relative max-h-[85vh] w-full max-w-[40rem] overflow-y-auto overscroll-contain rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
         <div className="flex items-start gap-3 px-5 py-4">
           <LogIn className="mt-0.5 size-5" />
-          <div>
+          <div className="min-w-0">
             <DialogPrimitive.Title asChild>
-              <h2 className="text-[0.9375rem] font-semibold tracking-tight">{copy.webappTitle}</h2>
+              <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+                {copy.webappTitle}
+              </h2>
             </DialogPrimitive.Title>
-            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
+            <p className="mt-1 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
               {copy.webappDescription}
             </p>
           </div>
@@ -353,9 +342,7 @@ export function BootFailureOverlay() {
       } else {
         await desktop?.oauthLogoutConnectionConfig?.(remoteReauth.url)
 
-        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(
-          remoteReauth.url
-        )
+        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(remoteReauth.url)
 
         connected = result?.connected === true
         error = result?.error
@@ -379,9 +366,7 @@ export function BootFailureOverlay() {
       notify({
         kind: 'warning',
         title: t.boot.failure.signInIncompleteTitle,
-        message: error
-          ? `${t.boot.failure.signInIncompleteMessage}: ${error}`
-          : t.boot.failure.signInIncompleteMessage
+        message: error ? `${t.boot.failure.signInIncompleteMessage}: ${error}` : t.boot.failure.signInIncompleteMessage
       })
     } catch (err) {
       notifyError(err, t.boot.failure.signInFailed)
@@ -555,76 +540,79 @@ export function BootFailureOverlay() {
 
   return (
     <BootFailureModal onDismiss={dismiss}>
-      <div className="relative w-full max-w-[40rem] overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
+      <div className="relative flex max-h-[85vh] w-full max-w-[40rem] flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) text-[length:var(--aino-text-body)] shadow-nous">
         <DialogCloseButton />
-        <div className="flex items-start gap-3 px-5 py-4 pr-12">
-          <ErrorIcon className="mt-0.5" size="1.25rem" />
-          <div>
-            <DialogPrimitive.Title asChild>
-              <h2 className="text-[length:var(--aino-text-title)] font-semibold">
-                {remoteReauth ? copy.remoteTitle : cloudDown ? copy.cloudDownTitle : copy.title}
-              </h2>
-            </DialogPrimitive.Title>
-            <p className="mt-1 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
-              {remoteReauth
-                ? copy.remoteDescription
-                : cloudDown
-                  ? copy.cloudDownDescription
-                  : copy.description}
-            </p>
+        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain" data-slot="boot-recovery-body">
+          <div className="flex items-start gap-3 px-5 py-4 pr-12">
+            <ErrorIcon className="mt-0.5" size="1.25rem" />
+            <div className="min-w-0">
+              <DialogPrimitive.Title asChild>
+                <h2 className="text-[length:var(--aino-text-title)] font-semibold [overflow-wrap:anywhere]">
+                  {remoteReauth ? copy.remoteTitle : cloudDown ? copy.cloudDownTitle : copy.title}
+                </h2>
+              </DialogPrimitive.Title>
+              <p className="mt-1 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+                {remoteReauth ? copy.remoteDescription : cloudDown ? copy.cloudDownDescription : copy.description}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="grid gap-4 p-5 pt-0">
-          <div className="rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-            {localizedBootFailureError(t, failureCopy.headline)}
-            {failureCopy.rawDetail ? (
-              <details className="mt-2 text-muted-foreground">
-                <summary className="cursor-pointer select-none font-medium">{copy.details}</summary>
-                <pre
-                  className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.6875rem] leading-relaxed"
-                  data-selectable-text="true"
+          <div className="grid gap-4 p-5 pt-0">
+            <div className="min-w-0 rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) px-4 py-3 leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+              <p role="alert">{localizedBootFailureError(t, failureCopy.headline)}</p>
+              {failureCopy.rawDetail ? (
+                <details className="mt-2 text-muted-foreground">
+                  <summary className="cursor-pointer select-none font-medium">{copy.details}</summary>
+                  <pre
+                    className="mt-1 min-w-0 whitespace-pre-wrap font-mono text-[length:var(--aino-text-caption)] leading-relaxed [overflow-wrap:anywhere]"
+                    data-selectable-text="true"
+                  >
+                    {failureCopy.rawDetail}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+
+            {logs.length > 0 ? (
+              <div className="grid gap-2">
+                <Button
+                  className="-ml-2 self-start font-medium"
+                  onClick={() => setShowLogs(v => !v)}
+                  size="xs"
+                  type="button"
+                  variant="text"
                 >
-                  {failureCopy.rawDetail}
-                </pre>
-              </details>
+                  {showLogs ? copy.hideRecentLogs : copy.showRecentLogs}
+                </Button>
+                {showLogs ? (
+                  <LogView className="min-w-0 overflow-visible text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+                    {logs.slice(-40).join('\n')}
+                  </LogView>
+                ) : null}
+              </div>
             ) : null}
           </div>
-
-          <div className="grid gap-2">
-            <div className="flex flex-wrap gap-2">
-              {actions.map(action => (
-                <Button
-                  disabled={Boolean(busy)}
-                  key={action.key}
-                  onClick={action.onClick}
-                  variant={action.variant}
-                >
-                  {action.busy && busy === action.busy ? <Loader2 className="animate-spin" /> : action.icon}
-                  {action.label}
-                </Button>
-              ))}
-              <Button onClick={openLogs} variant="ghost">
-                <FileText />
-                {copy.openLogs}
+        </div>
+        <div
+          className="grid min-w-0 shrink-0 gap-2 border-t border-(--ui-stroke-tertiary) p-5"
+          data-slot="boot-recovery-footer"
+        >
+          <DialogFooter className="flex-row flex-wrap justify-start sm:justify-start">
+            {actions.map(action => (
+              <Button disabled={Boolean(busy)} key={action.key} onClick={action.onClick} variant={action.variant}>
+                {action.busy && busy === action.busy ? <Loader2 className="animate-spin" /> : action.icon}
+                {action.label}
               </Button>
-            </div>
-            {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-          </div>
-
-          {logs.length > 0 ? (
-            <div className="grid gap-2">
-              <Button
-                className="-ml-2 self-start font-medium"
-                onClick={() => setShowLogs(v => !v)}
-                size="xs"
-                type="button"
-                variant="text"
-              >
-                {showLogs ? copy.hideRecentLogs : copy.showRecentLogs}
-              </Button>
-              {showLogs ? <LogView className="max-h-48">{logs.slice(-40).join('')}</LogView> : null}
-            </div>
+            ))}
+            <Button onClick={openLogs} variant="ghost">
+              <FileText />
+              {copy.openLogs}
+            </Button>
+          </DialogFooter>
+          {hint ? (
+            <p className="min-w-0 text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+              {hint}
+            </p>
           ) : null}
         </div>
       </div>

@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import { isLikelyProseCodeBlock, isLikelyProseFence, isLikelyStructuredText } from './markdown-code'
 
+const markdownSource = '# 排查任务\n\n- **账号切换**：保留原始格式\n- **默认模型**：`GLM-5.3-Flash`\n'
+
+describe('explicit Markdown is source code', () => {
+  it.each(['md', 'markdown', 'MD', 'Markdown'])('preserves %s before prose heuristics', language => {
+    expect(isLikelyProseFence(language, markdownSource)).toBe(false)
+    expect(isLikelyProseCodeBlock(language, markdownSource)).toBe(false)
+  })
+})
+
 describe('isLikelyProseCodeBlock', () => {
   it('detects prose that Streamdown mislabels as an unknown language', () => {
     expect(

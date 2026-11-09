@@ -1129,6 +1129,13 @@ export const zhHantSettings = {
         restartFailedBecause: reason => `閘道無法重新啟動：${reason}`,
         startTimedOut: '閘道未能在 90 秒內提供網頁應用程式。',
         stopTimedOut: '閘道未能在 90 秒內停止提供網頁應用程式。',
+        startStages: {
+          preparing: '正在準備網頁應用程式。建置可能需要幾分鐘。',
+          building: '正在建置網頁應用程式，可能需要幾分鐘。',
+          registering: '正在為此位址設定 Nous 登入。',
+          restarting: '正在重新啟動閘道以提供網頁應用程式。'
+        },
+        startElapsed: time => `已經過 ${time}`,
         start: '啟動',
         stop: '停止',
         restartGateway: '重新啟動閘道',
@@ -1288,7 +1295,6 @@ export const zhHantSettings = {
       tasks: {
         vision: { label: '視覺', hint: '圖片分析' },
         compression: { label: '壓縮', hint: '上下文壓縮' },
-        skills_hub: { label: '技能中心', hint: '技能搜尋' },
         approval: { label: '核准', hint: '智慧自動核准' },
         mcp: { label: 'MCP', hint: 'MCP 工具路由' },
         title_generation: { label: '標題生成', hint: '工作階段標題' },
@@ -1862,7 +1868,7 @@ export const zhHantSettings = {
       existingAccount: '登入現有帳戶',
       registerAccount: '註冊帳戶',
       registrationClosed: '註冊暫未開放。',
-      phoneAutoRegister: '尚未註冊的手機號碼驗證成功後會自動註冊。',
+      phoneAutoRegister: '未註冊手機號碼驗證後自動註冊。',
       phoneLoginUnavailable: '手機號碼登入暫未開放，請使用現有帳戶登入。',
       existingAccountPhoneHint: '已有網站帳戶？請先登入原帳戶，再綁定手機號碼。',
       registrationReturnHint: '註冊完成後，使用相同電子郵件和密碼登入。網站與桌面共用一個帳戶。',

@@ -672,6 +672,16 @@ def _stage_first_contact_onboarding_note(session: dict, agent, history_empty: bo
         logger.debug("first-contact onboarding note failed", exc_info=True)
 
 
+def _sync_agent_daybreak(agent) -> None:
+    """``agent.daybreak`` for this turn, read inside the turn's profile scope once the final agent is selected,
+    so a build that raced a flip, a model switch and a compute-host child all take the saved value. Only the
+    owner's own surfaces carry it (agent.session_source.DAYBREAK_SOURCES): OpenAI allows no third-party use."""
+    from agent.session_source import DAYBREAK_SOURCES
+    if agent is not None:
+        agent.daybreak = (getattr(agent, "platform", None) in DAYBREAK_SOURCES
+                          and (_load_cfg().get("agent") or {}).get("daybreak") is True)
+
+
 def _prepare_turn_input(sid: str, session: dict, st: _TurnRun, text: Any, images: list[str]):
     """Bind scopes, sync the agent, snapshot history, build the run message; returns
     ``(prompt, run_message, cols, streamer)`` or None when @-expansion was refused.
@@ -708,6 +718,7 @@ def _prepare_turn_input(sid: str, session: dict, st: _TurnRun, text: Any, images
     _sync_bot_capabilities(sid, session)  # Bot Chat: adopt Settings->Capabilities edits
     _adopt_out_of_band_turns(session)
     st.agent = agent = session["agent"]
+    _sync_agent_daybreak(agent)
     from tui_gateway.managed_model_usage import begin_managed_usage
     scopes.billing = begin_managed_usage(agent)
     from tui_gateway.turn_metrics import begin_turn_metrics

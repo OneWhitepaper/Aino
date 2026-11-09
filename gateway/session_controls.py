@@ -9,7 +9,7 @@ import sqlite3
 import uuid
 
 from gateway.config import Platform
-from gateway.session_contract import CANONICAL_GATEWAY_PROTOCOL, Principal, SessionRef, Submission
+from gateway.session_contract import CANONICAL_GATEWAY_PROTOCOL, SessionActor, SessionRef, Submission
 from gateway.session_llm_oneshot import DeferredReply
 from hermes_constants import profile_name_for_home
 from hermes_state_runtime import RuntimeStoreError
@@ -31,7 +31,9 @@ def _refusal_data(exc: RuntimeStoreError) -> dict:
         if isinstance(getattr(exc, key, None), int):
             data[key] = getattr(exc, key)
     if getattr(exc, 'admitted', None) is False:
-        data['admitted'] = False  # nothing admitted yet: the sender may finalize with ``bot_relay.settle``
+        # Nothing of this request was admitted: bot_relay.deliver's sender may finalize with
+        # ``bot_relay.settle``; groups.send's words may come back for editing.
+        data['admitted'] = False
     return data
 
 
@@ -97,7 +99,7 @@ _PROFILE_IMPLICIT = frozenset({'session.create', 'session.list', 'session.info',
                                'prompt.submit', 'prompt.receipt', 'prompt.cancel', 'prompt.resolve_unknown',
                                'prompt.steer_queued', 'prompt.replace_queued',
                                'session.interrupt', 'session.events.since', 'session.mutate', 'session.stats',
-                               'approval.respond', 'clarify.respond'})
+                               'approval.respond', 'clarify.respond', 'model.session'})
 
 
 def display_projection(history, profile_home, *, db=None, session_id=None):
@@ -154,7 +156,7 @@ class AuthorityConnection:
                 or identity.get('instance_id', authority.instance_id) != authority.instance_id):
             capabilities = frozenset()
         from gateway.owner_identity import principal_subject
-        self.actor = Principal(principal_subject(identity),
+        self.actor = SessionActor(principal_subject(identity),
                                identity.get('profile_id', authority.profile_id),
                                capabilities, uuid.uuid4().hex)
         from gateway.session_local_migration import bind_native_transport
@@ -224,7 +226,7 @@ class AuthorityConnection:
                     'slash.exec': self.slash_exec, 'command.dispatch': self.command_dispatch,
                     'session.list': self.list_sessions, 'session.info': self.info,
                     'session.mutate': self.mutate, 'bot_relay.deliver': self.bot_deliver,
-                    'bot_relay.settle': self.bot_settle,
+                    'bot_relay.settle': self.bot_settle, 'bot_relay.cancel': self.bot_cancel,
                     'bot_relay.roster.sync': self.bot_roster, 'bot_relay.outbox.drain': self.bot_outbox,
                     'bot_relay.reply': self.bot_reply, 'a2a.forward': self.a2a_forward,
                     'kanban.run': self.kanban_run,
@@ -278,6 +280,8 @@ class AuthorityConnection:
         handlers.update(connection_handlers(self))
         from gateway.session_control_actions import control
         handlers['session.control'] = partial(control, self)
+        from gateway.session_model_requests import model_session
+        handlers['model.session'] = partial(model_session, self)
         from gateway.session_platform_model import handlers as platform_model_handlers
         handlers.update(platform_model_handlers(self))
         from gateway.session_diagnostics import handlers as diagnostics_handlers
@@ -426,6 +430,10 @@ class AuthorityConnection:
     async def bot_settle(self, ref, params):
         from gateway.session_bot import settle
         return await settle(self, params)
+
+    async def bot_cancel(self, ref, params):
+        from gateway.session_bot_cancel import cancel
+        return await cancel(self, params)
 
     async def worker_register(self, ref, params):
         from gateway.session_worker import worker_request

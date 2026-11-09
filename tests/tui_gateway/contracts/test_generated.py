@@ -39,6 +39,7 @@ _EMIT_HELPERS = ("_emit", "_broadcast_global_event", "_voice_emit", "_pet_emit",
 _LITERAL_EMIT = re.compile(r"\b(?:{})\(\s*\"([a-z_][a-z0-9_.]*)\"".format("|".join(_EMIT_HELPERS)))
 _REQUEST_HELPERS = ("server_requests\\.send", "server_requests\\.send_async", "_ask", "_read_block")
 _LITERAL_REQUEST = re.compile(r"\b(?:{})\(\s*\"([a-z_][a-z0-9_.]*)\"".format("|".join(_REQUEST_HELPERS)))
+_CANONICAL_REQUEST = re.compile(r"\bask_viewer(?:_result)?\s*,\s*[^,]+,\s*[^,]+,\s*['\"]([a-z_][a-z0-9_.]*)['\"]")
 _LITERAL_FRAME = re.compile(r"\"method\":\s*\"event\".{0,120}?\"type\":\s*\"([a-z_][a-z0-9_.]*)\"", re.DOTALL)
 _SIDE_AGENT = re.compile(r"_spawn_side_agent\((?:[^()]|\([^()]*\))*?\"([a-z_][a-z0-9_.]*\.complete)\"", re.DOTALL)
 _SUBAGENT_RELAY = re.compile(r"\"(subagent\.[a-z_]+)\"")
@@ -82,6 +83,9 @@ def sent_server_requests() -> set[str]:
     names: set[str] = set()
     for src in (REPO / "tui_gateway").glob("*.py"):
         names.update(_LITERAL_REQUEST.findall(_read(src)))
+    # Native owner bridges can send a server request without a legacy sidecar handler.
+    for src in (REPO / "gateway").glob("*.py"):
+        names.update(_CANONICAL_REQUEST.findall(_read(src)))
     return names
 
 

@@ -1,7 +1,7 @@
 import { normalize } from '@/lib/text'
 
 const VALID_LANGUAGE_RE = /^[a-z0-9][a-z0-9+#-]*$/i
-const NON_CODE_FENCE_LANGUAGES = new Set(['', 'text', 'plain', 'plaintext', 'md', 'markdown'])
+const NON_CODE_FENCE_LANGUAGES = new Set(['', 'text', 'plain', 'plaintext'])
 
 const COMMON_CODE_LANGUAGES = new Set([
   'bash',
@@ -49,6 +49,12 @@ export function sanitizeLanguageTag(tag: string): string {
   const first = trimmed.split(/\s/, 1)[0] || ''
 
   return VALID_LANGUAGE_RE.test(first) && first.length <= 16 ? first.toLowerCase() : ''
+}
+
+export function isMarkdownCodeLanguage(language: string | undefined): boolean {
+  const tag = sanitizeLanguageTag(language || '')
+
+  return tag === 'md' || tag === 'markdown'
 }
 
 // Sanitized language tag → codicon glyph. Anything not listed falls back to
@@ -337,6 +343,12 @@ export function isLikelyStructuredText(body: string): boolean {
 }
 
 export function isLikelyProseFence(info: string, body: string): boolean {
+  // Explicit Markdown fences deliver source (prompts, documents, examples).
+  // Headings and lists are expected code here, not evidence of a bad fence.
+  if (isMarkdownCodeLanguage(info)) {
+    return false
+  }
+
   const trimmedInfo = info.trim()
   const rawInfo = trimmedInfo.toLowerCase()
   const language = sanitizeLanguageTag(info)
@@ -379,6 +391,10 @@ export function isLikelyProseFence(info: string, body: string): boolean {
 }
 
 export function isLikelyProseCodeBlock(language: string | undefined, code: string | undefined): boolean {
+  if (isMarkdownCodeLanguage(language)) {
+    return false
+  }
+
   const cleanLanguage = sanitizeLanguageTag(language || '')
   const signals = codeSignals(code || '')
 

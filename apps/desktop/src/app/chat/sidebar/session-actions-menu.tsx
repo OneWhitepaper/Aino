@@ -10,6 +10,7 @@ import {
   reloadTreePane,
   treeTabCloseTargets
 } from '@/components/pane-shell/tree/store'
+import { $workspaceOwnerLabels, workspaceOwnerTitle } from '@/components/pane-shell/workspace-scope'
 import {
   type ActionItemSpec,
   ActionsContextMenu,
@@ -31,6 +32,7 @@ import { ArchiveOff } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { PROFILE_SWATCHES } from '@/lib/profile-color'
 import { exportSession } from '@/lib/session-export'
+import { useStoresSelector } from '@/lib/use-session-slice'
 import { activeGateway } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
 import {
@@ -55,6 +57,7 @@ import {
 import { $sessionColorOverrides, setSessionColorOverride } from '@/store/session-color'
 import { ambientRequestFor } from '@/store/session-gone-latch'
 import {
+  $botChatScopes,
   $sessionStates,
   $sessionTiles,
   closeAllOpenSessionTiles,
@@ -168,7 +171,7 @@ interface SessionActions {
   onToggleUnread?: () => void
   onBranch?: () => void
   onArchive?: () => void
-  onDelete?: () => void
+  onDelete?: () => Promise<void> | void
   /** Close this surface (a tile tab) — omitted where nothing closes (sidebar
    *  rows, the main tab). */
   onClose?: () => void
@@ -289,6 +292,16 @@ function useSessionActions({
   const suppressCloseFocusRef = useRef(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const tiles = useStore($sessionTiles)
+
+  // Canonical bot-chat titles are registry keys. The confirmation names the
+  // same exact session owner as its caption without changing that stored key.
+  const deleteTitle = useStoresSelector([$sessionTiles, $botChatScopes, $workspaceOwnerLabels], () =>
+    workspaceOwnerTitle(
+      title,
+      $sessionTiles.get().find(tile => tile.storedSessionId === sessionId) ?? $botChatScopes.get()[sessionId]
+    )
+  )
+
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const isRemote = useStore($connection)?.mode === 'remote'
   // The row's finished-unread dot is cleared by opening the session (main or
@@ -631,12 +644,10 @@ function useSessionActions({
 
   const deleteDialog = (
     <DeleteSessionDialog
-      onConfirm={() => {
-        onDelete?.()
-      }}
+      onConfirm={() => onDelete?.()}
       onOpenChange={setDeleteOpen}
       open={deleteOpen}
-      sessionTitle={title}
+      sessionTitle={deleteTitle}
     />
   )
 
@@ -646,15 +657,15 @@ function useSessionActions({
 interface DeleteSessionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: () => void
+  onConfirm: () => Promise<void> | void
   sessionTitle: string
 }
 
 // Thin wrapper over ConfirmDialog — the single choke point for every session
 // delete entry point (sidebar rows, tab menus, the chat header). Deleting a
 // session is irreversible and the desktop used to fire it instantly on click
-// (#61470); this mirrors the CLI's y/N guard. onConfirm is the fire-and-forget
-// delete call; ConfirmDialog owns the busy/done beat and Enter-to-confirm.
+// (#61470); this mirrors the CLI's y/N guard. The deletion promise reaches
+// ConfirmDialog so failure stays in the decision instead of showing success.
 function DeleteSessionDialog({ open, onOpenChange, onConfirm, sessionTitle }: DeleteSessionDialogProps) {
   const { t } = useI18n()
   const r = t.sidebar.row

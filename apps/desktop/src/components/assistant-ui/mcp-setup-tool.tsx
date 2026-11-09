@@ -1,6 +1,7 @@
 'use client'
 
 import { type ToolCallMessagePartProps, useAuiState } from '@assistant-ui/react'
+import type { ConnectionTargetLaunchKind } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -62,6 +63,11 @@ const DONE = {
   enable: (copy: SetupCopy, server: string) => copy.enabled(server),
   install: (copy: SetupCopy, server: string) => copy.installed(server)
 } satisfies Record<SetupAction, (copy: SetupCopy, server: string) => string>
+
+const LAUNCH_LINE = {
+  remote: (copy: SetupCopy, target: string) => copy.launchRemote(target),
+  stdio: (copy: SetupCopy, target: string) => copy.launchCommand(target)
+} satisfies Record<ConnectionTargetLaunchKind, (copy: SetupCopy, target: string) => string>
 
 /** The row's one verb. `approve` is the user's consent, `working` is the backend acting on it, `open`
  *  is a sign-in link the backend already minted, `reissue` asks for a fresh attempt. */
@@ -415,6 +421,11 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
   const displayServer = prettyName(server)
   const { mark, rowCue } = rowPresentation(target, action, verb, t)
 
+  // What approving runs or contacts, shown until the row resolves. Plain text from the backend's
+  // scrubbed line: React escapes it. The backend never cuts the line, so it wraps in full; a very
+  // long one scrolls inside a bounded box, and every argument stays reachable without hover.
+  const launch = target.launch && !CONNECTOR_CARD_PHASES[target.state].resolved ? target.launch : null
+
   return (
     <>
       <ConnectorRow
@@ -425,6 +436,16 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
         markLabel={rowCue ?? MARK_LABEL[mark](t.connectors)}
       />
       <McpSetupReview target={target} />
+      {launch ? (
+        <p
+          className="-mt-1 max-h-40 overflow-y-auto break-all whitespace-pre-wrap ml-6.5 font-mono text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)"
+          data-slot="mcp-launch-target"
+        >
+          {LAUNCH_LINE[launch.kind](copy, launch.target)}
+          {launch.cwd ? <span className="block">{copy.launchCwd(launch.cwd)}</span> : null}
+          {launch.env?.length ? <span className="block">{copy.launchEnv(launch.env.join(', '))}</span> : null}
+        </p>
+      ) : null}
       <SetupFormDialog
         copy={{
           cancel: t.connectors.setupCancel,

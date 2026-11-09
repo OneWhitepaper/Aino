@@ -16,7 +16,7 @@ import threading
 import time
 
 from gateway.hosted_room_driver import TaskIdentity
-from gateway.session_contract import Principal
+from gateway.session_contract import SessionActor
 from gateway.session_authorities import owner_scope
 from gateway.session_hosted_rpc import HostedRoomAuthorityRPC
 from gateway.owner_identity import same_owner
@@ -32,6 +32,22 @@ _OPERATIONS = frozenset({'resolve_exact', 'create', 'resume', 'submit', 'history
 _CHUNK_BYTES = 360 * 1024
 _CAPS = frozenset({'session:create', 'session:read', 'session:submit',
                    'session:control', 'session:approve'})
+# The control server emits ``ExceptionType: reason``. Match whole known envelopes;
+# an arbitrary diagnostic ending in a known reason is still an unknown failure.
+_OWNER_ERRORS = {
+    prefix + reason: reason
+    for reason in (
+        'permission_denied', 'profile_mismatch', 'invalid_params', 'unknown_execution',
+        'stale_generation', 'admission_conflict', 'response_too_large', 'request_too_large',
+        'storage_unavailable', 'awaiting_managed_credentials', 'managed_binding_forbidden',
+        'managed_binding_busy', 'managed_binding_stale', 'managed_binding_expired',
+        'managed_binding_invalid', 'managed_model_identity_mismatch', 'managed_model_protocol_unsupported',
+        'managed_model_switch_failed', 'session_busy', 'not_found', 'revision_conflict',
+        'runtime_coordination_required', 'runtime_retired', 'stale_epoch', 'queue_full',
+        'session_idle', 'admission_started', 'unsupported_operation',
+    )
+    for prefix in ('', 'RuntimeStoreError: ', 'ManagedBindingError: ')
+}
 
 
 def owner_request(home, verb, params, *, timeout=30):
@@ -72,10 +88,8 @@ def owner_request(home, verb, params, *, timeout=30):
         raise RuntimeStoreError('runtime_draining')
     response = json.loads(raw)
     if response.get('ok') is not True:
-        reason = str(response.get('error', '')).split(': ')[-1]
-        if reason not in {'permission_denied', 'profile_mismatch', 'invalid_params', 'unknown_execution',
-                          'stale_generation', 'admission_conflict', 'response_too_large', 'request_too_large'}:
-            reason = 'runtime_draining'
+        error = response.get('error')
+        reason = _OWNER_ERRORS.get(error, 'runtime_draining') if isinstance(error, str) else 'runtime_draining'
         raise RuntimeStoreError(reason)
     if response.get('protocol') != 1 or response.get('id') != 1:
         raise RuntimeStoreError('runtime_draining')
@@ -169,10 +183,10 @@ def _attachment_data(binding, attested, params):
 
 def _principal(authority, binding):
     # Source-profile namespace prevents equal room owner strings on other owners
-    # from aliasing a target's principal. Never widen Principal.profile_id.
+    # from aliasing a target's principal. Never widen SessionActor.profile_id.
     identity = json.dumps([binding['source_home'], binding['owner']], separators=(',', ':'))
     subject = 'hosted-owner:' + hashlib.sha256(identity.encode()).hexdigest()
-    return Principal(subject, authority.profile_id, _CAPS, 'hosted-owner-transport')
+    return SessionActor(subject, authority.profile_id, _CAPS, 'hosted-owner-transport')
 
 
 def install_hosted_transport(server, authority, loop, *, attest):

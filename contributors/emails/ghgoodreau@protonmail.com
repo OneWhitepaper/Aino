@@ -1,0 +1,2 @@
+ghgoodreau
+# Verified from NousResearch/hermes-agent commit 7b204ed1633fa193fa9129f67bc0c9e4951f7a8f

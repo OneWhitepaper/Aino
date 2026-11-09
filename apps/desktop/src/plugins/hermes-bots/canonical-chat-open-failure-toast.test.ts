@@ -15,21 +15,23 @@ const { hostMock, pluginCtx } = vi.hoisted(() => ({
     notify: vi.fn(),
     notifyError: vi.fn(),
     openSession: vi.fn(),
+    openModelSettings: undefined as unknown,
     request: vi.fn(),
     revealPane: vi.fn()
   },
   pluginCtx: { current: null as null | { i18n?: { t: (key: string, ...args: unknown[]) => string } } }
 }))
 
-vi.mock('@hermes/plugin-sdk', () => ({
+vi.mock('@hermes/plugin-sdk', async () => ({
   BOT_CHAT_SESSION_HYDRATION_TIMEOUT_MS: 15_000,
   host: hostMock,
+  translateNow: (await import('@/i18n')).translateNow,
   usePluginI18n: () => (key: string) => key
 }))
 
 vi.mock('./routing', () => ({
   backendTargetProfile: (route: { targetProfile?: string } | null, name: string) => route?.targetProfile ?? name,
-  botConnectionRoute: () => null,
+  botConnectionRoute: (bot: RosterRow) => bot?.route ?? null,
   botRosterMeta: () => ({}),
   botWorkspaceOwnerKey: (bot: { name?: string } | null) => `bot:${bot?.name || 'default'}`,
   requestForBot: vi.fn()
@@ -70,9 +72,72 @@ async function load() {
 beforeEach(() => {
   vi.clearAllMocks()
   pluginCtx.current = null
+  hostMock.openModelSettings = undefined
 })
 
 describe('notifyBotOpenFailure', () => {
+  it.each(['platform_account_changed', 'stale_account_revision', 'not_authenticated'])(
+    'sends %s to the existing account recovery page',
+    async code => {
+      const { notifyBotOpenFailure } = await load()
+      notifyBotOpenFailure(Object.assign(new Error('账户需要检查'), { code }), BOT, 'open')
+      const toast = lastToast()
+    expect(toast.action?.label).toBe('My Account')
+      await toast.action?.onClick()
+      expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=account')
+      expect(hostMock.revealPane).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a structured unsupported runtime failure on the connection update recovery', async () => {
+    const { notifyBotOpenFailure } = await load()
+    notifyBotOpenFailure(Object.assign(new Error('运行服务不支持'), { code: 'unsupported_gateway' }), BOT, 'open')
+    const toast = lastToast()
+    expect(toast.message).toContain('Update Studio Mac')
+    await toast.action?.onClick()
+    expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=gateway')
+  })
+
+  it.each([false, true])('uses structured model errors despite translated messages (wrapped: %s)', async wrapped => {
+    const { notifyBotOpenFailure } = await load()
+    const route = { connectionId: 'local', mode: 'local' as const, profile: 'ops-alias', targetProfile: 'ops' }
+    const error = Object.assign(new Error('模型不可用'), { code: 'model_unavailable' })
+    hostMock.openModelSettings = vi.fn(() => true)
+
+    notifyBotOpenFailure(wrapped ? new Error('Request failed', { cause: error }) : error, { ...BOT, route }, 'open')
+    const toast = lastToast()
+
+    expect(toast.action?.label).toBe('Configure model')
+    await toast.action?.onClick()
+    expect(hostMock.openModelSettings).toHaveBeenCalledWith(route)
+    expect(hostMock.navigate).not.toHaveBeenCalled()
+    expect(hostMock.revealPane).not.toHaveBeenCalled()
+  })
+
+  it('explains a source mismatch rather than silently configuring another source', async () => {
+    const { notifyBotOpenFailure } = await load()
+    hostMock.openModelSettings = vi.fn(() => false)
+    notifyBotOpenFailure(Object.assign(new Error('模型不可用'), { code: 'model_unavailable' }), BOT, 'open')
+    await lastToast().action?.onClick()
+
+    expect(hostMock.notify).toHaveBeenCalledTimes(2)
+    expect(hostMock.revealPane).not.toHaveBeenCalled()
+    expect(lastToast().message).toMatch(/connection/i)
+    lastToast().action?.onClick()
+    expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=gateway')
+  })
+
+  it('does not retarget a model recovery when the failed Bot has no captured source', async () => {
+    const { notifyBotOpenFailure } = await load()
+    hostMock.openModelSettings = vi.fn(() => true)
+    notifyBotOpenFailure(Object.assign(new Error('模型不可用'), { code: 'model_unavailable' }), { name: 'ops' }, 'open')
+    await lastToast().action?.onClick()
+
+    expect(hostMock.openModelSettings).not.toHaveBeenCalled()
+    expect(hostMock.notify).toHaveBeenCalledTimes(2)
+    expect(lastToast().message).toMatch(/connection/i)
+  })
+
   it('needs-update: names the connection, keeps the raw RPC text in detail, offers Gateways', async () => {
     const { notifyBotOpenFailure } = await load()
     const raw = 'RPC -32601: method not found: bots.canonical'

@@ -20,7 +20,7 @@
 .aino-model-menu-detail {
   min-width: 0;
   border: 1px solid var(--stroke-nous);
-  border-radius: var(--aino-radius-menu);
+  border-radius: var(--aino-radius-panel);
   background: var(--ui-bg-elevated);
   box-shadow: var(--shadow-nous);
 }
@@ -109,7 +109,7 @@
 
 .aino-model-menu-row[data-current='true'],
 .aino-model-menu-row[data-selected] {
-  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-bg-elevated));
+  background: var(--ui-control-active-background);
 }
 
 .aino-model-menu-row[data-kb-active],
@@ -246,7 +246,7 @@
   border-radius: var(--aino-radius-control);
   padding: 1px 5px;
   color: var(--ui-accent);
-  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-bg-elevated));
+  background: var(--ui-bg-quaternary);
   white-space: nowrap;
 }
 

@@ -26,6 +26,7 @@ import { frNotifications } from './fr_notifications'
 import { frOnboarding } from './fr_onboarding'
 import { frPluginPreviewAccess } from './fr_plugin_preview_access'
 import { frPluginUpdate } from './fr_plugin_update'
+import { frPluginUpdateAll } from './fr_plugin_update_all'
 import { frPreviewWeb } from './fr_preview_web'
 import { frProjects } from './fr_projects'
 import { frSharedMetrics } from './fr_shared_metrics'
@@ -34,6 +35,7 @@ import { frUpdateChannel } from './fr_update_channel'
 import { homeGuidance } from './home-guidance'
 import { introFr } from './intro-fr'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -320,6 +322,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const frBaseOverrides = {
+  notificationCenter: notificationCenterCopy['fr'],
   platformModels: {
     permanent: "Sans expiration",
     reauthorize: "Réautoriser cet appareil",
@@ -842,6 +845,7 @@ const frBaseOverrides = {
   },
   ...frNotices,
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Fermer cette fenêtre n’annule pas un envoi déjà commencé.',
     title: 'Envoyer les diagnostics à Aino',
     privacyNotice:
       'Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.',
@@ -2658,6 +2662,7 @@ memoryLayers: frMemoryLayers
         `Épinglé au commit ${sha}. Les mises à jour sont refusées tant qu’il n’est pas réinstallé avec un nouvel épinglage.`,
       pinnedBadge: (sha: string) => `épinglé @ ${sha}`,
       ...frPluginUpdate,
+      ...frPluginUpdateAll,
       ...frPluginPreviewAccess,
       uninstall: 'Désinstaller',
       uninstallTip: (name: string, profile: string) => `Désinstaller ${name} de ${profile}`,
@@ -3124,6 +3129,32 @@ memoryLayers: frMemoryLayers
       'Réessayez le redémarrage ; si le problème persiste, ouvrez les journaux et envoyez les diagnostics.',
     restartAgain: 'Redémarrer à nouveau',
     openLogs: 'Ouvrir les journaux',
+    relayLink: {
+      title: 'Team Gateway',
+      badge: 'Aucun jeton de bot requis',
+      intro: (platform: string) => `${platform} atteint cet agent via le bot Hermes partagé. Associez votre compte ${platform} et écrivez au bot pour parler à votre agent.`,
+      link: (platform: string) => `Associer ${platform}`,
+      linkAnother: (platform: string) => `Associer un autre compte ${platform}`,
+      linkedAccounts: 'Comptes associés',
+      unlink: 'Dissocier',
+      unlinkFailed: 'Impossible de dissocier ce compte',
+      stepOpen: (platform: string) => `1. Scannez le code avec votre téléphone ou ouvrez le bot dans ${platform}.`,
+      stepSend: '2. Envoyez ce message au bot depuis le compte à associer :',
+      open: (platform: string) => `Ouvrir ${platform}`,
+      copy: 'Copier le message',
+      copied: 'Copié',
+      copyFailed: (command: string) => `Échec de la copie. Tapez plutôt ${command}.`,
+      waiting: 'En attente du message dans le bot. Le code ne sert qu’une fois.',
+      linked: (platform: string) => `Compte ${platform} associé. Écrivez au bot pour parler à votre agent.`,
+      expired: 'Le code a expiré avant d’être utilisé. Demandez-en un nouveau et réessayez.',
+      refused: (platform: string) => `${platform} a refusé l’association. Demandez un nouveau code et réessayez.`,
+      qrAlt: (platform: string) => `Code QR du bot ${platform} partagé`,
+      managed: 'Géré par Team Gateway',
+      managedNote: (platform: string) => `Team Gateway assure la messagerie sur cette instance : le gateway désactive donc la connexion directe ${platform} à chaque démarrage. Pour l’utiliser en plus du relais, définissez GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true dans l’environnement du gateway (une connexion directe empêche l’instance de descendre à zéro et peut livrer les messages deux fois).`,
+      managedIntro: 'Les comptes de cet agent se lient depuis Nous Portal.',
+      openPortal: 'Lier des comptes dans Nous Portal',
+      noNewAccount: (platform: string) => `Le code n’est plus actif et aucun nouveau compte n’est apparu. Si votre compte ${platform} n’est pas listé, obtenez un nouveau code et réessayez.`
+    },
     telegramQr: {
       title: 'Choisissez comment connecter votre bot Telegram',
       subtitle:
@@ -4709,7 +4740,9 @@ memoryLayers: frMemoryLayers
       ultra: 'Ultra',
       sendsOnRoute: (level: string) => `envoie ${level} sur cette route`,
       updateFailed: "Échec de la mise à jour de l'option du modèle",
-      fastFailed: 'Échec de la mise à jour du mode rapide'
+      fastFailed: 'Échec de la mise à jour du mode rapide',
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Échec de la mise à jour de Daybreak'
     },
     gatewayMenu: {
       gateway: 'Gateway',
@@ -4819,6 +4852,15 @@ memoryLayers: frMemoryLayers
           subagent_definitions: 'Définitions de sous-agents',
           system_prompt: 'Invite système',
           tool_definitions: "Définitions d'outils"
+        },
+        compact: {
+          action: 'Compacter la conversation',
+          busyHint: "Terminez ou arrêtez d'abord la réponse en cours",
+          confirm: 'Compacter',
+          hint: 'Résumez le contexte ancien pour libérer de la place. Continuez dans cette même conversation.',
+          question: 'Compacter cette conversation en un résumé ?',
+          questionNamed: title => `Compacter « ${title} » en un résumé ?`,
+          working: 'Compaction…'
         },
         empty: 'Aucune donnée de contexte pour le moment',
         detailsUnavailable: 'Le détail est temporairement indisponible. L’utilisation actuelle reste affichée.',
@@ -4984,6 +5026,7 @@ memoryLayers: frMemoryLayers
     }
   },
   zones: {
+    switchConversation: 'Changer de conversation',
     sidebarModeMenu: 'Changer de mode de conversation',
     sidebarSessionsDescription: 'Projets, fichiers et conversations quotidiennes',
     showTabStrip: 'Afficher les onglets',
@@ -5373,6 +5416,10 @@ memoryLayers: frMemoryLayers
       authorized: server => `${server} autorisé`,
       failed: server => `Échec de la configuration de ${server}`,
       toolCount: count => (count === 1 ? '1 outil' : `${count} outils`),
+      launchCommand: target => `Exécute : ${target}`,
+      launchRemote: target => `Se connecte à : ${target}`,
+      launchEnv: keys => `Environnement : ${keys}`,
+      launchCwd: dir => `Dossier de travail : ${dir}`,
       envRequired: "Renseignez d'abord les identifiants requis",
       sendFailed: "Impossible d'envoyer la réponse de configuration MCP",
       reloadFailed:

@@ -40,7 +40,8 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('@/store/notifications', () => ({
-  notify: vi.fn()
+  notify: vi.fn(),
+  resetNotifications: vi.fn()
 }))
 
 vi.mock('@/lib/desktop-fs', () => ({

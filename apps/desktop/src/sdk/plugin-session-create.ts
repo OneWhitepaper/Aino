@@ -1,10 +1,17 @@
 import { capturePlatformDraftAuthority, createPlatformDraft } from '@/api/platform-session-binding'
 import { resolveModelDefault } from '@/lib/model-default'
+import { RECONNECT_ATTEMPT_TIMEOUT_MS } from '@/lib/with-timeout'
 import { $gateway, requestGatewayForAgent, retainGatewayForAgent, type SpawnPriority } from '@/store/gateway'
+import { $gatewayManagedCapabilities, type ManagedModelRoute, managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { samePlatformAccount } from '@/store/platform-model-owner'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { $connection } from '@/store/session'
+
+import { hasPlatformModelIdentity } from '../../shared/platform-contract'
+
+import { preparePluginGroupModels } from './plugin-group-models'
+import { requestPluginProfileCreate } from './plugin-profile-create'
 
 export interface PluginSessionCreateRoute {
   connectionId: null | string
@@ -15,7 +22,7 @@ export interface PluginSessionCreateRoute {
 type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
 
 function usesPluginPlatformDefault(method: string, params: Record<string, unknown>): boolean {
-  if (window.hermesDesktop?.accountAdapter !== 'platform' || platformModelCatalog().account.get()?.phase !== 'signed_in') {
+  if (window.hermesDesktop?.accountAdapter !== 'platform' || !hasPlatformModelIdentity(platformModelCatalog().account.get())) {
     return false
   }
 
@@ -54,10 +61,55 @@ function pluginAccountFence(): () => void {
   const account = catalog.account.get()
 
   return () => {
-    if (!samePlatformAccount(catalog.account.get(), account)) {
+    if (catalog.account.get() !== account && !samePlatformAccount(catalog.account.get(), account)) {
       throw new PlatformSelectionError('platform_account_changed')
     }
   }
+}
+
+/** Socket open precedes gateway.ready. An unknown capability is still a handshake,
+ * not evidence that an Aino account needs a third-party provider key. */
+function waitForManagedCapability(route: ManagedModelRoute): Promise<void> {
+  const current = managedModelRouteCapability(route)
+
+  if (current !== 'unknown') {
+    return current === 'supported' ? Promise.resolve() : Promise.reject(new PlatformSelectionError('unsupported_gateway'))
+  }
+
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(timer)
+      unlisten()
+
+      if (managedModelRouteCapability(route) === 'supported') { resolve() }
+      else { reject(new PlatformSelectionError('unsupported_gateway')) }
+    }
+
+    const timer = setTimeout(finish, RECONNECT_ATTEMPT_TIMEOUT_MS)
+
+    const unlisten = $gatewayManagedCapabilities.listen(() => {
+      if (managedModelRouteCapability(route) !== 'unknown') { finish() }
+    })
+  })
+}
+
+async function resolvePluginModelDefault(route: PluginSessionCreateRoute, profile: string, assertAccount: () => void) {
+  const scope = { ...(route.connectionId ? { connectionId: route.connectionId } : {}), profile }
+  const managedRoute = { connectionId: route.connectionId ?? undefined, profile: route.profile }
+  const resolved = await resolveModelDefault(scope, managedRoute)
+  assertAccount()
+
+  // Explicit third-party configuration does not depend on managed capability.
+  if (resolved.model || resolved.provider) { return resolved }
+
+  await waitForManagedCapability(managedRoute)
+  assertAccount()
+  const ready = await resolveModelDefault(scope, managedRoute)
+  assertAccount()
+
+  if (!ready.model && !ready.provider) { throw new PlatformSelectionError('unsupported_gateway') }
+
+  return ready
 }
 
 async function requestPluginRuntimeReadiness<T>(
@@ -74,10 +126,7 @@ async function requestPluginRuntimeReadiness<T>(
   try {
     assertAccount()
 
-    const resolved = await resolveModelDefault(
-      { ...(route.connectionId ? { connectionId: route.connectionId } : {}), profile: targetProfile },
-      { connectionId: route.connectionId ?? undefined, profile: route.profile }
-    )
+    const resolved = await resolvePluginModelDefault(route, targetProfile, assertAccount)
 
     assertAccount()
 
@@ -90,9 +139,48 @@ async function requestPluginRuntimeReadiness<T>(
   } catch (error) {
     if (!(error instanceof PlatformSelectionError)) { throw error }
 
-    return { ok: false, error: error.message, error_code: error.code } as T
+    return { ok: false, provider: 'aino', error: error.message, error_code: error.code } as T
   } finally {
     release()
+  }
+}
+
+function groupSendNotDispatched(error: unknown): Error {
+  const data = (error as { data?: Record<string, unknown> } | null)?.data
+
+  // Errors can be frozen or shared with another request. Preserve their public
+  // fields without mutating them; this proof concerns only this Send attempt.
+  return Object.assign(new Error(error instanceof Error ? error.message : String(error), { cause: error }), error, {
+    data: { ...data, admitted: false }
+  })
+}
+
+async function requestPreparedPluginGroup<T>(
+  route: PluginSessionCreateRoute, request: Request, method: string,
+  params: Record<string, unknown>, send: () => Promise<T>, spawnPriority?: SpawnPriority
+): Promise<T> {
+  let release: (() => void) | undefined
+  let dispatched = false
+
+  try {
+    const assertAccount = pluginAccountFence()
+    release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
+    assertAccount()
+    await preparePluginGroupModels(route, request, params.room_id as string,
+      profile => resolvePluginModelDefault(route, profile, assertAccount), assertAccount,
+      method === 'groups.retry' ? params.member_id as string : undefined)
+    assertAccount()
+    // From this point even a synchronous transport error may have posted the
+    // intent. Only the gateway can prove otherwise; preserve its exact error.
+    dispatched = true
+
+    return await send()
+  } catch (error) {
+    throw method === 'groups.send' && !dispatched ? groupSendNotDispatched(error) : error
+  } finally {
+    // Lease cleanup must not replace a receipt or its admission evidence.
+    try { release?.() }
+    catch (error) { console.warn('[plugin-session-create] group lease release failed', error) }
   }
 }
 
@@ -149,6 +237,18 @@ export async function requestPluginSession<T>(
 ): Promise<T> {
   const send = () => timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs)
 
+  if (method === 'profiles.create') {
+    return requestPluginProfileCreate(route, params, send)
+  }
+
+  if (
+    (method === 'groups.send' || (method === 'groups.retry' && typeof params.member_id === 'string')) &&
+    typeof params.room_id === 'string' && params.room_id &&
+    window.hermesDesktop?.accountAdapter === 'platform'
+  ) {
+    return requestPreparedPluginGroup(route, request, method, params, send, spawnPriority)
+  }
+
   if (!usesPluginPlatformDefault(method, params)) {
     return send()
   }
@@ -163,8 +263,7 @@ export async function requestPluginSession<T>(
 
   try {
     assertAccount()
-    const scope = { ...(route.connectionId ? { connectionId: route.connectionId } : {}), profile: route.targetProfile }
-    const resolved = await resolveModelDefault(scope, { connectionId: route.connectionId ?? undefined, profile: route.profile })
+    const resolved = await resolvePluginModelDefault(route, route.targetProfile, assertAccount)
     assertAccount()
 
     if (!resolved.platform) {

@@ -19,6 +19,7 @@ import { useI18n } from '@/i18n'
 import { aboutPageCopy } from '@/i18n/about-page'
 import { RELEASES_URL, WEBSITE_URL } from '@/lib/brand'
 import { ExternalLink } from '@/lib/external-link'
+import { $cloudOwnsUpdates } from '@/store/cloud-updates'
 import { $connection } from '@/store/session'
 import {
   $backendUpdateApply,
@@ -48,9 +49,12 @@ export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElemen
   const remoteStatus = useStore($backendUpdateStatus)
   const remoteApply = useStore($backendUpdateApply)
   const remote = connection?.mode === 'remote'
+  // Hermes Cloud updates its agents itself: no checker, channel or Update button for what it owns.
+  const cloudOwned = useStore($cloudOwnsUpdates)
+  const showBackend = remote && !cloudOwned.backend
 
   const remoteAttention =
-    remote &&
+    showBackend &&
     Boolean(
       remoteStatus?.error ||
       remoteStatus?.retirement ||
@@ -64,22 +68,22 @@ export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElemen
   useEffect((): void => {
     void refreshDesktopVersion()
 
-    if (remote) {
+    if (showBackend) {
       void checkBackendUpdates()
     }
-  }, [connection, remote])
+  }, [connection, showBackend])
 
   return (
     <SettingsContent>
       <div className="about-page">
         <VersionHero variant="compact" version={version} />
-        <section
+        {!cloudOwned.client && <section
           aria-label={t.settings.about.updates}
           className="about-update"
           id={settingElementId(SETTING_IDS.about.updates)}
         >
           <UpdateStatusCard target="client" variant="compact" version={version} />
-        </section>
+        </section>}
         <div className="about-links">
           <ExternalLink href={WEBSITE_URL} native showExternalIcon>
             {copy.website}
@@ -128,8 +132,8 @@ export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElemen
                   </details>
                 </>
               )}
-              <UpdateChannelRow />
-              {remote && <UpdateStatusCard showReleaseNotes={false} target="backend" version={version} />}
+              {!cloudOwned.client && <UpdateChannelRow />}
+              {showBackend && <UpdateStatusCard showReleaseNotes={false} target="backend" version={version} />}
               <DialogFooter>
                 {version && (
                   <CopyButton

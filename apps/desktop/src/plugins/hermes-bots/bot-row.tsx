@@ -8,7 +8,6 @@
 
 import {
   cn,
-  coarseElapsed,
   Codicon,
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -41,7 +40,7 @@ import {
   focusedRosterOwner,
   saveSelectedRosterBot
 } from './bot-state'
-import { ensureBotMetadata } from './canonical-chat'
+import { ensureBotMetadata, ensureBotProfile } from './canonical-chat'
 import {
   $botAttention,
   $botMeta,
@@ -58,6 +57,7 @@ import {
   saveBotMeta
 } from './data'
 import { $groupChats, $groupChatWorkspace } from './group-chat'
+import { projectGroupMentions } from './group-chat-mentions'
 import { botGroups, groupLastActivity } from './group-membership'
 import { toggleGroupChatPinned } from './group-pin'
 import { $activeGroupMemberKeys } from './group-presence'
@@ -67,7 +67,8 @@ import { displayName, rosterConnectionLabel, stripPreviewMarkdown } from './labe
 import { duplicateBot } from './profile-ops'
 import { botRecentSession, openBotRecentSession } from './recent-session'
 import { openRosterBot } from './roster-actions'
-import { botRosterMeta, botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
+import { botRosterMeta, botWorkspaceOwnerKey, groupTranscriptSpeakerMeta, setBotsWorkspaceOwner } from './routing'
+import { rowAge } from './row-age'
 import {
   A2A_PREFIX_RE,
   botCanonicalSessionId,
@@ -78,7 +79,7 @@ import {
   workerActiveAt
 } from './row-helpers'
 import { openBotScreen } from './screen-open'
-import type { GroupMember, RosterRow, SidebarRowLabels } from './types'
+import type { GroupMember, RosterRow } from './types'
 import {
   $botSections,
   $draggingBot,
@@ -92,17 +93,6 @@ import {
 
 // ── bot row ──────────────────────────────────────────────────────────────────
 
-/** Row age in the sidebar's compact form ("now", "52m", "3h", "18d").
- *  Deliberately the same `coarseElapsed` + suffix pair the session rows
- *  directly above use, so the two lists in one rail don't disagree about how
- *  an age is spelled. Not `relativeTime` — that's the bidirectional Intl form
- *  ("in 14 hr"), which belongs on a scheduled next-run. */
-function rowAge(ms: number, r: SidebarRowLabels): string {
-  const { unit, value } = coarseElapsed(Date.now() - ms)
-
-  return unit === 'second' ? r.ageNow : `${value}${unit === 'day' ? r.ageDay : unit === 'hour' ? r.ageHour : r.ageMin}`
-}
-
 interface BotRowProps {
   bot: RosterRow
   onDelete: (bot: RosterRow) => void
@@ -111,6 +101,16 @@ interface BotRowProps {
   /** Opens the New section dialog; the bot is filed into it on create. */
   onNewSection: (bot: RosterRow) => void
   showHandle?: boolean
+}
+
+function botMessagePreview(preview: string | undefined, fromBot: ReturnType<typeof previewKind>['fromBot']): string {
+  return stripPreviewMarkdown(fromBot ? (preview || '').replace(A2A_PREFIX_RE, '').trim() || '…' : preview || '')
+}
+
+function groupMessagePreview(fromKind: string | undefined, author: string, text: string, you: string): string {
+  const speaker = fromKind === 'user' ? you : author
+
+  return `${speaker}: ${stripPreviewMarkdown(text) || '…'}`
 }
 
 export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandle }: BotRowProps) {
@@ -190,9 +190,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
   const { fromBot } = previewKind(previewSession?.preview, $lastRoster.get(), bot.connectionId)
 
   // DM previews read like DMs: strip the delivery prefix, keep the message.
-  const displayPreview = stripPreviewMarkdown(
-    fromBot ? (previewSession?.preview || '').replace(A2A_PREFIX_RE, '').trim() || '…' : previewSession?.preview || ''
-  )
+  const displayPreview = botMessagePreview(previewSession?.preview, fromBot)
 
   const handle = botHandle(bot.name, bot)
   const gatewayLabel = rosterConnectionLabel(bot) || (bot.connectionId === 'local' ? b.bot.thisDevice : '')
@@ -244,9 +242,10 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
   const row = (
     <RowButton
       aria-busy={isOpening || undefined}
+      aria-current={isActive || undefined}
       aria-label={rowTooltip}
       className={cn(
-        'flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-(--aino-radius-row) px-2 py-2 text-left transition-colors',
+        'aino-roster-bot-row',
         'hover:bg-(--chrome-action-hover)',
         isActive && 'bg-(--ui-row-active-background)',
         // The row being dragged fades in place; the browser's drag image is
@@ -264,43 +263,49 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
       }}
       onPointerEnter={warm}
     >
-      <div className={cn('shrink-0', !sourceStatus.available && 'grayscale opacity-60')}>
+      <div className={cn('aino-roster-bot-avatar', !sourceStatus.available && 'grayscale opacity-60')}>
         <BotFace
           color={avatarColor(color, bot.name)}
           image={photo ? image : null}
           mood={botMood}
           name={bot.name}
           shape={shape}
-          size={34}
+          size={32}
         />
+        <span className="aino-roster-bot-status">
+          <SidebarRowLead>
+            <SessionStatusDot storedSessionId={canonicalSessionId} />
+          </SidebarRowLead>
+        </span>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {/* The session row's own lead cell, so a bot's name sits on the
-                same left edge as every session name above it in the rail. */}
-            <SidebarRowLead>
-              <SessionStatusDot storedSessionId={canonicalSessionId} />
-            </SidebarRowLead>
+      <div className="aino-roster-bot-copy">
+        <div className="aino-roster-bot-title">
+          <div className="aino-roster-bot-name">
             {pinned ? (
               <Tip label={b.roster.pinned}>
-                <Codicon className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)" name="pinned" />
+                <Codicon
+                  className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                  name="pinned"
+                />
               </Tip>
             ) : null}
             {hidden ? (
               <Tip label={b.roster.hiddenFromRoster}>
-                <Codicon className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)" name="eye-closed" />
+                <Codicon
+                  className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                  name="eye-closed"
+                />
               </Tip>
             ) : null}
             <Tip label={rowTooltip}>
-              <span className="min-w-0 truncate text-[length:var(--aino-text-body)] font-medium">{displayName(bot, meta)}</span>
+              <span className="aino-roster-bot-label">{displayName(bot, meta)}</span>
             </Tip>
           </div>
           {attention ? (
             <Tip label={botAttentionHint(attention.reason)}>
               <Codicon
                 aria-label={b.roster.needsAttention}
-                className="shrink-0 text-[length:var(--aino-text-caption)] text-amber-600 dark:text-amber-300"
+                className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-yellow)"
                 name="warning"
               />
             </Tip>
@@ -315,7 +320,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
           ) : null}
         </div>
         {showDetailsRow ? (
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-(--ui-text-tertiary)">
+          <div className="aino-roster-bot-preview">
             {showHandle ? (
               <span className="shrink-0 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{`@${handle}`}</span>
             ) : null}
@@ -334,7 +339,9 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => void openRosterBot(bot)}>{b.bot.openBotChat}</ContextMenuItem>
-        <ContextMenuItem onSelect={() => void openRosterBot(bot, { intent: 'tab' })}>{b.bot.openBotChatInNewTab}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => void openRosterBot(bot, { intent: 'tab' })}>
+          {b.bot.openBotChatInNewTab}
+        </ContextMenuItem>
         <ContextMenuItem onSelect={() => openBotScreen(bot, meta)}>{b.screen.menu}</ContextMenuItem>
         <ContextMenuCheckboxItem
           checked={Boolean(meta?.screenAutoOpen)}
@@ -404,8 +411,8 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() =>
-            void ensureBotMetadata(bot)
-              .then(() => onEdit(bot))
+            void ensureBotProfile(bot)
+              .then(onEdit)
               .catch(error => host.notifyError?.(error, b.bot.loadFailed))
           }
         >
@@ -526,17 +533,32 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
   const log = Array.isArray(room.log) ? room.log : []
   const last = log.length ? log[log.length - 1] : null
   const lastAt = groupLastActivity(room)
-  // Room previews speak the same handle vocabulary as the roster, mentions
-  // and the group prompt: the primary profile is @hermes, not @default.
+  const meta = useValue($botMeta)
   const lastFrom = last?.from?.name || ''
 
-  const lastHandle = botHandle(
-    lastFrom || 'bot',
-    members.find(member => member?.name === lastFrom)
+  const lastMember = members.find(
+    member =>
+      member.name === lastFrom &&
+      (last?.from?.source ? (member.connectionLabel || member.connectionId) === last.from.source : !member.remoteSource)
   )
 
+  const lastName = displayName(lastMember || { name: lastFrom }, groupTranscriptSpeakerMeta(last, members, meta))
+
+  const mentionIdentities = members.map(member => ({
+    handle: botHandle(member.name, member),
+    label: displayName(member, botRosterMeta(member, meta))
+  }))
+
+  const previewText = last
+    ? projectGroupMentions(last.text, [
+        ...mentionIdentities,
+        { handle: 'all', label: b.canonical.allMembers },
+        { handle: 'everyone', label: b.canonical.allMembers }
+      ]).text
+    : ''
+
   const preview = last
-    ? `${last.from?.kind === 'user' ? b.group.you : `@${lastHandle}`}: ${stripPreviewMarkdown(last.text) || '…'}`
+    ? groupMessagePreview(last.from?.kind, lastName, previewText, b.group.you)
     : b.group.memberCount(members.length)
 
   const availableMembers = members.filter(member => botSourceStatus(member).available).length
@@ -604,7 +626,10 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
           <span className="min-w-0 flex-1 truncate text-[length:var(--aino-text-body)] font-medium">{group}</span>
           {room.pinned ? (
             <Tip label={b.roster.pinned}>
-              <Codicon className="shrink-0 text-[0.6875rem] text-(--ui-text-quaternary)" name="pinned" />
+              <Codicon
+                className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                name="pinned"
+              />
             </Tip>
           ) : null}
           {needsYou ? (

@@ -2,6 +2,7 @@ import type { Translations } from './types'
 
 export const sidebarMode: Pick<
   Translations['zones'],
+  | 'switchConversation'
   | 'sidebarModeMenu'
   | 'sidebarSessionsDescription'
   | 'showTabStrip'
@@ -10,6 +11,7 @@ export const sidebarMode: Pick<
   | 'hideStripTab'
   | 'toggleStripTab'
 > = {
+  switchConversation: 'Switch conversation',
   sidebarModeMenu: 'Switch conversation mode',
   sidebarSessionsDescription: 'Projects, files and everyday conversations',
   showTabStrip: 'Show tabs',

@@ -80,7 +80,7 @@ export function MainModelSetupEmpty({ source, onSetup }: MainModelSetupEmptyProp
   const copy = modelSourceCopy(locale)
 
   return (
-    <div className="py-4 text-[13px] text-muted-foreground">
+    <div className="py-4 text-[length:var(--aino-text-ui)] text-muted-foreground">
       <p className="mb-3 leading-relaxed">{source === 'custom' ? copy.customEmpty : copy.noProviders}</p>
       <Button onClick={onSetup} size="sm" variant="outline">
         {source === 'custom' ? copy.configureCustom : copy.configureProvider}

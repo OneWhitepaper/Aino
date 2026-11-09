@@ -119,7 +119,8 @@ const TOOL_HEADER_GLYPH_WRAP_CLASS = cn(SCAFFOLD_GLYPH_CLASS, 'self-center')
 // Glass-style section label that sits above any pre/JSON/output block.
 // Lowercase tracking + tiny size so it reads as a quiet field label rather
 // than a chrome heading. Used for "stdout", "stderr", "Search results", etc.
-const TOOL_SECTION_LABEL_CLASS = 'mb-1 text-[0.65rem] font-medium uppercase tracking-[0.08em] text-(--ui-text-tertiary)'
+const TOOL_SECTION_LABEL_CLASS =
+  'mb-1 text-[length:var(--aino-text-caption)] font-medium uppercase tracking-[0.08em] text-(--ui-text-tertiary)'
 
 // Detail payloads remain flat; only reviewable file edits own a framed surface.
 const TOOL_SECTION_SURFACE_CLASS =
@@ -127,10 +128,16 @@ const TOOL_SECTION_SURFACE_CLASS =
 
 const TOOL_EXPANDED_SHELL_CLASS = 'rounded-[0.3125rem] border border-(--ui-stroke-tertiary)'
 
-const TOOL_SECTION_PRE_CLASS = cn(TOOL_SECTION_SURFACE_CLASS, 'font-mono text-[0.7rem] leading-relaxed')
+const TOOL_SECTION_PRE_CLASS = cn(
+  TOOL_SECTION_SURFACE_CLASS,
+  'font-mono text-[length:var(--aino-text-caption)] leading-relaxed'
+)
 
 // Raw args/result dump — reference material, so a notch smaller than a body.
-const TOOL_PAYLOAD_PRE_CLASS = cn(TOOL_SECTION_SURFACE_CLASS, 'font-mono text-[0.65rem] leading-relaxed')
+const TOOL_PAYLOAD_PRE_CLASS = cn(
+  TOOL_SECTION_SURFACE_CLASS,
+  'font-mono text-[length:var(--aino-text-caption)] leading-relaxed'
+)
 
 /**
  * Technical-mode raw payload, behind a chevron disclosure.
@@ -226,17 +233,10 @@ function statusGlyph(status: ToolStatus, copy: ToolStatusCopy): ReactNode {
   }
 
   if (status === 'warning') {
-    return (
-      <AlertCircle aria-label={copy.statusRecovered} className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-    )
+    return <AlertCircle aria-label={copy.statusRecovered} className="size-3.5 shrink-0 text-(--ui-yellow)" />
   }
 
-  return (
-    <CheckCircle2
-      aria-label={copy.statusDone}
-      className="size-3.5 shrink-0 text-emerald-600/85 dark:text-emerald-400/85"
-    />
-  )
+  return <CheckCircle2 aria-label={copy.statusDone} className="size-3.5 shrink-0 text-(--ui-green)" />
 }
 
 // Leading glyph for any tool-row header. Status (running/error/warning)
@@ -363,7 +363,7 @@ function ToolTitle({
         'truncate',
         isPending && 'text-(--conversation-scaffold-meta)',
         status === 'error' && 'text-destructive',
-        status === 'warning' && 'text-amber-700 dark:text-amber-300',
+        status === 'warning' && 'text-(--ui-yellow)',
         legendary && !isPending && 'tool-memory-legendary-title text-transparent'
       )}
       fadeWidth="0px"
@@ -394,8 +394,8 @@ function useDisclosureOpen(disclosureId: string, fallbackOpen = false): boolean 
 
 function ToolDiffStats({ diffStats }: { diffStats: { added: number; removed: number } }) {
   return (
-    <span className="flex shrink-0 items-center gap-1 font-mono text-[0.625rem] tabular-nums">
-      {diffStats.added > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{diffStats.added}</span>}
+    <span className="flex shrink-0 items-center gap-1 font-mono text-[length:var(--aino-text-caption)] tabular-nums">
+      {diffStats.added > 0 && <span className="text-(--ui-green)">+{diffStats.added}</span>}
       {diffStats.removed > 0 && <span className="text-rose-600 dark:text-rose-400">−{diffStats.removed}</span>}
     </span>
   )
@@ -818,7 +818,7 @@ function ToolEntry({ part }: ToolEntryProps) {
                   {detailSections.body && (
                     <pre
                       className={cn(
-                        'max-h-56 overflow-auto whitespace-pre-wrap wrap-anywhere font-mono text-[0.7rem] leading-[1.55] text-(--ui-text-secondary)',
+                        'max-h-56 overflow-auto whitespace-pre-wrap wrap-anywhere font-mono text-[length:var(--aino-text-caption)] leading-[1.55] text-(--ui-text-secondary)',
                         detailSections.summary && 'mt-1.5'
                       )}
                     >
@@ -938,7 +938,7 @@ function TerminalTranscript({ part, pending, view }: TerminalTranscriptProps) {
         )}
       </div>
       <ExpandableBlock className="overscroll-y-auto" collapsedHeight={200}>
-        <div className="min-w-full w-max space-y-3 px-3 pt-1 pb-4 font-mono text-[0.8125rem] leading-5 text-(--ui-text-secondary)">
+        <div className="min-w-full w-max space-y-3 px-3 pt-1 pb-4 font-mono text-[length:var(--aino-text-label)] leading-5 text-(--ui-text-secondary)">
           {command && (
             <pre className="m-0 whitespace-pre" data-terminal-command="">
               <span aria-hidden className="select-none text-(--ui-text-tertiary)">
@@ -950,7 +950,9 @@ function TerminalTranscript({ part, pending, view }: TerminalTranscriptProps) {
           {output && (
             <div>
               {view.stdout && stderr && !failed && (
-                <p className="mb-1 font-sans text-[0.6875rem] text-(--ui-text-tertiary)">{copy.stdout}</p>
+                <p className="mb-1 font-sans text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                  {copy.stdout}
+                </p>
               )}
               <pre className="m-0 whitespace-pre" data-terminal-output="">
                 <AnsiText text={clampForDisplay(output)} />
@@ -959,7 +961,9 @@ function TerminalTranscript({ part, pending, view }: TerminalTranscriptProps) {
           )}
           {stderr && (
             <div>
-              <p className="mb-1 font-sans text-[0.6875rem] text-(--ui-text-tertiary)">{copy.stderr}</p>
+              <p className="mb-1 font-sans text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                {copy.stderr}
+              </p>
               <pre className="m-0 whitespace-pre" data-terminal-output="">
                 <AnsiText text={clampForDisplay(stderr)} />
               </pre>
@@ -967,7 +971,7 @@ function TerminalTranscript({ part, pending, view }: TerminalTranscriptProps) {
           )}
         </div>
       </ExpandableBlock>
-      <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">
+      <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
         <div className="flex items-center gap-2">
           <TimelineTimestamp completedAt={part.completedAt} timestamp={part.timestamp} />
           {view.durationLabel && <span>{view.durationLabel}</span>}

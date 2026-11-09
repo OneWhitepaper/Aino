@@ -34,12 +34,15 @@ export function BillingBanner({ sessionId }: { sessionId: null | string }) {
   const message = firstLine(block.message) || copy.fallbackMessage
 
   return (
-    <StatusRow
-      leading={<Codicon aria-hidden className="text-destructive/85" name="credit-card" size="0.8rem" />}
-      trailing={
-        <>
+    <StatusRow leading={<Codicon aria-hidden className="text-destructive/85" name="credit-card" size="0.8rem" />}>
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5 py-1">
+        <p className="min-w-0 text-sm leading-5 text-foreground [overflow-wrap:anywhere]">
+          <span className="font-medium">{title}</span>
+          {message && <span className="text-[0.8125rem] text-(--ui-text-secondary)"> · {message}</span>}
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Button
-            className="text-foreground/90 hover:text-foreground"
+            className="min-h-7 max-w-full whitespace-normal text-left text-[0.8125rem] text-foreground hover:text-foreground [overflow-wrap:anywhere]"
             onClick={() => runBillingRecovery(block)}
             size="micro"
             type="button"
@@ -49,7 +52,7 @@ export function BillingBanner({ sessionId }: { sessionId: null | string }) {
           </Button>
           <Button
             aria-label={copy.dismiss}
-            className="size-4 rounded-md text-muted-foreground/60 hover:text-foreground/90"
+            className="size-7 rounded-md text-(--ui-text-secondary) hover:text-foreground"
             onClick={() => {
               recordFriction('notice_dismissed', 'billing_banner')
               clearBillingBlock(sessionId)
@@ -58,16 +61,10 @@ export function BillingBanner({ sessionId }: { sessionId: null | string }) {
             type="button"
             variant="ghost"
           >
-            <Codicon name="close" size="0.75rem" />
+            <Codicon aria-hidden name="close" size="0.85rem" />
           </Button>
-        </>
-      }
-      trailingVisible
-    >
-      <span className="min-w-0 truncate text-[0.73rem] leading-4 text-foreground/92">
-        <span className="font-medium">{title}</span>
-        {message && <span className="text-muted-foreground/80"> · {message}</span>}
-      </span>
+        </div>
+      </div>
     </StatusRow>
   )
 }

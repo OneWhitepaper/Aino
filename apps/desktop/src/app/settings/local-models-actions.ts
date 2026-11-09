@@ -45,7 +45,7 @@ export function isActiveStatus(status: LocalRuntimeJob['status']): boolean {
   return status === 'paused' || status === 'running'
 }
 
-// The actions below never reject: a failure toasts only while its owner is
+// Non-dialog actions never reject: a failure toasts only while its owner is
 // still the one on screen, so a late error cannot land on the next connection.
 
 export async function runQuickstart({ owner, client, copy }: LocalModelsActionScope): Promise<void> {
@@ -132,18 +132,18 @@ export async function setServerRunning(
 }
 
 export async function deleteModel({ owner, client, copy }: LocalModelsActionScope, target: string): Promise<void> {
-  try {
-    await deleteLocalModel(target, localModelsRequestScope(owner))
-    notify({
-      durationMs: 2_500,
-      kind: 'success',
-      message: copy.deleted(target),
-      title: localModelsNotificationTitle(owner)
-    })
-    refreshLocalModels(owner, client)
-  } catch (err) {
-    if (isCurrentLocalModelsOwner(owner)) {
-      notifyError(err, copy.deleteFailed)
-    }
+  // The shared confirmation owns pending/error state and must receive failures.
+  const result = await deleteLocalModel(target, localModelsRequestScope(owner))
+
+  if (!result.ok) {
+    throw new Error(copy.deleteFailed)
   }
+
+  notify({
+    durationMs: 2_500,
+    kind: 'success',
+    message: copy.deleted(target),
+    title: localModelsNotificationTitle(owner)
+  })
+  refreshLocalModels(owner, client)
 }

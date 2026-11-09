@@ -152,12 +152,12 @@ export function ScreenInstallCard({ bot, status, onInstalled }: ScreenInstallCar
           </Button>
         ) : null}
         {log.length > 0 ? (
-          <pre className="max-h-48 overflow-auto rounded bg-black/80 p-2 text-left font-mono text-[0.65rem] leading-tight text-white/85">
+          <pre className="max-h-48 overflow-auto rounded bg-black/80 p-2 text-left font-mono text-[length:var(--aino-text-caption)] leading-tight text-white/85">
             {log.join('\n')}
             <div ref={logEnd} />
           </pre>
         ) : null}
-        {error ? <div className="text-xs text-red-500">{error}</div> : null}
+        {error ? <div className="text-xs text-destructive">{error}</div> : null}
         <div className="text-xs text-muted-foreground">{t.screen.installHint}</div>
       </div>
     </div>

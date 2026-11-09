@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { Check, CheckCircle2, Cpu, Download, Eject, Loader2, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { confirm } from '@/store/confirm'
 import { runningDownloadFor } from '@/store/local-runtime-jobs'
 import type { LocalCatalogModel, LocalModelPlacement, LocalModelsStatus, LocalRuntimeJob } from '@/types/hermes'
 
@@ -98,31 +99,33 @@ function EjectModelButton({ modelId }: ModelIdProps): ReactElement {
 
 function DeleteModelButton({ modelId }: ModelIdProps): ReactElement {
   const scope: LocalModelsActionScope = useLocalModelsActionScope()
-  const [deleting, setDeleting] = useState<boolean>(false)
+  const [confirming, setConfirming] = useState<boolean>(false)
 
   async function handleDelete(): Promise<void> {
-    if (!window.confirm(scope.copy.deleteConfirm(modelId))) {
-      return
-    }
-
-    setDeleting(true)
+    setConfirming(true)
 
     try {
-      await deleteModel(scope, modelId)
+      await confirm({
+        confirmLabel: scope.copy.deleteAction,
+        destructive: true,
+        title: scope.copy.deleteConfirm(modelId),
+        onConfirm: () => deleteModel(scope, modelId)
+      })
     } finally {
-      setDeleting(false)
+      setConfirming(false)
     }
   }
 
   return (
     <Tip label={scope.copy.deleteAction}>
       <Button
-        className={cn(deleting && '[&_svg]:animate-spin')}
+        aria-label={scope.copy.deleteAction}
+        disabled={confirming}
         onClick={() => void handleDelete()}
         size="icon"
         variant="ghost"
       >
-        {deleting ? <Loader2 /> : <Trash2 />}
+        <Trash2 />
       </Button>
     </Tip>
   )
@@ -196,7 +199,9 @@ export function CatalogModelRow({ model, status, jobs }: CatalogModelRowProps): 
           <div className="mt-2 grid gap-1">
             <ProgressBar paused={dJob.status === 'paused'} percent={dJob.percent} />
 
-            <p className="text-[0.68rem] text-muted-foreground">{downloadStatusText(dJob, copy)}</p>
+            <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">
+              {downloadStatusText(dJob, copy)}
+            </p>
           </div>
         ) : undefined
       }
@@ -328,9 +333,11 @@ export function SideloadedModelRow({ model: m, status, jobs }: SideloadedModelRo
       description={<span>{copy.addedByYou}</span>}
       title={
         <span className="inline-flex items-center gap-2">
-          <span className="truncate font-mono text-[0.8rem]">{m.id}</span>
+          <span className="truncate font-mono text-[length:var(--aino-text-ui)]">{m.id}</span>
 
-          <span className="text-[0.68rem] font-normal text-muted-foreground">{m.size_label}</span>
+          <span className="text-[length:var(--aino-text-caption)] font-normal text-muted-foreground">
+            {m.size_label}
+          </span>
         </span>
       }
     />

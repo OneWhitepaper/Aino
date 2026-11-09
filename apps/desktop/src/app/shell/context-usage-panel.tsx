@@ -1,20 +1,25 @@
 import { compactNumber } from '@hermes/shared'
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
-import { useI18n } from '@/i18n'
+import { type Translations, useI18n } from '@/i18n'
+import { Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import type { ContextBreakdown, ContextUsageCategory, UsageStats } from '@/types/hermes'
+
+import type { CompactConversationAction } from './hooks/use-compact-conversation'
+import { StatusbarMenuCloseContext } from './statusbar-controls'
 
 function tokenCountLabel(value: number | null | undefined): string {
   return value == null ? '\u2014' : compactNumber(value)
 }
 
 interface ContextUsagePanelProps {
-  compact?: boolean
   compacting?: boolean
   breakdown: ContextBreakdown | null
+  /** Omitted by surfaces that cannot act on the session: numbers only. */
+  compact?: boolean | CompactConversationAction
   loading: boolean
   unavailable?: boolean
   onRetry?: () => void
@@ -60,22 +65,14 @@ export function ContextUsagePanel({
 
   const hasContextData = (contextMax ?? 0) > 0 || (contextUsed ?? 0) > 0 || categories.length > 0
 
-  const status = compacting
-    ? copy.compacting
-    : contextPercent !== null
-      ? `${usage.context_estimated ? '~' : ''}${copy.percentFull(contextPercent)}`
-      : hasContextData
-        ? null
-        : loading
-          ? copy.loading
-          : copy.empty
+  const status = contextStatus(copy, compacting, contextPercent, usage.context_estimated, hasContextData, loading)
 
   const summary = copy.tokenSummary(
     `${usage.context_estimated && contextUsed != null ? '~' : ''}${usedLabel}`,
     maxLabel
   )
 
-  if (compact) {
+  if (compact === true) {
     return (
       <CompactContextUsage
         categories={categories}
@@ -88,11 +85,14 @@ export function ContextUsagePanel({
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3 p-3 text-[0.75rem]" data-slot="context-usage-panel">
+    <div
+      className="flex w-full min-w-0 flex-col gap-3 p-3 text-[length:var(--aino-text-caption)]"
+      data-slot="context-usage-panel"
+    >
       <div className="flex items-baseline justify-between gap-2">
         {showTitle && <p className="font-medium text-foreground">{copy.title}</p>}
 
-        <span className="text-[0.6875rem] text-muted-foreground">{summary}</span>
+        <span className="text-[length:var(--aino-text-caption)] text-muted-foreground">{summary}</span>
       </div>
 
       {compacting && (
@@ -102,7 +102,7 @@ export function ContextUsagePanel({
       )}
 
       {contextPercent !== null && (
-        <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
+        <p className="flex items-center justify-between gap-2 text-[length:var(--aino-text-caption)] text-foreground">
           <span>
             {usage.context_estimated ? '~' : ''}
             {copy.percentFull(contextPercent)}
@@ -144,6 +144,48 @@ export function ContextUsagePanel({
         onRetry={onRetry}
         unavailable={unavailable}
       />
+      {typeof compact === 'object' && <CompactConversationRow compact={compact} />}
+    </div>
+  )
+}
+
+function CompactConversationRow({ compact }: { compact: CompactConversationAction }) {
+  const { t } = useI18n()
+  const closeMenu = useContext(StatusbarMenuCloseContext)
+  const copy = t.shell.statusbar.contextUsagePanel.compact
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-(--ui-stroke-tertiary) pt-2" data-slot="context-compact">
+      <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">
+        {compact.busy ? copy.busyHint : copy.hint}
+      </p>
+
+      {compact.pending ? (
+        <p
+          className="inline-flex items-center gap-1.5 text-[length:var(--aino-text-caption)] text-muted-foreground"
+          data-testid="context-compact-pending"
+        >
+          <Loader2 className="size-3 animate-spin" />
+          {copy.working}
+        </p>
+      ) : (
+        // Close the dropdown first: left open under the shared confirmation, its
+        // modal layer keeps trapping pointer events and the meter cannot reopen.
+        <Button
+          className="w-full justify-start"
+          disabled={compact.busy || compact.unavailable}
+          onClick={() => {
+            closeMenu()
+            compact.onRequest()
+          }}
+          size="xs"
+          type="button"
+          variant="ghost"
+        >
+          <Codicon name="archive" size="0.75rem" />
+          {copy.action}
+        </Button>
+      )}
     </div>
   )
 }
@@ -214,13 +256,13 @@ function ContextUsageEmptyState({
   }
 
   if (loading) {
-    return <p className="text-[0.6875rem] text-muted-foreground">{copy.loading}</p>
+    return <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{copy.loading}</p>
   }
 
   if (unavailable) {
     return (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.6875rem] text-muted-foreground" role="status">
+        <p className="text-[length:var(--aino-text-caption)] text-muted-foreground" role="status">
           {hasContextData ? copy.detailsUnavailable : copy.unavailable}
         </p>
         {onRetry && (
@@ -234,7 +276,7 @@ function ContextUsageEmptyState({
 
   const message = hasContextData ? (breakdown ? copy.pendingDetails : null) : copy.empty
 
-  return message ? <p className="text-[0.6875rem] text-muted-foreground">{message}</p> : null
+  return message ? <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{message}</p> : null
 }
 
 /** The statusbar meter's trailing `[bar] N%`, plus a quiet `layers N` once the
@@ -289,4 +331,23 @@ function ContextUsageBar({
       ))}
     </div>
   )
+}
+
+function contextStatus(
+  copy: Translations['shell']['statusbar']['contextUsagePanel'],
+  compacting: boolean,
+  contextPercent: number | null,
+  estimated: boolean | undefined,
+  hasContextData: boolean,
+  loading: boolean
+) {
+  return compacting
+    ? copy.compacting
+    : contextPercent !== null
+      ? `${estimated ? '~' : ''}${copy.percentFull(contextPercent)}`
+      : hasContextData
+        ? null
+        : loading
+          ? copy.loading
+          : copy.empty
 }

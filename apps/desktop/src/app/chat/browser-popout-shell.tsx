@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect } from 'react'
 
 import { PanelEmpty } from '@/app/overlays/panel'
 import { TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
+import { NotificationStack } from '@/components/notifications'
 import { useI18n } from '@/i18n'
 import { windowBrowserTabId } from '@/store/windows'
 
@@ -33,15 +34,17 @@ export function BrowserPopoutShell() {
         <div className="pointer-events-none absolute inset-y-0 left-0 w-(--titlebar-controls-left,14px) [-webkit-app-region:drag]" />
         <div className="pointer-events-none absolute inset-y-0 left-[calc(var(--titlebar-controls-left,14px)+(var(--titlebar-control-size,24px)*2)+0.75rem)] right-[calc(var(--titlebar-tools-right,0.75rem)+0.75rem)] [-webkit-app-region:drag]" />
       </div>
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        {tabId ? (
-          <PreviewTilePane tabId={tabId} />
-        ) : (
-          <div className="grid h-full place-items-center">
-            <PanelEmpty description={t.preview.web.blankPageBody} icon="globe" />
-          </div>
-        )}
-      </div>
+      <NotificationStack>
+        <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          {tabId ? (
+            <PreviewTilePane tabId={tabId} />
+          ) : (
+            <div className="grid h-full place-items-center">
+              <PanelEmpty description={t.preview.web.blankPageBody} icon="globe" />
+            </div>
+          )}
+        </div>
+      </NotificationStack>
     </div>
   )
 }

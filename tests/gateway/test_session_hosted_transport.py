@@ -105,7 +105,7 @@ class _SourceTask:
         import gateway.run
         monkeypatch.setenv('HERMES_HOME', str(tmp_path))
         self.homes = {'other': str(tmp_path / 'profiles' / 'other')}
-        monkeypatch.setattr(gateway.run, '_load_gateway_config', lambda: {'hosted_rooms': {'profiles': self.homes}})
+        monkeypatch.setattr(gateway.run, '_load_gateway_config', lambda *args: {'hosted_rooms': {'profiles': self.homes}})
         self.db = db = SessionDB(tmp_path / 'state.db')
         self.authority = SimpleNamespace(db=db, profile_id=str(tmp_path), epoch=begin_runtime_epoch(db, instance_id='test'))
         self.service = CanonicalHostedRoomService(self.authority, None)
