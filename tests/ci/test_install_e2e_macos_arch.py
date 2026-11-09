@@ -1,8 +1,4 @@
-"""install-e2e's macOS packaged arm refuses an Intel bundle pair before any setup.
-
-The arm runs on an Apple Silicon runner and no Intel macOS bundle ships, so an
-x64 pair would otherwise get as far as app launch (or Rosetta) before failing.
-"""
+"""Packaged macOS tests admit supported bundles and route them to native runners."""
 from __future__ import annotations
 
 import subprocess
@@ -23,9 +19,13 @@ def _bundled_job() -> dict:
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("arch,refused", [("arm64", False), ("x64", True), ("", True)])
-def test_the_packaged_arm_refuses_a_non_arm64_bundle_before_setup(arch, refused):
-    steps = _bundled_job()["steps"]
+@pytest.mark.parametrize("arch,refused", [
+    ("arm64", False), ("x64", False), ("", True), ("arm", True), ("x86", True),
+])
+def test_packaged_bundles_reject_unsupported_architectures_before_setup(arch, refused):
+    job = _bundled_job()
+    assert job["runs-on"] == "${{ inputs.bundle-arch == 'x64' && 'macos-15-intel' || 'macos-15' }}"
+    steps = job["steps"]
     first = steps[0]
     # The gate runs before checkout, toolchain setup and the installer.
     assert "uses" not in first

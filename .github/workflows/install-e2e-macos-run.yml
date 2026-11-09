@@ -272,6 +272,19 @@ jobs:
     timeout-minutes: ${{ fromJSON(format('{0}', inputs.timeout-minutes)) }}
 
     steps:
+      - name: Reject an unsupported bundle architecture
+        shell: bash
+        env:
+          BUNDLE_ARCH: ${{ inputs.bundle-arch }}
+        run: |
+          case "$BUNDLE_ARCH" in
+            arm64|x64) ;;
+            *)
+              echo "::error::unsupported macOS bundle architecture: expected arm64 or x64"
+              exit 1
+              ;;
+          esac
+
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit || github.sha }}

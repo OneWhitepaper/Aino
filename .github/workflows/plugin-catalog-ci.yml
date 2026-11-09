@@ -72,14 +72,14 @@ jobs:
             exit 1
           fi
 
-          # A v0.22.6 upstream import is the one reviewed exception to the
+          # A v0.23.0 upstream import is the one reviewed exception to the
           # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
           # its second parent is the proposed PR head and its first parent is
           # the target branch.  The release must be present in the PR head but
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
-          UPSTREAM=f0d94882e89ab8d4098b5bb2f166adfb9ee0a0ab
-          CATALOG_TREE=095427b35a2a32a8df6f479f91661ec2b6f0d03e
+          UPSTREAM=2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          CATALOG_TREE=14d696fa3bd5ef77c43e9b09f1d22f58b41456bd
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
@@ -90,7 +90,7 @@ jobs:
             # imported entries continue through the pinned-source gate below.
             # Any unreviewed catalog edit is rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
-              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.22.6"
+              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.0"
               exit 1
             fi
             # The import must use the release's reviewed enforcement inputs.
