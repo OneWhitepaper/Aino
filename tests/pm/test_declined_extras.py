@@ -35,21 +35,22 @@ def _next_selection(recorded, requested=None):
 
 
 def test_without_drops_a_recorded_extra_from_every_later_selection(synced, tmp_path):
-    assert pm.cli.cmd_install(argparse.Namespace(names=None, tools_only=False, without=["matrix"])) == 0
+    # Use a portable extra: Matrix's Linux-only gate correctly excludes it on other hosts.
+    assert pm.cli.cmd_install(argparse.Namespace(names=None, tools_only=False, without=["slack"])) == 0
 
     # The update's sync carries recorded extras forward; the dropped one stays out, others stay.
-    assert _next_selection(["all", "fal", "matrix"]) == ["all", "fal"]
+    assert _next_selection(["all", "fal", "slack"]) == ["all", "fal"]
     # A data root without facts re-scans the main-era venv, which is never deleted.
     site = tmp_path / "venv" / "lib" / "python3.11" / "site-packages"
-    for anchor in (*extras._anchors("matrix"), "fal_client"):
+    for anchor in (*extras._anchors("slack"), "fal_client"):
         (site / anchor).mkdir(parents=True)
-    assert extras.legacy_selection(tmp_path) == ["all", "fal", "matrix"]
-    extras.record_declined_extras(add=["matrix"], project_root=tmp_path)
+    assert extras.legacy_selection(tmp_path) == ["all", "fal", "slack"]
+    extras.record_declined_extras(add=["slack"], project_root=tmp_path)
     assert extras.legacy_selection(tmp_path) == ["all", "fal"]
     # A lazy first use refuses instead of silently reinstalling it.
     package = SimpleNamespace(project_root=repo_root)
-    with pytest.raises(InstallError, match="pm install --extra matrix"):
-        install._refuse_declined(package, ["matrix"], explicit=False)
+    with pytest.raises(InstallError, match="pm install --extra slack"):
+        install._refuse_declined(package, ["slack"], explicit=False)
 
 
 def test_extra_opts_a_dropped_extra_back_in():
@@ -218,8 +219,9 @@ def test_without_after_a_failed_first_migration_keeps_the_other_legacy_extras(mo
 
 def test_automatic_repair_never_undoes_a_without_that_landed_after_its_read(monkeypatch):
     """Configured-platform repair reads the declines, then asks PM for the configured extra. A
-    `--without matrix` completing between that read and PM's lock wins: repair's request was
-    Hermes's choice, not the user's, so it neither re-adds matrix nor clears the new decline."""
+    `--without slack` completing between that read and PM's lock wins: repair's request was
+    Hermes's choice, not the user's, so it neither re-adds slack nor clears the new decline.
+    Slack is supported on every host, so repair reaches the dependency lock on macOS too."""
     import pm.client
     from hermes_cli import main_install_repair
 
@@ -228,7 +230,7 @@ def test_automatic_repair_never_undoes_a_without_that_landed_after_its_read(monk
     monkeypatch.setattr(install, "get_package", lambda name: package)
     monkeypatch.setattr(pm.client, "is_runtime", lambda: True)
     monkeypatch.setattr(main_install_repair, "_configured_features_missing_deps",
-                        lambda: [("Matrix", "Run `hermes setup`.", "matrix")])
+                        lambda: [("Slack", "Run `hermes setup`.", "slack")])
     install.sync_venv(["all"], explicit=True)
 
     real_lock, opted_out = install._venv_install_lock, []
@@ -237,7 +239,7 @@ def test_automatic_repair_never_undoes_a_without_that_landed_after_its_read(monk
         if not opted_out:
             # Repair has read the declines and is about to take the lock: the opt-out lands first.
             opted_out.append(True)
-            install.decline_extras(["matrix"])
+            install.decline_extras(["slack"])
             install.sync_venv(["all"], explicit=True)
         return real_lock(**kwargs)
 
@@ -245,6 +247,6 @@ def test_automatic_repair_never_undoes_a_without_that_landed_after_its_read(monk
     main_install_repair._install_configured_features_missing_deps(repo_root())
 
     assert opted_out
-    assert extras.declined_extras() == frozenset({"matrix"})
+    assert extras.declined_extras() == frozenset({"slack"})
     assert _recorded() == ["all"]
-    assert all("matrix" not in built for built in package.built)
+    assert all("slack" not in built for built in package.built)

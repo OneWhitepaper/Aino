@@ -53,6 +53,10 @@ export interface CanonicalGroupMessages {
   discardWarning: string
   confirmDiscard: string
   unconfirmedSend: string
+  abandonRetry: string
+  abandonRetryWarning: string
+  abandonRetryChanged: string
+  retryAbandoned: string
   restoredPendingSend: string
   groupMessage: string
   attachFiles: string
@@ -155,6 +159,10 @@ export interface CanonicalGroupMessages {
 
 export const CANONICAL_GROUP_LOCALES = {
   en: {
+    abandonRetry: 'Abandon retry',
+    abandonRetryWarning: 'This message may already have been posted or may arrive later. This only removes the local retry copy; it does not recall or resend the message.',
+    abandonRetryChanged: 'This pending message changed. Close this dialog and review it before trying again.',
+    retryAbandoned: 'Retry abandoned. Check the conversation before sending the same message again.',
     allMembers: 'Everyone',
     pickerLabel: 'Choose who to mention',
     unresolvedMention: 'Some mentions are not linked to a member. Choose them from the @ menu before sending.',
@@ -209,7 +217,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: 'Side effects may already have occurred. Discarding does not undo them.',
     confirmDiscard: 'Confirm discard',
     unconfirmedSend: 'The previous send is unconfirmed. Retry its original text before sending another message.',
-    restoredPendingSend: 'An unconfirmed send was restored. Retry it before sending another message.',
+    restoredPendingSend: 'An unconfirmed send was restored. Retry it or abandon retry before sending another message.',
     groupMessage: 'Group message',
     attachFiles: 'Attach files',
     removeAttachment: 'Remove attachment',
@@ -309,6 +317,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: 'Earlier messages, read only. They stay on this Desktop and aren’t copied into a new group.'
   },
   ja: {
+    abandonRetry: '再試行を放棄',
+    abandonRetryWarning: 'このメッセージは既に投稿されているか、後から届く可能性があります。ローカルの再試行用コピーだけを削除します。送信の取り消しや再送信は行いません。',
+    abandonRetryChanged: '保留中のメッセージが変更されました。この画面を閉じ、内容を確認してからやり直してください。',
+    retryAbandoned: '再試行を放棄しました。同じメッセージを送る前に会話を確認してください。',
     allMembers: '全員',
     pickerLabel: 'メンションするメンバーを選択',
     unresolvedMention: '宛先が未指定のメンションがあります。送信前に @ メニューからメンバーを選んでください。',
@@ -364,7 +376,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: 'すでに変更が行われている可能性があります。破棄しても元には戻りません。',
     confirmDiscard: '破棄を確定',
     unconfirmedSend: '前回の送信は未確認です。別のメッセージを送信する前に、元のテキストで再試行してください。',
-    restoredPendingSend: '未確認の送信を復元しました。別のメッセージを送信する前に再試行してください。',
+    restoredPendingSend: '未確認の送信を復元しました。再試行するか再試行を放棄してから、別のメッセージを送信してください。',
     groupMessage: 'グループメッセージ',
     attachFiles: 'ファイルを添付',
     removeAttachment: '添付ファイルを削除',
@@ -464,6 +476,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: '以前のメッセージ（閲覧のみ）。この Desktop に残り、新しいグループにはコピーされません。'
   },
   zh: {
+    abandonRetry: '放弃重试',
+    abandonRetryWarning: '这条消息可能已经发布，也可能稍后到达。此操作只移除本机的重试副本，不会撤回或重新发送消息。',
+    abandonRetryChanged: '这条待确认消息已发生变化。请关闭此对话框，检查后再操作。',
+    retryAbandoned: '已放弃重试。再次发送相同内容前，请先检查群聊记录。',
     allMembers: '所有成员',
     pickerLabel: '选择要提及的成员',
     unresolvedMention: '有提及尚未关联到成员，请从 @ 菜单重新选择后发送。',
@@ -518,7 +534,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: '可能已产生实际影响。丢弃任务不会撤销这些影响。',
     confirmDiscard: '确认丢弃',
     unconfirmedSend: '上次发送尚未确认。请先重试发送原始文本，再发送其他消息。',
-    restoredPendingSend: '已恢复尚未确认的发送。请先重试，再发送其他消息。',
+    restoredPendingSend: '已恢复尚未确认的发送。请先重试或放弃重试，再发送其他消息。',
     groupMessage: '群组消息',
     attachFiles: '附加文件',
     removeAttachment: '移除附件',
@@ -618,6 +634,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: '之前的消息（只读）。它们保留在此 Desktop 上，不会复制到新群组。'
   },
   'zh-hant': {
+    abandonRetry: '放棄重試',
+    abandonRetryWarning: '這則訊息可能已經張貼，也可能稍後送達。此操作只移除本機的重試副本，不會收回或重新傳送訊息。',
+    abandonRetryChanged: '這則待確認訊息已變更。請關閉此對話框，檢查後再操作。',
+    retryAbandoned: '已放棄重試。再次傳送相同內容前，請先檢查群聊記錄。',
     allMembers: '所有成員',
     pickerLabel: '選擇要提及的成員',
     unresolvedMention: '有提及尚未關聯到成員，請從 @ 選單重新選擇後傳送。',
@@ -672,7 +692,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: '可能已產生實際影響。捨棄工作不會復原這些影響。',
     confirmDiscard: '確認捨棄',
     unconfirmedSend: '上次傳送尚未確認。請先重試傳送原始文字，再傳送其他訊息。',
-    restoredPendingSend: '已還原尚未確認的傳送。請先重試，再傳送其他訊息。',
+    restoredPendingSend: '已還原尚未確認的傳送。請先重試或放棄重試，再傳送其他訊息。',
     groupMessage: '群組訊息',
     attachFiles: '附加檔案',
     removeAttachment: '移除附件',
@@ -772,6 +792,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: '先前的訊息（唯讀）。它們會保留在此 Desktop 上，不會複製到新群組。'
   },
   ar: {
+    abandonRetry: 'التخلي عن إعادة المحاولة',
+    abandonRetryWarning: 'ربما نُشرت هذه الرسالة بالفعل أو قد تصل لاحقًا. يؤدي هذا إلى إزالة النسخة المحلية لإعادة المحاولة فقط، ولا يسحب الرسالة أو يعيد إرسالها.',
+    abandonRetryChanged: 'تغيّرت هذه الرسالة المعلّقة. أغلق مربع الحوار وراجعها قبل المحاولة مجددًا.',
+    retryAbandoned: 'تم التخلي عن إعادة المحاولة. راجع المحادثة قبل إرسال الرسالة نفسها مجددًا.',
     allMembers: 'الجميع',
     pickerLabel: 'اختر عضواً لذكره',
     unresolvedMention: 'بعض الإشارات غير مرتبطة بعضو. اختر الأعضاء من قائمة @ قبل الإرسال.',
@@ -826,7 +850,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: 'قد تكون تغييرات قد حدثت بالفعل. تجاهل العمل لا يتراجع عنها.',
     confirmDiscard: 'تأكيد التجاهل',
     unconfirmedSend: 'الإرسال السابق غير مؤكّد. أعد المحاولة بالنص الأصلي قبل إرسال رسالة أخرى.',
-    restoredPendingSend: 'تمت استعادة إرسال غير مؤكّد. أعد محاولته قبل إرسال رسالة أخرى.',
+    restoredPendingSend: 'تمت استعادة إرسال غير مؤكّد. أعد محاولته أو تخلّ عن إعادة المحاولة قبل إرسال رسالة أخرى.',
     groupMessage: 'رسالة المجموعة',
     attachFiles: 'إرفاق ملفات',
     removeAttachment: 'إزالة المرفق',
@@ -926,6 +950,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: 'الرسائل السابقة، للقراءة فقط. تبقى على Desktop هذا ولن تُنسخ إلى مجموعة جديدة.'
   },
   ru: {
+    abandonRetry: 'Отказаться от повтора',
+    abandonRetryWarning: 'Сообщение могло уже появиться или может прийти позже. Удаляется только локальная копия для повтора; сообщение не отзывается и не отправляется заново.',
+    abandonRetryChanged: 'Ожидающее сообщение изменилось. Закройте это окно и проверьте его перед новой попыткой.',
+    retryAbandoned: 'Повтор отменён. Проверьте беседу, прежде чем отправлять то же сообщение снова.',
     allMembers: 'Все участники',
     pickerLabel: 'Кого упомянуть',
     unresolvedMention: 'Некоторые упоминания не связаны с участником. Выберите его в меню @ перед отправкой.',
@@ -982,8 +1010,7 @@ export const CANONICAL_GROUP_LOCALES = {
     confirmDiscard: 'Подтвердить отмену работы',
     unconfirmedSend:
       'Предыдущая отправка не подтверждена. Повторите её с исходным текстом, прежде чем отправлять другое сообщение.',
-    restoredPendingSend:
-      'Восстановлена неподтверждённая отправка. Повторите её, прежде чем отправлять другое сообщение.',
+    restoredPendingSend: 'Восстановлена неподтверждённая отправка. Повторите её или откажитесь от повтора, прежде чем отправлять другое сообщение.',
     groupMessage: 'Сообщение группе',
     attachFiles: 'Прикрепить файлы',
     removeAttachment: 'Удалить вложение',
@@ -1083,6 +1110,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: 'Прежние сообщения, только для чтения. Они остаются в этом Desktop и не копируются в новую группу.'
   },
   fr: {
+    abandonRetry: 'Abandonner la nouvelle tentative',
+    abandonRetryWarning: 'Ce message a peut-être déjà été publié ou peut arriver plus tard. Seule la copie locale destinée à une nouvelle tentative sera supprimée ; le message ne sera ni rappelé ni renvoyé.',
+    abandonRetryChanged: 'Ce message en attente a changé. Fermez cette fenêtre et vérifiez-le avant de réessayer.',
+    retryAbandoned: 'Nouvelle tentative abandonnée. Vérifiez la conversation avant de renvoyer le même message.',
     allMembers: 'Tous les membres',
     pickerLabel: 'Choisir un membre à mentionner',
     unresolvedMention: 'Certaines mentions ne sont liées à aucun membre. Choisissez-les dans le menu @ avant d’envoyer.',
@@ -1139,7 +1170,7 @@ export const CANONICAL_GROUP_LOCALES = {
     confirmDiscard: "Confirmer l'abandon",
     unconfirmedSend:
       "L'envoi précédent n'est pas confirmé. Réessayez son texte d'origine avant d'envoyer un autre message.",
-    restoredPendingSend: "Un envoi non confirmé a été restauré. Réessayez-le avant d'envoyer un autre message.",
+    restoredPendingSend: 'Un envoi non confirmé a été restauré. Réessayez ou abandonnez la nouvelle tentative avant d’envoyer un autre message.',
     groupMessage: 'Message de groupe',
     attachFiles: 'Joindre des fichiers',
     removeAttachment: 'Retirer la pièce jointe',
@@ -1239,6 +1270,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: 'Messages précédents, en lecture seule. Ils restent sur ce Desktop et ne sont pas copiés dans un nouveau groupe.'
   },
   de: {
+    abandonRetry: 'Wiederholung aufgeben',
+    abandonRetryWarning: 'Diese Nachricht wurde möglicherweise bereits veröffentlicht oder kommt später an. Nur die lokale Kopie für einen erneuten Versuch wird entfernt; die Nachricht wird weder zurückgerufen noch erneut gesendet.',
+    abandonRetryChanged: 'Diese ausstehende Nachricht wurde geändert. Schließen Sie dieses Dialogfeld und prüfen Sie sie vor einem erneuten Versuch.',
+    retryAbandoned: 'Wiederholung aufgegeben. Prüfen Sie den Verlauf, bevor Sie dieselbe Nachricht erneut senden.',
     allMembers: 'Alle Mitglieder',
     pickerLabel: 'Mitglied erwähnen',
     unresolvedMention: 'Einige Erwähnungen sind keinem Mitglied zugeordnet. Wähle die Mitglieder vor dem Senden im @-Menü aus.',
@@ -1296,8 +1331,7 @@ export const CANONICAL_GROUP_LOCALES = {
     confirmDiscard: 'Verwerfen bestätigen',
     unconfirmedSend:
       'Der vorherige Versand ist unbestätigt. Wiederholen Sie seinen ursprünglichen Text, bevor Sie eine weitere Nachricht senden.',
-    restoredPendingSend:
-      'Ein unbestätigter Versand wurde wiederhergestellt. Wiederholen Sie ihn, bevor Sie eine weitere Nachricht senden.',
+    restoredPendingSend: 'Ein unbestätigter Versand wurde wiederhergestellt. Versuchen Sie es erneut oder geben Sie die Wiederholung auf, bevor Sie eine weitere Nachricht senden.',
     groupMessage: 'Gruppennachricht',
     attachFiles: 'Dateien anhängen',
     removeAttachment: 'Anhang entfernen',
@@ -1397,6 +1431,10 @@ export const CANONICAL_GROUP_LOCALES = {
     earlierMessages: 'Frühere Nachrichten, nur lesbar. Sie bleiben auf diesem Desktop und werden nicht in eine neue Gruppe kopiert.'
   },
   es: {
+    abandonRetry: 'Abandonar reintento',
+    abandonRetryWarning: 'Puede que este mensaje ya se haya publicado o que llegue más tarde. Esto solo elimina la copia local para reintentar; no retira ni reenvía el mensaje.',
+    abandonRetryChanged: 'Este mensaje pendiente ha cambiado. Cierra este cuadro y revísalo antes de volver a intentarlo.',
+    retryAbandoned: 'Reintento abandonado. Revisa la conversación antes de volver a enviar el mismo mensaje.',
     allMembers: 'Todos los miembros',
     pickerLabel: 'Elegir a quién mencionar',
     unresolvedMention: 'Algunas menciones no están vinculadas a un miembro. Elígelos en el menú @ antes de enviar.',
@@ -1452,7 +1490,7 @@ export const CANONICAL_GROUP_LOCALES = {
     discardWarning: 'Puede que ya se hayan producido efectos secundarios. Descartar no los deshace.',
     confirmDiscard: 'Confirmar descarte',
     unconfirmedSend: 'El envío anterior no está confirmado. Reintenta su texto original antes de enviar otro mensaje.',
-    restoredPendingSend: 'Se restauró un envío sin confirmar. Reintántalo antes de enviar otro mensaje.',
+    restoredPendingSend: 'Se restauró un envío sin confirmar. Reinténtalo o abandona el reintento antes de enviar otro mensaje.',
     groupMessage: 'Mensaje de grupo',
     attachFiles: 'Adjuntar archivos',
     removeAttachment: 'Quitar adjunto',

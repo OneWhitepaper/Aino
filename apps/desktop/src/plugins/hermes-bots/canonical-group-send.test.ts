@@ -10,7 +10,7 @@ vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 // exercising the real atomic-file implementation in this Node fixture.
 const nativeModule = '../../../electron/prepared-submissions'
 const { preparedJournal } = await import(/* @vite-ignore */ nativeModule)
-import { prepareCanonicalGroupSend, readCanonicalGroupSend, retireCanonicalGroupSend } from './canonical-group-send'
+import { abandonCanonicalGroupSend, prepareCanonicalGroupSend, readCanonicalGroupSend, retireCanonicalGroupSend } from './canonical-group-send'
 
 const binding = { connectionId: 'remote-a', profile: 'profile-a', roomId: 'room-a' }
 afterEach(() => vi.unstubAllGlobals())
@@ -82,4 +82,36 @@ test('native journal acknowledgement gates send and a failed write cannot downgr
   await expect(prepareCanonicalGroupSend(binding, { text: 'blocked' }).then(send)).rejects.toThrow('disk full')
   expect(send).toHaveBeenCalledOnce()
   expect(browserWrite).not.toHaveBeenCalled()
+})
+
+
+test('abandonment compares the whole confirmed legacy snapshot once at the native journal owner', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'group-abandon-journal-'))
+  const journal = preparedJournal(dir, 'http://localhost:5174')
+
+  const compare = vi.fn(async (key: string, expected: string | null, entry: string | null) => {
+    const result = journal.compareAndSet(key, expected && JSON.parse(expected), entry && JSON.parse(entry))
+
+    return { ...result, current: result.current === null ? null : JSON.stringify(result.current) }
+  })
+
+  vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: {
+    read: async () => JSON.stringify(journal.read()), compareAndSet: compare
+  } } })
+
+  try {
+    const prepared = await prepareCanonicalGroupSend(binding, { text: 'Unknown delivery' })
+    const key = Object.keys(journal.read())[0]
+    const legacy = { binding: prepared.binding, params: prepared.params }
+    journal.update(key, legacy)
+    const confirmation = await readCanonicalGroupSend(binding)
+    journal.update(key, { ...legacy, attempts: 1 })
+    compare.mockClear()
+    expect(await abandonCanonicalGroupSend(confirmation!)).toBe(false)
+    expect(compare).toHaveBeenCalledOnce()
+    expect(journal.read()[key]).toEqual({ ...legacy, attempts: 1 })
+    journal.update(key, legacy)
+    expect(await abandonCanonicalGroupSend(confirmation!)).toBe(true)
+    expect(journal.read()).toEqual({})
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })

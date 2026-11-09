@@ -41,11 +41,14 @@ if str(PROJECT_ROOT) not in sys.path:
 # Every test file runs in its own process, and in a checkout without an install stamp
 # get_version_info() shells out to git 7 times (~0.55 s per process in a large local
 # clone; a whole local suite run spent ~48 CPU-minutes there). Seed the shape a shallow
-# CI checkout resolves to; tests of version resolution call _reset_version_info_cache().
+# CI checkout resolves to, with core compatibility separate from unknown distribution
+# provenance; tests of version resolution call _reset_version_info_cache().
 from hermes_cli import version_info as _version_info
+from hermes_cli.upstream_compatibility import UPSTREAM_VERSION as _upstream_version
 
 _version_info._cached_version_info = _version_info.VersionInfo(
-    "unknown", "git.0000000", None, "0" * 40, "main", "git")
+    _upstream_version, "git.0000000", None, "0" * 40, "main", "git",
+    distribution_base_version="unknown")
 
 
 # ── Sandbox HERMES_HOME before ANY test module is imported ──────────────────
@@ -1153,6 +1156,11 @@ def _processes_with_hermes_home_under(roots) -> list[int]:
         try:
             home = proc.environ().get("HERMES_HOME")
         except (psutil.Error, OSError):
+            continue
+        except SystemError as exc:
+            # macOS psutil can wrap a denied/disappearing process in a C-extension error.
+            if not isinstance(exc.__cause__, OSError):
+                raise
             continue
         if not home:
             continue

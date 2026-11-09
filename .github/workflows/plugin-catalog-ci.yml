@@ -79,7 +79,7 @@ jobs:
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
           UPSTREAM=2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
-          CATALOG_TREE=14d696fa3bd5ef77c43e9b09f1d22f58b41456bd
+          CATALOG_TREE=d34b910d6489705a6e49f2bb5b51ba8644ef2cd3
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
@@ -88,6 +88,8 @@ jobs:
             # existing Experiential Labs entry and excludes AtmoRouter because
             # its pinned repository could not be cloned during review. Other
             # imported entries continue through the pinned-source gate below.
+            # AI SENSE and Toll use reachable replacement commits with plugin
+            # subtrees identical to their original pins (recorded in each entry).
             # Any unreviewed catalog edit is rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
               echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.0"
@@ -105,6 +107,7 @@ jobs:
               exit 1
             fi
             echo "validation_ref=$UPSTREAM" >> "$GITHUB_OUTPUT"
+            echo "validation_catalog_tree=$CATALOG_TREE" >> "$GITHUB_OUTPUT"
             echo "Validated reviewed upstream import $UPSTREAM"
           fi
           # Added + modified + renamed + typechanged entry files only; deletions
@@ -147,6 +150,7 @@ jobs:
         if: steps.changed.outputs.files != '' && steps.changed.outputs.validation_ref != ''
         env:
           VALIDATION_REF: ${{ steps.changed.outputs.validation_ref }}
+          VALIDATION_CATALOG_TREE: ${{ steps.changed.outputs.validation_catalog_tree }}
         run: |
           set -euo pipefail
           # Keep the original PR's changed-entry output, but load the complete
@@ -154,6 +158,30 @@ jobs:
           # Cleaning also prevents untracked PR modules shadowing trusted code.
           git checkout --detach "$VALIDATION_REF"
           git clean -ffdx
+          # Fork tags describe Aino releases, so they do not establish the
+          # upstream runtime version. Fetch the reviewed official tag locally
+          # and verify both its immutable tag object and peeled release commit
+          # before setup or plugin code can consume its version identity.
+          REVIEWED_TAG=v0.23.0
+          REVIEWED_TAG_OBJECT=df1774294af26285ae758c6114f3f2f60e2a602d
+          git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "refs/tags/$REVIEWED_TAG"
+          if [ "$(git rev-parse FETCH_HEAD)" != "$REVIEWED_TAG_OBJECT" ] \
+              || [ "$(git rev-parse 'FETCH_HEAD^{commit}')" != "$VALIDATION_REF" ]; then
+            echo "::error::official release tag does not match the reviewed upstream import"
+            exit 1
+          fi
+          git update-ref "refs/tags/$REVIEWED_TAG" "$REVIEWED_TAG_OBJECT"
+          # Validate the exact admitted catalog data, including reviewed pins
+          # whose plugin trees are unchanged but whose old commits disappeared
+          # from the remote's advertised history. Only catalog data is restored;
+          # the runtime, scanners and PM setup stay at the reviewed release.
+          git rm -r --quiet -- plugin-catalog
+          git read-tree -u --prefix=plugin-catalog/ "$VALIDATION_CATALOG_TREE"
+          if [ "$(git write-tree --prefix=plugin-catalog/)" != "$VALIDATION_CATALOG_TREE" ] \
+              || ! git diff --quiet -- plugin-catalog; then
+            echo "::error::validation catalog differs from the reviewed tree"
+            exit 1
+          fi
 
       - name: Prepare Hermes from the validation checkout
         if: steps.changed.outputs.files != ''

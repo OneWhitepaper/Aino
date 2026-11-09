@@ -51,6 +51,7 @@ export interface CanonicalGroupSurfaceProps {
   notice?: string
   sendHint?: string
   reply?: { name: string; quote: string; thread?: string } | null
+  onAbandonRetry?: () => void
   onCancelReply?: () => void
   onContinue?: (discussionEventId: string) => unknown
   onReply?: (member: CanonicalRoomMember | undefined, text: string, thread: string | undefined, author: string) => void

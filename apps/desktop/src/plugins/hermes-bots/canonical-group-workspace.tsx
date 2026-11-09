@@ -11,6 +11,7 @@ import { useCanonicalMembers } from './canonical-group-members'
 import { forgetCanonicalGroup, syncCanonicalGroupName } from './canonical-group-registry'
 import { attemptCanonicalGroupSend, prepareCanonicalGroupSend, readCanonicalGroupSend, replaceCanonicalGroupSend, retireCanonicalGroupSend, withdrawCanonicalGroupSend } from './canonical-group-send'
 import type { PreparedCanonicalGroupSend } from './canonical-group-send'
+import { useCanonicalGroupSendRecovery } from './canonical-group-send-recovery'
 import { CanonicalGroupSurface, type CanonicalGroupSurfaceState } from './canonical-group-surface'
 import { actCanonicalGroup, canonicalGroupRequest } from './canonical-groups'
 import type { CanonicalGroupBinding, CanonicalPendingAction, CanonicalRoomMember } from './canonical-groups'
@@ -351,6 +352,41 @@ function CanonicalRoomView({
     if (alive.current) {setPending(null); setReplyValue(next.canonicalReply ?? null); setRestoredPending(false); setComposerDraft(next)}
   }
 
+  const releaseAbandoned = (entry: PreparedCanonicalGroupSend, draftRevision: number) => {
+    const current = groupComposerDraftSnapshot(composerKey)
+
+    const same = current.revision === draftRevision && sameGroupPayload(entry.params.payload, current.main,
+      current.canonicalAttachments ?? [], current.canonicalReply?.thread)
+
+    const own = same ? { text: '', attachments: [], reply: null }
+      : { text: current.main, attachments: current.canonicalAttachments ?? [], reply: current.canonicalReply ?? null }
+
+    const held = current.canonicalHeld ?? heldDraft.current
+
+    const words = held && (held.reply?.thread !== own.reply?.thread ||
+      !sameGroupPayload({ text: held.text, attachments: held.attachments }, own.text, own.attachments))
+      ? holdDraft(held, own) : own
+
+    const next = updateGroupComposerDraft(composerKey, value => ({ ...value, main: words.text,
+      canonicalAttachments: words.attachments, canonicalReply: words.reply, canonicalHeld: null }))
+
+    heldDraft.current = null
+    sentDraft.current = null
+    editing.current = null
+    draftThread.current = next.canonicalReply?.thread
+    setPending(null)
+    setRestoredPending(false)
+    setComposerDraft(next)
+    setReplyValue(next.canonicalReply ?? null)
+    setError('')
+    setSendHint('')
+    setNotice(labels.retryAbandoned)
+  }
+
+  const recovery = useCanonicalGroupSendRecovery({ pending, composerKey, visible, labels,
+    blocked: busy || stopping || uploading, isCurrent: () => alive.current && ownsDraft(),
+    onAbandoned: releaseAbandoned, onError: setError })
+
   // Another window finished with this intent: resending it could post it twice, and so could
   // offering its words as a new message.
   const finishedElsewhere = () => {
@@ -450,7 +486,7 @@ function CanonicalRoomView({
 
   const send = () => {
     // A Stop still fencing behind the last Send would cancel this one too: it waits until Stop is done.
-    if (!restored || busyRef.current || stopPending.current || uploading || !state?.driver_status || state.room.disbanded_at || (!pending && !draft.trim() && !attachments.length)) {return}
+    if (!restored || busyRef.current || recovery.confirming || stopPending.current || uploading || !state?.driver_status || state.room.disbanded_at || (!pending && !draft.trim() && !attachments.length)) {return}
     stopIntent.current = null
     setSendHint('')
     setNotice('')
@@ -551,13 +587,13 @@ function CanonicalRoomView({
     if (member) {const tag = `@${member.handle}`; setDraft(current => current.trimStart().startsWith(tag) ? current : `${tag} ${current}`)}
   }
 
-  return <CanonicalGroupSurface attachments={attachments} binding={binding} busy={busy} draft={draft} error={error} events={events}
-    journalError={journalError} mainTab={mainTab} methods={methods} notice={notice} onAction={act} onAttachmentsChange={setAttachments}
-    onBack={showBack ? onBack : undefined} onCancelReply={() => {draftThread.current = undefined; setReply(null)}} onContinue={continueDiscussion}
-    onDisband={end} onDraftChange={setDraft} onJournalReload={() => setJournalAttempt(value => value + 1)}
+  return <><CanonicalGroupSurface attachments={attachments} binding={binding} busy={busy || recovery.confirming} draft={draft} error={error} events={events}
+    journalError={journalError} mainTab={mainTab} methods={methods} notice={notice} onAbandonRetry={recovery.begin} onAction={act}
+    onAttachmentsChange={setAttachments} onBack={showBack ? onBack : undefined} onCancelReply={() => {draftThread.current = undefined; setReply(null)}}
+    onContinue={continueDiscussion} onDisband={end} onDraftChange={setDraft} onJournalReload={() => setJournalAttempt(value => value + 1)}
     onRefresh={() => void refresh().catch(e => setReadError(String(e)))} onRename={rename} onReply={replyTo} onSend={send}
     onStop={() => void stop()} onUploadingChange={setUploading} pending={!!pending} readError={readError} reply={reply}
     restored={restored} restoredPending={restoredPending} sendHint={sendHint} sending={!!sending.current}
     state={state ? { ...state, room: { ...state.room, members: markRoomLead(members, state.context) } } : null}
-    stopping={stopping} uploading={uploading} visible={visible} />
+    stopping={stopping} uploading={uploading} visible={visible} />{recovery.confirmation}</>
 }

@@ -161,6 +161,16 @@ export async function retireCanonicalGroupSend(binding: CanonicalGroupBinding, e
   }
 }
 
+/** Explicitly abandon only the exact snapshot the user confirmed. Unlike receipt retirement,
+ *  never reread/retry: a concurrent attempt, payload edit or replacement requires new consent.
+ *  Removing the local retry copy says nothing about whether the message reached the room. */
+export async function abandonCanonicalGroupSend(expected: PreparedCanonicalGroupSend): Promise<boolean> {
+  const key = journalKey(expected.binding)
+  validEntry(expected.binding, key, expected)
+
+  return (await compareAndSet(key, JSON.stringify(expected), null)).applied
+}
+
 async function countRequests(binding: CanonicalGroupBinding, eventId: string, step: 1 | -1): Promise<number | null> {
   const key = journalKey(binding)
 

@@ -16,7 +16,7 @@ import { fill, RoomReplyChip } from './group-room-ui'
 
 interface CanonicalGroupComposerProps extends Pick<
   CanonicalGroupSurfaceProps,
-  | 'sending' | 'methods' | 'stopping' | 'journalError' | 'notice' | 'sendHint' | 'reply' | 'onCancelReply' | 'onJournalReload'
+  | 'onAbandonRetry' | 'sending' | 'methods' | 'stopping' | 'journalError' | 'notice' | 'sendHint' | 'reply' | 'onCancelReply' | 'onJournalReload'
   | 'binding'
   | 'state'
   | 'events'
@@ -131,6 +131,13 @@ function CanonicalComposerStatus(props: CanonicalGroupComposerProps) {
           {labels.restoredPendingSend}
         </p>
       )}
+      {props.pending && props.onAbandonRetry && <Button
+        disabled={busy || props.sending || props.stopping}
+        onClick={props.onAbandonRetry}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >{labels.abandonRetry}</Button>}
       {props.sendHint && <p aria-live="polite" className="aino-group-pending-send">{props.sendHint}</p>}
       {props.reply && <RoomReplyChip cancelLabel={labels.cancelReply} label={fill(labels.replyingTo, { name: props.reply.name })}
         onCancel={() => props.onCancelReply?.()} quote={props.reply.quote} />}

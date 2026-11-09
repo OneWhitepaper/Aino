@@ -551,9 +551,9 @@ def core_requirement_error(declaration, extras: Iterable[str] | None = None,
     specifier. So the specifier is judged here, PEP 440 like any requirement, under *extras*
     (the core extras the build selects; ``None`` reads the recorded selection) and the markers
     of *target* (the installing interpreter; ``None`` is this process, which the loader runs
-    in). The identity is the one ``requires_hermes`` reads (the committed pyproject version is
-    a placeholder); with none (``unknown``) nothing is judged. It is read only for a plugin
-    that names core: the read walks git, and every plugin passes here at startup.
+    in). The compatibility version is the one ``requires_hermes`` reads, from the merged
+    upstream baseline; the distribution's stamp and pyproject placeholder are not API versions.
+    It is read only for a plugin that names core.
     """
     import tomllib
 

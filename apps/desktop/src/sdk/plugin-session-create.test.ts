@@ -175,7 +175,7 @@ it('does not replace explicitly configured providers or prepare bindings for sto
 it('blocks group execution when one member cannot bind without retiring its exact intent', async () => {
   io.bind.mockResolvedValue({ ok: false, error: { code: 'insufficient_balance' } })
   await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } }))
-    .rejects.toMatchObject({ code: 'insufficient_balance' })
+    .rejects.toMatchObject({ code: 'insufficient_balance', data: { admitted: false } })
   expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
   expect(io.agent.mock.calls.some(call => call[2] === 'session.close')).toBe(false)
   expect(io.release).toHaveBeenCalledOnce()
@@ -200,9 +200,56 @@ it('fences account changes while a group member ticket is prepared', async () =>
   window.hermesDesktop.platformAccount.status = async () => platformSnapshot('user-b', 2)
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   prepared.resolve(transport('groups.prepare_model', { member_id: 'seat-a', model_id: 'catalog-a' }))
-  await expect(pending).rejects.toMatchObject({ code: 'platform_account_changed' })
+  await expect(pending).rejects.toMatchObject({ code: 'platform_account_changed', data: { admitted: false } })
   expect(io.bind).not.toHaveBeenCalled()
   expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
+})
+
+it.each(['retain', 'defaults', 'prepare'] as const)('proves a group Send admitted nothing when %s fails before dispatch', async phase => {
+  const failure = Object.freeze(Object.assign(new Error(`${phase} unavailable`), {
+    code: 4201, data: Object.freeze({ reason: 'unavailable', retryable: true })
+  }))
+
+  if (phase === 'retain') { io.retain.mockRejectedValueOnce(failure) }
+  else if (phase === 'defaults') { io.globalModel.mockRejectedValueOnce(failure) }
+  else {
+    io.agent.mockImplementation(async (_connectionId, _profile, method, params) => {
+      if (method === 'groups.prepare_model') { throw failure }
+
+      return transport(method, params)
+    })
+  }
+
+  await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } }))
+    .rejects.toMatchObject({ message: failure.message, code: 4201, data: { reason: 'unavailable', retryable: true, admitted: false } })
+  expect(failure.data).toEqual({ reason: 'unavailable', retryable: true })
+  expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
+  expect(io.release).toHaveBeenCalledTimes(phase === 'retain' ? 0 : 1)
+})
+
+it('preserves the original error once group Send dispatch begins even if lease cleanup also fails', async () => {
+  const failure = Object.assign(new Error('send result unknown'), { code: 4202, data: { reason: 'disconnected' } })
+  io.agent.mockImplementation(async (_connectionId, _profile, method, params) => {
+    if (method === 'groups.send') { throw failure }
+
+    return transport(method, params)
+  })
+  io.release.mockImplementationOnce(() => { throw new Error('lease cleanup failed') })
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+  try {
+    await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } })).rejects.toBe(failure)
+    expect(failure.data).toEqual({ reason: 'disconnected' })
+    expect(io.agent.mock.calls.filter(call => call[2] === 'groups.send')).toHaveLength(1)
+    expect(io.release).toHaveBeenCalledOnce()
+  } finally { warning.mockRestore() }
+})
+
+it('does not add a group Send admission marker to retry preparation failures', async () => {
+  const failure = Object.assign(new Error('retry retain failed'), { code: 4203 })
+  io.retain.mockRejectedValueOnce(failure)
+  await expect(host.requestProfile(route, 'groups.retry', { room_id: 'room-a', member_id: 'seat-a' })).rejects.toBe(failure)
+  expect(failure).not.toHaveProperty('data')
 })
 
 it('creates and binds a follow-profile Bot Chat using its exact default route without composer state', async () => {

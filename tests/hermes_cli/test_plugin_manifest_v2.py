@@ -396,14 +396,14 @@ class TestCtxHasPlugin:
 
 
 class TestRequiresHermes:
-    def test_gate_reads_the_running_code_version_not_dist_metadata(self, monkeypatch):
-        """Compatibility gates use the running code's base release version."""
+    def test_gate_reads_public_core_version_not_distribution_identity(self, monkeypatch):
+        """The loader and existing plugin self-checks share the public core version."""
         from hermes_cli import plugins_manifest
         monkeypatch.setattr(
             "hermes_cli.version_info.get_version_info",
-            lambda: SimpleNamespace(base_version="0.21.4"),
+            lambda: SimpleNamespace(base_version="0.23.0", distribution_base_version="0.20.6"),
         )
-        assert plugins_manifest.running_hermes_version() == "0.21.4"
+        assert plugins_manifest.running_hermes_version() == "0.23.0"
         assert plugins_manifest.version_satisfies(">=0.21.4", plugins_manifest.running_hermes_version())
 
     @pytest.mark.parametrize("spec, current, expected", [

@@ -45,7 +45,7 @@ import { $groupChatWorkspace } from './group-chat'
 import { copyGroupMentions, GROUP_MENTION_CLIPBOARD_TYPE } from './group-chat-mention-clipboard'
 import { projectGroupMentions } from './group-chat-mentions'
 import { GroupChatWorkspace } from './group-chat-view'
-import { clearGroupComposerDrafts } from './group-panes'
+import { canonicalGroupComposerDraftKey, clearGroupComposerDrafts, groupComposerDraftSnapshot, updateGroupComposerDraft } from './group-panes'
 const originalDesktop = window.hermesDesktop
 beforeEach(() => {
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, writable: true, value: undefined })
@@ -1660,4 +1660,176 @@ it('names the Bot behind each pending action and shows what an approval would al
       room_id: 'approvals', member_id: member, task_id: task, execution_generation: generation, request_id: requestId, choice: 'once', profile: 'team'
     })
   }
+})
+
+
+const ABANDON = 'Abandon retry'
+const ABANDON_CHANGED = 'This pending message changed. Close this dialog and review it before trying again.'
+
+async function abandonDialog(scope: HTMLElement) {
+  fireEvent.click(await within(scope).findByRole('button', { name: ABANDON }))
+
+  return screen.findByRole('dialog', { name: ABANDON })
+}
+
+it('requires confirmation to abandon a legacy send and never returns its uncertain words as a new draft', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-legacy' }
+  const journal = nativeJournal()
+  room(receipt)
+  const prepared = await prepareCanonicalGroupSend(binding, { text: 'Uncertain legacy message' })
+  const legacy = { binding: prepared.binding, params: prepared.params }
+  journal[Object.keys(journal)[0]] = legacy
+  const key = canonicalGroupComposerDraftKey(binding)
+  updateGroupComposerDraft(key, draft => ({ ...draft, main: 'Uncertain legacy message' }))
+  const scope = await openRoom(binding)
+  let dialog = await abandonDialog(scope)
+  expect(within(dialog).getByText(/may already have been posted or may arrive later/)).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(await readCanonicalGroupSend(binding)).toEqual(legacy)
+  expect(editor(scope).disabled).toBe(true)
+  expect(editor(scope).value).toBe('Uncertain legacy message')
+  dialog = await abandonDialog(scope)
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await waitFor(() => expect(editor(scope).disabled).toBe(false))
+  expect(editor(scope).value).toBe('')
+  expect(groupComposerDraftSnapshot(key).main).toBe('')
+  expect(await readCanonicalGroupSend(binding)).toBeUndefined()
+  expect(sentIds()).toEqual([])
+})
+
+it.each(['attempts', 'payload', 'event_id', 'binding'] as const)(
+  'rejects abandonment when the confirmed %s changes, including repeated confirmation', async change => {
+    const binding = { connectionId: 'local', profile: 'team', roomId: `abandon-race-${change}` }
+    const journal = nativeJournal()
+    room(receipt)
+    const prepared = await prepareCanonicalGroupSend(binding, { text: 'Keep uncertain words' })
+    const scope = await openRoom(binding)
+    const dialog = await abandonDialog(scope)
+    const changed = JSON.parse(JSON.stringify(prepared))
+
+    if (change === 'attempts') {changed.attempts++}
+
+    if (change === 'payload') {changed.params.payload.text = 'Different payload'}
+
+    if (change === 'event_id') {changed.params.event_id = 'replacement'}
+
+    if (change === 'binding') {changed.binding.profile = 'other-owner'}
+    journal[Object.keys(journal)[0]] = changed
+    fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+    await within(dialog).findByText(ABANDON_CHANGED)
+    expect(Object.values(journal)).toEqual([changed])
+    fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+    await waitFor(() => expect((within(dialog).getByRole('button', { name: ABANDON }) as HTMLButtonElement).disabled).toBe(false))
+    expect(Object.values(journal)).toEqual([changed])
+    expect((within(scope).getByRole('textbox', { hidden: true }) as HTMLTextAreaElement).disabled).toBe(true)
+    expect(sentIds()).toEqual([])
+  }
+)
+
+it('uses one atomic snapshot comparison if another window retries while abandonment reaches the journal owner', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-atomic-race' }
+  let deletes = 0
+
+  const journal = nativeJournal((_call, entry) => {
+    if (entry === null) {
+      deletes++
+      const current = Object.values(journal)[0] as { attempts: number }
+      current.attempts++
+    }
+  })
+
+  room(receipt)
+  await prepareCanonicalGroupSend(binding, { text: 'Concurrent retry' })
+  const scope = await openRoom(binding)
+  const dialog = await abandonDialog(scope)
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await within(dialog).findByText(ABANDON_CHANGED)
+  expect(deletes).toBe(1)
+  expect((await readCanonicalGroupSend(binding))?.attempts).toBe(1)
+  expect(sentIds()).toEqual([])
+})
+
+it.each(['room', 'account'] as const)('invalidates an open abandon confirmation when the %s changes', async change => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-owner' }
+  nativeJournal()
+  room(receipt)
+  const prepared = await prepareCanonicalGroupSend(binding, { text: 'Belongs to old owner' })
+  const view = render(<CanonicalGroupWorkspace binding={binding} />)
+  const dialog = await abandonDialog(view.container)
+  const confirm = within(dialog).getByRole('button', { name: ABANDON })
+
+  if (change === 'room') {view.rerender(<CanonicalGroupWorkspace binding={{ ...binding, roomId: 'other' }} />)}
+  else {act(() => clearGroupComposerDrafts())}
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  fireEvent.click(confirm)
+  expect(await readCanonicalGroupSend(binding)).toEqual(prepared)
+  expect(sentIds()).toEqual([])
+})
+
+it('preserves held words when abandoning the uncertain send from another window', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-held' }
+  nativeJournal()
+  room(() => Promise.reject(new Error('lost ACK')))
+  const scope = await openRoom(binding)
+  await prepareCanonicalGroupSend(binding, { text: 'Other window uncertain words' })
+  await typeAndSend(scope, 'My own words')
+  await within(scope).findByText('lost ACK')
+  const dialog = await abandonDialog(scope)
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await waitFor(() => expect(editor(scope).disabled).toBe(false))
+  expect(editor(scope).value).toBe('My own words')
+  expect(sentIds()).toHaveLength(1)
+  expect(await readCanonicalGroupSend(binding)).toBeUndefined()
+})
+
+it('preserves a newer local draft written while the abandon confirmation is open', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-newer-draft' }
+  room(() => Promise.reject(new Error('lost ACK')))
+  const scope = await openRoom(binding)
+  await typeAndSend(scope, 'Uncertain words')
+  await within(scope).findByText('lost ACK')
+  const dialog = await abandonDialog(scope)
+  const key = canonicalGroupComposerDraftKey(binding)
+  updateGroupComposerDraft(key, draft => ({ ...draft, main: 'Newer words from another pane' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await waitFor(() => expect(editor(scope).disabled).toBe(false))
+  expect(editor(scope).value).toBe('Newer words from another pane')
+  expect(sentIds()).toHaveLength(1)
+  expect(await readCanonicalGroupSend(binding)).toBeUndefined()
+})
+
+it('preserves a separate same-text draft replying to another thread when abandoning a restored send', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-other-reply' }
+  room(receipt)
+  await prepareCanonicalGroupSend(binding, { text: 'Thanks', thread_id: 'old-thread' })
+  const key = canonicalGroupComposerDraftKey(binding)
+  const reply = { name: 'New recipient', quote: 'New discussion', thread: 'new-thread' }
+  updateGroupComposerDraft(key, draft => ({ ...draft, main: 'Thanks', canonicalReply: reply }))
+  const scope = await openRoom(binding)
+  const dialog = await abandonDialog(scope)
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await waitFor(() => expect(editor(scope).disabled).toBe(false))
+  expect(editor(scope).value).toBe('Thanks')
+  expect(groupComposerDraftSnapshot(key).canonicalReply).toEqual(reply)
+  expect(sentIds()).toEqual([])
+})
+
+it('keeps held and current same-text drafts when they target different reply threads', async () => {
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'abandon-held-replies' }
+  room(receipt)
+  await prepareCanonicalGroupSend(binding, { text: 'Uncertain message' })
+  const key = canonicalGroupComposerDraftKey(binding)
+  const heldReply = { name: 'Held recipient', quote: 'Held discussion', thread: 'held-thread' }
+  updateGroupComposerDraft(key, draft => ({ ...draft, main: 'Thanks',
+    canonicalReply: { name: 'Current recipient', quote: 'Current discussion', thread: 'current-thread' },
+    canonicalHeld: { text: 'Thanks', attachments: [], reply: heldReply } }))
+  const scope = await openRoom(binding)
+  const dialog = await abandonDialog(scope)
+  fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
+  await waitFor(() => expect(editor(scope).disabled).toBe(false))
+  expect(editor(scope).value).toBe('Thanks\n\nThanks')
+  expect(groupComposerDraftSnapshot(key).canonicalReply).toEqual(heldReply)
+  expect(sentIds()).toEqual([])
 })

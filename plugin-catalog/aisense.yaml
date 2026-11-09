@@ -1,7 +1,9 @@
 name: aisense
 title: AI SENSE Free Public Tools
 repo: https://github.com/aisenseapi/aisense-free-public-rest-apis
-sha: 3a646585c2ab979da025ba057bd5b9fb049c0fba
+# Reachable replacement for 3a646585c2ab979da025ba057bd5b9fb049c0fba:
+# agent-plugin tree remains 4753ce3356c16f4e8c5fe2ccea18eb2a7d9ec17a.
+sha: 8c6496d127c42f5d4fa5866e7af08664c59622a5
 subdir: agent-plugin
 description: >-
   77 free tools for agents through AI SENSE's hosted MCP server (Streamable HTTP, no account, no
@@ -21,7 +23,7 @@ maintainer: aisenseapi
 tier: community
 category: tools
 requires_hermes: ">=0.22.0"
-docs_url: https://github.com/aisenseapi/aisense-free-public-rest-apis/blob/3a646585c2ab979da025ba057bd5b9fb049c0fba/agent-plugin/README.md
+docs_url: https://github.com/aisenseapi/aisense-free-public-rest-apis/blob/8c6496d127c42f5d4fa5866e7af08664c59622a5/agent-plugin/README.md
 version: "1.0.0"
 platforms: []
 capabilities:

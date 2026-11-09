@@ -16,6 +16,43 @@ from tests import conftest as suite_conftest
 from tests.waiting import wait_until
 
 
+@pytest.mark.platforms("linux", "macos")
+def test_unreadable_macos_process_does_not_abort_session_daemon_discovery(tmp_path, monkeypatch):
+    import psutil
+
+    def denied_environment():
+        try:
+            raise PermissionError("sysctl(KERN_PROCARGS2) denied")
+        except PermissionError as exc:
+            # psutil's macOS C extension can wrap a permission failure this way.
+            raise SystemError("proc_environ returned a result with an exception set") from exc
+
+    root = tmp_path / "session"
+    processes = [
+        SimpleNamespace(pid=-1, environ=denied_environment),
+        SimpleNamespace(pid=-2, environ=lambda: {"HERMES_HOME": str(root / "test-home")}),
+        SimpleNamespace(pid=-3, environ=lambda: {"HERMES_HOME": str(tmp_path / "outside")}),
+    ]
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter(processes))
+
+    assert suite_conftest._processes_with_hermes_home_under([root]) == [-2]
+
+
+@pytest.mark.platforms("linux", "macos")
+def test_unexpected_process_reader_system_error_remains_visible(tmp_path, monkeypatch):
+    import psutil
+
+    def broken_environment():
+        raise SystemError("unexpected reader defect")
+
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter([
+        SimpleNamespace(pid=-1, environ=broken_environment),
+    ]))
+
+    with pytest.raises(SystemError, match="unexpected reader defect"):
+        suite_conftest._processes_with_hermes_home_under([tmp_path])
+
+
 def _detached(env_home, marker):
     code = "import time\nwhile True: time.sleep(0.2)\n"
     env = {**os.environ, "HERMES_HOME": str(env_home), "LIVE_REAP_MARKER": marker}

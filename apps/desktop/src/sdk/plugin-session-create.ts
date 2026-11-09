@@ -145,6 +145,45 @@ async function requestPluginRuntimeReadiness<T>(
   }
 }
 
+function groupSendNotDispatched(error: unknown): Error {
+  const data = (error as { data?: Record<string, unknown> } | null)?.data
+
+  // Errors can be frozen or shared with another request. Preserve their public
+  // fields without mutating them; this proof concerns only this Send attempt.
+  return Object.assign(new Error(error instanceof Error ? error.message : String(error), { cause: error }), error, {
+    data: { ...data, admitted: false }
+  })
+}
+
+async function requestPreparedPluginGroup<T>(
+  route: PluginSessionCreateRoute, request: Request, method: string,
+  params: Record<string, unknown>, send: () => Promise<T>, spawnPriority?: SpawnPriority
+): Promise<T> {
+  let release: (() => void) | undefined
+  let dispatched = false
+
+  try {
+    const assertAccount = pluginAccountFence()
+    release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
+    assertAccount()
+    await preparePluginGroupModels(route, request, params.room_id as string,
+      profile => resolvePluginModelDefault(route, profile, assertAccount), assertAccount,
+      method === 'groups.retry' ? params.member_id as string : undefined)
+    assertAccount()
+    // From this point even a synchronous transport error may have posted the
+    // intent. Only the gateway can prove otherwise; preserve its exact error.
+    dispatched = true
+
+    return await send()
+  } catch (error) {
+    throw method === 'groups.send' && !dispatched ? groupSendNotDispatched(error) : error
+  } finally {
+    // Lease cleanup must not replace a receipt or its admission evidence.
+    try { release?.() }
+    catch (error) { console.warn('[plugin-session-create] group lease release failed', error) }
+  }
+}
+
 /** The compatibility door still pins the socket and owner before its first await. */
 export async function requestPluginActiveGateway<T>(
   method: string,
@@ -207,20 +246,7 @@ export async function requestPluginSession<T>(
     typeof params.room_id === 'string' && params.room_id &&
     window.hermesDesktop?.accountAdapter === 'platform'
   ) {
-    const assertAccount = pluginAccountFence()
-    const release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
-
-    try {
-      assertAccount()
-      await preparePluginGroupModels(route, request, params.room_id,
-        profile => resolvePluginModelDefault(route, profile, assertAccount), assertAccount,
-        method === 'groups.retry' ? params.member_id as string : undefined)
-      assertAccount()
-
-      return await send()
-    } finally {
-      release()
-    }
+    return requestPreparedPluginGroup(route, request, method, params, send, spawnPriority)
   }
 
   if (!usesPluginPlatformDefault(method, params)) {
