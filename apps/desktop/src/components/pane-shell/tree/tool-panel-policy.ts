@@ -28,7 +28,15 @@ export function isToolPanelGroup(group: GroupNode, paneFor: (id: string) => Cont
   return (
     group.panes.length > 0 &&
     group.panes.every(id => {
-      const data = paneFor(id)?.data as { toolPanel?: boolean; uncloseable?: boolean } | undefined
+      const pane = paneFor(id)
+
+      // Bot schedules unregister outside a bot chat but keep their saved tab
+      // position. Their known tool identity must outlive that registration.
+      if (!pane && id === 'hermes-bots:routines') {
+        return true
+      }
+
+      const data = pane?.data as { toolPanel?: boolean; uncloseable?: boolean } | undefined
 
       return Boolean(data?.toolPanel) && !data?.uncloseable
     })

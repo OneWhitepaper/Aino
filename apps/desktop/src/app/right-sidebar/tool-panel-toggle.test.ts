@@ -66,7 +66,8 @@ it('retains Files explicitly selected without a project when the panel reopens',
   const { tree, model, actions, layout } = await setup()
 
   tree.bindPaneVisibility(
-    'files', layout.$fileBrowserOpen,
+    'files',
+    layout.$fileBrowserOpen,
     () => layout.setFileBrowserOpen(false),
     () => layout.setFileBrowserOpen(true)
   )
@@ -113,4 +114,29 @@ it('opens the chooser on narrow windows and toggles that same overlay on the sec
     window.removeEventListener(PANE_TOGGLE_REVEAL_EVENT, receive)
     Object.defineProperty(window, 'matchMedia', { configurable: true, value: original })
   }
+})
+
+it('opens the chooser when a bot schedule unregisters from the saved panel', async () => {
+  const { tree, model, actions, registry, review } = await setup()
+
+  const unregister = registry.register({
+    id: 'hermes-bots:routines',
+    area: 'panes',
+    data: { toolPanel: true, placement: 'right' },
+    render: () => null
+  })
+
+  const tools = model.findGroup(tree.$layoutTree.get()!, 'tools')!
+  tree.$layoutTree.set(
+    model.split('row', [model.group(['workspace']), { ...tools, panes: [...tools.panes, 'hermes-bots:routines'] }])
+  )
+  unregister()
+
+  actions.toggleToolPanelSide('right')
+
+  const host = model.findGroupOfPane(tree.$layoutTree.get()!, 'tool-new-tab')
+  expect(host?.id).toBe('tools')
+  expect(host?.active).toBe('tool-new-tab')
+  expect(host?.panes).toContain('hermes-bots:routines')
+  expect(review.$reviewOpen.get()).toBe(false)
 })

@@ -114,6 +114,91 @@ describe('safe tool-only groups restored without presentation metadata', () => {
     expect(node.toolPanel).toBeUndefined()
   })
 
+  it('keeps a saved tool host tabbed when a bot-only tab unregisters and registers again', () => {
+    const registerSchedule = () =>
+      registry.register({
+        area: 'panes',
+        id: 'hermes-bots:routines',
+        title: 'Scheduled jobs',
+        data: { toolPanel: true, placement: 'right' },
+        render: () => <div>Bot schedules</div>
+      })
+
+    const unregisterSchedule = registerSchedule()
+    const node = group(['files', 'hermes-bots:routines'], { id: 'bot-tools', toolPanel: true })
+    $layoutTree.set(node)
+    const view = render(<TreeGroup node={node} parentAxis="row" />)
+    expect(screen.getByRole('tab', { name: 'Scheduled jobs' })).toBeTruthy()
+
+    act(() => unregisterSchedule())
+    expect(screen.queryByRole('tab', { name: 'Scheduled jobs' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Hide panel' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Maximize panel' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide panel' }))
+    const hidden = $layoutTree.get()!
+    expect(fixedTrackSize(hidden, 'row', context())).toBe('0px')
+    expect(subtreeGone(hidden, context())).toBe(true)
+
+    if (hidden.type !== 'group') {
+      throw new Error('Expected tool group')
+    }
+
+    view.rerender(<TreeGroup node={hidden} parentAxis="row" />)
+    expect(view.container.querySelector('[data-vertical="true"]')).toBeNull()
+
+    act(() => restoreTreePane('files'))
+    const restored = $layoutTree.get()!
+
+    if (restored.type !== 'group') {
+      throw new Error('Expected tool group')
+    }
+
+    view.rerender(<TreeGroup node={restored} parentAxis="row" />)
+    act(() => {
+      disposers.push(registerSchedule())
+    })
+    expect(screen.getByRole('tab', { name: 'Scheduled jobs' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hide panel' })).toBeTruthy()
+    expect(restored.panes).toEqual(['files', 'hermes-bots:routines'])
+  })
+
+  it.each([true, undefined])('restores saved tool chrome before its bot tab registers (marked: %s)', toolPanel => {
+    const node = group(['files', 'hermes-bots:routines'], { id: 'saved-tools', toolPanel, minimized: true })
+    $layoutTree.set(node)
+    const { container } = render(<TreeGroup node={node} parentAxis="row" />)
+
+    expect(fixedTrackSize(node, 'row', context())).toBe('0px')
+    expect(subtreeGone(node, context())).toBe(true)
+    expect(container.querySelector('[data-vertical="true"]')).toBeNull()
+
+    const workspace = group(['files', 'workspace'], { toolPanel: true, minimized: true })
+    const inspector = group(['files', 'plugin:inspector'], { toolPanel: true, minimized: true })
+    const unknown = group(['files', 'missing-plugin'], { toolPanel: true, minimized: true })
+
+    for (const mixed of [workspace, inspector, unknown]) {
+      expect(fixedTrackSize(mixed, 'row', context())).toBe(MINIMIZED_TRACK)
+      expect(subtreeGone(mixed, context())).toBe(false)
+    }
+  })
+
+  it.each([{ placement: 'main' }, { toolPanel: true, uncloseable: true }])(
+    'lets a live contribution override the dormant tool identity: %j',
+    data => {
+      disposers.push(
+        registry.register({
+          area: 'panes',
+          id: 'hermes-bots:routines',
+          data,
+          render: () => <div>Protected guest</div>
+        })
+      )
+      const node = group(['files', 'hermes-bots:routines'], { toolPanel: true, minimized: true })
+
+      expect(fixedTrackSize(node, 'row', context())).toBe(MINIMIZED_TRACK)
+      expect(subtreeGone(node, context())).toBe(false)
+    }
+  )
+
   it('offers panel Hide instead of a nonfunctional Hide tabs menu command', () => {
     const node = group(['review'], { id: 'legacy-tools' })
     $layoutTree.set(node)

@@ -687,10 +687,16 @@ export default {
           // drops bot-chat workspace ownership for a beat. While Bot Mode is
           // still on screen and the tile is the one holding focus, keep it —
           // a pane must never unregister itself out from under its own click.
-          // Leaving Bot Mode ($botsPaneVisible false) still unregisters.
+          // Selecting a group or leaving Bot Mode still unregisters.
           const $self = host.paneVisibility(`${ID}:routines`)
 
-          if ($botsPaneVisible.get() && $self && typeof $self.get === 'function' && $self.get()) {
+          if (
+            $botsPaneVisible.get() &&
+            !$groupChatWorkspace.get() &&
+            $self &&
+            typeof $self.get === 'function' &&
+            $self.get()
+          ) {
             return
           }
 

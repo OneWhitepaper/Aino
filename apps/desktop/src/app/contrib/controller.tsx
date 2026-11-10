@@ -721,6 +721,13 @@ registerPaneCloser('logs', () => $logsOpen.set(false))
 registerPaneOpener('logs', () => $logsOpen.set(true))
 syncLogsPane($logsOpen.get())
 $logsOpen.listen(syncLogsPane)
+modeLayout.onRestore(() => {
+  queueMicrotask(() => {
+    if (!$logsOpen.get()) {
+      syncLogsPane(false)
+    }
+  })
+})
 
 registry.register(
   paletteToggle({
