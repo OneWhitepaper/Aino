@@ -52,4 +52,4 @@ Do not merge obsolete whole trees back onto main. If a historical requirement is
 
 ## Validation
 
-The audit itself changes no production code. The selected action updates use full official commit pins and retain the existing workflow inputs, permissions and trigger conditions. Local workflow contract coverage passed: 44 files, 675 tests, zero failures; 59 host-specific cases are exercised in their CI lanes. Repository static checks and the consolidation PR/main CI results are recorded on the corresponding pull request.
+The audit itself changes no production code. The selected action updates use full official commit pins and retain the existing workflow inputs, permissions and trigger conditions. Local workflow contract coverage passed: 44 files, 675 tests, zero failures; 59 host-specific cases were skipped locally and require the applicable CI lanes. All 14 repository static checks passed. Consolidation PR/main CI results will be recorded on the corresponding pull request.
