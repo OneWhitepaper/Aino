@@ -400,6 +400,31 @@ describe('the Scheduled jobs pane', () => {
     harness.dispose()
   })
 
+  it('unregisters a selected bot schedule tab when a group chat takes the workspace', async () => {
+    const store = paneStores()
+    const harness = recordingContext()
+    const { $groupChatWorkspace } = await import('./group-chat')
+
+    mocks.botChatOwnsWorkspace.mockReturnValue(true)
+    store('hermes-bots:pane').set(true)
+    plugin.register(harness.ctx)
+    await settle()
+
+    store('hermes-bots:routines').set(true)
+    expect(harness.find('routines')).toBeTruthy()
+
+    mocks.botChatOwnsWorkspace.mockReturnValue(false)
+    $groupChatWorkspace.set('room')
+    expect(harness.find('routines')).toBeUndefined()
+
+    mocks.botChatOwnsWorkspace.mockReturnValue(true)
+    $groupChatWorkspace.set(null)
+    expect(harness.find('routines')).toBeTruthy()
+    expect(mocks.undismissPane).toHaveBeenCalledTimes(1)
+
+    harness.dispose()
+  })
+
   it('drops a remembered Close only on entering Bot Mode, not on every ownership regain', async () => {
     const store = paneStores()
     const harness = recordingContext()
