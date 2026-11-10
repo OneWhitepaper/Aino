@@ -20,6 +20,7 @@ import {
 import type { WorkspacePaneScope } from '@/components/pane-shell/workspace-scope'
 import type { MenuKit } from '@/components/ui/actions-menu'
 import { registry } from '@/contrib/registry'
+import { modeLayout } from '@/store/interface-mode'
 import type { TileDock } from '@/store/session-states'
 
 interface DockHint {
@@ -224,5 +225,9 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
     sync()
     cfg.source.listen(sync)
     cfg.also?.forEach(atom => atom.listen(sync))
+    // A saved mode can still contain tiles closed or parked in the other
+    // mode. Wait until restoration releases its persistence guard so pruning
+    // repairs that mode's saved tree as well as the current presentation.
+    modeLayout.onRestore(() => queueMicrotask(sync))
   }
 }
