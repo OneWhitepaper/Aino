@@ -126,7 +126,7 @@ export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId 
   })
 }
 
-function fromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: string): DelegateRow {
+export function delegateRowFromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: string): DelegateRow {
   return {
     activity: live.stream
       .map(entry => (entry.kind === 'summary' ? live.summary || entry.text : entry.text))
@@ -185,6 +185,7 @@ export function mergeDelegateRows(
               candidate.goal === row.goal
           )
         : undefined
+
     const sameBatch =
       native ??
       (row.delegationId
@@ -204,7 +205,7 @@ export function mergeDelegateRows(
 
     const merged = {
       ...row,
-      ...fromSubagent(matched, row.id, row.goal),
+      ...delegateRowFromSubagent(matched, row.id, row.goal),
       displayName: matched.displayName || row.displayName,
       delegationId: matched.delegationId || row.delegationId,
       sessionId: matched.sessionId || row.sessionId

@@ -15,11 +15,38 @@ import { $focusedStoredSessionId } from '@/store/session-focus'
 import { currentUserSessionOpen } from '@/store/session-open-intent'
 import { isSessionOwnerRoute } from '@/store/session-request-router'
 import { $sessionTiles, setSessionTileWorkspaceScope } from '@/store/session-states'
+import { $toolSession } from '@/store/tool-session'
 
 import { type ComposerTarget, getVisibleComposerSurfaceId, requestComposerInsertAcked } from '../chat/composer/focus'
 import { openSession, type OpenSessionNavigate, type OpenSessionWorkspaceScope } from '../open-session'
 
+import { openSubagentPanel, subagentPanelSourceKey } from './subagent-panel'
+
 let sourceNavigation = 0
+
+/** Inspection uses the child receipt's parent and owner, never the foreground's backend. */
+export async function openCollaborationTask(task: CollaborationTask): Promise<boolean> {
+  const group = $collaborationGroups.get().find(group => group.key === task.sourceKey)
+
+  const current = group?.tasks.find(candidate =>
+    candidate.key === task.key &&
+    candidate.parentRuntimeId === task.parentRuntimeId &&
+    candidate.storedSessionId === task.storedSessionId &&
+    collaborationOwnerKey(candidate.owner) === collaborationOwnerKey(task.owner)
+  )
+
+  if (!current || !collaborationOwnerKey(current.owner)) {
+    return false
+  }
+
+  return openSubagentPanel({
+    parentRuntimeId: null,
+    anchorSourceKey: subagentPanelSourceKey($toolSession.get()),
+    inspection: { runtimeId: current.parentRuntimeId, storedId: current.storedSessionId, owner: current.owner },
+    taskId: current.id,
+    row: delegateRowFromSubagent(current, current.id, current.goal)
+  })
+}
 
 async function openRoomSource(group: CollaborationGroup, generation: number): Promise<boolean> {
   const binding = group.roomBinding
@@ -259,3 +286,5 @@ export async function prepareCollaborationRetry(
     document.removeEventListener('keydown', cancel, true)
   }
 }
+
+import { delegateRowFromSubagent } from '@/components/assistant-ui/tool/delegate-model'

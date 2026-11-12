@@ -1,7 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { getLatestSessionMessages } from '@/api/sessions'
 import type { DelegateRow } from '@/components/assistant-ui/tool/delegate-model'
 import { buildToolView } from '@/components/assistant-ui/tool/fallback-model'
 import { CompactMarkdown } from '@/components/chat/compact-markdown'
@@ -11,10 +9,11 @@ import { Codicon } from '@/components/ui/codicon'
 import { Loader } from '@/components/ui/loader'
 import { useI18n } from '@/i18n'
 import { chatMessageText, toChatMessages } from '@/lib/chat-messages'
-import { sessionOwnerIsKnown } from '@/store/session-owner-resolution'
-import { profileScopeForSessionOwner, type SessionOwnerScope } from '@/store/session-request-router'
+import type { SessionOwnerScope } from '@/store/session-request-router'
 
 import { SubagentTranscript } from '../chat/composer/status-stack/subagent-transcript'
+
+import { useSubagentTranscriptSource } from './subagent-transcript-source'
 
 export interface SubagentPanelTranscriptProps {
   row: DelegateRow
@@ -27,25 +26,12 @@ export interface SubagentPanelTranscriptProps {
 export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: SubagentPanelTranscriptProps) {
   const { t } = useI18n()
   const visible = usePaneVisible()
-  const ownerKnown = sessionOwnerIsKnown(owner)
-  const scope = profileScopeForSessionOwner(owner)
-  const useLiveTail = live && Boolean(parentRuntimeId)
+  const source = useSubagentTranscriptSource({ row, parentRuntimeId, owner, live, visible })
   const liveSource = JSON.stringify([owner, parentRuntimeId, row.subagentId ?? row.id])
   const [expandedSource, setExpandedSource] = useState<string | null>(null)
 
-  const query = useQuery({
-    queryKey: ['subagent-panel-transcript', scope, row.sessionId],
-    enabled: visible && ownerKnown && Boolean(row.sessionId) && !useLiveTail,
-    queryFn: () => getLatestSessionMessages(row.sessionId!, scope, { passive: true }),
-    refetchInterval: live && visible && !useLiveTail ? 2000 : false,
-    refetchOnWindowFocus: false,
-    retry: false,
-    gcTime: 60_000,
-    staleTime: 0
-  })
-
   const messages = useMemo(() => {
-    const visible = toChatMessages(query.data?.messages ?? []).filter(
+    const visible = toChatMessages(source.messages).filter(
       message => !message.hidden && message.role !== 'system'
     )
 
@@ -53,17 +39,17 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
 
     // The detail already displays the exact original instructions above it.
     return first?.role === 'user' && chatMessageText(first).trim() === row.goal.trim() ? visible.slice(1) : visible
-  }, [query.data, row.goal])
+  }, [source.messages, row.goal])
 
   if (!visible) {
     return null
   }
 
-  if (!ownerKnown || (!row.sessionId && !useLiveTail)) {
+  if (!source.ownerKnown || source.unavailable) {
     return <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
   }
 
-  if (useLiveTail) {
+  if (source.useLiveTail) {
     return (
       <details key={liveSource} onToggle={event => setExpandedSource(event.currentTarget.open ? liveSource : null)}>
         <summary className="cursor-pointer text-(--ui-text-secondary)">{t.agents.extendedTranscript}</summary>
@@ -74,17 +60,17 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
     )
   }
 
-  if (query.isPending) {
+  if (source.pending && !source.error) {
     return <Loader label={t.common.loading} />
   }
 
-  if (query.isError) {
+  if (source.error) {
     return (
       <div className="grid justify-items-start gap-2" role="status">
         <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
         <Button
-          disabled={!visible || query.isFetching}
-          onClick={() => void query.refetch()}
+          disabled={!visible || source.fetching}
+          onClick={() => void source.retry()}
           size="xs"
           variant="secondary"
         >
@@ -95,11 +81,18 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   }
 
   if (!messages.length) {
-    return <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    return source.awaitingOutput
+      ? <Loader label={t.agents.running} />
+      : <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
   }
 
   return (
     <div className="grid min-w-0 gap-4" data-slot="subagent-panel-transcript">
+      {source.hasEarlier && (
+        <Button disabled={source.fetchingEarlier} onClick={() => void source.loadEarlier()} size="xs" variant="ghost">
+          {t.assistant.thread.showEarlier}
+        </Button>
+      )}
       {messages.map(message => (
         <div className="grid min-w-0 gap-2" data-subagent-message-role={message.role} key={message.id}>
           {message.parts.map((part, index) => {

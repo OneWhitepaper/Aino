@@ -1,3 +1,6 @@
+import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
 /** Child inspection uses the shared tool tab without replacing the parent conversation. */
 import { restartMockServer } from '../../../tests-js/scripts/mock-server'
 
@@ -12,6 +15,7 @@ const heldContext = 'This is a test subagent for the sidebar states E2E test.'
 async function launch() {
   restartMockServer()
   fixture = await setupMockBackend({
+    nativeGateway: true,
     extraDisplayConfig: '  language: zh',
     extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true',
     mockServer: { holdFirstCompletionContaining: heldContext }
@@ -117,12 +121,24 @@ test('named delegated work opens once in a tool tab, shares its avatar and follo
   const capsule = page.locator('.collaboration-capsule')
   const trigger = capsule.locator('.cc-trigger')
   await trigger.click()
+  const capsuleTask = capsule.locator('[data-collaboration-task]').filter({ hasText: name })
+  await capsuleTask.locator('.cc-task-button').click()
+  await capsuleTask.getByRole('button', { name: '查看会话', exact: true }).click()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await expect(panel.getByRole('heading', { name, exact: true })).toBeVisible()
+  await expect(panel.locator('.subagent-panel-goal')).toHaveText(goal)
+  await expect(editor).toHaveText(draft)
+  await expect(page.locator('[data-chat-surface]:visible')).toHaveAttribute('data-composer-target', draftTarget!)
+  expect(await windows()).toBe(initialWindows)
+  await page.screenshot({ path: testInfo.outputPath('capsule-child-preserves-draft.png'), scale: 'css' })
+  await trigger.click()
   await capsule.locator('.cc-source-link').click()
   await expect(page.locator('[data-chat-surface]:visible').getByText(request, { exact: true })).toBeVisible()
 
   if ((await trigger.getAttribute('aria-expanded')) === 'true') {
     await trigger.click()
   }
+
   await expect(delegate).toBeVisible()
   await delegate.click()
   await expect(panel.getByRole('heading', { name, exact: true })).toBeVisible()
@@ -140,6 +156,26 @@ test('named delegated work opens once in a tool tab, shares its avatar and follo
   await expect(panel.locator('header [data-slot="subagent-avatar"]')).toHaveAttribute('src', avatar!)
   expect(await windows()).toBe(initialWindows)
   expect(errors).toEqual([])
+
+  try {
+    await expect(panel.locator('[data-slot="subagent-panel-transcript"]')).toBeVisible({ timeout: 30_000 })
+  } finally {
+    const db = new DatabaseSync(path.join(fixture!.sandbox.hermesHome, 'state.db'), { readOnly: true })
+
+    try {
+      const sessions = db.prepare('SELECT id, source, parent_session_id, model_config FROM sessions').all().map(row => {
+        const config = typeof row.model_config === 'string' ? JSON.parse(row.model_config) : {}
+
+        return { id: row.id, source: row.source, parent: row.parent_session_id,
+          subagentId: config?._subagent_id, delegatedFrom: config?._delegate_from }
+      })
+
+      await testInfo.attach('native-child-lineage', { body: JSON.stringify(sessions, null, 2), contentType: 'application/json' })
+    } finally {
+      db.close()
+    }
+  }
+
   await page.screenshot({ path: testInfo.outputPath('subagent-completed-desktop.png'), scale: 'css' })
 
   await page.locator('button[aria-controls="session-summary"]').click()

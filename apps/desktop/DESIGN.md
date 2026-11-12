@@ -1751,7 +1751,7 @@ The detailed state contract lives in the scoped
 ### Collaboration capsule
 
 Subagent inspection uses one standing **Subagents** tab in the existing tool
-panel. It opens only on explicit intent from Summary or a transcript delegation,
+panel. It opens only on explicit intent from Summary, the collaboration capsule or a transcript delegation,
 alongside files, review and terminal; it never creates a new window or activates
 the child as the main conversation. Summary and transcript rows lead with the
 same receipt-bound portrait and short name. Full instructions and execution
@@ -1762,8 +1762,11 @@ When no child is running or queued, Summary collapses to one clickable row of
 up to four receipt-bound portraits and truthful status counts, without task names
 or a separate view-all link. Only live children expand into named rows; the compact
 row still opens the same Subagents tab and never treats an old dispatch as completion.
-The tab follows the existing tool-session owner and conversation. Changing that
-source clears the visible selection; hidden tabs do not poll transcripts. Live
+Summary and transcript entries follow the existing tool-session owner and conversation.
+The capsule's View session opens the exact captured child inside this same tab,
+without activating its parent or a group's hidden member chat. The inspection
+keeps that parent's owner through Back and list selection; changing the foreground
+conversation, workspace or account clears the visible selection. Hidden tabs do not poll transcripts. Live
 stop and instruction controls require the original native child's authority.
 Historical child conversations are read-only; technical live-log tails stay
 collapsed until requested. Capsule appearance and expansion retain the approved

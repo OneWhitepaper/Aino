@@ -4,7 +4,9 @@ import type { DelegateRow } from '@/components/assistant-ui/tool/delegate-model'
 import { findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { setTreePaneParked } from '@/components/pane-shell/tree/parked-panes'
 import { $layoutTree, restoreTreePane } from '@/components/pane-shell/tree/store'
+import { $workspaceMode, $workspaceOwnerKey, workspaceScopeKey } from '@/components/pane-shell/workspace-scope'
 import { collaborationOwnerKey } from '@/store/collaboration-capsule-model'
+import { sessionOwnerIsKnown } from '@/store/session-owner-resolution'
 import type { SessionOwnerScope } from '@/store/session-request-router'
 import { $toolSession, type ToolSession } from '@/store/tool-session'
 
@@ -21,6 +23,9 @@ export interface SubagentPanelIntent {
   taskId?: string
   toolCallId?: string
   row?: DelegateRow
+  /** A capsule may inspect another parent without activating its hidden chat. */
+  inspection?: Pick<ToolSession, 'owner' | 'runtimeId' | 'storedId'>
+  anchorSourceKey?: string
 }
 
 interface SubagentPanelSelection {
@@ -28,6 +33,7 @@ interface SubagentPanelSelection {
   taskId?: string
   toolCallId?: string
   row?: DelegateRow
+  inspection?: Pick<ToolSession, 'owner' | 'runtimeId' | 'storedId'>
 }
 
 export const $subagentPanelSelection = atom<SubagentPanelSelection | null>(null)
@@ -37,7 +43,8 @@ export function subagentPanelSourceKey(session: Pick<ToolSession, 'owner' | 'sto
   return JSON.stringify([
     collaborationOwnerKey(session.owner),
     session.storedId ?? session.runtimeId,
-    session.sourceKey
+    session.sourceKey,
+    workspaceScopeKey($workspaceMode.get(), $workspaceOwnerKey.get())
   ])
 }
 
@@ -45,13 +52,16 @@ export function subagentPanelSourceKey(session: Pick<ToolSession, 'owner' | 'sto
 export function openSubagentPanel(intent: SubagentPanelIntent): boolean {
   const session = $toolSession.get()
 
-  const matches =
-    (intent.parentRuntimeId && intent.parentRuntimeId === session.runtimeId) ||
-    (intent.storedSessionId && intent.storedSessionId === session.storedId)
+  const matches = intent.inspection
+    ? intent.anchorSourceKey === subagentPanelSourceKey(session) &&
+      sessionOwnerIsKnown(intent.inspection.owner) &&
+      Boolean(intent.inspection.runtimeId || intent.inspection.storedId)
+    : (intent.parentRuntimeId && intent.parentRuntimeId === session.runtimeId) ||
+      (intent.storedSessionId && intent.storedSessionId === session.storedId)
 
   if (
     !matches ||
-    (intent.owner !== undefined && collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(session.owner))
+    (!intent.inspection && intent.owner !== undefined && collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(session.owner))
   ) {
     return false
   }
@@ -60,7 +70,8 @@ export function openSubagentPanel(intent: SubagentPanelIntent): boolean {
     sourceKey: subagentPanelSourceKey(session),
     taskId: intent.taskId ?? intent.row?.subagentId ?? intent.row?.id,
     toolCallId: intent.toolCallId,
-    row: intent.row
+    row: intent.row,
+    ...(intent.inspection ? { inspection: { ...intent.inspection } } : {})
   })
   setTreePaneParked(SUBAGENT_PANEL_ID, false)
   restoreTreePane(SUBAGENT_PANEL_ID)
@@ -73,10 +84,11 @@ export function syncSubagentPanelRows(intent: SubagentPanelIntent, rows: readonl
   const session = $toolSession.get()
   const selection = $subagentPanelSelection.get()
   const callId = intent.toolCallId
+  const source = selection?.inspection ?? session
 
   const matches =
-    (intent.parentRuntimeId && intent.parentRuntimeId === session.runtimeId) ||
-    (intent.storedSessionId && intent.storedSessionId === session.storedId)
+    (intent.parentRuntimeId && intent.parentRuntimeId === source.runtimeId) ||
+    (intent.storedSessionId && intent.storedSessionId === source.storedId)
 
   if (
     !matches ||
@@ -84,7 +96,7 @@ export function syncSubagentPanelRows(intent: SubagentPanelIntent, rows: readonl
     !selection?.taskId ||
     selection.sourceKey !== subagentPanelSourceKey(session) ||
     selection.toolCallId !== callId ||
-    (intent.owner !== undefined && collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(session.owner))
+    (intent.owner !== undefined && collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(source.owner))
   ) {
     return false
   }

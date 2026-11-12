@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { $workspaceMode, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
 import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
 
 import type { SummaryDelegation } from '../right-sidebar/summary/session-activity'
@@ -16,12 +17,17 @@ const state = vi.hoisted(() => ({
   history: [] as SummaryDelegation[]
 }))
 
-vi.mock('@/store/tool-session', () => ({ $toolSession: { get: () => state.session } }))
+vi.mock('@/store/tool-session', () => ({
+  $toolSession: { get: () => state.session },
+  resolveToolSessionScope: (owner: { connectionId: string; profile: string }) => owner
+}))
 vi.mock('../right-sidebar/summary/use-summary-session', () => ({ useSummarySession: () => state.session }))
 vi.mock('../right-sidebar/summary/use-summary-content', () => ({
-  useSummaryContent: () => ({ delegations: state.history, loading: false, error: null, refetch: vi.fn() })
+  useSummaryContent: vi.fn(() => ({ delegations: state.history, loading: false, error: null, refetch: vi.fn() }))
 }))
 vi.mock('./subagent-panel-transcript', () => ({ SubagentPanelTranscript: () => null }))
+
+import { useSummaryContent } from '../right-sidebar/summary/use-summary-content'
 
 import { $subagentPanelSelection, subagentPanelSourceKey } from './subagent-panel'
 import { SubagentPanel } from './subagent-panel-view'
@@ -30,6 +36,8 @@ afterEach(() => {
   cleanup()
   $subagentsBySession.set({})
   $subagentPanelSelection.set(null)
+  $workspaceOwnerKey.set(null)
+  $workspaceMode.set('sessions')
   state.history = []
 })
 
@@ -106,4 +114,38 @@ it('keeps a selected native child live before its persisted tool receipt has loa
     )
   )
   expect(screen.getByText('Review complete')).toBeTruthy()
+})
+
+it.each(['conversation', 'workspace'])('keeps the capsule member source through Back and clears it after %s navigation', change => {
+  const inspection = { runtimeId: 'member-runtime', storedId: 'member-history', owner: { connectionId: 'remote', profile: 'member' } }
+  state.history = [{ id: 'member-call', rows: [{ id: 'capsule-child', subagentId: 'capsule-child',
+    displayName: 'Member review', goal: 'Inspect member work', status: 'failed', activity: [] }] }]
+  $subagentPanelSelection.set({
+    sourceKey: subagentPanelSourceKey(state.session),
+    inspection,
+    taskId: 'capsule-child',
+    row: { id: 'capsule-child', goal: 'Inspect member work', status: 'failed', activity: [], sessionId: 'child-history' }
+  })
+  const { rerender } = render(<SubagentPanel />)
+  expect(screen.getAllByText('Inspect member work').length).toBeGreaterThan(0)
+  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
+  fireEvent.click(screen.getByRole('button', { name: /Member review/ }))
+  expect($subagentPanelSelection.get()?.inspection).toEqual(inspection)
+  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
+
+  if (change === 'conversation') {
+    state.session = { ...state.session, storedId: 'different-parent' }
+  } else {
+    act(() => {
+      $workspaceMode.set('bots')
+      $workspaceOwnerKey.set('another-room')
+    })
+  }
+
+  rerender(<SubagentPanel />)
+  expect(screen.queryByText('Inspect member work')).toBeNull()
+  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(state.session))
+  state.session = { ...state.session, storedId: 'stored-parent' }
 })
