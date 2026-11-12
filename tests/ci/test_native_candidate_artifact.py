@@ -99,3 +99,49 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     else:
         assert result.returncode == 0, result.stderr
         assert f"CANDIDATE_EXE={install / names[layout]}" in (tmp_path / "env").read_text()
+
+
+@pytest.mark.platforms("posix")
+def test_resmoke_verifies_stamp_in_the_same_shell_step_that_discovers_its_path(tmp_path):
+    """GITHUB_ENV writes become visible only to later Actions steps."""
+    from pm.store import current_target
+    commit, tag = 'a' * 40, 'v0.1.5'
+    root = tmp_path / 'install/resources/agent-payload'
+    root.mkdir(parents=True)
+    (root / 'python').symlink_to(sys.executable)
+    (root / 'manifest.json').write_text(json.dumps({'runtime': {'storePython': 'python'}}))
+    stamp = {'commit': commit, 'tag': tag, 'payload': 'bundled', 'distribution': 'desktop-app',
+             'dirty': False, 'updateMechanism': 'external'}
+    (root.parent / 'install-stamp.json').write_text(json.dumps(stamp))
+    env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': tag,
+           'HERMES_BUILD_COMMIT': '', '_HERMES_CHANNEL_REQUEST_JSON': ''}
+    name = subprocess.check_output(['node', '-e',
+        "console.log(require('./apps/desktop/electron-builder.config.cjs').linux.executableName)"],
+        env=env, text=True, encoding='utf-8', timeout=10).strip()
+    (root.parent.parent / name).symlink_to(sys.executable)
+    artifact = tmp_path / 'fixture.AppImage'
+    artifact.write_bytes(b'exact archive identity fixture')
+    (tmp_path / 'candidate-download').mkdir()
+    (tmp_path / 'candidate-download/source-artifact.json').write_text('{}')
+    (tmp_path / 'candidate-proof').mkdir()
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    (commands / 'python').symlink_to(sys.executable)
+    # The fixture has no complete bundled environment. Stub only that later
+    # subprocess; stamp CLI, identity config, file/architecture checks run real.
+    reached = tmp_path / 'payload-reached'
+    shell = commands / 'bash'
+    shell.write_text('#!/bin/sh\nif [ "$1" = scripts/smoke-payload.sh ]; then\n'
+                     f'  printf "%s" "$2" > "{reached}"\n  exit 0\nfi\nexec /bin/bash "$@"\n')
+    shell.chmod(0o755)
+    env.update(EXPECTED_COMMIT=commit, EXPECTED_TARGET=current_target(), RELEASE_TAG=tag,
+               CANDIDATE_PLATFORM='linux', CANDIDATE_FORMAT='AppImage', CANDIDATE_ROOT=str(root),
+               CANDIDATE_INSTALL=str(root.parent.parent), CANDIDATE_APPIMAGE=str(artifact),
+               RUNNER_TEMP=str(tmp_path), GITHUB_ENV=str(tmp_path / 'env'), PATH=f'{commands}{os.pathsep}{env["PATH"]}')
+    env.pop('CANDIDATE_STAMP', None)
+    step = next(row for row in smoke_workflow()['jobs']['native-candidate']['steps']
+                if row.get('name') == 'Verify product identity architecture and provenance')
+    result = subprocess.run(['/bin/bash', '-euo', 'pipefail', '-c', step['run']], env=env,
+                            capture_output=True, text=True, check=False, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert reached.read_text() == str(root)

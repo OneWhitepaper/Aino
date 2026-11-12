@@ -230,7 +230,7 @@ jobs:
           PYCODE
           args=()
           if [ -n "$RELEASE_TAG" ]; then args+=(--tag "$RELEASE_TAG"); fi
-          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform "$CANDIDATE_PLATFORM" --format "$CANDIDATE_FORMAT" --stamp "$CANDIDATE_STAMP" --commit "$EXPECTED_COMMIT" "${args[@]}"
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform "$CANDIDATE_PLATFORM" --format "$CANDIDATE_FORMAT" --stamp "$CANDIDATE_ROOT/../install-stamp.json" --commit "$EXPECTED_COMMIT" "${args[@]}"
           bash scripts/smoke-payload.sh "$CANDIDATE_ROOT" 2>&1 | tee "$RUNNER_TEMP/candidate-proof/payload-smoke.log"
       - name: Native ZIP startup login chat and tool smoke
         if: inputs.format == 'zip'
