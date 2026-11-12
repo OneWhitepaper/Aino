@@ -52,3 +52,38 @@ catalog's response size limit is increased from 2 MiB to 16 MiB.
 
 Verification is recorded against the final source and PR checks before merge.
 No production deployment or installer publication is part of this integration.
+
+- Desktop, Electron and E2E TypeScript checking passed; staged lint hooks
+  passed across the Python and JavaScript workspaces.
+- The complete renderer suite passed in one final run: all 1,937 files and
+  16,265 cases, including ordinary chat, Bot/groups, settings and tool panels.
+- The complete Electron suite passed: 464 files, 4,472 cases; 11 files and
+  67 cases were skipped by their existing host/environment requirements.
+- Seven real Electron/API cases passed together against the latest build:
+  account A-to-B-to-A homes/history/Chromium isolation; ordinary, Bot, group
+  and delegated-child identity; both widget send bridges and theme tokens;
+  built-in, official-provider and custom default-model inheritance through
+  real provider requests; and same-account Bot recovery after sign-in.
+- Eleven additional native panel cases passed, covering tabbed tools,
+  browser/terminal lifetime, file edits and saves, summary ownership, viewport
+  stability, keyboard/focus and reduced-motion transitions.
+- Shared credential changes were exercised through real store files before a
+  watcher tick. Replaced or revoked credentials fence late refresh success
+  and rejection without affecting another gateway. Those regressions failed
+  before the fix and passed with the coordinator and store suites afterward.
+- Generated contracts, prompt surfaces, installed offline help, managed
+  inference, and encryption/OAuth/browser-sign-in boundaries passed their
+  targeted runtime regression suites. Full CI remains authoritative for the
+  complete Python, platform, plugin-catalog and workspace matrix.
+- All 14 local repository checks passed. The final code-health comparison
+  reports zero new findings; its 69 inherited findings match the exact
+  reviewed upstream revision and remain visible in the report.
+
+The 99 committed icon targets were regenerated on Linux x86_64 with the
+lockfile's SHA-256-verified Pillow 13.0.0 and resvg-py 0.5.0 wheels. The 69
+changed files differ only in container/PNG encoding: decoded pixels, native
+ICO/ICNS frames and color metadata match the previous assets exactly. All 32
+unabbreviated asset sizes reported by the Linux CI failure match these outputs.
+The generator's full `--check` passes for all 99 canonical outputs. Aino's source
+art and rendered appearance are preserved; the original strict regeneration,
+structure and Git byte-diff gate remains enabled without exceptions.

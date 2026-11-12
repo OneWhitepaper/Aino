@@ -25,6 +25,10 @@ from tests.pm.test_source_update_launch import source_launch
 def configured_update(source_launch, tmp_path, monkeypatch):
     root, _, _ = source_launch
     repository = Path(__file__).resolve().parents[2]
+    # The selected source tree owns product identity, including in this Python-only slice.
+    brand = root / "apps" / "desktop" / "brand.json"
+    brand.parent.mkdir(parents=True)
+    brand.symlink_to(repository / "apps" / "desktop" / "brand.json")
     pm.sync_venv(["launch-extra"], explicit=True, project_root=root)
     selected = selected_venv(root)
     site = site_packages(selected)
