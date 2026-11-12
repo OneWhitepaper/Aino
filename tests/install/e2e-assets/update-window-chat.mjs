@@ -57,7 +57,8 @@ export async function runUpdateWindowChat(app, page, options) {
       throw new Error('OLD update-window chat did not use the local installed backend');
     }
     // The app's own home names the canonical gateway it dials (`gateway_state.json`).
-    const backend = localBackendProcess(Number(base.port), running.pid, identity.hermesHome);
+    const backend = localBackendProcess(Number(base.port), running.pid, identity.hermesHome,
+      options.origin === 'bundled' ? options.root : undefined);
     const provenanceCommit = readInstallationCommit(options.root, options.origin);
     assertUpdateWindowBackendOrigin(backend, identity, options.root, options.origin, provenanceCommit);
     if (provenanceCommit !== options.expectCommit) throw new Error('Installed OLD commit differs from the expected commit');
@@ -72,7 +73,7 @@ export async function runUpdateWindowChat(app, page, options) {
     await page.screenshot({ path: path.join(options.outDir, 'desktop-chat-old-failed.png') }).catch(() => {});
     fs.writeFileSync(receiptPath, JSON.stringify({ status: 'failed', phase: 'old',
       expectedCommit: options.expectCommit, origin: options.origin, root: options.root,
-      error: String(error) }, null, 2) + '\n');
+      error: String(error), stack: error instanceof Error ? error.stack : undefined }, null, 2) + '\n');
     throw error;
   }
 }

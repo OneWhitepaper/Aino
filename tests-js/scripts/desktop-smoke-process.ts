@@ -14,6 +14,7 @@ export interface NativeProcess {
   parentPid: number
   executable: string
   command: string
+  startedAt?: number | null
   sourceRoot?: string
   // The app binds its backend to a tree by environment, not only by argv: the
   // installation root leads PYTHONPATH and VIRTUAL_ENV names the venv. Only the
@@ -113,16 +114,52 @@ export function readBundledBundleEnv(root: string): Record<string, string | null
   return stamp.bundleEnv
 }
 
-const windowsProcesses = z.array(z.object({
-  ProcessId: z.number(), ParentProcessId: z.number(), ExecutablePath: z.string().nullable(), CommandLine: z.string().nullable(),
-}))
+const processSnapshotSchema = z.object({
+  processes: z.array(z.object({ pid: z.number().int(), parentPid: z.number().int(), executable: z.string(),
+    command: z.string(), startedAt: z.number().nullable() })),
+  listeners: z.array(z.number().int().positive()),
+})
+
+/** Read OS process facts with the installed psutil; Windows CIM startup can stall on ARM. */
+export function readProcessSnapshot(port: number, payloadRoot?: string): z.infer<typeof processSnapshotSchema> {
+  let python = process.env.HERMES_PYTHON
+  let site = ''
+
+  if (payloadRoot) {
+    const runtime = z.object({ runtime: z.object({ storePython: z.string(), sitePackages: z.string() }) }).parse(
+      JSON.parse(fs.readFileSync(path.join(payloadRoot, 'manifest.json'), 'utf8'))).runtime
+
+    python = path.resolve(payloadRoot, runtime.storePython)
+    site = path.resolve(payloadRoot, runtime.sitePackages)
+
+    if (!within(payloadRoot, python) || !within(payloadRoot, site)) { throw new Error('Process observer escapes the installed payload') }
+  }
+
+  if (!python) { throw new Error('OS process snapshot requires the installed HERMES_PYTHON') }
+
+  const code = `import json, subprocess, sys
+if sys.argv[1]: sys.path.insert(0, sys.argv[1])
+import psutil
+processes = []
+for proc in psutil.process_iter(['pid', 'ppid', 'exe', 'cmdline', 'create_time'], ad_value=None):
+    row = proc.info
+    processes.append(dict(pid=row['pid'], parentPid=row['ppid'] or 0, executable=row['exe'] or '',
+                          command=subprocess.list2cmdline(row['cmdline'] or []), startedAt=row['create_time']))
+port = int(sys.argv[2])
+listeners = sorted({conn.pid for conn in psutil.net_connections(kind='tcp')
+                    if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port and conn.pid}) if port else []
+print(json.dumps(dict(processes=processes, listeners=listeners)))`
+
+  try {
+    return processSnapshotSchema.parse(JSON.parse(nativeText(python, ['-I', ...(site ? ['-S'] : []), '-c', code, site, String(port)])))
+  } catch (error) {
+    throw new Error(`OS process/listener snapshot failed (port=${port}, python=${python}): ${String(error)}`, { cause: error })
+  }
+}
 
 export function readNativeProcesses(): NativeProcess[] {
   if (process.platform === 'win32') {
-    const rows = windowsProcesses.parse(JSON.parse(nativeText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      '[Console]::OutputEncoding = [Text.UTF8Encoding]::new(); ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine)'])))
-
-    return rows.map((row): NativeProcess => ({ pid: row.ProcessId, parentPid: row.ParentProcessId, executable: row.ExecutablePath ?? '', command: row.CommandLine ?? '' }))
+    return readProcessSnapshot(0).processes
   }
 
   const table = nativeText('ps', ['-axo', 'pid=,ppid=,comm='])
@@ -181,7 +218,9 @@ function linuxListeningPid(port: number, candidates: NativeProcess[]): number[] 
 }
 
 /** Epoch seconds a live process started (psutil's `create_time` basis), or null when unreadable. */
-function processStartTime(pid: number): number | null {
+function processStartTime(pid: number, processes?: NativeProcess[]): number | null {
+  if (process.platform === 'win32') { return processes?.find(candidate => candidate.pid === pid)?.startedAt ?? null }
+
   try {
     if (process.platform === 'linux') {
       // psutil: boot time + field 22 (starttime, clock ticks), read after the `(comm)` field.
@@ -203,10 +242,7 @@ function processStartTime(pid: number): number | null {
       return Number.isNaN(started) ? null : started
     }
 
-    const ms = nativeText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `([DateTimeOffset](Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' -ErrorAction Stop).CreationDate).ToUnixTimeMilliseconds()`])
-
-    return /^\d+$/.test(ms) ? Number(ms) / 1000 : null
+    return null
   } catch {
     return null
   }
@@ -221,7 +257,7 @@ const gatewayStateSchema = z.object({
 /** Whether `pid` is still the incarnation `gateway.status._get_process_start_time` recorded:
  * raw `/proc/<pid>/stat` start ticks on Linux, psutil centiseconds elsewhere. An unrecorded
  * start time carries only its PID, as in the product's `_start_times_conflict`. */
-function gatewayIncarnationMatches(pid: number, recorded: number | null | undefined): boolean {
+function gatewayIncarnationMatches(pid: number, recorded: number | null | undefined, processes: NativeProcess[]): boolean {
   if (recorded === null || recorded === undefined) {
     return true
   }
@@ -234,7 +270,7 @@ function gatewayIncarnationMatches(pid: number, recorded: number | null | undefi
     }
   }
 
-  const started = processStartTime(pid)
+  const started = processStartTime(pid, processes)
 
   return started !== null && Math.abs(started - recorded / 100) < 2
 }
@@ -249,7 +285,7 @@ function canonicalGateways(homes: string[], processes: NativeProcess[]): Map<num
         fs.readFileSync(path.join(home, 'gateway_state.json'), 'utf8').replace(/^\uFEFF/, '')))
 
       const live = state.gateway_state === 'running' && processes.some(candidate => candidate.pid === state.pid)
-        && gatewayIncarnationMatches(state.pid, state.start_time)
+        && gatewayIncarnationMatches(state.pid, state.start_time, processes)
 
       return live ? [[state.pid, state.code_sha ?? undefined]] : []
     } catch { return [] /* Missing/unreadable state provides no attachment evidence. */ }
@@ -257,12 +293,13 @@ function canonicalGateways(homes: string[], processes: NativeProcess[]): Map<num
 }
 
 /** Identify the actual listener, not a healthy helper or a command recorded before spawn. */
-export function localBackendProcess(port: number, electronPid: number, hermesHome?: string): BackendProcess {
+export function localBackendProcess(port: number, electronPid: number, hermesHome?: string, payloadRoot?: string): BackendProcess {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error('Invalid backend port')
   }
 
-  const processes = readNativeProcesses()
+  const snapshot = process.platform === 'win32' ? readProcessSnapshot(port, payloadRoot) : undefined
+  const processes = snapshot?.processes ?? readNativeProcesses()
   const children = descendants(processes, electronPid)
   // An update can automatically reopen the app before this smoke starts. The
   // new window legitimately attaches to that host backend instead of spawning
@@ -290,7 +327,7 @@ export function localBackendProcess(port: number, electronPid: number, hermesHom
             return true
           }
 
-          const started = processStartTime(record.pid)
+          const started = processStartTime(record.pid, processes)
 
           return started !== null && Math.abs(started - record.createTime) < 2
         })
@@ -304,8 +341,7 @@ export function localBackendProcess(port: number, electronPid: number, hermesHom
   let pids: number[]
 
   if (process.platform === 'win32') {
-    pids = z.array(z.number()).parse(JSON.parse(nativeText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `ConvertTo-Json -Compress -InputObject @((Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction Stop).OwningProcess | Sort-Object -Unique)`])))
+    pids = snapshot!.listeners
   } else if (process.platform === 'darwin') {
     pids = nativeText('/usr/sbin/lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp']).split('\n')
       .filter((line: string): boolean => /^p\d+$/.test(line)).map((line: string): number => Number(line.slice(1)))
