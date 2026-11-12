@@ -2,10 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect, useState } from 'react'
 
 import { $activeGatewayConnectionId, $activeGatewayRoute } from '@/store/gateway'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { platformRecoveryActionForCode } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 
@@ -19,20 +16,30 @@ export function usePlatformOnboardingReady(enabled: boolean): boolean {
   const capabilities = useStore($gatewayManagedCapabilities)
   const [verified, setVerified] = useState<{ catalog: typeof catalog; scope: string } | null>(null)
 
-  const supported = managedModelRouteCapabilityFrom(capabilities, {
-    connectionId,
-    profile
-  }) === 'supported'
+  const supported =
+    managedModelRouteCapabilityFrom(capabilities, {
+      connectionId,
+      profile
+    }) === 'supported'
 
   const signedIn = account?.phase === 'signed_in' && Boolean(account.account)
   const scope = account?.account ? JSON.stringify([account.account.id, account.mode, connectionId, profile]) : null
 
-  const accountRecovery = signedIn && state.phase === 'ready' && state.models.some(model =>
-    model.capabilities.tools && platformRecoveryActionForCode(model.state) === 'account')
-  const recovering = account?.phase === 'offline' || account?.phase === 'loading' ||
-    (signedIn && (state.phase === 'idle' || state.phase === 'loading')) || accountRecovery
+  const accountRecovery =
+    signedIn &&
+    state.phase === 'ready' &&
+    state.models.some(model => model.capabilities.tools && platformRecoveryActionForCode(model.state) === 'account')
 
-  const ready = supported && signedIn && state.phase === 'ready' &&
+  const recovering =
+    account?.phase === 'offline' ||
+    account?.phase === 'loading' ||
+    (signedIn && (state.phase === 'idle' || state.phase === 'loading')) ||
+    accountRecovery
+
+  const ready =
+    supported &&
+    signedIn &&
+    state.phase === 'ready' &&
     state.models.some(model => model.state === 'available' && model.capabilities.tools)
 
   useEffect(() => {

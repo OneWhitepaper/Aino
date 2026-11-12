@@ -1695,12 +1695,14 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated, seed }
   const selectableRoster = seatableGroupBots(roster, { connectionId, mode, seatable })
 
   const selected = selectableRoster.filter(bot => checked[botRosterKey(bot)])
+
   const targets = usePeerTargets(
     selectableRoster,
     connectionId,
     open && groupSeatsPeers(capability?.snapshot),
     peerCheck
   )
+
   const plan = groupCreationEngine(mode, selected, connectionId, capability?.snapshot, targets)
   const engine = plan.engine
 
@@ -1797,6 +1799,7 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated, seed }
       if (!sourceCurrent()) {
         return
       }
+
       intent.current = {}
 
       const key = registerCanonicalGroup(route, created.room, { created: true })
@@ -1804,6 +1807,7 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated, seed }
       if (image) {
         updateGroupChat(key, room => ({ ...room, image }))
       }
+
       refreshGatewayGroupRooms()
       onClose()
       onCreated?.(key, 'key')
@@ -1827,6 +1831,7 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated, seed }
         if (draft.current === submitted) {
           setCreateError(message)
         }
+
         host.notify({ kind: 'error', message })
       } else if (draft.current === submitted) {
         setNotice(next)

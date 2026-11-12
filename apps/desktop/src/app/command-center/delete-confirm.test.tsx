@@ -95,7 +95,10 @@ describe('Command Center session delete confirmation (#99410)', () => {
   })
 
   it('keeps a failed delete in its confirmation and permits retry', async () => {
-    const onDeleteSession = vi.fn().mockRejectedValueOnce(new Error('Storage is read only')).mockResolvedValue(undefined)
+    const onDeleteSession = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Storage is read only'))
+      .mockResolvedValue(undefined)
     renderCommandCenter(onDeleteSession)
     fireEvent.click(await screen.findByRole('button', { name: 'Delete session' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))

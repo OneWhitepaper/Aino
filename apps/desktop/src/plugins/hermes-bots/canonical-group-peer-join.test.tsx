@@ -12,6 +12,7 @@ const { request, union, notify, language } = vi.hoisted(() => ({
   notify: vi.fn(),
   union: { profiles: [] as unknown[] }
 }))
+
 vi.mock('@hermes/plugin-sdk', async () => {
   const { atom: createAtom } = await import('nanostores')
   const { useStore } = await import('@nanostores/react')
@@ -66,6 +67,7 @@ import { setPluginCtx } from './shared'
 const words = CANONICAL_GROUP_LOCALES.en
 const say = (text: string) => text.replace('{name}', 'Hermes · Mac Mini')
 const binding = { connectionId: 'local', profile: 'default', roomId: 'linked' }
+
 const pinned = {
   kind: 'peer',
   peer_id: 'install:3f2a0000000000000000000000000000',
@@ -73,6 +75,7 @@ const pinned = {
   profile: 'default',
   capability_digest: MINI.room_link.catalog.catalog_digest
 }
+
 const mini = peerRosterRow('mini', 'Mac Mini')
 
 const room = {
@@ -146,10 +149,12 @@ function gateways({
 
 const refusal = (reason: string) => Object.assign(new Error(reason), { code: 4001, data: { reason } })
 const status = () => screen.getByText(say(words.peerNotJoined)).closest('[role="status"]') as HTMLElement
+
 const steps = () =>
   request.mock.calls
     .map(([route, method]) => [route?.connectionId, method])
     .filter(([, method]) => method.startsWith('groups.peer'))
+
 const SEATED = [
   ['mini', 'groups.peer.invite'],
   ['local', 'groups.peer.register']
@@ -266,6 +271,7 @@ it("says when a joined Bot's access ended, and offers Retry", async () => {
 
 const later = (answer: unknown) => new Promise(resolve => setTimeout(() => resolve(answer), 0))
 const oneDay = { ...MINI, features: MINI.features.filter(feature => feature !== 'peer_renewal_horizon') }
+
 const nonpersistent = {
   ...MINI,
   room_link: {
@@ -334,6 +340,7 @@ it.each(['confirmed', 'offline', 'unconfirmed', 'stop pending'])(
     if (outcome === 'offline') {
       union.profiles = []
     }
+
     gateways({
       routes: outcome === 'offline' ? [{ room_id: 'linked', member_id: 'hermes-mac-mini', status: 'unavailable' }] : [],
       home: method =>
@@ -351,6 +358,7 @@ it.each(['confirmed', 'offline', 'unconfirmed', 'stop pending'])(
     const original = structuredClone($groupChats.get().Linked)
     registerCanonicalGroup({ connectionId: 'local', profile: 'default' }, room)
     render(<CanonicalGroupWorkspace binding={binding} onReplaced={onReplaced} />)
+
     const row = (await screen.findByText(say(outcome === 'offline' ? words.peerAway : words.peerNotJoined))).closest(
       '[role="status"]'
     ) as HTMLElement
@@ -358,6 +366,7 @@ it.each(['confirmed', 'offline', 'unconfirmed', 'stop pending'])(
     if (outcome === 'offline') {
       expect(within(row).queryByRole('button', { name: 'Retry' })).toBeNull()
     }
+
     // The control says what it does: a new group without that Bot, earlier messages not copied.
     fireEvent.click(within(row).getByRole('button', { name: 'Start new group chat without Hermes · Mac Mini' }))
     const dialog = await screen.findByRole('dialog')
@@ -435,6 +444,7 @@ it.each(['desktop', 'gateway'])(
         if (method !== 'groups.create') {
           return undefined
         }
+
         const answer = create(params)
 
         if (lost) {
@@ -699,17 +709,20 @@ it.each(['acknowledgement', 'refusal'])(
 )
 
 const joined = [{ room_id: 'linked', member_id: 'hermes-mac-mini', status: 'ready' }]
+
 const sent = (params: Record<string, any>) => ({
   event: {},
   client_event_id: params.event_id,
   accepted: true,
   driver_started: true
 })
+
 const textbox = () => screen.getByRole('textbox') as HTMLTextAreaElement
 
 /** A registration on the home that answers once the test releases it. */
 function heldRegistration() {
   let release!: () => void
+
   const held = new Promise<void>(resolve => {
     release = resolve
   })
@@ -828,6 +841,7 @@ it.each(['Stop', 'close'] as const)('holds a journaled Send when %s interrupts r
       fireEvent.click(screen.getByRole('button', { name: words.stopRound }))
     })
   }
+
   await act(async () => {
     release()
     await peerRenewalSettled(interrupted)
@@ -957,9 +971,11 @@ it('offers Start again without only where the gateway lists groups.create', asyn
 
 it('keeps a replacement that finishes after its view closed registered, without opening it', async () => {
   let finish!: () => void
+
   const held = new Promise<void>(resolve => {
     finish = resolve
   })
+
   const { rooms, create } = strictGroupCreation()
   gateways({
     home: (method, params) =>

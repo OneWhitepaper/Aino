@@ -9,7 +9,11 @@ export interface WebAccessStatus {
   /** `webapp.enabled` in the serving gateway's config: what it serves from its next start. */
   enabled: boolean
   /** What the gateway serves now; `stopped` when none answers. */
-  gateway: { reason: null | string; state: 'off' | 'serving' | 'starting' | 'stopped' | 'unavailable'; url: null | string }
+  gateway: {
+    reason: null | string
+    state: 'off' | 'serving' | 'starting' | 'stopped' | 'unavailable'
+    url: null | string
+  }
   lan_address: null | string
   /** Who the configured web app serves; `local` is a loopback bind, reachable from this computer only. */
   mode: 'local' | null | WebAccessMode
@@ -49,7 +53,11 @@ export function getWebAccessStatus(owner: ResolvedOwner = resolveOwnerNow()): Pr
   return hermesApiAs<WebAccessStatus>(owner, { path: '/api/webapp-access/status' })
 }
 
-export function startWebAccess(mode: WebAccessMode, publicUrl?: string, owner: ResolvedOwner = resolveOwnerNow()): Promise<WebAccessChange> {
+export function startWebAccess(
+  mode: WebAccessMode,
+  publicUrl?: string,
+  owner: ResolvedOwner = resolveOwnerNow()
+): Promise<WebAccessChange> {
   return hermesApiAs<WebAccessChange>(owner, {
     body: { mode, public_url: publicUrl },
     method: 'POST',

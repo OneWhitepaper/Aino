@@ -323,9 +323,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const esBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Abriendo el chat de grupo…",
-    lookupFailed: "No se pudo encontrar este grupo en la pasarela. Inténtalo de nuevo.",
-    missing: "Este chat de grupo ya no existe."
+    opening: 'Abriendo el chat de grupo…',
+    lookupFailed: 'No se pudo encontrar este grupo en la pasarela. Inténtalo de nuevo.',
+    missing: 'Este chat de grupo ya no existe.'
   },
   notificationCenter: notificationCenterCopy['es'],
   platformModels: {
@@ -2516,12 +2516,15 @@ const esBaseOverrides = {
         enabledTitle: 'Navegación con perfil real activada',
         enabledMessage: 'Las sesiones nuevas navegarán con una instantánea de tu perfil predeterminado del navegador.',
         disabledTitle: 'Navegación con perfil real desactivada',
-        disabledMessage: 'Se eliminará la instantánea del perfil y se cerrará su sesión en el navegador integrado; las sesiones nuevas usan un navegador limpio.',
+        disabledMessage:
+          'Se eliminará la instantánea del perfil y se cerrará su sesión en el navegador integrado; las sesiones nuevas usan un navegador limpio.',
         failedSave: 'No se pudo guardar el ajuste del perfil real',
         reimportSignins: 'Volver a importar inicios de sesión',
         signinsImportedTitle: 'Inicios de sesión del navegador integrado',
-        signinsImported: count => `Se inició sesión en el navegador integrado con ${count} cookie${count === 1 ? '' : 's'} de tu perfil del navegador.`,
-        signinsRemote: 'Este backend se ejecuta en otro equipo, así que su perfil del navegador no se importa al navegador integrado.',
+        signinsImported: count =>
+          `Se inició sesión en el navegador integrado con ${count} cookie${count === 1 ? '' : 's'} de tu perfil del navegador.`,
+        signinsRemote:
+          'Este backend se ejecuta en otro equipo, así que su perfil del navegador no se importa al navegador integrado.',
         signinsFailed: 'No se pudieron importar los inicios de sesión al navegador integrado',
         prompt: {
           title: 'Mantén la sesión iniciada en tus sitios',

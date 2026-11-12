@@ -27,10 +27,20 @@ export function CanonicalGroupPendingActions({
       {(state?.driver_status?.pending_actions ?? []).map(action => {
         const member = members.find(item => item.member_id === action.member_id)
 
-        return <CanonicalPendingCard action={action} avatar={member && <CanonicalMemberAvatar binding={binding} member={member} size={24} />} busy={busy}
-          key={`${action.kind}:${action.member_id}:${action.task_id}:${action.execution_generation}:${action.request_id ?? ''}`}
-          labels={labels} methods={methods} name={member ? nameFor(member) : labels.memberGeneric}
-          onAct={(action, choice) => onAction(action, choice).catch(() => undefined)} onDiscard={() => setDiscard({ ...action })} onRefresh={onRefresh} />
+        return (
+          <CanonicalPendingCard
+            action={action}
+            avatar={member && <CanonicalMemberAvatar binding={binding} member={member} size={24} />}
+            busy={busy}
+            key={`${action.kind}:${action.member_id}:${action.task_id}:${action.execution_generation}:${action.request_id ?? ''}`}
+            labels={labels}
+            methods={methods}
+            name={member ? nameFor(member) : labels.memberGeneric}
+            onAct={(action, choice) => onAction(action, choice).catch(() => undefined)}
+            onDiscard={() => setDiscard({ ...action })}
+            onRefresh={onRefresh}
+          />
+        )
       })}
       {discard && (
         <ConfirmDialog

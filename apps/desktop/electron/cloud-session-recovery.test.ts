@@ -110,9 +110,20 @@ describe('Cloud cookie session recovery', () => {
     let releaseOld!: (restored: boolean) => void
     let releaseNew!: (restored: boolean) => void
 
-    const restore = vi.fn()
-      .mockImplementationOnce(() => new Promise<boolean>(resolve => { releaseOld = resolve }))
-      .mockImplementationOnce(() => new Promise<boolean>(resolve => { releaseNew = resolve }))
+    const restore = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>(resolve => {
+            releaseOld = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>(resolve => {
+            releaseNew = resolve
+          })
+      )
       .mockResolvedValue(true)
 
     const run = createCloudSessionRecovery({ hasNativeSession: () => false, restoreCookieSession: restore })

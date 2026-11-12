@@ -772,6 +772,7 @@ function groupGatePlan({
   if (!classicRoom) {
     return { ...plan, message: open.missing, retry: 'lookup' }
   }
+
   const checked = canonicalGroupRoster(route, props.members)
 
   if (!('problem' in checked)) {
@@ -836,11 +837,13 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
   const gateway = connectionId === ambientConnectionId ? foregroundGateway : 'open'
   const activationEpoch = useGatewayActivationEpoch()
   const source = JSON.stringify([connectionId, profile, gateway, activationEpoch])
+
   const [capability, setCapability] = useState<{
     source: string
     mode: GroupExecutionMode
     unavailable: GateUnavailable
   } | null>(null)
+
   const current = capability?.source === source ? capability : null
   const mode = current ? current.mode : 'checking'
   const [error, setError] = useState('')
@@ -862,9 +865,11 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
     setError('')
     const route = { connectionId: connectionId ?? '', profile }
     const origin = props.origin ?? 'name'
+
     const lookupKey = props.owner
       ? `canonical:${encodeURIComponent(connectionId ?? '')}:${encodeURIComponent(profile)}:${props.owner.roomId}`
       : props.group
+
     void resolveCanonicalGroup(route, lookupKey, props.owner ? 'key' : origin)
       .then(resolved => {
         if (cancelled) {
@@ -941,6 +946,7 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
   if (plan.classic) {
     return <LegacyGroupChatWorkspace {...props} />
   }
+
   const { canCreate } = plan
 
   return (
@@ -1047,10 +1053,12 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
   // view on mount and whenever the log grows — but only when the user is
   // already near the bottom, so reading history is never yanked away.
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
+
   const [mainComposerInput, threadReplyInput] = [
     useRef<GroupMentionInputHandle>(null),
     useRef<GroupMentionInputHandle>(null)
   ]
+
   const stickToBottomRef = useRef(true)
   // eslint-disable-next-line no-restricted-syntax -- tracks live scroll position from a DOM listener, not an atom
   useEffect(() => {

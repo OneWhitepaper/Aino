@@ -113,6 +113,7 @@ it('reimports the same profile after the account or its authorization generation
 
 it('does not stamp a new account with a late result from the prior owner', async () => {
   let resolve!: (result: PreviewSigninsResult) => void
+
   const bridge = vi
     .fn()
     .mockImplementationOnce(
@@ -122,6 +123,7 @@ it('does not stamp a new account with a late result from the prior owner', async
         })
     )
     .mockResolvedValue(ok('imported'))
+
   setBridge(bridge)
   const mod = await load()
   const scope = { connectionId: 'local', profile: 'work' }

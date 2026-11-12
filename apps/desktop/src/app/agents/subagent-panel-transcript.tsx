@@ -31,9 +31,7 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   const [expandedSource, setExpandedSource] = useState<string | null>(null)
 
   const messages = useMemo(() => {
-    const visible = toChatMessages(source.messages).filter(
-      message => !message.hidden && message.role !== 'system'
-    )
+    const visible = toChatMessages(source.messages).filter(message => !message.hidden && message.role !== 'system')
 
     const first = visible[0]
 
@@ -81,9 +79,11 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   }
 
   if (!messages.length) {
-    return source.awaitingOutput
-      ? <Loader label={t.agents.running} />
-      : <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    return source.awaitingOutput ? (
+      <Loader label={t.agents.running} />
+    ) : (
+      <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    )
   }
 
   return (

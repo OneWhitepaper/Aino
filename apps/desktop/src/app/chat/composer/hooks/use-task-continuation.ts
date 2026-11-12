@@ -30,7 +30,7 @@ export function useTaskContinuation({
 }: UseTaskContinuationProps): TaskContinuationControl | null {
   const { t } = useI18n()
   const key = sessionId ? gateway?.taskPauseKey?.(sessionId, profile) : null
-  const pause = useStoreSelector($taskPauses, pauses => key ? pauses[key] : undefined)
+  const pause = useStoreSelector($taskPauses, pauses => (key ? pauses[key] : undefined))
 
   if (!pause || !key || !sessionId || !gateway) {
     return null

@@ -319,9 +319,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 export const zhOverrides = {
   gatewayGroupOpen: {
-    opening: "正在打开群聊…",
-    lookupFailed: "无法在网关上查找此群组，请重试。",
-    missing: "此群聊已不存在。"
+    opening: '正在打开群聊…',
+    lookupFailed: '无法在网关上查找此群组，请重试。',
+    missing: '此群聊已不存在。'
   },
   notificationCenter: notificationCenterCopy['zh'],
   appearancePage: appearancePage.zh,

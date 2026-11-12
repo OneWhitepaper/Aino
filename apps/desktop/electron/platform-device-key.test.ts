@@ -8,12 +8,33 @@ import type { PlatformModel } from '../shared/platform-contract'
 import type { PlatformTokenSet } from '../shared/platform-token-contract'
 
 function platformModel(id = 'catalog-a'): PlatformModel {
-  return { id, model: 'wire-model', display_name: 'Fixture Model', provider_label: 'Fixture',
-    api_mode: 'chat_completions', state: 'available', reason_code: null, is_default: true,
-    context_window: 10000, max_output_tokens: 1000, capabilities: { tools: true, vision: false, reasoning: false },
-    billing_source: 'balance', pricing: { currency: 'USD', unit: 'million_tokens', input: '1.20', output: '2.40',
-      cache_read: null, cache_write: null, effective_user_rate: '1', detail_available: true,
-      tiers: [], time_pricing: null, group_peak: null } }
+  return {
+    id,
+    model: 'wire-model',
+    display_name: 'Fixture Model',
+    provider_label: 'Fixture',
+    api_mode: 'chat_completions',
+    state: 'available',
+    reason_code: null,
+    is_default: true,
+    context_window: 10000,
+    max_output_tokens: 1000,
+    capabilities: { tools: true, vision: false, reasoning: false },
+    billing_source: 'balance',
+    pricing: {
+      currency: 'USD',
+      unit: 'million_tokens',
+      input: '1.20',
+      output: '2.40',
+      cache_read: null,
+      cache_write: null,
+      effective_user_rate: '1',
+      detail_available: true,
+      tiers: [],
+      time_pricing: null,
+      group_peak: null
+    }
+  }
 }
 
 const device = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -25,7 +46,18 @@ afterEach(async () => {
   }
 })
 
-async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoked?: boolean; rolloutDenied?: boolean; deviceKeyDenied?: boolean; delay?: boolean; delayRotation?: boolean; warmLogin?: boolean } = {}) {
+async function rig(
+  options: {
+    remember?: boolean
+    metadataOnly?: boolean
+    revoked?: boolean
+    rolloutDenied?: boolean
+    deviceKeyDenied?: boolean
+    delay?: boolean
+    delayRotation?: boolean
+    warmLogin?: boolean
+  } = {}
+) {
   let persisted: PlatformTokenSet | null =
     options.remember === false
       ? null
@@ -58,42 +90,44 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
       version,
       status: revoked ? 'revoked' : 'active',
       expires_at: null,
-      ...(method === 'POST' && (!options.metadataOnly || mutation)
-        ? { api_key: `secret-${version}` }
-        : {})
+      ...(method === 'POST' && (!options.metadataOnly || mutation) ? { api_key: `secret-${version}` } : {})
     }
   }
 
-  function replyDevice(req: http.IncomingMessage, body: Record<string, unknown>, send: (data: unknown, code?: string | number, status?: number) => void) {
-      requests.push({ method: req.method!, body, account: req.headers.authorization! })
+  function replyDevice(
+    req: http.IncomingMessage,
+    body: Record<string, unknown>,
+    send: (data: unknown, code?: string | number, status?: number) => void
+  ) {
+    requests.push({ method: req.method!, body, account: req.headers.authorization! })
 
-      if (req.method === 'POST' && (body.rotate || body.reauthorize) && (!recentAuthentication || mutationFailure)) {
-        return send(null, mutationFailure ?? 'RECENT_AUTH_REQUIRED', 403)
-      }
+    if (req.method === 'POST' && (body.rotate || body.reauthorize) && (!recentAuthentication || mutationFailure)) {
+      return send(null, mutationFailure ?? 'RECENT_AUTH_REQUIRED', 403)
+    }
 
-      if (options.deviceKeyDenied && req.method === 'POST') {
-        return send(null, 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED', 403)
-      }
+    if (options.deviceKeyDenied && req.method === 'POST') {
+      return send(null, 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED', 403)
+    }
 
-      if (revoked && !body.reauthorize && req.method === 'POST') {
-        return send(null, 'DESKTOP_DEVICE_KEY_REVOKED', 403)
-      }
+    if (revoked && !body.reauthorize && req.method === 'POST') {
+      return send(null, 'DESKTOP_DEVICE_KEY_REVOKED', 403)
+    }
 
-      if (body.rotate || body.reauthorize) {
-        version++
-        revoked = false
-      }
+    if (body.rotate || body.reauthorize) {
+      version++
+      revoked = false
+    }
 
-      const result = deviceResponse(req.method!, Boolean(body.rotate || body.reauthorize))
+    const result = deviceResponse(req.method!, Boolean(body.rotate || body.reauthorize))
 
-      if ((options.delay && requests.length === 1) || (options.delayRotation && version === 2 && req.method === 'POST')) {
-        release = () => send(result)
-        started()
+    if ((options.delay && requests.length === 1) || (options.delayRotation && version === 2 && req.method === 'POST')) {
+      release = () => send(result)
+      started()
 
-        return
-      }
+      return
+    }
 
-      return send(result)
+    return send(result)
   }
 
   const server = http.createServer(async (req, res) => {
@@ -197,8 +231,12 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
     revoke: () => {
       revoked = true
     },
-    expireRecentAuthentication: () => { recentAuthentication = false },
-    failDeviceMutation: (code: string | null) => { mutationFailure = code },
+    expireRecentAuthentication: () => {
+      recentAuthentication = false
+    },
+    failDeviceMutation: (code: string | null) => {
+      mutationFailure = code
+    },
     expireManagement: () => {
       managementExpired = true
     }
@@ -210,7 +248,8 @@ it('prepares and persists the device key during login so the first later convers
   const loggedIn = await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
   expect(loggedIn).toMatchObject({ status: 'signed_in', snapshot: { model_identity_ready: true } })
   expect(f.requests.map(request => request.body)).toEqual([
-    { device_id: device }, { device_id: device, rotate: true, expected_version: 1 }
+    { device_id: device },
+    { device_id: device, rotate: true, expected_version: 1 }
   ])
   f.expireRecentAuthentication()
   const restarted = f.createAuth()
@@ -221,10 +260,13 @@ it('prepares and persists the device key during login so the first later convers
 
 it('prepares only the new account key when switching accounts and rejects a late prior-login response', async () => {
   const f = await rig({ metadataOnly: true, warmLogin: true, delay: true })
-  const first = f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }).catch(error => error)
+  const first = f.auth
+    .loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
+    .catch(error => error)
   await f.ready
-  expect(await f.auth.loginExisting({ email: 'other@example.com', password: 'password', remember: true }))
-    .toMatchObject({ status: 'signed_in', snapshot: { account: { id: '23' }, model_identity_ready: true } })
+  expect(
+    await f.auth.loginExisting({ email: 'other@example.com', password: 'password', remember: true })
+  ).toMatchObject({ status: 'signed_in', snapshot: { account: { id: '23' }, model_identity_ready: true } })
   f.release()
   expect(await first).toMatchObject({ code: 'auth_attempt_superseded' })
   expect(f.persisted()?.deviceKeys).toMatchObject([{ user_id: '23', api_key: 'secret-2' }])
@@ -237,12 +279,22 @@ it('prepares only the new account key when switching accounts and rejects a late
 it('retains successful account login and a visible key failure, then recovers on a fresh login', async () => {
   const f = await rig({ metadataOnly: true, warmLogin: true })
   f.failDeviceMutation('RECENT_AUTH_REQUIRED')
-  expect(await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }))
-    .toMatchObject({ status: 'signed_in', snapshot: { phase: 'signed_in', account: { id: '17' }, model_identity_ready: false, error: { code: 'RECENT_AUTH_REQUIRED' } } })
+  expect(
+    await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
+  ).toMatchObject({
+    status: 'signed_in',
+    snapshot: {
+      phase: 'signed_in',
+      account: { id: '17' },
+      model_identity_ready: false,
+      error: { code: 'RECENT_AUTH_REQUIRED' }
+    }
+  })
   expect(f.persisted()?.deviceKeys).toBeUndefined()
   f.failDeviceMutation(null)
-  expect(await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }))
-    .toMatchObject({ status: 'signed_in', snapshot: { model_identity_ready: true, error: null } })
+  expect(
+    await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
+  ).toMatchObject({ status: 'signed_in', snapshot: { model_identity_ready: true, error: null } })
   f.expireRecentAuthentication()
   expect(await f.auth.ensureDeviceKey(device)).toMatchObject({ api_key: 'secret-2' })
   expect(f.requests).toHaveLength(4)

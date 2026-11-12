@@ -60,9 +60,7 @@ vi.mock('@/store/session-focus', async () => {
 
   return {
     $focusedTreePaneId,
-    $focusedSessionIsTile: computed($focusedTreePaneId, active =>
-      Boolean(active?.startsWith(TILE_PANE_PREFIX))
-    ),
+    $focusedSessionIsTile: computed($focusedTreePaneId, active => Boolean(active?.startsWith(TILE_PANE_PREFIX))),
     $focusedStoredSessionId: computed([$focusedTreePaneId, $selectedStoredSessionId], (active, selected) =>
       active?.startsWith(TILE_PANE_PREFIX) ? active.slice(TILE_PANE_PREFIX.length) : selected
     )
@@ -88,9 +86,7 @@ function focusPane(storedId: null | string): void {
 
 const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter>{children}</MemoryRouter>
 
-function renderStatusbarItems(
-  changeSessionCwd: (cwd: string, sessionId?: string) => Promise<void> = async () => {}
-) {
+function renderStatusbarItems(changeSessionCwd: (cwd: string, sessionId?: string) => Promise<void> = async () => {}) {
   const { result } = renderHook(
     () =>
       useStatusbarItems({
@@ -116,9 +112,7 @@ function renderStatusbarItems(
 }
 
 function workspaceMenu(changeSessionCwd?: (cwd: string, sessionId?: string) => Promise<void>) {
-  const workspace = renderStatusbarItems(changeSessionCwd).leftStatusbarItems.find(
-    item => item.id === 'workspace-cwd'
-  )
+  const workspace = renderStatusbarItems(changeSessionCwd).leftStatusbarItems.find(item => item.id === 'workspace-cwd')
 
   return (workspace?.menuItems ?? []).filter(item => !item.hidden)
 }
@@ -231,9 +225,7 @@ describe('statusbar workspace menu — change working directory', () => {
     const item = workspaceMenu(changeSessionCwd).find(menuItem => menuItem.id === 'change-workspace-path')
     item?.onSelect?.()
 
-    await vi.waitFor(() =>
-      expect(changeSessionCwd).toHaveBeenCalledWith('/opt/data/profiles/austin', undefined)
-    )
+    await vi.waitFor(() => expect(changeSessionCwd).toHaveBeenCalledWith('/opt/data/profiles/austin', undefined))
     expect(selectDesktopPaths).toHaveBeenCalledWith(
       expect.objectContaining({ defaultPath: '/opt/data', directories: true })
     )
@@ -545,9 +537,7 @@ describe('context meter beside an agentless breakdown', () => {
 
     const panel = item?.menuContent
 
-    expect(isValidElement<{ breakdown: ContextBreakdown | null }>(panel) && panel.props.breakdown).toBe(
-      agentless
-    )
+    expect(isValidElement<{ breakdown: ContextBreakdown | null }>(panel) && panel.props.breakdown).toBe(agentless)
   })
 
   it("never borrows another session's reading from the global usage", async () => {

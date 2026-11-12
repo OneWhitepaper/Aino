@@ -124,7 +124,9 @@ it('searches the current conversation and clears highlighting without discarding
   fireEvent.keyDown(search, { key: 'Escape' })
   expect(screen.queryByRole('textbox', { name: labels.searchMessages })).toBeNull()
   expect(input.value).toBe('Keep my draft')
-  expect(request.mock.calls.every(call => ['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))).toBe(true)
+  expect(
+    request.mock.calls.every(call => ['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))
+  ).toBe(true)
 })
 
 it('counts an author-name search consistently with its highlighted message', async () => {
@@ -152,7 +154,9 @@ it('opens group information beside the chat and mentions a member by its frozen 
   fireEvent.click(within(info).getByRole('button', { name: `${labels.reply} Renamed Researcher` }))
   expect(input.value).toBe('@Renamed Researcher ')
   expect(view.container.querySelector('aside')).not.toBeNull()
-  expect(request.mock.calls.some(call => !['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))).toBe(false)
+  expect(
+    request.mock.calls.some(call => !['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))
+  ).toBe(false)
   fireEvent.click(within(info).getByRole('button', { name: 'Close' }))
   expect(screen.queryByRole('complementary', { name: labels.groupInfo })).toBeNull()
 })
@@ -338,7 +342,9 @@ it.each([
       expect(within(restored).getByRole('button', { name: /disband/i })).toBeTruthy()
     }
 
-    expect(request.mock.calls.every(call => ['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))).toBe(true)
+    expect(
+      request.mock.calls.every(call => ['groups.state', 'groups.log', 'groups.capabilities'].includes(call[1]))
+    ).toBe(true)
   }
 )
 

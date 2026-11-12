@@ -98,6 +98,7 @@ function transport(method: string, params: Record<string, unknown> = {}) {
   if (['groups.send', 'groups.retry', 'groups.approve', 'groups.stop'].includes(method)) {
     return { ok: true }
   }
+
   throw new Error(`Unexpected ${method}`)
 }
 
@@ -199,6 +200,7 @@ it('restores only the failed member binding before retry after a runtime restart
     execution_generation: 1,
     choice: 'once'
   }
+
   await host.requestProfile(route, 'groups.retry', params)
   expect(io.bind).toHaveBeenCalledOnce()
   expect(io.order.at(-1)).toBe('groups.retry')
@@ -213,6 +215,7 @@ it('approves the existing task without switching its frozen model to a newer def
     execution_generation: 1,
     choice: 'once'
   }
+
   await host.requestProfile(route, 'groups.approve', params)
   expect(io.bind).not.toHaveBeenCalled()
   expect(io.globalModel).not.toHaveBeenCalled()
@@ -366,6 +369,7 @@ it('creates and binds a follow-profile Bot Chat using its exact default route wi
 it.each(['', 'nous'])('opens an unselected canonical Bot despite an ambient provider (%s)', async provider => {
   window.hermesDesktop.platformModels.list = async () => [{ ...platformModel(), is_default: false }]
   await platformModelCatalog().refresh()
+
   const params = {
     source: 'desktop',
     profile: route.targetProfile,
@@ -373,6 +377,7 @@ it.each(['', 'nous'])('opens an unselected canonical Bot despite an ambient prov
     hidden: true,
     follow_profile_config: true
   }
+
   io.agent.mockImplementation(async (_connectionId, _profile, method, payload) => {
     if (method === 'session.create') {
       return {
@@ -415,11 +420,13 @@ it('rejects an unselected canonical creation response after its account changed'
   io.agent.mockImplementation(async (_connectionId, _profile, method, payload) =>
     method === 'session.create' ? created.promise : transport(method, payload)
   )
+
   const pending = host.requestProfile(route, 'session.create', {
     title: 'Bot Chat',
     hidden: true,
     follow_profile_config: true
   })
+
   await vi.waitFor(() => expect(io.agent.mock.calls.some(call => call[2] === 'session.create')).toBe(true))
   window.hermesDesktop.platformAccount.status = async () => platformSnapshot('user-b', 2)
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
@@ -744,9 +751,11 @@ it.each(['setup.runtime_check', 'session.create'])(
     io.retain.mockResolvedValue(io.release)
     const params = { profile: route.targetProfile, follow_profile_config: true }
     let settled = false
+
     const pending = host.requestProfile(route, method, params).finally(() => {
       settled = true
     })
+
     await vi.advanceTimersByTimeAsync(0)
 
     recordGatewayReadyCapability({ connectionId: 'other', profile: route.profile }, {

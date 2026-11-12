@@ -10,11 +10,21 @@ it('answers metadata for the originating background session on its captured sour
   answer.mockResolvedValue(result)
   const respond = vi.fn()
 
-  const request = { id: 'srq-model', method: 'model.session', params: { session_id: 'background', action: 'select', query: 'DeepSeek' },
-    profile: 'origin-profile', connectionId: 'origin-connection', respond, fail: vi.fn() }
+  const request = {
+    id: 'srq-model',
+    method: 'model.session',
+    params: { session_id: 'background', action: 'select', query: 'DeepSeek' },
+    profile: 'origin-profile',
+    connectionId: 'origin-connection',
+    respond,
+    fail: vi.fn()
+  }
 
   const deps = { sessionStateByRuntimeIdRef: { current: new Map() } } as ServerRequestContext['deps']
   expect(handleServerRequest(request, deps, 'foreground')).toBe(true)
   await vi.waitFor(() => expect(respond).toHaveBeenCalledExactlyOnceWith(result))
-  expect(answer).toHaveBeenCalledExactlyOnceWith({ profile: 'origin-profile', connectionId: 'origin-connection' }, { action: 'select', query: 'DeepSeek' })
+  expect(answer).toHaveBeenCalledExactlyOnceWith(
+    { profile: 'origin-profile', connectionId: 'origin-connection' },
+    { action: 'select', query: 'DeepSeek' }
+  )
 })

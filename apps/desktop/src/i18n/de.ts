@@ -321,9 +321,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const deBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Gruppenchat wird geöffnet…",
-    lookupFailed: "Diese Gruppe konnte auf dem Gateway nicht gefunden werden. Versuche es erneut.",
-    missing: "Dieser Gruppenchat existiert nicht mehr."
+    opening: 'Gruppenchat wird geöffnet…',
+    lookupFailed: 'Diese Gruppe konnte auf dem Gateway nicht gefunden werden. Versuche es erneut.',
+    missing: 'Dieser Gruppenchat existiert nicht mehr.'
   },
   notificationCenter: notificationCenterCopy['de'],
   platformModels: {
@@ -2529,12 +2529,15 @@ const deBaseOverrides = {
         enabledTitle: 'Echtes Profil-Browsen aktiv',
         enabledMessage: 'Neue Sessions browsen mit einem Schnappschuss Ihres Standard-Browserprofils.',
         disabledTitle: 'Echtes Profil-Browsen deaktiviert',
-        disabledMessage: 'Der Profil-Schnappschuss wird gelöscht und der In-App-Browser davon abgemeldet; neue Sessions verwenden einen sauberen Browser.',
+        disabledMessage:
+          'Der Profil-Schnappschuss wird gelöscht und der In-App-Browser davon abgemeldet; neue Sessions verwenden einen sauberen Browser.',
         failedSave: 'Die Echtes-Profil-Einstellung konnte nicht gespeichert werden',
         reimportSignins: 'Anmeldungen erneut importieren',
         signinsImportedTitle: 'Anmeldungen im In-App-Browser',
-        signinsImported: count => `In-App-Browser mit ${count} Cookie${count === 1 ? '' : 's'} aus Ihrem Browserprofil angemeldet.`,
-        signinsRemote: 'Dieses Backend läuft auf einem anderen Rechner, daher wird sein Browserprofil nicht in den In-App-Browser importiert.',
+        signinsImported: count =>
+          `In-App-Browser mit ${count} Cookie${count === 1 ? '' : 's'} aus Ihrem Browserprofil angemeldet.`,
+        signinsRemote:
+          'Dieses Backend läuft auf einem anderen Rechner, daher wird sein Browserprofil nicht in den In-App-Browser importiert.',
         signinsFailed: 'Anmeldungen konnten nicht in den In-App-Browser importiert werden',
         prompt: {
           title: 'Auf Ihren Websites angemeldet bleiben',
@@ -5344,7 +5347,8 @@ const deBaseOverrides = {
       readAloud: 'Vorlesen',
       copyFullResponse: 'Vollständige Antwort kopieren',
       readAloudFullResponseHint: 'Umschalt-Klick: vollständige Antwort vorlesen',
-      contentRefusedNotice: 'Diese Nachricht wurde vom Sicherheitsfilter des Modells abgelehnt – versuche eine andere Anfrage.',
+      contentRefusedNotice:
+        'Diese Nachricht wurde vom Sicherheitsfilter des Modells abgelehnt – versuche eine andere Anfrage.',
       editMessage: 'Nachricht bearbeiten',
       expandMessage: 'Nachricht aufklappen',
       scrollToBottom: 'Nach unten scrollen',

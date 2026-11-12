@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest'
 
-import { legacyGroupMentionScope, legacyGroupRecipientNames, unresolvedLegacyGroupMentions } from './legacy-group-mentions'
+import {
+  legacyGroupMentionScope,
+  legacyGroupRecipientNames,
+  unresolvedLegacyGroupMentions
+} from './legacy-group-mentions'
 import type { GroupMember } from './types'
 
 const members: GroupMember[] = [
@@ -11,20 +15,34 @@ const members: GroupMember[] = [
 it('binds clipboard scope to the room, exact source and addresses while ignoring names and seat order', () => {
   const scope = legacyGroupMentionScope('Team', members)
   expect(legacyGroupMentionScope('Team', [...members].reverse())).toBe(scope)
-  expect(legacyGroupMentionScope('Team', members.map(member => ({ ...member, display_name: 'Renamed' })))).toBe(scope)
+  expect(
+    legacyGroupMentionScope(
+      'Team',
+      members.map(member => ({ ...member, display_name: 'Renamed' }))
+    )
+  ).toBe(scope)
   expect(legacyGroupMentionScope('Another room', members)).not.toBe(scope)
   expect(legacyGroupMentionScope('Team', [{ ...members[0], connectionId: 'other' }, members[1]])).not.toBe(scope)
   expect(legacyGroupMentionScope('Team', [{ ...members[0], handle: 'new-address' }, members[1]])).not.toBe(scope)
-  expect(legacyGroupMentionScope('Team', [{ ...members[0], targetProfile: 'other-profile' }, members[1]])).not.toBe(scope)
+  expect(legacyGroupMentionScope('Team', [{ ...members[0], targetProfile: 'other-profile' }, members[1]])).not.toBe(
+    scope
+  )
   const owner = { connectionId: 'local', profile: 'default' }
   const bareMembers = [{ name: 'builder', handle: 'build-a' }]
-  expect(legacyGroupMentionScope('id:room-a', bareMembers, owner)).not.toBe(legacyGroupMentionScope('id:room-b', bareMembers, owner))
-  expect(legacyGroupMentionScope('Team', bareMembers, owner)).not.toBe(legacyGroupMentionScope('Team', bareMembers, { ...owner, connectionId: 'other' }))
-  expect(legacyGroupMentionScope('Team', bareMembers, owner)).not.toBe(legacyGroupMentionScope('Team', bareMembers, { ...owner, profile: 'other' }))
+  expect(legacyGroupMentionScope('id:room-a', bareMembers, owner)).not.toBe(
+    legacyGroupMentionScope('id:room-b', bareMembers, owner)
+  )
+  expect(legacyGroupMentionScope('Team', bareMembers, owner)).not.toBe(
+    legacyGroupMentionScope('Team', bareMembers, { ...owner, connectionId: 'other' })
+  )
+  expect(legacyGroupMentionScope('Team', bareMembers, owner)).not.toBe(
+    legacyGroupMentionScope('Team', bareMembers, { ...owner, profile: 'other' })
+  )
 })
 
 it('rejects unbound readable names and stale recipients but preserves aliases resolved by the existing legacy parser', () => {
-  const unresolved = (text: string, seated = members) => unresolvedLegacyGroupMentions(text, seated, {}, '所有成员', '你')
+  const unresolved = (text: string, seated = members) =>
+    unresolvedLegacyGroupMentions(text, seated, {}, '所有成员', '你')
   expect(unresolved('@测试 请回复')).toHaveLength(1)
   expect(unresolved('＠测试 请回复')).toHaveLength(1)
   expect(unresolved('@build-a 请回复')).toEqual([])

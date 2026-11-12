@@ -32,6 +32,7 @@ function foreignSessionAccess(ownerUserId: string): PlatformSessionAccess {
   if (existing) {
     return existing
   }
+
   const access: PlatformSessionAccess = { kind: 'foreign', ownerUserId }
   foreignAccess.set(ownerUserId, access)
 
@@ -53,6 +54,7 @@ export function platformSessionAccess(sessionId?: string | null): PlatformSessio
   if (!model.ownerUserId || !model.platformOrigin) {
     return SESSION_OWNER_PENDING
   }
+
   const owner = platformModelCatalog().owner.state.get().owner
 
   if (!owner) {
@@ -77,6 +79,7 @@ export async function canRecoverUnboundPlatformSession(sessionId: string, owner:
   if (platformSessionAccess(sessionId).kind !== 'unbound' || !owner || typeof owner !== 'object') {
     return false
   }
+
   const state = $sessionStates.get()[sessionId]
   const account = platformModelCatalog().account.get()
   const scope = profileScopeForSessionOwner(owner)
@@ -86,6 +89,7 @@ export async function canRecoverUnboundPlatformSession(sessionId: string, owner:
   if (!state?.storedSessionId || !modelId) {
     return false
   }
+
   const row = await getSession(state.storedSessionId, scope)
 
   return (

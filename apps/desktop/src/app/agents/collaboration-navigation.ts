@@ -28,11 +28,12 @@ let sourceNavigation = 0
 export async function openCollaborationTask(task: CollaborationTask): Promise<boolean> {
   const group = $collaborationGroups.get().find(group => group.key === task.sourceKey)
 
-  const current = group?.tasks.find(candidate =>
-    candidate.key === task.key &&
-    candidate.parentRuntimeId === task.parentRuntimeId &&
-    candidate.storedSessionId === task.storedSessionId &&
-    collaborationOwnerKey(candidate.owner) === collaborationOwnerKey(task.owner)
+  const current = group?.tasks.find(
+    candidate =>
+      candidate.key === task.key &&
+      candidate.parentRuntimeId === task.parentRuntimeId &&
+      candidate.storedSessionId === task.storedSessionId &&
+      collaborationOwnerKey(candidate.owner) === collaborationOwnerKey(task.owner)
   )
 
   if (!current || !collaborationOwnerKey(current.owner)) {

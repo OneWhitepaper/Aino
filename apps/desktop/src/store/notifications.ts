@@ -502,6 +502,7 @@ function errorSummaryInput(error: unknown, fallback: string) {
   const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined
   const isStructuredStorageFailure = reason ? /^(storage_[a-z_]+|disk_full)$/.test(reason) : false
   const summaryInput = isStructuredStorageFailure ? JSON.stringify({ code: reason, detail: rawDetail }) : rawDetail
+
   return { summaryInput, rawDetail }
 }
 
