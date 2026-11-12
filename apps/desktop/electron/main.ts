@@ -6842,8 +6842,13 @@ function _persistNativeTokens(baseUrl: string, tokens: NativeTokenSet | null) {
   persistNativeTokenSet(baseUrl, tokens, _nativeTokenStoreIo())
 }
 
-function _loadNativeTokens(baseUrl: string): NativeTokenSet | null {
+function _loadNativeTokens(baseUrl: string, fresh = false): NativeTokenSet | null {
   baseUrl = normalizeRemoteBaseUrl(baseUrl)
+
+  if (fresh) {
+    _nativeTokens.delete(baseUrl)
+  }
+
   const cached = _nativeTokens.get(baseUrl)
 
   if (cached) {

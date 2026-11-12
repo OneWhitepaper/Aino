@@ -30,7 +30,6 @@ import {
   Input,
   queryClient,
   relativeTime,
-  RowButton,
   Tip,
   ToggleRow,
   useGatewayActivationEpoch,
@@ -81,13 +80,7 @@ import {
   ROSTER_KEY,
   saveBotMeta
 } from './data'
-import {
-  $groupActivity,
-  currentGroupActivity,
-  GROUP_ACTIVITY_GLYPHS,
-  groupActivityLabel,
-  groupActivityTone
-} from './group-activity'
+import { $groupActivity, currentGroupActivity } from './group-activity'
 import type { GroupActivityEntry } from './group-activity'
 import { filesToGroupAttachments, pickGroupAttachments } from './group-attachments'
 import {
@@ -140,6 +133,7 @@ import { groupReplyMentionTag, sendToGroupChat, stopGroupThread } from './group-
 import { clearGroupClarify, renameGroupClarify } from './group-turns'
 import { botsText, useBots } from './i18n'
 import { displayName } from './labels'
+import { LegacyGroupActivity } from './legacy-group-activity'
 import { useLegacyGroupBrowserHandoff, useLegacyGroupComposer } from './legacy-group-composer'
 import {
   legacyGroupMentionScope,
@@ -1002,7 +996,6 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
 }
 
 function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = true }: GroupChatWorkspaceProps) {
-  const { locale } = useI18n()
   const b = useBots()
   const allMeta: Record<string, BotMeta> = useValue($botMeta)
   // A former member's line is labelled from the live roster (renderEntry).
@@ -1157,9 +1150,6 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
     void filesToGroupAttachments(files).then(picked => addImages(replyThread, picked))
   }
 
-  // Collapsible Activity view: collapsed by default — opening it is always an
-  // explicit user action, it never steals focus, and it never auto-scrolls.
-  const [activityOpen, setActivityOpen] = useState(false)
   // Subscribe: activity rows re-render as turn events land.
   useValue($groupActivity)
   // Pending member questions for THIS room (#90694), oldest first.
@@ -1251,57 +1241,6 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
       message: b.group.stopped(group)
     })
   }
-
-  const activityPanel = (
-    <div className="border-b border-(--ui-stroke-tertiary) px-4">
-      <div className="mx-auto flex w-full max-w-3xl items-center gap-1">
-        <RowButton
-          aria-controls={`group-activity:${group}`}
-          aria-expanded={activityOpen}
-          className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-1 text-left text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary) transition-colors hover:text-foreground"
-          onClick={() => setActivityOpen(prev => !prev)}
-        >
-          <Codicon
-            className="shrink-0 text-[length:var(--aino-text-caption)]"
-            name={activityOpen ? 'chevron-down' : 'chevron-right'}
-          />
-          <span className="shrink-0 font-medium">{b.group.activity}</span>
-          {summaryActivity ? (
-            <span
-              className={cn('min-w-0 flex-1 truncate', groupActivityTone(summaryActivity.kind))}
-            >{`${groupActivityLabel(summaryActivity, group)} · ${relativeTime(summaryActivity.at, undefined, locale)}`}</span>
-          ) : null}
-        </RowButton>
-      </div>
-      {activityOpen ? (
-        <div className="mx-auto grid w-full max-w-3xl gap-0.5 px-2.5 pb-1.5" id={`group-activity:${group}`}>
-          {activityEvents.length ? (
-            [...activityEvents].reverse().map((event, i) => (
-              <div
-                className="flex items-center gap-1.5 text-[length:var(--aino-text-caption)]"
-                key={`${event.at}:${i}`}
-              >
-                <Codicon
-                  className={cn('shrink-0 text-[length:var(--aino-text-caption)]', groupActivityTone(event.kind))}
-                  name={GROUP_ACTIVITY_GLYPHS[event.kind] || 'circle-outline'}
-                />
-                <span className={cn('min-w-0 flex-1 truncate', groupActivityTone(event.kind))}>
-                  {groupActivityLabel(event, group)}
-                </span>
-                <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-                  {relativeTime(event.at, undefined, locale)}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="px-0.5 pb-0.5 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-              {b.group.noActivityYet}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  )
 
   const submit = () => {
     const text = draft.trim()
@@ -1751,7 +1690,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
         memberLabel={member => displayName(member, botRosterMeta(member, allMeta))}
         members={members}
       />
-      {activityPanel}
+      <LegacyGroupActivity events={activityEvents} group={group} summary={summaryActivity} />
       <div className="aino-group-messages-scroll">
         {/* minmax(0,1fr): an implicit grid track is min-content sized, so one */}
         {/* unbreakable code line widened every entry to its own width and the */}

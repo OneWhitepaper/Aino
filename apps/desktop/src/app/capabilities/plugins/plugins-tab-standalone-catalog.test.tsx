@@ -76,10 +76,10 @@ describe('PluginsTab catalog card for a standalone desktop plugin', () => {
 
     expect(screen.queryByRole('button', { name: `Add ${ACCENT.name}` })).toBeNull()
 
-    const card = screen
-      .getAllByRole('article')
-      .find(article => within(article).queryByRole('button', { name: ACCENT.name }))!
-
-    expect(within(card).getByRole('switch', { name: 'Accent Picker' }).getAttribute('aria-checked')).toBe('false')
+    const toggle = screen.getByRole('switch', { name: 'Accent Picker' })
+    const card = toggle.closest('article')!
+    expect(card).not.toBeNull()
+    expect(within(card).queryByRole('button', { name: /^Add / })).toBeNull()
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
   })
 })
