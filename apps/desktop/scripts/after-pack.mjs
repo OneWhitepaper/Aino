@@ -108,6 +108,8 @@ export default async function afterPack(context) {
     return
   }
   if (platform === 'linux') {
+    // The resource copier drops empty markers such as pnpm's .gitkeep.
+    rehashPayloadDigests(payload)
     return
   }
   if (platform !== 'win32') {
