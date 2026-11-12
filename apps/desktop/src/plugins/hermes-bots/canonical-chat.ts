@@ -497,6 +497,20 @@ function kickoffText(): string {
   return pluginText('bot.kickoff', 'Hey, tell me about yourself!')
 }
 
+function canonicalIntroRequired(
+  info: { model?: null | string; provider?: null | string; model_id?: null | string } | undefined,
+  kickoff: boolean,
+  titled: boolean
+): boolean {
+  const unselected = info && Object.hasOwn(info, 'model') && !info.model && !info.provider && !info.model_id
+
+  if (unselected && !titled) {
+    throw Object.assign(new Error('Cannot persist an unselected Bot Chat'), { code: 'unsupported_gateway' })
+  }
+
+  return !unselected && (kickoff || !titled)
+}
+
 /** Create the bot's ONE forever chat: a real session titled "Bot Chat".
  *  Adopts the existing "Bot Chat" row instead of creating when the profile
  *  already has one — minting while a "Bot Chat" row exists is always wrong
@@ -617,7 +631,11 @@ export function createCanonicalChat(
 
     // Same click gesture as the foreground lookup above: a first-ever open
     // has no row to find and mints one, still on the user's dial.
-    const res = await requestForBot<{ session_id?: string; stored_session_id?: string }>(
+    const res = await requestForBot<{
+      session_id?: string
+      stored_session_id?: string
+      info?: { model?: null | string; provider?: null | string; model_id?: null | string }
+    }>(
       bot,
       'session.create',
       {
@@ -693,6 +711,8 @@ export function createCanonicalChat(
       }
     }
 
+    const submitIntro = canonicalIntroRequired(res.info, kickoff, titled)
+
     // Mount the session view FIRST, then send the kickoff — submitting into
     // an unmounted session left the intro reply invisible until reopen.
     let opened = false
@@ -713,8 +733,8 @@ export function createCanonicalChat(
       // prunes the zero-message lazy session, so without some first prompt
       // the chat never survives its own creation. A titled row needs neither:
       // the user speaks first.
-      const submitIntro = kickoff || !titled
-
+      // A managed account can have choices without a default. Let the user
+      // enter and choose; an automatic intro must not spend an unchosen model.
       if (submitIntro) {
         await new Promise(resolve => window.setTimeout(resolve, 400))
 

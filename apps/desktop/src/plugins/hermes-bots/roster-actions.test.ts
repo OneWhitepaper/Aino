@@ -45,6 +45,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
 })
 
 vi.mock('./shared', () => ({
+  $pendingBotOpen: { get: () => null },
   bumpBotOpenGeneration: vi.fn(),
   getBotOpenGeneration: vi.fn(),
   getPluginCtx: () => ({ i18n: i18nMock, storage: storageMock }),

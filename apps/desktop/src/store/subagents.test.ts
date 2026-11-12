@@ -21,6 +21,25 @@ const listFor = (sid: string) => $subagentsBySession.get()[sid] ?? []
 describe('subagent store', () => {
   beforeEach(() => $subagentsBySession.set({}))
 
+  it('retains a backend-authored name through progress without using internal identifiers as names', () => {
+    upsertSubagent('owner', {
+      subagent_id: 'internal-worker',
+      display_name: 'Source review',
+      goal: 'Read and compare sources'
+    })
+    upsertSubagent(
+      'owner',
+      { subagent_id: 'internal-worker', text: 'Reading package metadata' },
+      false,
+      'subagent.progress'
+    )
+    expect(listFor('owner')[0]).toMatchObject({
+      displayName: 'Source review',
+      id: 'internal-worker',
+      goal: 'Read and compare sources'
+    })
+  })
+
   it('upserts subagent progress and keeps terminal status stable', () => {
     upsertSubagent('s1', { goal: 'scan files', status: 'running', subagent_id: 'a1', task_index: 0 })
     upsertSubagent('s1', { goal: 'scan files', status: 'completed', subagent_id: 'a1', summary: 'done', task_index: 0 })

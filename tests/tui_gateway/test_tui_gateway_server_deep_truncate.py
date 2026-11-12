@@ -11,12 +11,6 @@ from tui_gateway import server
 
 
 @pytest.fixture
-def no_cloud_imports(monkeypatch):
-    # Truncation doubles expose only message operations; cloud refresh has its own DB tests.
-    monkeypatch.setattr("tui_gateway.session_cloud_sync.refresh_cloud_history", lambda *a, **kw: False)
-
-
-@pytest.fixture
 def no_background_turn(monkeypatch):
     """Truncation-only cases must not execute their placeholder agent on a real thread."""
     monkeypatch.setattr(server.threading, "Thread", lambda *a, **kw: types.SimpleNamespace(start=lambda: None))
@@ -32,7 +26,7 @@ def _session(agent=None, **extra):
     }
 
 
-def test_prompt_submit_refuses_deep_truncation_without_confirm(no_cloud_imports, monkeypatch):
+def test_prompt_submit_refuses_deep_truncation_without_confirm(monkeypatch):
     # register() rebinds the handlers onto the server namespace, so the flag is read there.
     monkeypatch.setattr(server, "DEEP_TRUNCATE_ENFORCED", True)  # the next release's behaviour
     replaced = []
@@ -117,7 +111,7 @@ def test_deep_truncate_counts_every_durable_row_a_merged_carrier_holds(monkeypat
         server._sessions.pop("deep-carrier-sid", None)
 
 
-def test_prompt_submit_empty_truncation_allowed_with_confirm(no_cloud_imports, monkeypatch):
+def test_prompt_submit_empty_truncation_allowed_with_confirm(monkeypatch):
     """Intentional restore/regenerate of the first user turn may wipe history."""
 
     seen = {}
@@ -217,7 +211,7 @@ def test_archived_user_turns_counts_a_carrier_without_its_own_row_id():
         methods_prompt._load_durable_truncation_history = original
 
 
-def test_unconfirmed_deep_truncation_is_warn_only_this_release(no_cloud_imports, monkeypatch, caplog):
+def test_unconfirmed_deep_truncation_is_warn_only_this_release(monkeypatch, caplog):
     """Rollout (G15-B): an older client without confirm_deep_truncate keeps working for one release;
     the cut runs and the would-be refusal is logged."""
     import logging

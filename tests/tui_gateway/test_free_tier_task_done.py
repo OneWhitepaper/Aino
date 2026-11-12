@@ -113,8 +113,6 @@ def test_prompt_submit_records_only_untouched_turns(monkeypatch, touch, recorded
 
     from unittest.mock import MagicMock
     monkeypatch.setattr(server, "_get_db", lambda: MagicMock())
-    # Task-completion eligibility uses a storage double, not cloud import generations.
-    monkeypatch.setattr("tui_gateway.session_cloud_sync.refresh_cloud_history", lambda *a, **kw: False)
     recorded_at_complete: list[int] = []
 
     def _emit(event, *a, **kw):

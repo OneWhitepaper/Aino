@@ -5,7 +5,6 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { frBoot } from './fr_boot'
@@ -324,17 +323,17 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 const frBaseOverrides = {
   notificationCenter: notificationCenterCopy['fr'],
   platformModels: {
-    permanent: "Sans expiration",
-    reauthorize: "Réautoriser cet appareil",
-    reauthorizeDescription: "Remplacez l’autorisation des modèles de cet appareil. Reconnectez-vous si votre session de gestion a expiré.",
-    deviceRevoked: "L’accès aux modèles de cet appareil a été révoqué. Réautorisez-le dans les paramètres des modèles.",
+    permanent: 'Sans expiration',
+    reauthorize: 'Réautoriser cet appareil',
+    reauthorizeDescription:
+      'Remplacez l’autorisation des modèles de cet appareil. Reconnectez-vous si votre session de gestion a expiré.',
+    deviceRevoked: 'L’accès aux modèles de cet appareil a été révoqué. Réautorisez-le dans les paramètres des modèles.'
   },
   platformDevices: { expired: 'Expirée' },
   appearancePage: appearancePage.fr,
   home: homeGuidance.fr,
   toolPanel: toolPanel['fr'],
   workspacePage: workspacePage.fr,
-  cloudSync: cloudSync['fr'],
   accountPage: accountPage['fr'],
   platformRecharge: {
     description:
@@ -2542,10 +2541,9 @@ const frBaseOverrides = {
           enable: 'Utiliser mon profil'
         }
       }
-    }
-  ,
-memoryLayers: frMemoryLayers
-},
+    },
+    memoryLayers: frMemoryLayers
+  },
   skills: {
     tabSkills: 'Skills',
     tabToolsets: 'Outils',
@@ -3132,7 +3130,8 @@ memoryLayers: frMemoryLayers
     relayLink: {
       title: 'Team Gateway',
       badge: 'Aucun jeton de bot requis',
-      intro: (platform: string) => `${platform} atteint cet agent via le bot Hermes partagé. Associez votre compte ${platform} et écrivez au bot pour parler à votre agent.`,
+      intro: (platform: string) =>
+        `${platform} atteint cet agent via le bot Hermes partagé. Associez votre compte ${platform} et écrivez au bot pour parler à votre agent.`,
       link: (platform: string) => `Associer ${platform}`,
       linkAnother: (platform: string) => `Associer un autre compte ${platform}`,
       linkedAccounts: 'Comptes associés',
@@ -3150,10 +3149,12 @@ memoryLayers: frMemoryLayers
       refused: (platform: string) => `${platform} a refusé l’association. Demandez un nouveau code et réessayez.`,
       qrAlt: (platform: string) => `Code QR du bot ${platform} partagé`,
       managed: 'Géré par Team Gateway',
-      managedNote: (platform: string) => `Team Gateway assure la messagerie sur cette instance : le gateway désactive donc la connexion directe ${platform} à chaque démarrage. Pour l’utiliser en plus du relais, définissez GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true dans l’environnement du gateway (une connexion directe empêche l’instance de descendre à zéro et peut livrer les messages deux fois).`,
+      managedNote: (platform: string) =>
+        `Team Gateway assure la messagerie sur cette instance : le gateway désactive donc la connexion directe ${platform} à chaque démarrage. Pour l’utiliser en plus du relais, définissez GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true dans l’environnement du gateway (une connexion directe empêche l’instance de descendre à zéro et peut livrer les messages deux fois).`,
       managedIntro: 'Les comptes de cet agent se lient depuis Nous Portal.',
       openPortal: 'Lier des comptes dans Nous Portal',
-      noNewAccount: (platform: string) => `Le code n’est plus actif et aucun nouveau compte n’est apparu. Si votre compte ${platform} n’est pas listé, obtenez un nouveau code et réessayez.`
+      noNewAccount: (platform: string) =>
+        `Le code n’est plus actif et aucun nouveau compte n’est apparu. Si votre compte ${platform} n’est pas listé, obtenez un nouveau code et réessayez.`
     },
     telegramQr: {
       title: 'Choisissez comment connecter votre bot Telegram',
@@ -3406,9 +3407,10 @@ memoryLayers: frMemoryLayers
     manageProfiles: 'Gérer les profils…',
     connectGateway: 'Connecter un autre gateway Hermes…',
     fleet: {
-      switchDeviceTitle: "Passer à cet appareil ?",
-      switchDeviceDesc: "Ouvre une nouvelle session sur cet ordinateur. La conversation actuelle reste sur l’autre service.",
-      switchDeviceConfirm: "Changer",
+      switchDeviceTitle: 'Passer à cet appareil ?',
+      switchDeviceDesc:
+        'Ouvre une nouvelle session sur cet ordinateur. La conversation actuelle reste sur l’autre service.',
+      switchDeviceConfirm: 'Changer',
       allOnGateway: 'Tous les profils de cette gateway',
       gateway: gateway => `Profils sur ${gateway}`,
       gatewayUnreachable: gateway => `${gateway} · inaccessible`,
@@ -4887,15 +4889,16 @@ memoryLayers: frMemoryLayers
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "Terminal déconnecté. Appuyez sur Entrée pour retrouver le même shell.",
-    terminalExpired: "Terminal expiré ou fermé. Appuyez sur Entrée pour créer un nouveau shell.",
-    terminalSuperseded: "Terminal connecté dans une autre fenêtre. Appuyez sur Entrée pour le reprendre ici.",
-    terminalDenied: "Accès au terminal refusé. Vérifiez la connexion et le profil, puis appuyez sur Entrée.",
-    terminalCapacity: "Limite de terminaux atteinte. Fermez un autre terminal puis appuyez sur Entrée.",
-    terminalSignedOut: "Déconnecté. Reconnectez-vous dans ce navigateur, puis appuyez sur Entrée.",
-    terminalReconnecting: "Terminal déconnecté. Reconnexion au même shell…",
-    terminalStartRetry: (error: string) => "Échec du démarrage du terminal : " + error + ". Appuyez sur Entrée pour réessayer.",
-    terminalCloseFailed: "Impossible de fermer le terminal",
+    terminalReconnectSame: 'Terminal déconnecté. Appuyez sur Entrée pour retrouver le même shell.',
+    terminalExpired: 'Terminal expiré ou fermé. Appuyez sur Entrée pour créer un nouveau shell.',
+    terminalSuperseded: 'Terminal connecté dans une autre fenêtre. Appuyez sur Entrée pour le reprendre ici.',
+    terminalDenied: 'Accès au terminal refusé. Vérifiez la connexion et le profil, puis appuyez sur Entrée.',
+    terminalCapacity: 'Limite de terminaux atteinte. Fermez un autre terminal puis appuyez sur Entrée.',
+    terminalSignedOut: 'Déconnecté. Reconnectez-vous dans ce navigateur, puis appuyez sur Entrée.',
+    terminalReconnecting: 'Terminal déconnecté. Reconnexion au même shell…',
+    terminalStartRetry: (error: string) =>
+      'Échec du démarrage du terminal : ' + error + '. Appuyez sur Entrée pour réessayer.',
+    terminalCloseFailed: 'Impossible de fermer le terminal',
     terminalDropUnquotable: (shell, paths) =>
       `Impossible de saisir ces noms en toute sécurité dans ${shell} : ${paths}`,
     aria: 'Barre latérale droite',
@@ -5669,12 +5672,14 @@ memoryLayers: frMemoryLayers
     vaultCodeConfirm: 'Saisir le code'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "Environnement local indisponible",
-    localRuntimeUnavailableDesktop: "Configurez-le dans Paramètres → Fournisseurs → Modèles locaux.",
-    localRuntimeUnavailableWebapp: "Configurez les modèles locaux dans Aino Desktop ou choisissez un modèle hébergé dans ce navigateur.",
-    openLocalModels: "Ouvrir les modèles locaux",
-    serviceAuthorizationTitle: "Autorisation des services",
-    serviceAuthorizationDescription: "Connectez-vous avec le compte propre à chaque service externe. Ces autorisations sont distinctes du compte Aino.",
+    localRuntimeUnavailableTitle: 'Environnement local indisponible',
+    localRuntimeUnavailableDesktop: 'Configurez-le dans Paramètres → Fournisseurs → Modèles locaux.',
+    localRuntimeUnavailableWebapp:
+      'Configurez les modèles locaux dans Aino Desktop ou choisissez un modèle hébergé dans ce navigateur.',
+    openLocalModels: 'Ouvrir les modèles locaux',
+    serviceAuthorizationTitle: 'Autorisation des services',
+    serviceAuthorizationDescription:
+      'Connectez-vous avec le compte propre à chaque service externe. Ces autorisations sont distinctes du compte Aino.',
     audioReadFailed: "Impossible de lire l'audio enregistré",
     sessionUnavailable: 'Session indisponible',
     createSessionFailed: 'Impossible de créer une nouvelle session',

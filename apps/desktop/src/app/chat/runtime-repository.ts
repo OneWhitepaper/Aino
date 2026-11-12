@@ -4,6 +4,7 @@ import { useMemo, useRef } from 'react'
 
 import type { ChatMessage } from '@/lib/chat-messages'
 import { withUniqueToolCallIdsWithinMessage } from '@/lib/chat-messages'
+import { modelErrorRecoveryReasons } from '@/lib/chat-messages/model-error-recovery'
 import { coalesceToolOnlyAssistants, createToolMergeCache, toRuntimeMessage } from '@/lib/chat-runtime'
 
 // The exact fallback status ExportedMessageRepository.fromBranchableArray uses.
@@ -34,6 +35,7 @@ export function useRuntimeMessageRepository(messages: ChatMessage[]): ExportedMe
     const seenIds = new Set<string>()
     let visibleParentId: string | null = null
     let headId: string | null = null
+    const recoveries = modelErrorRecoveryReasons(messages)
 
     for (const message of coalesceToolOnlyAssistants(messages, toolMergeCacheRef.current)) {
       // A repeated id is a transcript bug upstream, but it must not reach the
@@ -64,10 +66,17 @@ export function useRuntimeMessageRepository(messages: ChatMessage[]): ExportedMe
       // identity when clean, so the cache below is unaffected in the common case.
       const deduped = withUniqueToolCallIdsWithinMessage(message)
 
-      const cachedMessage = cacheRef.current.get(message)
+      const recovery = recoveries.get(message.id)
+      const cached = cacheRef.current.get(message)
+      const cachedMessage = cached?.metadata.custom?.errorResolved === recovery ? cached : undefined
 
       const runtimeMessage =
-        cachedMessage ?? fromThreadMessageLike(toRuntimeMessage(deduped), message.id, FALLBACK_STATUS)
+        cachedMessage ??
+        fromThreadMessageLike(
+          toRuntimeMessage(recovery ? { ...deduped, errorResolved: recovery } : deduped),
+          message.id,
+          FALLBACK_STATUS
+        )
 
       if (!cachedMessage) {
         cacheRef.current.set(message, runtimeMessage)

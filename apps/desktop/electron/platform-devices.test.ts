@@ -109,6 +109,7 @@ async function rig() {
         ...(mode === 'malformed' ? { revoked: 'false' } : {}),
         ...(mode.startsWith('status-') ? { status: mode.slice('status-'.length) } : {}),
         api_key: 'secret-fixture',
+        is_current: false,
         user: { id: 17 }
       }
     ])
@@ -191,7 +192,7 @@ async function rig() {
 
 it('projects only safe device summaries and fences every operation to the trusted current owner and generation', async () => {
   const f = await rig()
-  expect(await f.invoke('list')).toEqual([device])
+  expect(await f.invoke('list')).toEqual([{ ...device, is_current: true }])
   const count = f.requests.length
 
   for (const method of ['list', 'revoke']) {
@@ -239,7 +240,7 @@ it('preserves explicit device status across the API and IPC boundary while rejec
 
   for (const status of ['active', 'expired', 'revoked']) {
     f.mode(`status-${status}`)
-    expect(await f.invoke('list')).toEqual([{ ...device, status }])
+    expect(await f.invoke('list')).toEqual([{ ...device, status, is_current: true }])
   }
 
   f.mode('status-unknown')

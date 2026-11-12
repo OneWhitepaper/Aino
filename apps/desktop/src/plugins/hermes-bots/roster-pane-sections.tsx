@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { botRosterKey } from './data'
 import type { useBots } from './i18n'
 import type { RosterGroupRow } from './roster-pane-derivation'
-import { GatewayKindGlyph, GatewaySectionHeading, RosterSectionHeader } from './roster-sections'
+import { GatewayKindGlyph, GatewaySectionHeading } from './roster-sections'
 import type { ResolvedRosterGatewaySection } from './roster-sections'
 import type { BotMeta, GroupChat, RosterRow } from './types'
 import type { $botSections, SectionDialogState } from './user-sections'
@@ -171,26 +171,17 @@ export function rosterSectionRenderers({
     )
   }
 
-  const renderGroupChatSection = () => {
-    const sectionId = 'group-chats'
-    const collapsed = rosterSectionCollapsed(sectionId)
-
-    return (
-      <div className="min-w-0" key={sectionId}>
-        <RosterSectionHeader
-          collapsed={collapsed}
-          count={sortedGroupRows.length}
-          icon="organization"
-          label={b.roster.groupChats}
-          onToggle={() => toggleRosterSection(sectionId)}
-          tip={`${sortedGroupRows.length} global group chat${sortedGroupRows.length === 1 ? '' : 's'}`}
-        />
-        {collapsed ? null : (
-          <div className="grid min-w-0 gap-0.5">{renderUserSections(sortedGroupRows, 'groups:')}</div>
-        )}
+  const renderGroupChatSection = () => (
+    <section aria-label={b.roster.groupChats} className="aino-roster-groups">
+      <div className="aino-roster-section-heading">
+        <h2>{b.roster.groupChats}</h2>
+        <span aria-hidden className="font-normal tabular-nums">
+          {sortedGroupRows.length}
+        </span>
       </div>
-    )
-  }
+      <div className="aino-roster-rows">{renderUserSections(sortedGroupRows, 'groups:')}</div>
+    </section>
+  )
 
   const renderHiddenGatewaySection = (section: ResolvedRosterGatewaySection) => (
     <div className="min-w-0" key={`hidden-gateway:${section.id}`}>

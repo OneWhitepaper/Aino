@@ -1,0 +1,34 @@
+.aino-inline-recovery {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  margin-block: 1.5rem 0;
+  padding-block: 1rem;
+  border-block: 1px solid var(--ui-stroke-tertiary);
+  overflow-wrap: anywhere;
+  color: var(--ui-text-primary);
+}
+.aino-inline-recovery-icon { margin-top: 0.1875rem; color: var(--dt-destructive); font-size: 1.25rem; }
+.aino-inline-recovery-content { min-width: 0; }
+.aino-inline-recovery-content > h3 { font-size: var(--aino-text-body); font-weight: 600; line-height: 1.5; }
+.aino-inline-recovery-content > p { margin-top: 0.375rem; font-size: var(--aino-text-ui); line-height: 1.7; color: var(--ui-text-secondary); }
+.aino-inline-recovery-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.aui-error-card.aino-inline-recovery[data-severity] {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  max-width: none;
+  margin-top: 1.5rem;
+  padding: 1rem 0;
+  border: 0;
+  border-block: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0;
+  background: transparent;
+  gap: 0.75rem;
+  overflow: visible;
+}
+.aui-error-card.aino-inline-recovery .aui-error-card-row,
+.aui-error-card.aino-inline-recovery .aui-error-details { grid-column: 2; margin-left: 0; }
+.aui-error-card.aino-inline-recovery .aui-error-card-head { display: contents; }
+.aui-error-card.aino-inline-recovery .aui-error-card-body { font-size: var(--aino-text-ui); line-height: 1.7; color: var(--ui-text-secondary); }
+.aui-error-card.aino-inline-recovery .aui-error-card-icon { margin-top: 0.1875rem; font-size: 1.25rem; }

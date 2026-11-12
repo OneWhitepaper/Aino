@@ -1,15 +1,10 @@
+import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 import { type CommandCenterSection } from '@/app/command-center'
-import {
-  AGENTS_ROUTE,
-  appViewForPath,
-  COMMAND_CENTER_ROUTE,
-  isOverlayView,
-  NEW_CHAT_ROUTE,
-  STARMAP_ROUTE
-} from '@/app/routes'
+import { appViewForPath, COMMAND_CENTER_ROUTE, isOverlayView, NEW_CHAT_ROUTE, STARMAP_ROUTE } from '@/app/routes'
+import { $collaborationCapsuleOpen, openCollaborationCapsule } from '@/store/collaboration-capsule-view'
 
 const SECTIONS = ['sessions', 'system', 'usage'] as const
 
@@ -20,7 +15,7 @@ export function useOverlayRouting() {
   const currentView = appViewForPath(location.pathname)
   const settingsOpen = currentView === 'settings'
   const commandCenterOpen = currentView === 'command-center'
-  const agentsOpen = currentView === 'agents'
+  const agentsOpen = useStore($collaborationCapsuleOpen)
   const starmapOpen = currentView === 'starmap'
   const cronOpen = currentView === 'cron'
   const webhooksOpen = currentView === 'webhooks'
@@ -89,6 +84,14 @@ export function useOverlayRouting() {
     navigate(target, { replace: true })
   }, [navigate])
 
+  // Retain old deep links without mounting the retired standalone monitor.
+  useEffect(() => {
+    if (currentView === 'agents') {
+      openCollaborationCapsule()
+      closeOverlayToPreviousRoute()
+    }
+  }, [closeOverlayToPreviousRoute, currentView])
+
   const toggleCommandCenter = useCallback(() => {
     if (commandCenterOpen) {
       closeOverlayToPreviousRoute()
@@ -98,7 +101,7 @@ export function useOverlayRouting() {
     }
   }, [closeOverlayToPreviousRoute, commandCenterOpen, navigate, rememberSettingsReturnPath])
 
-  const openAgents = useCallback(() => navigate(AGENTS_ROUTE), [navigate])
+  const openAgents = openCollaborationCapsule
   const openStarmap = useCallback(() => navigate(STARMAP_ROUTE), [navigate])
 
   return {

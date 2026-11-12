@@ -335,7 +335,11 @@ def _(rid, params: dict) -> dict:
     soul = params.get("soul")
     soul_written = isinstance(soul, str) and bool(soul.strip()) and _best_effort(
         lambda: (path / "SOUL.md").write_text(soul, encoding="utf-8"))
-    mirrored = _mirror_launch_credentials(path, params)
+    # An explicit clone source owns credentials and optional sections too. The RPC may be
+    # hosted by another workspace, whose keys must not fill an empty source .env or auth store.
+    credential_home = profiles_mod.get_profile_dir(clone_from) if clone_from else get_hermes_home()
+    with _hermes_home_scope(credential_home):
+        mirrored = _mirror_launch_credentials(path, params)
     model, provider = _model_provider_params(params)
     model_set = False
     if model and provider:
@@ -484,7 +488,7 @@ def _env_has_content(env_path) -> bool:
 
 
 def _mirror_voice_sections(path) -> bool:
-    """Copy stt/tts/voice sections from the launch profile (a fresh profile has only ``model``,
+    """Copy stt/tts/voice sections from the active source (a fresh profile has only ``model``,
     so voice fell back to defaults); True if written."""
     try:
         from hermes_cli.config import read_user_config_raw, save_config
@@ -548,7 +552,8 @@ def _inherit_launch_model(path) -> bool:
 
 
 def _mirror_launch_credentials(path, params: dict) -> dict:
-    """Copy launch .env / auth.json / voice sections into a new profile (best-effort per item).
+    """Copy active-source .env / auth.json / voice sections into a new profile (best-effort).
+    The caller binds the explicit clone source, or keeps the launch scope for a fresh profile.
     ``share_auth`` reports ``auth: "shared"`` and skips the auth copy; ``mirror_credentials``
     false skips everything. ``model_inherited`` is filled in by the caller."""
     share_auth = is_truthy_value(params.get("share_auth", False))

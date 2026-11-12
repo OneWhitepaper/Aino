@@ -19,6 +19,7 @@ import json
 
 import pytest
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tui_gateway import server
 
 
@@ -76,7 +77,7 @@ def test_unanswered_probe_returns_an_actionable_error(session, bridge):
     result = json.loads(server._preview_action_request("s1", {"action": "elements"}))
 
     assert result["success"] is False
-    assert "Update the Hermes Desktop app" in result["error"]
+    assert f"Update the {PRODUCT_NAME} Desktop app" in result["error"]
 
 
 def test_repeat_actions_short_circuit_instead_of_stalling_again(session, bridge):

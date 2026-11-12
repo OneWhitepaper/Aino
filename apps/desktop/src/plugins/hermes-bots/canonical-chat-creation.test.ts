@@ -218,16 +218,37 @@ describe('the lazy row is materialized before anything else touches it', () => {
     })
   })
 
-  it('sends the one intro turn on New Bot creation (kickoff: true)', async () => {
-    respondWith((method, params) => {
+  it.each([{ model: '', provider: '' }, { model: null, provider: null }, { model: '' }])(
+    'opens an unselected Bot without an intro: %j',
+    async info => {
+      respondWith(method => {
+        events.push(method)
+
+        if (method === 'session.create') {
+          return { session_id: 'runtime-1', stored_session_id: 'stored-1', info }
+        }
+
+        return {}
+      })
+
+      const { createCanonicalChat } = await loadModule()
+
+      expect(await createCanonicalChat('ops', { kickoff: true })).toBe('stored-1')
+      expect(events).toEqual(['session.list', 'session.create', 'session.title', 'open:stored-1'])
+      expect(hostMock.openSession).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('requires title persistence when an unselected Bot cannot use the compatibility intro', async () => {
+    respondWith(method => {
       events.push(method)
 
       if (method === 'session.create') {
-        return { session_id: 'runtime-1', stored_session_id: 'stored-1' }
+        return { session_id: 'runtime-1', stored_session_id: 'stored-1', info: { model: '', provider: '' } }
       }
 
-      if (method === 'prompt.submit') {
-        expect(params.session_id).toBe('runtime-1')
+      if (method === 'session.title') {
+        throw new Error('Method not found')
       }
 
       return {}
@@ -235,9 +256,34 @@ describe('the lazy row is materialized before anything else touches it', () => {
 
     const { createCanonicalChat } = await loadModule()
 
-    expect(await createCanonicalChat('ops', { kickoff: true })).toBe('stored-1')
-    expect(events).toEqual(['session.list', 'session.create', 'session.title', 'open:stored-1', 'prompt.submit'])
+    await expect(createCanonicalChat('ops', { kickoff: true })).rejects.toMatchObject({ code: 'unsupported_gateway' })
+    expect(events).toEqual(['session.list', 'session.create', 'session.title'])
+    expect(hostMock.openSession).not.toHaveBeenCalled()
   })
+
+  it.each([undefined, { cwd: '/tmp/older-gateway' }])(
+    'preserves the creation intro when the backend does not report model identity: %j',
+    async info => {
+      respondWith((method, params) => {
+        events.push(method)
+
+        if (method === 'session.create') {
+          return { session_id: 'runtime-1', stored_session_id: 'stored-1', info }
+        }
+
+        if (method === 'prompt.submit') {
+          expect(params.session_id).toBe('runtime-1')
+        }
+
+        return {}
+      })
+
+      const { createCanonicalChat } = await loadModule()
+
+      expect(await createCanonicalChat('ops', { kickoff: true })).toBe('stored-1')
+      expect(events).toEqual(['session.list', 'session.create', 'session.title', 'open:stored-1', 'prompt.submit'])
+    }
+  )
 
   it('scopes the open to the bots workspace even with no staleness probe', async () => {
     // The create path is the one caller that passes no probe. Gating the

@@ -650,6 +650,7 @@ class SubagentSnapshot(Result):
     subagent_id: str
     parent_id: str | None = None
     depth: int | None = None
+    display_name: str | None = None
     goal: str | None = None
     delegation_id: str | None = None
     model: str | None = None
@@ -658,6 +659,7 @@ class SubagentSnapshot(Result):
     tool_count: int | None = None
     last_tool: str | None = None
     accepting_steer: bool | None = None
+    child_session_id: str | None = None
 
 
 class FailedDelegation(Result):
@@ -683,10 +685,21 @@ method("subagent.list", params=SessionParams, result=SubagentListResult,
        doc="Live children owned by this session (other sessions' children never leak).")
 
 
+class LiveWorkRoomSource(Result):
+    """Native group's authority route; never inferred from a hidden producer's title."""
+
+    kind: Literal["bot_room"]
+    room_id: str
+    room_name: str | None = None
+    profile: str
+
+
 class SubagentRosterEntry(Result):
     session_id: str
     subagents: int = 0
     background: int = 0
+    workers: list[SubagentSnapshot] = Field(default_factory=list)
+    source: LiveWorkRoomSource | None = None
 
 
 class SubagentRosterResult(Result):
@@ -694,7 +707,7 @@ class SubagentRosterResult(Result):
 
 
 method("subagent.roster", params=ProfileParams, result=SubagentRosterResult,
-       doc="Per-conversation counts of live delegated children and running background processes, limited to "
+       doc="Per-conversation counts and read-only child snapshots, plus running background processes, limited to "
            "conversations stored in the named profile (launch profile when omitted). Needs no attached session.")
 
 

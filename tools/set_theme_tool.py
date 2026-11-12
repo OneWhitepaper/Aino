@@ -10,6 +10,7 @@ import json
 import re
 from typing import Callable, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.registry import registry, tool_error
 
 ACCENT_SWATCHES = ("mono", "green", "cyan", "nous", "violet", "pink", "red", "orange")
@@ -36,7 +37,7 @@ def set_theme_tool(accent: Optional[str] = None, mode: Optional[str] = None, lay
                    picker: Optional[str] = None, callback: Optional[Callable[[dict], dict]] = None) -> str:
     """Apply the given appearance values, or show one picker card and wait for the pick."""
     if callback is None:
-        return tool_error("set_theme is only available in the Hermes desktop app.")
+        return tool_error(f"set_theme is only available in the {PRODUCT_NAME} desktop app.")
     values = {key: value.strip() for key, value in (("accent", accent), ("mode", mode), ("layout", layout))
               if isinstance(value, str) and value.strip()}
     if picker is not None:
@@ -58,7 +59,7 @@ def set_theme_tool(accent: Optional[str] = None, mode: Optional[str] = None, lay
 SET_THEME_SCHEMA = {
     "name": "set_theme",
     "description": (
-        "Change how the Hermes desktop app looks: accent colour, light/dark mode, layout. Pass the values "
+        f"Change how the {PRODUCT_NAME} desktop app looks: accent colour, light/dark mode, layout. Pass the values "
         "to apply them now; the result says what was applied. Pass picker instead to show the user an "
         "accent or layout picker card in the chat and wait for their pick. To reveal ONE pane, use "
         "focus_pane instead."

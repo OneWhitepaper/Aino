@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { $connectionsRegistry } from '@/store/connections'
 import { $bindings } from '@/store/keybinds'
 import { $activeGatewayProfile } from '@/store/profile'
+import { $toolSession, toolSessionHasCurrentConnection } from '@/store/tool-session'
 
 import { $localGateway, $terminalShellGateways, defaultTerminalGateway, shellGatewayFor } from './terminal-gateway'
 import { createTerminal } from './terminals'
@@ -35,7 +36,14 @@ type GatewayChoice = Pick<DesktopRegistryConnection, 'id' | 'kind' | 'label'>
 // profile's. The session's cwd is a path on its own host: a tab on another
 // gateway starts in its home instead.
 function openOn(choice: GatewayChoice) {
-  const gateway = shellGatewayFor(choice.id, $activeGatewayProfile.get(), $connectionsRegistry.get())
+  const toolSession = $toolSession.get()
+
+  const profile =
+    toolSessionHasCurrentConnection(toolSession) && choice.id === toolSession.scope.connectionId
+      ? toolSession.scope.profile
+      : $activeGatewayProfile.get()
+
+  const gateway = shellGatewayFor(choice.id, profile, $connectionsRegistry.get())
   const session = defaultTerminalGateway()
   const sameHost = !session || gateway?.connectionId === session.connectionId
 

@@ -6,7 +6,8 @@ import {
   notify,
   pauseNotification,
   resumeNotification,
-  runNotificationAction
+  runNotificationAction,
+  updateNotification
 } from './notifications'
 
 beforeEach(() => {
@@ -122,4 +123,46 @@ test('same-identity updates retain the single recovery in progress and its failu
   await first
   expect($notifications.get()[0].actionError).toBe('Connection failed')
   expect($notifications.get()[0].pendingAction).toBeUndefined()
+})
+
+test('continuous status updates retain identity, arrival time, repeat count and a reader expiry pause', () => {
+  const id = notify({ id: 'sync', message: '3 items waiting', source: 'Cloud history', durationMs: 5000 })
+  const original = $notifications.get()[0]
+
+  expect(updateNotification(id, { source: original.source })).toBe(true)
+  expect($notifications.get()[0]).toBe(original)
+  pauseNotification(id, 'panel')
+  vi.advanceTimersByTime(1000)
+  expect(updateNotification(id, { message: '2 items waiting', facts: [{ label: 'Pending', value: '2' }] })).toBe(true)
+  const updated = $notifications.get()[0]
+  expect(updated).toMatchObject({
+    instance: original.instance,
+    createdAt: original.createdAt,
+    repeatCount: original.repeatCount
+  })
+  expect(updated.message).toBe('2 items waiting')
+  vi.advanceTimersByTime(8000)
+  expect($notifications.get()).toHaveLength(1)
+  resumeNotification(id, 'panel')
+  vi.advanceTimersByTime(5000)
+  expect($notifications.get()).toHaveLength(0)
+  expect(updateNotification(id, { message: 'Late status' })).toBe(false)
+  expect($notifications.get()).toHaveLength(0)
+})
+
+test('an event-owned recovery stays present until the actual state owner clears it', async () => {
+  const id = notify({
+    message: 'Sync offline',
+    action: { label: 'Retry', onClick: async () => undefined, retainOnSuccess: true }
+  })
+
+  await runNotificationAction(id, 'action')
+  expect($notifications.get()).toHaveLength(1)
+  expect($notifications.get()[0].pendingAction).toBeUndefined()
+})
+
+test('passive feedback from different named sources never coalesces', () => {
+  notify({ message: 'Saved', source: 'Workspace one' })
+  notify({ message: 'Saved', source: 'Workspace two' })
+  expect($notifications.get()).toHaveLength(2)
 })

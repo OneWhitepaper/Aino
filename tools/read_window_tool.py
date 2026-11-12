@@ -8,6 +8,7 @@ main process (native window enumeration) -> ``window.read.respond``.
 
 from typing import Callable, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.read_terminal_tool import read_pane
 from tools.registry import registry
 
@@ -15,7 +16,7 @@ from tools.registry import registry
 def read_window_below_tool(callback: Optional[Callable] = None) -> str:
     """Return the window underneath the Hermes window as a JSON string."""
     return read_pane(callback, (), (
-        "read_window_below is only available in the Hermes desktop app.",
+        f"read_window_below is only available in the {PRODUCT_NAME} desktop app.",
         "",
         "Failed to read the window below: ",
         "Could not determine the window underneath (the desktop app did "
@@ -26,7 +27,8 @@ def read_window_below_tool(callback: Optional[Callable] = None) -> str:
 READ_WINDOW_BELOW_SCHEMA = {
     "name": "read_window_below",
     "description": (
-        "Identify the app window behind the Hermes desktop window (what the user is in). JSON: {window: {app, title, bounds, "
+        f"Identify the app window behind the {PRODUCT_NAME} desktop window (what the user is in). "
+        "JSON: {window: {app, title, bounds, "
         "id}, frontmost, platform}. title may be empty when the OS withholds "
         "it (noted in `note`); where windows cannot be enumerated at all, "
         "{error, platform} says what would fix it — relay that instead of "

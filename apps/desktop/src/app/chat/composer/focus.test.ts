@@ -493,6 +493,23 @@ describe('insert acknowledgement', () => {
     await expect(requestComposerInsertAcked('hello', { target: 'tile:gone' })).resolves.toBe(false)
   })
 
+  it('cancels an acknowledged insert when its owner changes before deferred dispatch', async () => {
+    const seen: string[] = []
+    let current = true
+
+    mountInsert('tile:sess-a', seen)
+
+    const pending = requestComposerInsertAcked('old goal', {
+      stillCurrent: () => current,
+      target: 'tile:sess-a'
+    })
+
+    current = false
+
+    expect(await pending).toBe(false)
+    expect(seen).toEqual([])
+  })
+
   it('resolves false for blank text without dispatching', async () => {
     const seen: string[] = []
 

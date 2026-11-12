@@ -888,8 +888,6 @@ def _resume_reuse_live_locked(ctx: _Resume, sid: str, session: dict) -> dict:
     if (refusal := _reattach_refusal(ctx.rid, sid, session)) is not None:
         return refusal
     _cancel_ws_orphan_reap(sid)  # unconditionally: the fast path must never race the reap Timer
-    from .session_cloud_sync import refresh_cloud_history
-    refresh_cloud_history(session, ctx.db, ctx.target, canonicalize_replay_history)
     payload = _live_session_payload(sid, session, cols=ctx.cols, touch=True, omit_messages=ctx.omit_messages,
                                     transport=current_transport() or _stdio_transport,
                                     inline_images=ctx.inline_images)

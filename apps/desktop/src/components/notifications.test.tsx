@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { $notifications, notify, resetNotifications } from '@/store/notifications'
@@ -13,6 +13,30 @@ afterEach(() => {
 })
 
 describe('flow-owned notifications', () => {
+  it('opens auxiliary-window notifications outside the workspace while keeping its draft active', () => {
+    render(
+      <main aria-label="Browser workspace">
+        <NotificationStack>
+          <textarea aria-label="Workspace draft" defaultValue="Keep editing" />
+        </NotificationStack>
+      </main>
+    )
+    const workspace = screen.getByRole('main', { name: 'Browser workspace' })
+    const draft = screen.getByRole('textbox', { name: 'Workspace draft' })
+
+    act(() => {
+      notify({ message: 'Saved successfully', durationMs: 0 })
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Notifications and status/ }))
+    const card = screen.getByRole('dialog', { name: 'Notifications and status' })
+
+    expect(workspace.contains(card)).toBe(false)
+    expect(draft.closest('[inert], [aria-hidden="true"]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('textbox', { name: 'Workspace draft' })).toBe(draft)
+    expect((draft as HTMLTextAreaElement).value).toBe('Keep editing')
+  })
+
   it('shows notices only in the foreground frame without remounting its workspace', () => {
     notify({ id: 'frame', message: 'A shared reminder', durationMs: 0 })
 
@@ -32,7 +56,7 @@ describe('flow-owned notifications', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Details' }))
     rerender(view(false))
-    expect(screen.getAllByRole('button', { name: 'Notifications and status' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^Notifications and status/ })).toHaveLength(1)
     expect(screen.getAllByRole('status')).toHaveLength(1)
     expect(screen.getByRole('textbox', { name: 'Workspace draft' })).toBe(draft)
     expect((draft as HTMLTextAreaElement).value).toBe('Keep this draft')
@@ -63,7 +87,7 @@ describe('flow-owned notifications', () => {
       </NotificationStack>
     )
     expect(screen.getAllByRole('status')).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications and status' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Notifications and status/ }))
     expect(screen.getByRole('button', { name: 'Notice 0' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Notice 6' })).toBeTruthy()
     expect((screen.getByRole('textbox', { name: 'Draft' }) as HTMLTextAreaElement).value).toBe('Keep my draft')
@@ -103,7 +127,7 @@ describe('flow-owned notifications', () => {
     render(<NotificationStack />)
     fireEvent.click(screen.getByRole('button', { name: 'Details' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Still offline'))
+    await waitFor(() => expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe('Still offline'))
     expect(screen.getByRole('button', { name: 'Reconnect' }).hasAttribute('disabled')).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
     await waitFor(() => expect($notifications.get()).toHaveLength(0))

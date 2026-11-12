@@ -3,6 +3,8 @@ import type { RefObject } from 'react'
 
 import type { HermesTerminalSession } from '@/global'
 import { translateNow } from '@/i18n'
+import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { terminalSourceCopy } from '@/i18n/terminal-source'
 import { hostHas } from '@/lib/host-capabilities'
 
 import { defaultTerminalGateway, runsOverSsh, terminalGatewayOf } from './terminal-gateway'
@@ -168,8 +170,7 @@ export function createSessionAttemptController(
 
     if (!terminalGatewayOf(tab) && !terminalSourceIsCurrent(id)) {
       restoreHistory()
-      setStatus('closed')
-      term.write(`${translateNow('rightSidebar.terminalStartFailed', translateNow('summary.state.unavailable'))}\r\n`)
+      armRetry(terminalSourceCopy(getRuntimeI18nLocale()).sourceChanged)
 
       return
     }

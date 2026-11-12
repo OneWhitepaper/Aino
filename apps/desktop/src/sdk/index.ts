@@ -24,7 +24,7 @@ import type { ReactNode } from 'react'
 import { ambientOwnerConnectionId, capabilityScoped, getApiRequestConnection } from '@/api/client'
 import { mutateSessionFenced } from '@/api/sessions'
 import { type OpenSessionIntent, revealSessionWorkspace } from '@/app/open-session'
-import { syncWorkspaceRoute } from '@/app/routes'
+import { $workspaceIsPage, syncWorkspaceRoute } from '@/app/routes'
 import {
   $newSessionTabAction,
   $paneVisible,
@@ -112,7 +112,11 @@ import { i18nHost } from './i18n'
 import { restoreEmptyBotModelDefault } from './plugin-empty-bot-model'
 import { planPluginOpenSession } from './plugin-open-session-plan'
 import { requestPluginActiveGateway } from './plugin-session-create'
-import { navigatePluginSession, refreshPluginSessionAfterOpen, refreshVisiblePluginSession } from './plugin-session-navigation'
+import {
+  navigatePluginSession,
+  refreshPluginSessionAfterOpen,
+  refreshVisiblePluginSession
+} from './plugin-session-navigation'
 import { dropLeftoverProfilePrefs, warmProfile } from './profile-local'
 import {
   type PluginProfileRequestOptions,
@@ -543,6 +547,12 @@ async function awaitProfileActivation(
 
 export const host = {
   state: {
+    /** Current conversation workspace; changes do not switch the API owner. */
+    workspaceMode: readonlyAtom<WorkspaceMode>($workspaceMode),
+    /** A full page currently covers the retained conversation panes. */
+    workspaceIsPage: readonlyAtom<boolean>($workspaceIsPage),
+    /** Exact presentation owner selected by explicit workspace navigation. */
+    workspaceOwnerKey: readonlyAtom<null | string>($workspaceOwnerKey),
     /** Runtime id of the active chat session (null on a fresh draft). */
     activeSessionId: readonlyAtom<null | string>($activeSessionId),
     /** True from send until the first assistant payload on the focused chat. */

@@ -41,27 +41,17 @@ interface RosterContentProps {
   renderHiddenGatewaySection: ReturnType<typeof rosterSectionRenderers>['renderHiddenGatewaySection']
 }
 
-export function renderRosterContent({
+function renderRosterCategories({
   b,
-  staleNotice,
-  isLoading,
-  initialRosterLoading,
-  listedCount,
-  error,
-  gatewayUp,
-  refetch,
-  allBotsHidden,
-  hiddenExpanded,
   rosterRows,
-  matchingHiddenBots,
-  query,
-  selectedGateway,
   showGatewaySections,
   sortedGroupRows,
   gatewaySections,
   showHiddenSection,
   hiddenSectionRef,
   hasRosterConstraint,
+  matchingHiddenBots,
+  hiddenExpanded,
   hiddenBots,
   showHiddenRows,
   hiddenGatewaySections,
@@ -70,7 +60,99 @@ export function renderRosterContent({
   renderGatewaySection,
   renderUserSections,
   renderHiddenGatewaySection
-}: RosterContentProps) {
+}: Pick<
+  RosterContentProps,
+  | 'b'
+  | 'rosterRows'
+  | 'showGatewaySections'
+  | 'sortedGroupRows'
+  | 'gatewaySections'
+  | 'showHiddenSection'
+  | 'hiddenSectionRef'
+  | 'hasRosterConstraint'
+  | 'matchingHiddenBots'
+  | 'hiddenExpanded'
+  | 'hiddenBots'
+  | 'showHiddenRows'
+  | 'hiddenGatewaySections'
+  | 'renderBotRow'
+  | 'renderGroupChatSection'
+  | 'renderGatewaySection'
+  | 'renderUserSections'
+  | 'renderHiddenGatewaySection'
+>) {
+  const botRows = rosterRows.filter(row => row.kind === 'bot')
+
+  return (
+    <div className="aino-roster-content" data-slot="bots-roster">
+      <div className="aino-roster-categories">
+        {botRows.length ? (
+          <section aria-label={b.canonical.botsHeading} className="aino-roster-rows">
+            {showGatewaySections ? gatewaySections.sections.map(renderGatewaySection) : renderUserSections(botRows)}
+          </section>
+        ) : null}
+        {sortedGroupRows.length ? renderGroupChatSection() : null}
+        {showHiddenSection ? (
+          <div
+            className="mt-1 border-t border-(--ui-stroke-tertiary) pt-1"
+            key={'hidden-section'}
+            ref={hiddenSectionRef}
+          >
+            {hasRosterConstraint ? (
+              <div className="flex w-full items-center gap-1 px-2 py-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
+                <Codicon name="eye-closed" />
+                <span>{b.roster.hidden}</span>
+                <span className="text-(--ui-text-quaternary)">{matchingHiddenBots.length}</span>
+              </div>
+            ) : (
+              <RowButton
+                aria-expanded={hiddenExpanded}
+                className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
+                onClick={() => $showHiddenBots.set(!hiddenExpanded)}
+              >
+                <DisclosureCaret open={hiddenExpanded} />
+                <span>{b.roster.hidden}</span>
+                <span className="text-(--ui-text-quaternary)">{hiddenBots.length}</span>
+              </RowButton>
+            )}
+            {showHiddenRows ? (
+              matchingHiddenBots.length ? (
+                hiddenGatewaySections.sectioned ? (
+                  hiddenGatewaySections.sections.map(renderHiddenGatewaySection)
+                ) : (
+                  matchingHiddenBots.map((bot: RosterRow) => renderBotRow(bot, 'hidden:'))
+                )
+              ) : (
+                <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                  {b.roster.noHiddenMatch}
+                </div>
+              )
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function renderRosterContent(props: RosterContentProps) {
+  const {
+    b,
+    staleNotice,
+    isLoading,
+    initialRosterLoading,
+    listedCount,
+    error,
+    gatewayUp,
+    refetch,
+    allBotsHidden,
+    hiddenExpanded,
+    rosterRows,
+    matchingHiddenBots,
+    query,
+    selectedGateway
+  } = props
+
   return (
     <>
       {staleNotice ? (
@@ -127,54 +209,7 @@ export function renderRosterContent({
           />
         </div>
       ) : (
-        <div className="aino-roster-content" data-slot="bots-roster">
-          <div className="aino-roster-rows">
-            {showGatewaySections
-              ? [
-                  sortedGroupRows.length ? renderGroupChatSection() : null,
-                  ...gatewaySections.sections.map(renderGatewaySection)
-                ].filter(Boolean)
-              : renderUserSections(rosterRows)}
-            {showHiddenSection ? (
-              <div
-                className="mt-1 border-t border-(--ui-stroke-tertiary) pt-1"
-                key={'hidden-section'}
-                ref={hiddenSectionRef}
-              >
-                {hasRosterConstraint ? (
-                  <div className="flex w-full items-center gap-1 px-2 py-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
-                    <Codicon name="eye-closed" />
-                    <span>{b.roster.hidden}</span>
-                    <span className="text-(--ui-text-quaternary)">{matchingHiddenBots.length}</span>
-                  </div>
-                ) : (
-                  <RowButton
-                    aria-expanded={hiddenExpanded}
-                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
-                    onClick={() => $showHiddenBots.set(!hiddenExpanded)}
-                  >
-                    <DisclosureCaret open={hiddenExpanded} />
-                    <span>{b.roster.hidden}</span>
-                    <span className="text-(--ui-text-quaternary)">{hiddenBots.length}</span>
-                  </RowButton>
-                )}
-                {showHiddenRows ? (
-                  matchingHiddenBots.length ? (
-                    hiddenGatewaySections.sectioned ? (
-                      hiddenGatewaySections.sections.map(renderHiddenGatewaySection)
-                    ) : (
-                      matchingHiddenBots.map((bot: RosterRow) => renderBotRow(bot, 'hidden:'))
-                    )
-                  ) : (
-                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                      {b.roster.noHiddenMatch}
-                    </div>
-                  )
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
+        renderRosterCategories(props)
       )}
     </>
   )

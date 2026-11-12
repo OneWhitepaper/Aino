@@ -16,6 +16,10 @@ export type BotsMessages = {
     gatewayDefault: string
     modelNameExample: string
     modelSwitchFailed: string
+    draftResetTitle: string
+    draftResetDescription: string
+    draftResetAction: string
+    draftResetStale: string
     newDescription: string
     name: string
     title: string

@@ -9,6 +9,7 @@ gateway's blocking-prompt bridge (as `clarify` does): tui_gateway emits
 
 from typing import Callable, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.desktop_ui import passthrough_json
 from tools.registry import registry, tool_error
 
@@ -39,7 +40,7 @@ def read_terminal_tool(
 ) -> str:
     """Return the in-app terminal's contents (+ line metadata) as a JSON string."""
     return read_pane(callback, (("start", start_line, 0), ("count", count, 1)), (
-        "read_terminal is only available in the Hermes desktop app.",
+        f"read_terminal is only available in the {PRODUCT_NAME} desktop app.",
         "start_line and count must be integers.",
         "Failed to read terminal: ",
         "No in-app terminal answered: nothing is open, or the bridge timed out. "

@@ -60,6 +60,8 @@ export type ChatMessage = {
    *  Drives the error card's layer label + actions; absent on older
    *  backends, where the card falls back to generic copy. */
   errorSurface?: ErrorSurface
+  /** Presentation acknowledgement; preserves the failed turn and its original diagnostics. */
+  errorResolved?: 'model_changed' | 'reply_received'
   branchGroupId?: string
   hidden?: boolean
   /** Sealed mid-turn commentary (`message.interim`) — rendered without the

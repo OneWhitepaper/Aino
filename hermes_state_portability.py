@@ -712,8 +712,7 @@ class SessionPortabilityMixin:
             raise ValueError("messages exceeds the total import limit")
         return item
 
-    def _import_session_row(self, conn, raw: dict[str, Any], messages: list[dict[str, Any]], session_id: str,
-                            *, replace_existing: bool = False) -> None:
+    def _import_session_row(self, conn, raw: dict[str, Any], messages: list[dict[str, Any]], session_id: str) -> None:
         """INSERT one normalized session + its messages; counts fixed up after."""
         started_at = coerce_epoch(raw.get("started_at"), session_id=session_id, field="started_at")
         params = {
@@ -726,11 +725,7 @@ class SessionPortabilityMixin:
             **{col: self._import_int_or_bounded(raw.get(col), col, 0) for col in _IMPORT_INT_COLS},
         }
         params["auto_archived"] &= params["archived"]  # only the sweep sets it, and only on rows it archives
-        sql = _IMPORT_SESSION_INSERT_SQL
-        if replace_existing:
-            from hermes_state_cloud_sync import replacement_import_sql
-            sql = replacement_import_sql(sql, params)
-        conn.execute(sql, params)
+        conn.execute(_IMPORT_SESSION_INSERT_SQL, params)
         def _json_value(value: Any) -> Any:
             return safe_json_loads(value, default=value) if isinstance(value, str) else value
         sanitized_messages = [

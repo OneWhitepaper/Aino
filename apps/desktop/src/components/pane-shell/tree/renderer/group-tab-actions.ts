@@ -1,3 +1,4 @@
+import { revealSessionWorkspace } from '@/app/open-session'
 import { openToolPanelChooser } from '@/app/right-sidebar/tool-panel-actions'
 import type { Contribution } from '@/contrib/types'
 import type { Translations } from '@/i18n'
@@ -8,6 +9,15 @@ import { clearTabSelection } from '../tab-selection'
 import { isConversationPane } from '../workspace-presentation'
 
 import { paneChrome } from './track-model'
+
+/** Selecting a conversation mode leaves full pages; passive visibility never does. */
+export function revealSidebarModeWorkspace(pane: Contribution | undefined): void {
+  if (paneChrome(pane).sidebarMode) {
+    revealSessionWorkspace(to => {
+      window.location.hash = `#${to}`
+    })
+  }
+}
 
 interface GroupTabPolicyInput {
   node: GroupNode
@@ -64,6 +74,7 @@ export function groupTabActions({
 
   const activatePane = (paneId: string) => {
     clearTabSelection()
+    revealSidebarModeWorkspace(paneFor(paneId))
 
     if (node.minimized || isCollapsePane(paneId)) {
       restoreTreePane(paneId)

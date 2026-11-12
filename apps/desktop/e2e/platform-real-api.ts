@@ -12,7 +12,8 @@ import { nativeBindingObserverBootstrap } from './platform-account-window'
 import { prepareNativeProtocolOverlay } from './platform-native-protocol-overlay'
 import { installErrorBannerGuard } from './test'
 
-export const KNOWN_BLOCKED_THEME_FONT_URL = 'https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap'
+export const KNOWN_BLOCKED_THEME_FONT_URL =
+  'https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap'
 
 export interface ChromiumRequestShape {
   url: string
@@ -30,11 +31,13 @@ export interface NativeTransportAudit {
 }
 
 export function isExpectedBlockedThemeFontRequest(request: ChromiumRequestShape): boolean {
-  return request.url === KNOWN_BLOCKED_THEME_FONT_URL
-    && request.method === 'GET'
-    && request.resourceType === 'stylesheet'
-    && !request.hasUploadData
-    && !request.hasAuthorization
+  return (
+    request.url === KNOWN_BLOCKED_THEME_FONT_URL &&
+    request.method === 'GET' &&
+    request.resourceType === 'stylesheet' &&
+    !request.hasUploadData &&
+    !request.hasAuthorization
+  )
 }
 
 interface DebuggerAuditTarget {
@@ -44,14 +47,23 @@ interface DebuggerAuditTarget {
 }
 
 /** A retired account detaches CDP immediately before webContents destruction. */
-export function observeDebuggerDetach(contents: DebuggerAuditTarget,
-  app: { once(event: 'before-quit', listener: () => void): unknown }, report: (error: string) => void): void {
+export function observeDebuggerDetach(
+  contents: DebuggerAuditTarget,
+  app: { once(event: 'before-quit', listener: () => void): unknown },
+  report: (error: string) => void
+): void {
   let tearingDown = false
-  contents.once('destroyed', () => { tearingDown = true })
-  app.once('before-quit', () => { tearingDown = true })
+  contents.once('destroyed', () => {
+    tearingDown = true
+  })
+  app.once('before-quit', () => {
+    tearingDown = true
+  })
   contents.debugger.on('detach', () => {
     setImmediate(() => {
-      if (!tearingDown && !contents.isDestroyed()) { report('unexpected-detach') }
+      if (!tearingDown && !contents.isDestroyed()) {
+        report('unexpected-detach')
+      }
     })
   })
 }
@@ -96,12 +108,32 @@ export interface NativeState {
 }
 
 export function fixtureEnvironment(): Record<string, string> {
-  const allowed = ['PATH', 'TMPDIR', 'DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'SHELL', 'USER', 'LOGNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT']
+  const allowed = [
+    'PATH',
+    'TMPDIR',
+    'DISPLAY',
+    'XAUTHORITY',
+    'XDG_RUNTIME_DIR',
+    'SHELL',
+    'USER',
+    'LOGNAME',
+    'DOCKER_HOST',
+    'DOCKER_CONTEXT'
+  ]
 
-  const env: Record<string, string> = { LANG: 'en_US.UTF-8', TZ: 'UTC', AWS_EC2_METADATA_DISABLED: 'true',
-    AWS_METADATA_SERVICE_TIMEOUT: '1', AWS_METADATA_SERVICE_NUM_ATTEMPTS: '1' }
+  const env: Record<string, string> = {
+    LANG: 'en_US.UTF-8',
+    TZ: 'UTC',
+    AWS_EC2_METADATA_DISABLED: 'true',
+    AWS_METADATA_SERVICE_TIMEOUT: '1',
+    AWS_METADATA_SERVICE_NUM_ATTEMPTS: '1'
+  }
 
-  for (const key of allowed) { if (process.env[key]) { env[key] = process.env[key]! } }
+  for (const key of allowed) {
+    if (process.env[key]) {
+      env[key] = process.env[key]!
+    }
+  }
 
   return env
 }
@@ -111,7 +143,9 @@ export function installLoopbackPythonGuard(root: string): string {
   fs.mkdirSync(directory, { mode: 0o700 })
   // Loaded by the actual isolated Python interpreter; it changes transport
   // reachability only, never model/tool/auth/account behavior.
-  fs.writeFileSync(path.join(directory, 'sitecustomize.py'), `import ipaddress, os, socket, subprocess
+  fs.writeFileSync(
+    path.join(directory, 'sitecustomize.py'),
+    `import ipaddress, os, socket, subprocess
 with open(os.path.join(os.environ['HERMES_HOME'], 'python-network-guard-active'), 'a') as f:
     f.write(str(os.getpid()) + '\\n')
 _connect = socket.socket.connect
@@ -147,7 +181,9 @@ socket.socket.connect = _guard_connect
 socket.socket.connect_ex = _guard_connect_ex
 socket.getaddrinfo = _guard_resolve
 subprocess.Popen.__init__ = _guard_popen
-`, { mode: 0o600 })
+`,
+    { mode: 0o600 }
+  )
 
   return directory
 }
@@ -159,7 +195,9 @@ export function guardedPlatformPython(root: string, guardPath: string, python: s
   const bootstrap = path.join(root, 'guarded-platform-python.py')
   const launcher = path.join(root, 'guarded-platform-python')
   const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`
-  fs.writeFileSync(bootstrap, `import runpy, sys
+  fs.writeFileSync(
+    bootstrap,
+    `import runpy, sys
 sys.path.insert(0, ${JSON.stringify(guardPath)})
 import sitecustomize
 sys.executable = ${JSON.stringify(launcher)}
@@ -168,7 +206,9 @@ if args[:1] != ['-m'] or len(args) < 2:
     raise SystemExit('fixture launcher expects a Python module')
 sys.argv = [args[1], *args[2:]]
 runpy.run_module(args[1], run_name='__main__', alter_sys=True)
-`, { mode: 0o600 })
+`,
+    { mode: 0o600 }
+  )
   fs.writeFileSync(launcher, `#!/bin/sh\nexec ${quote(python)} ${quote(bootstrap)} "$@"\n`, { mode: 0o700 })
 
   return launcher
@@ -176,7 +216,9 @@ runpy.run_module(args[1], run_name='__main__', alter_sys=True)
 
 export function installLoopbackNodeGuard(root: string): string {
   const guard = path.join(root, 'node-network-guard.cjs')
-  fs.writeFileSync(guard, `const fs = require('node:fs');
+  fs.writeFileSync(
+    guard,
+    `const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
 const home = process.env.HERMES_HOME;
@@ -202,7 +244,9 @@ if (globalThis.fetch) {
     return fetch.call(this, input, ...rest);
   };
 }
-`, { mode: 0o600 })
+`,
+    { mode: 0o600 }
+  )
 
   return guard
 }
@@ -213,7 +257,9 @@ export async function launchGuardedDesktop(env: Record<string, string>, guardPat
   const mainURL = pathToFileURL(path.join(desktopRoot, 'dist', 'electron-main.mjs')).href
   // Electron deliberately ignores NODE_OPTIONS --require. The fixture entry
   // installs transport policy before importing the unchanged real main bundle.
-  fs.writeFileSync(entry, `require(${JSON.stringify(guardPath)});
+  fs.writeFileSync(
+    entry,
+    `require(${JSON.stringify(guardPath)});
 ${accountTemplateBootstrap(env)}
 ${nativeBindingObserverBootstrap()}
 const { app, session } = require('electron');
@@ -286,23 +332,56 @@ app.whenReady().then(() => {
 });
 app.setAppPath(${JSON.stringify(desktopRoot)});
 import(${JSON.stringify(mainURL)});
-`, { mode: 0o600 })
+`,
+    { mode: 0o600 }
+  )
   // Fixture credentials must never create items or prompt in the host's macOS keychain.
-  const app = await _electron.launch({ executablePath: findElectron(), args: [entry, '--disable-gpu', '--no-sandbox', '--use-mock-keychain'], env, cwd: desktopRoot })
-  const transportAudit: NativeTransportAudit = { mainPid: app.process().pid!, unexpectedRendererDestinations: [], knownBlockedThemeFontHosts: [], pending: [] }
+  const app = await _electron.launch({
+    executablePath: findElectron(),
+    args: [entry, '--disable-gpu', '--no-sandbox', '--use-mock-keychain'],
+    env,
+    cwd: desktopRoot
+  })
+  const transportAudit: NativeTransportAudit = {
+    mainPid: app.process().pid!,
+    unexpectedRendererDestinations: [],
+    knownBlockedThemeFontHosts: [],
+    pending: []
+  }
 
   // Cancellation stays at onBeforeRequest. Independently verify request headers;
   // the audit rejects any candidate not observed here, including startup races.
   app.context().on('request', request => {
     const url = new URL(request.url())
 
-    if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) { return }
-    transportAudit.pending.push(request.allHeaders().then(headers => {
-      const shape = { url: url.href, method: request.method(), resourceType: request.resourceType(), hasUploadData: request.postDataBuffer() !== null, hasAuthorization: Object.keys(headers).some(name => name.toLowerCase() === 'authorization') }
+    if (
+      !['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) ||
+      ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+    ) {
+      return
+    }
+    transportAudit.pending.push(
+      request
+        .allHeaders()
+        .then(headers => {
+          const shape = {
+            url: url.href,
+            method: request.method(),
+            resourceType: request.resourceType(),
+            hasUploadData: request.postDataBuffer() !== null,
+            hasAuthorization: Object.keys(headers).some(name => name.toLowerCase() === 'authorization')
+          }
 
-      if (isExpectedBlockedThemeFontRequest(shape)) { transportAudit.knownBlockedThemeFontHosts.push(url.hostname) }
-      else { transportAudit.unexpectedRendererDestinations.push(url.hostname) }
-    }).catch(() => { transportAudit.unexpectedRendererDestinations.push(url.hostname) }))
+          if (isExpectedBlockedThemeFontRequest(shape)) {
+            transportAudit.knownBlockedThemeFontHosts.push(url.hostname)
+          } else {
+            transportAudit.unexpectedRendererDestinations.push(url.hostname)
+          }
+        })
+        .catch(() => {
+          transportAudit.unexpectedRendererDestinations.push(url.hostname)
+        })
+    )
   })
   const page = await app.firstWindow()
   installErrorBannerGuard(page)
@@ -316,8 +395,11 @@ export function persistedFixtureText(directory: string): string[] {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const filename = path.join(directory, entry.name)
 
-    if (entry.isDirectory()) { values.push(...persistedFixtureText(filename)) }
-    else if (entry.isFile()) { values.push(fs.readFileSync(filename).toString('utf8')) }
+    if (entry.isDirectory()) {
+      values.push(...persistedFixtureText(filename))
+    } else if (entry.isFile()) {
+      values.push(fs.readFileSync(filename).toString('utf8'))
+    }
   }
 
   return values
@@ -334,8 +416,13 @@ export async function auditFixtureText(
   let checkedCredentials = 0
 
   async function flush() {
-    if (entries.length === 0) { return }
-    const result = await api.control<{ leaked: boolean; checked_credentials: number }>('audit', `[${entries.join(',')}]`)
+    if (entries.length === 0) {
+      return
+    }
+    const result = await api.control<{ leaked: boolean; checked_credentials: number }>(
+      'audit',
+      `[${entries.join(',')}]`
+    )
 
     if (result.leaked !== false || !Number.isInteger(result.checked_credentials) || result.checked_credentials < 1) {
       throw new Error('Fixture secret audit failed')
@@ -354,9 +441,13 @@ export async function auditFixtureText(
 
     // Preserve complete file contents: splitting could hide a credential at a
     // chunk boundary. The server independently enforces its 32 MiB body cap.
-    if (size + 2 > 32 * 1024 * 1024) { throw new Error(`Fixture audit file exceeds request limit (${size} bytes)`) }
+    if (size + 2 > 32 * 1024 * 1024) {
+      throw new Error(`Fixture audit file exceeds request limit (${size} bytes)`)
+    }
 
-    if (bytes + size + 1 > 8 * 1024 * 1024) { await flush() }
+    if (bytes + size + 1 > 8 * 1024 * 1024) {
+      await flush()
+    }
     entries.push(encoded)
     bytes += size + (entries.length > 1 ? 1 : 0)
   }
@@ -366,7 +457,10 @@ export async function auditFixtureText(
   return { leaked: false, checked_credentials: checkedCredentials, batches, audited_bytes: auditedBytes }
 }
 
-export async function startRealPlatformAPI(apiRoot: string) {
+export async function startRealPlatformAPI(
+  apiRoot: string,
+  options: { selectableWithoutDefault?: boolean; catalogWithDefault?: boolean } = {}
+) {
   apiRoot = process.env.AINO_NATIVE_API_ROOT || apiRoot
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-native-api-'))
   fs.chmodSync(dir, 0o700)
@@ -375,23 +469,46 @@ export async function startRealPlatformAPI(apiRoot: string) {
   const logPath = path.join(dir, 'api.log')
   const runtimeArgs = ['-test.run', '^TestAinoNativeConsumer$', '-test.count=1', '-test.timeout=9m', '-test.v']
   const apiSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: apiRoot, encoding: 'utf8' }).trim()
-  fs.writeFileSync(path.join(dir, 'api-source-status.txt'), execFileSync('git', ['status', '--short'], { cwd: apiRoot }), { mode: 0o600 })
-  fs.writeFileSync(path.join(dir, 'api-source-working.diff'), execFileSync('git', ['diff'], { cwd: apiRoot }), { mode: 0o600 })
+  fs.writeFileSync(
+    path.join(dir, 'api-source-status.txt'),
+    execFileSync('git', ['status', '--short'], { cwd: apiRoot }),
+    { mode: 0o600 }
+  )
+  fs.writeFileSync(path.join(dir, 'api-source-working.diff'), execFileSync('git', ['diff'], { cwd: apiRoot }), {
+    mode: 0o600
+  })
   fs.writeFileSync(path.join(dir, 'api-source-head.txt'), `${apiSha}\n`, { mode: 0o600 })
-  const protocolOverlay = prepareNativeProtocolOverlay(apiRoot, dir, apiSha)
-  const compileArgs = ['test', '-overlay', protocolOverlay.overlay_path, '-c', '-tags', 'integration,nativeconsumer', '-o', binaryPath, './internal/repository']
+  const protocolOverlay = prepareNativeProtocolOverlay(apiRoot, dir, apiSha, options)
+  const compileArgs = [
+    'test',
+    '-overlay',
+    protocolOverlay.overlay_path,
+    '-c',
+    '-tags',
+    'integration,nativeconsumer',
+    '-o',
+    binaryPath,
+    './internal/repository'
+  ]
   fs.mkdirSync(runtimeHome, { mode: 0o700 })
 
   // Compilation may use the existing Go caches, but the service itself gets no
   // host HOME. Resolve the toolchain caches and Docker's non-secret endpoint
   // before launching the fixture with its isolated HOME.
-  const goEnvironment = JSON.parse(execFileSync('go', ['env', '-json', 'GOCACHE', 'GOPATH'], {
-    cwd: path.join(apiRoot, 'backend'), encoding: 'utf8'
-  })) as Record<'GOCACHE' | 'GOPATH', string>
+  const goEnvironment = JSON.parse(
+    execFileSync('go', ['env', '-json', 'GOCACHE', 'GOPATH'], {
+      cwd: path.join(apiRoot, 'backend'),
+      encoding: 'utf8'
+    })
+  ) as Record<'GOCACHE' | 'GOPATH', string>
 
-  const dockerHost = execFileSync('docker', ['context', 'inspect', '--format', '{{ .Endpoints.docker.Host }}'], { encoding: 'utf8' }).trim()
+  const dockerHost = execFileSync('docker', ['context', 'inspect', '--format', '{{ .Endpoints.docker.Host }}'], {
+    encoding: 'utf8'
+  }).trim()
 
-  if (!dockerHost.startsWith('unix://')) { throw new Error('Native fixture requires an explicit Unix Docker endpoint') }
+  if (!dockerHost.startsWith('unix://')) {
+    throw new Error('Native fixture requires an explicit Unix Docker endpoint')
+  }
 
   const toolingEnvironment = {
     ...fixtureEnvironment(),
@@ -410,8 +527,16 @@ export async function startRealPlatformAPI(apiRoot: string) {
     DOCKER_HOST: dockerHost
   }
 
-  fs.writeFileSync(path.join(dir, 'compile-command.txt'), `CI=true GOCACHE=<toolchain cache> GOPATH=<toolchain cache> go ${compileArgs.join(' ')}\n`, { mode: 0o600 })
-  fs.writeFileSync(path.join(dir, 'command.txt'), `CI=true HOME=<private fixture home> AINO_NATIVE_FIXTURE_DIR=<private directory> ${path.basename(binaryPath)} ${runtimeArgs.join(' ')}\n`, { mode: 0o600 })
+  fs.writeFileSync(
+    path.join(dir, 'compile-command.txt'),
+    `CI=true GOCACHE=<toolchain cache> GOPATH=<toolchain cache> go ${compileArgs.join(' ')}\n`,
+    { mode: 0o600 }
+  )
+  fs.writeFileSync(
+    path.join(dir, 'command.txt'),
+    `CI=true HOME=<private fixture home> AINO_NATIVE_FIXTURE_DIR=<private directory> ${path.basename(binaryPath)} ${runtimeArgs.join(' ')}\n`,
+    { mode: 0o600 }
+  )
 
   const log = fs.openSync(logPath, 'wx', 0o600)
 
@@ -426,16 +551,24 @@ export async function startRealPlatformAPI(apiRoot: string) {
   }
 
   const binaryHash = execFileSync('shasum', ['-a', '256', binaryPath], { encoding: 'utf8' }).trim().split(/\s+/)[0]
-  fs.writeFileSync(path.join(dir, 'runtime-isolation.json'), JSON.stringify({
-    api_source_sha: apiSha,
-    fixture_protocol_overlay: protocolOverlay,
-    binary: binaryPath,
-    binary_sha256: binaryHash,
-    runtime_home: runtimeHome,
-    docker_host: dockerHost,
-    tooling_cache_scope: { gocache: toolingEnvironment.GOCACHE, gopath: toolingEnvironment.GOPATH },
-    runtime_environment: { HOME: runtimeHome, CI: 'true', AINO_NATIVE_FIXTURE_DIR: dir, DOCKER_HOST: dockerHost }
-  }, null, 2), { mode: 0o600 })
+  fs.writeFileSync(
+    path.join(dir, 'runtime-isolation.json'),
+    JSON.stringify(
+      {
+        api_source_sha: apiSha,
+        fixture_protocol_overlay: protocolOverlay,
+        binary: binaryPath,
+        binary_sha256: binaryHash,
+        runtime_home: runtimeHome,
+        docker_host: dockerHost,
+        tooling_cache_scope: { gocache: toolingEnvironment.GOCACHE, gopath: toolingEnvironment.GOPATH },
+        runtime_environment: { HOME: runtimeHome, CI: 'true', AINO_NATIVE_FIXTURE_DIR: dir, DOCKER_HOST: dockerHost }
+      },
+      null,
+      2
+    ),
+    { mode: 0o600 }
+  )
 
   const runtimeLog = fs.openSync(logPath, 'a', 0o600)
   let child: ChildProcess
@@ -459,12 +592,19 @@ export async function startRealPlatformAPI(apiRoot: string) {
   let manifest: NativeManifest | undefined
 
   async function awaitOwnedChildExit() {
-    if (exited !== undefined) { return }
+    if (exited !== undefined) {
+      return
+    }
 
     child.kill('SIGTERM')
-    const outcome = await Promise.race([done, new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 15_000))])
+    const outcome = await Promise.race([
+      done,
+      new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 15_000))
+    ])
 
-    if (outcome !== 'timeout') { return }
+    if (outcome !== 'timeout') {
+      return
+    }
 
     child.kill('SIGKILL')
     await Promise.race([done, new Promise(resolve => setTimeout(resolve, 15_000))])
@@ -474,7 +614,9 @@ export async function startRealPlatformAPI(apiRoot: string) {
     const deadline = Date.now() + 120_000
 
     while (Date.now() < deadline) {
-      if (exited !== undefined) { throw new Error(`API fixture exited (${exited}); private log ${logPath}`) }
+      if (exited !== undefined) {
+        throw new Error(`API fixture exited (${exited}); private log ${logPath}`)
+      }
       const manifestPath = path.join(dir, 'manifest.json')
 
       if (fs.existsSync(manifestPath)) {
@@ -486,7 +628,9 @@ export async function startRealPlatformAPI(apiRoot: string) {
       await new Promise(resolve => setTimeout(resolve, 200))
     }
 
-    if (!manifest) { throw new Error(`API fixture startup timed out; private log ${logPath}`) }
+    if (!manifest) {
+      throw new Error(`API fixture startup timed out; private log ${logPath}`)
+    }
     const address = new URL(manifest.origin)
 
     if (address.protocol !== 'http:' || address.hostname !== '127.0.0.1' || !address.port) {
@@ -507,27 +651,40 @@ export async function startRealPlatformAPI(apiRoot: string) {
       signal: AbortSignal.timeout(15_000)
     })
 
-    if (!response.ok) { throw new Error(`Fixture control ${endpoint}: HTTP ${response.status}`) }
+    if (!response.ok) {
+      throw new Error(`Fixture control ${endpoint}: HTTP ${response.status}`)
+    }
 
     return response.json() as Promise<T>
   }
 
   return {
-    info, dir, apiSha, logPath, control,
+    info,
+    dir,
+    apiSha,
+    logPath,
+    control,
     async close() {
       if (exited === undefined) {
         await control('complete', '').catch(() => undefined)
-        const code = await Promise.race([done, new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 15_000))])
+        const code = await Promise.race([
+          done,
+          new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 15_000))
+        ])
 
         if (code === 'timeout') {
           await awaitOwnedChildExit()
           throw new Error(`API fixture cleanup timed out; ${logPath}`)
         }
 
-        if (code !== 0) { throw new Error(`API fixture failed (${code}); ${logPath}`) }
+        if (code !== 0) {
+          throw new Error(`API fixture failed (${code}); ${logPath}`)
+        }
       }
 
-      if (exited !== 0) { throw new Error(`API fixture failed (${exited}); ${logPath}`) }
+      if (exited !== 0) {
+        throw new Error(`API fixture failed (${exited}); ${logPath}`)
+      }
     }
   }
 }

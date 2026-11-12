@@ -25,8 +25,10 @@ use ``build_editable``, which does NOT call ``bdist_wheel`` — it calls
 """
 
 import os
+from pathlib import Path
 
 from setuptools import setup
+from setuptools.command.build_py import build_py
 from setuptools.command.sdist import sdist
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +55,23 @@ class _GuardedSdist(sdist):
         return super().run(*args, **kwargs)
 
 
-cmdclass = {"sdist": _GuardedSdist}
+class _ProductBuildPy(build_py):
+    """Carry shared product copy and offline help into source-free runtimes."""
+
+    def run(self):
+        super().run()
+        root = Path(_ROOT)
+        data = Path(self.build_lib) / "hermes_cli" / "data"
+        data.mkdir(parents=True, exist_ok=True)
+        brand = root / "apps" / "desktop" / "brand.json"
+        if brand.is_file():
+            self.copy_file(str(brand), str(data / "brand.json"))
+        docs = root / "docs" / "aino"
+        if docs.is_dir():
+            self.copy_tree(str(docs), str(data / "aino-docs"))
+
+
+cmdclass = {"sdist": _GuardedSdist, "build_py": _ProductBuildPy}
 
 # bdist_wheel is only available when the `wheel` package is installed.
 # setuptools.build_meta.build_wheel() calls it internally, so the guard

@@ -56,6 +56,7 @@ import { warnIfTerminalBackendUnavailable } from '@/store/terminal-backend-warni
 import { deferred } from '../../../test/deferred'
 import { FakeWebSocket } from '../../../test/fake-gateway-socket'
 
+import { targetedGatewayReconnectCases } from './gateway-boot-targeted-reconnect-cases'
 import { coderConn, primaryConn, remotePrimaryConn } from './gateway-boot-test-connections'
 import { takeGatewaySurvivor } from './gateway-hmr-survivor'
 import { useGatewayBoot } from './use-gateway-boot'
@@ -83,9 +84,6 @@ vi.mock(import('@/store/terminal-backend-warning'), () => ({
 let connectionApplied: null | (() => void) = null
 let powerResume: null | (() => void) = null
 let backendExit: null | ((payload?: unknown) => void) = null
-
-
-
 
 function fakeDesktop() {
   let bootProgressHandler: ((payload: Record<string, unknown>) => void) | null = null
@@ -1832,6 +1830,8 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     expect($gatewayState.get()).toBe('open')
     release()
   })
+
+  targetedGatewayReconnectCases({ fakeDesktop, Harness, flushAsync })
 
   it('manual reconnect replaces only the active secondary route', async () => {
     ;(window as { hermesDesktop?: unknown }).hermesDesktop = {

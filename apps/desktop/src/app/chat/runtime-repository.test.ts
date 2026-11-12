@@ -25,6 +25,35 @@ const feedToRepository = (repository: ExportedRepository) => {
 type ExportedRepository = ReturnType<typeof useRuntimeMessageRepository>
 
 describe('useRuntimeMessageRepository', () => {
+  it('folds a recovered model failure after a successful reply without erasing its history', () => {
+    const failure: ChatMessage = {
+      ...text('model-failure', 'assistant', 'Partial answer before the failure'),
+      error: 'The model is unavailable',
+      errorSurface: { layer: 'provider', code: 'managed_model_access_denied', retryable: false }
+    }
+
+    const messages = [
+      text('u1', 'user', 'hello'),
+      failure,
+      text('u2', 'user', 'try again'),
+      text('reply', 'assistant', 'done')
+    ]
+
+    const { result } = renderHook(() => useRuntimeMessageRepository(messages))
+    const recovered = result.current.messages.find(item => item.message.id === failure.id)!.message
+
+    expect(recovered.metadata.custom?.errorResolved).toBe('reply_received')
+    expect(recovered.content).toEqual(failure.parts)
+    expect(failure.error).toBe('The model is unavailable')
+
+    // A cold renderer rebuilding the same stored failed turn must derive the
+    // recovery from the successful reply, rather than restoring the active card.
+    const { result: reloaded } = renderHook(() => useRuntimeMessageRepository(structuredClone(messages)))
+    expect(
+      reloaded.current.messages.find(item => item.message.id === failure.id)!.message.metadata.custom?.errorResolved
+    ).toBe('reply_received')
+  })
+
   it('emits each id once when the transcript repeats one', () => {
     const { result } = renderHook(() =>
       useRuntimeMessageRepository([

@@ -18,6 +18,11 @@ export const en: BotsMessages = {
     gatewayDefault: 'gateway default',
     modelNameExample: 'e.g. model name',
     modelSwitchFailed: 'Model switch failed',
+    draftResetTitle: 'Reset draft configuration?',
+    draftResetDescription:
+      'Changing the template or sharing options removes this draft and its configured skills, tools, and MCP connections. Your name, description, and staged model choice are kept.',
+    draftResetAction: 'Reset draft',
+    draftResetStale: 'The creation workspace changed. Reopen the dialog before resetting this draft.',
     newDescription: 'A named teammate with its own memory, skills, and chat. It can message your other agents.',
     name: 'Name',
     title: 'Title',
@@ -77,7 +82,7 @@ export const en: BotsMessages = {
   },
   roster: {
     modeDescription: 'Bots, group chats and collaboration',
-    title: 'Agent Hub',
+    title: 'Bot',
     search: 'Search bots and group chats',
     searchPlaceholder: 'Search bots and group chats…',
     newBotOrGroup: 'New bot or group chat',

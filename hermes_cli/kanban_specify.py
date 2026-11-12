@@ -12,6 +12,8 @@ back to "whole reply is the body" so a malformed reply never strands a task.
 
 from __future__ import annotations
 
+from hermes_cli.product_identity import AGENT_NAME
+
 import json
 import logging
 import os
@@ -29,17 +31,17 @@ HERMES_KANBAN_SPECIFY_MAX_TOKENS = max(1500, env_int("HERMES_KANBAN_SPECIFY_MAX_
 logger = logging.getLogger(__name__)
 
 
-_SYSTEM_PROMPT = """You are the Kanban triage specifier for the Hermes Agent board.
+_SYSTEM_PROMPT = f"""You are the Kanban triage specifier for the {AGENT_NAME} board.
 A user dropped a rough idea into the Triage column. Your job is to turn it
 into a concrete, actionable task spec that an autonomous worker can pick up
 and execute without further clarification.
 
 Output a single JSON object with exactly two keys:
 
-  {
+  {{
     "title": "<tightened task title, <= 80 chars, imperative voice>",
     "body":  "<multi-line spec, see structure below>"
-  }
+  }}
 
 The body MUST include these sections, each prefixed with a bold markdown
 heading, in this order:

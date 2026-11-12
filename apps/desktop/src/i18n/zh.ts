@@ -3,7 +3,6 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
@@ -323,7 +322,6 @@ export const zhOverrides = {
   appearancePage: appearancePage.zh,
   toolPanel: toolPanel['zh'],
   workspacePage: workspacePage.zh,
-  cloudSync: cloudSync['zh'],
   accountPage: accountPage['zh'],
   connectorOffer: {
     heading: '保留已连接的应用',
@@ -564,7 +562,12 @@ export const zhOverrides = {
   },
 
   notifications: {
-    actions: { restartHermes: '重启 Aino', openKeys: '打开工具与密钥', openGateways: '打开连接设置', openMaintenance: '查看整理选项' },
+    actions: {
+      restartHermes: '重启 Aino',
+      openKeys: '打开工具与密钥',
+      openGateways: '打开连接设置',
+      openMaintenance: '查看整理选项'
+    },
     sharedProfileWarning:
       '另一个 Hermes 安装实例正在使用此配置。两个实例共享此配置的设置和数据，因此更改可能发生冲突。你可以继续使用，也可以在更改前关闭另一个实例。',
     region: '通知',
@@ -2443,7 +2446,8 @@ export const zhOverrides = {
         }
       }
     },
-    account: { ...accountLogin.zh,
+    account: {
+      ...accountLogin.zh,
       browserSessionOnly: '此浏览器仅在当前标签页内保持登录，关闭或刷新后需要重新登录。',
       displayNameLabel: '昵称',
       editDisplayName: '修改昵称',
@@ -2582,10 +2586,9 @@ export const zhOverrides = {
       fullDescription: '删除应用、智能体及所有用户数据——配置、对话、定时任务、密钥和日志。',
       fullConsequence: name => `全部内容——聊天界面、${name} 智能体以及所有配置、对话、密钥和日志`,
       couldNotStart: '无法开始卸载。'
-    }
-  ,
-memoryLayers: zhMemoryLayers
-},
+    },
+    memoryLayers: zhMemoryLayers
+  },
 
   skillDeepLink: zhSkillDeepLink,
   skills: {
@@ -3328,11 +3331,10 @@ memoryLayers: zhMemoryLayers
 
     profileNameRequired: '需要工作区名称',
 
-    defaultProfileDeleteBlocked: '无法删除默认工作区。'
-  ,
-exportNeedsHost: name => `浏览器无法保存配置档案归档。请在 Hermes 主机上运行：hermes profile export ${name}`,
-notServedHere: '此处未提供'
-},
+    defaultProfileDeleteBlocked: '无法删除默认工作区。',
+    exportNeedsHost: name => `浏览器无法保存配置档案归档。请在 Hermes 主机上运行：hermes profile export ${name}`,
+    notServedHere: '此处未提供'
+  },
 
   modelAssignment: {
     saveFailed: 'Hermes 未保存该模型更改。',
@@ -5036,15 +5038,15 @@ notServedHere: '此处未提供'
   },
 
   rightSidebar: {
-    terminalReconnectSame: "终端连接已断开。按 Enter 重新连接到原来的 Shell。",
-    terminalExpired: "终端已过期或退出。按 Enter 创建新的 Shell。",
-    terminalSuperseded: "终端已在其他窗口中打开。按 Enter 将它切回此窗口。",
-    terminalDenied: "无权访问终端。请检查登录状态和配置分组，再按 Enter 重试。",
-    terminalCapacity: "终端数量已达上限。关闭其他终端后按 Enter 重试。",
-    terminalSignedOut: "Aino 登录已失效。请在此浏览器重新登录，再按 Enter 连接终端。",
-    terminalReconnecting: "终端连接已断开，正在重新连接到原来的 Shell…",
-    terminalStartRetry: (error: string) => "终端启动失败：" + error + "。按 Enter 重试。",
-    terminalCloseFailed: "无法关闭终端",
+    terminalReconnectSame: '终端连接已断开。按 Enter 重新连接到原来的 Shell。',
+    terminalExpired: '终端已过期或退出。按 Enter 创建新的 Shell。',
+    terminalSuperseded: '终端已在其他窗口中打开。按 Enter 将它切回此窗口。',
+    terminalDenied: '无权访问终端。请检查登录状态和配置分组，再按 Enter 重试。',
+    terminalCapacity: '终端数量已达上限。关闭其他终端后按 Enter 重试。',
+    terminalSignedOut: 'Aino 登录已失效。请在此浏览器重新登录，再按 Enter 连接终端。',
+    terminalReconnecting: '终端连接已断开，正在重新连接到原来的 Shell…',
+    terminalStartRetry: (error: string) => '终端启动失败：' + error + '。按 Enter 重试。',
+    terminalCloseFailed: '无法关闭终端',
     terminalDropUnquotable: (shell, paths) => `无法在 ${shell} 中安全地输入这些名称：${paths}`,
     terminalReadOnly: '只读输出',
     terminalReadOnlyHelp:
@@ -5095,17 +5097,13 @@ notServedHere: '此处未提供'
 
     unableToReadPlaceholder: error => `无法读取 (${error})`,
 
-    terminalStartFailed: error => `终端启动失败：${error}`
-  ,
-terminalNewOn: '新建终端于…',
-terminalGatewayRemoved: '已移除的网关',
-terminalGatewayRemovedBody:
-      '此终端所在的网关已被移除，无法重新打开。请关闭此标签页。',
-terminalGatewayNoShellBody:
-      '此网关不提供 Shell 访问，此终端无法重新打开。请关闭此标签页。',
-terminalDisconnectedBody:
-      '终端已断开。按 Enter 启动新的 shell；滚动记录会保留。'
-},
+    terminalStartFailed: error => `终端启动失败：${error}`,
+    terminalNewOn: '新建终端于…',
+    terminalGatewayRemoved: '已移除的网关',
+    terminalGatewayRemovedBody: '此终端所在的网关已被移除，无法重新打开。请关闭此标签页。',
+    terminalGatewayNoShellBody: '此网关不提供 Shell 访问，此终端无法重新打开。请关闭此标签页。',
+    terminalDisconnectedBody: '终端已断开。按 Enter 启动新的 shell；滚动记录会保留。'
+  },
 
   preview: {
     tab: '预览',
@@ -5295,10 +5293,9 @@ terminalDisconnectedBody:
       focus: '专注',
       terminalDeck: '终端布局',
       quad: '四宫格'
-    }
-  ,
-tabActions: title => `${title} 的操作`
-},
+    },
+    tabActions: title => `${title} 的操作`
+  },
 
   contextMenu: {
     link: {
@@ -5948,12 +5945,12 @@ tabActions: title => `${title} 的操作`
   },
 
   desktop: {
-    localRuntimeUnavailableTitle: "本地运行环境不可用",
-    localRuntimeUnavailableDesktop: "请在设置 → 模型服务 → 本地模型中完成运行环境配置。",
-    localRuntimeUnavailableWebapp: "请在 Aino 桌面端配置本地模型，或在此浏览器选择托管模型。",
-    openLocalModels: "打开本地模型",
-    serviceAuthorizationTitle: "服务授权",
-    serviceAuthorizationDescription: "使用第三方服务自己的账户登录。此授权独立于你的 Aino 账户。",
+    localRuntimeUnavailableTitle: '本地运行环境不可用',
+    localRuntimeUnavailableDesktop: '请在设置 → 模型服务 → 本地模型中完成运行环境配置。',
+    localRuntimeUnavailableWebapp: '请在 Aino 桌面端配置本地模型，或在此浏览器选择托管模型。',
+    openLocalModels: '打开本地模型',
+    serviceAuthorizationTitle: '服务授权',
+    serviceAuthorizationDescription: '使用第三方服务自己的账户登录。此授权独立于你的 Aino 账户。',
     audioReadFailed: '无法读取录制的音频',
     sessionUnavailable: '会话不可用',
     createSessionFailed: '无法创建新会话',
@@ -6825,17 +6822,16 @@ tabActions: title => `${title} 的操作`
     vision: '图片',
     reasoning: '推理',
     defaultModel: '新会话默认模型',
-    historyReadOnly: (owner: string) =>
-      `此会话属于原 Aino 账户 ${owner}。可以查看本地历史，但不能使用当前账户继续发送。`,
+    historyReadOnly: (_owner: string) => '这是其他账户的历史会话，目前仅可查看。',
     newChatCurrentAccount: '使用当前账户新建会话',
     followCustom: '使用自定义模型默认配置',
     defaultTag: '默认',
     not_authenticated: '请先登录 Aino 再使用此模型',
     platform_account_changed: '此模型属于其他账户。请登录原账户或重新选择模型。',
-    permanent: "不限期",
-    reauthorize: "重新授权此设备",
-    reauthorizeDescription: "替换此设备的模型授权。如账户管理登录已过期，请先重新登录。",
-    deviceRevoked: "此设备的模型访问已被撤销，请在模型设置中重新授权。",
+    permanent: '不限期',
+    reauthorize: '重新授权此设备',
+    reauthorizeDescription: '替换此设备的模型授权。如账户管理登录已过期，请先重新登录。',
+    deviceRevoked: '此设备的模型访问已被撤销，请在模型设置中重新授权。',
     bindingFailed: '模型授权失败，消息尚未发送。请重新选择模型后重试。',
     unsupported: '此连接不支持 Aino 内置模型',
     rate: '账户倍率',

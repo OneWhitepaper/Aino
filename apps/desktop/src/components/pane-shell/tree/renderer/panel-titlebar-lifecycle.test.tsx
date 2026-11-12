@@ -207,7 +207,10 @@ describe('titlebar reservation lifecycle', () => {
     expect(reservation('left')).toBe('310px')
 
     fireEvent.click(screen.getByText('Settings'))
-    expect(globalThis.document.querySelector('[data-titlebar-cluster]')).toBeNull()
+    expect(globalThis.document.querySelector('[data-titlebar-cluster="left"]')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Notifications and status' }).closest('[data-titlebar-cluster="right"]')
+    ).not.toBeNull()
     expect(reservation('left')).toBe('310px')
 
     chipWidth = 90

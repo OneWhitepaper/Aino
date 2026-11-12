@@ -19,6 +19,21 @@ const latestBoundary = (...values: (number | undefined)[]) => {
 
 const normalizedTimelineText = (message: ChatMessage) => chatMessageText(message).replace(/\s+/g, ' ').trim()
 
+const sameErrorRecord = (stored: ChatMessage, local: ChatMessage): boolean =>
+  stored.rowId !== undefined && local.rowId !== undefined ? stored.rowId === local.rowId : stored.id === local.id
+
+function resolvedErrorMetadata(stored: ChatMessage, local: ChatMessage): Pick<ChatMessage, 'errorResolved'> {
+  if (
+    !local.errorResolved ||
+    !sameErrorRecord(stored, local) ||
+    (stored.errorSurface && stored.errorSurface.code !== local.errorSurface?.code)
+  ) {
+    return {}
+  }
+
+  return { errorResolved: local.errorResolved }
+}
+
 const assistantTimelineMatch = (stored: ChatMessage, local: ChatMessage) => {
   if (stored.id === local.id) {
     return true
@@ -242,6 +257,7 @@ function reconcileLocalAssistantTimeline(nextMessages: ChatMessage[], currentMes
       ...message,
       completedAt: latestBoundary(message.completedAt, local.completedAt, ...parts.map(part => part.completedAt)),
       turnMetrics: message.turnMetrics ?? local.turnMetrics,
+      ...resolvedErrorMetadata(message, local),
       durationS: message.durationS ?? local.durationS,
       parts,
       timestamp: earliestBoundary(message.timestamp, local.timestamp, ...parts.map(part => part.timestamp))
@@ -273,6 +289,7 @@ function mergeStoredAssistantErrors(nextMessages: ChatMessage[], currentMessages
       ...message,
       error: local.error,
       ...(local.errorSurface ? { errorSurface: local.errorSurface } : {}),
+      ...resolvedErrorMetadata(message, local),
       pending: false
     }
   })
@@ -498,6 +515,7 @@ function localAssistantErrorIdsToPreserve(
         ...mergedNextMessages[twinIndex],
         error: message.error,
         ...(message.errorSurface ? { errorSurface: message.errorSurface } : {}),
+        ...resolvedErrorMetadata(mergedNextMessages[twinIndex], message),
         pending: false
       }
 

@@ -3,16 +3,24 @@ import { useEffect } from 'react'
 
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { $backgroundRunningSessionIds } from '@/store/composer-status'
-import { $gateway, activeGatewayProfileKey, gatewayRouteState, isActivePrimary } from '@/store/gateway'
+import {
+  $gateway,
+  activeGatewayConnectionId,
+  activeGatewayProfileKey,
+  gatewayRouteState,
+  isActivePrimary
+} from '@/store/gateway'
 import { $primaryGatewayRoute } from '@/store/gateway-primary-route'
 import { $liveWorkRoster, rosterSourceHasWork, setLiveWorkRosterSource } from '@/store/live-work-roster'
 import { $gatewayState, ownerLookupSessionRows } from '@/store/session'
 import { $delegatingSessionIds } from '@/store/session-dot-state'
 import { ambientRequestFor } from '@/store/session-gone-latch'
 import { isSessionOwnerRoute, requestForSessionProfile, type SessionOwnerScope } from '@/store/session-request-router'
-import { knownOwnerForSession } from '@/store/session-states'
+import { knownOwnerForSession, type SessionTileWorkspaceScope } from '@/store/session-states'
 
 const POLL_MS = 10_000
+const ACTIVE_GROUP_POLL_MS = 2_000
+const GROUP_DISCOVERY_MS = 10_000
 // A closed socket whose last read showed work is re-dialed this often, not every tick.
 const COLD_BUSY_MS = 60_000
 // Window focus re-reads every source at most this often (alt-tab bursts).
@@ -28,6 +36,13 @@ interface RosterSource {
   covers: string[]
   open: boolean
   owner: SessionOwnerScope
+  sourceScopesBySession?: Record<string, SessionTileWorkspaceScope>
+}
+
+interface BotRosterSource {
+  covers: string[]
+  owner: SessionOwnerScope
+  scope?: SessionTileWorkspaceScope
 }
 
 const routeOf = (owner: SessionOwnerScope) =>
@@ -35,13 +50,33 @@ const routeOf = (owner: SessionOwnerScope) =>
     ? gatewayRouteState(owner.connectionId, owner.profile)
     : gatewayRouteState(null, String(owner ?? ''))
 
+const groupReadDue = (
+  groupOnly: boolean,
+  keys: ReadonlySet<string>,
+  key: string,
+  last: number | undefined,
+  now: number
+) => !groupOnly || (keys.has(key) && (last === undefined || now - last >= ACTIVE_GROUP_POLL_MS))
+
+/** A background delegate may outlive the short room turn that launched it. */
+const groupHasLiveWork = (connectionId: string, profile: string, roomId: string) =>
+  Object.values($liveWorkRoster.get()).some(
+    bucket =>
+      isSessionOwnerRoute(bucket.owner) &&
+      bucket.owner.connectionId === connectionId &&
+      Object.entries(bucket.sourcesBySession ?? {}).some(
+        ([sid, source]) =>
+          source.room_id === roomId && source.profile === profile && (bucket.sessions[sid]?.subagents ?? 0) > 0
+      )
+  )
+
 /** Every backend the sidebar shows rows for (recents, cron and messaging rows
  *  alike), keyed by the socket a read would ride, so one backend is asked once
  *  however many spellings its owner has (the launch profile used to be asked
  *  three times a tick). The ambient socket answers for the active profile; a row owned by another profile (or connection) is asked on
  *  the route its own session RPCs take, so each backend only reports
  *  conversations stored in that profile. */
-function rosterSources(): Map<string, RosterSource> {
+function rosterSources(bots: readonly BotRosterSource[] = []): Map<string, RosterSource> {
   // The ambient read carries no profile, so it shares a key only when it IS the
   // window primary answering for its own profile.
   const ambientKey = isActivePrimary() ? gatewayRouteState(null, activeGatewayProfileKey()).key : 'ambient'
@@ -63,6 +98,21 @@ function rosterSources(): Map<string, RosterSource> {
       source.covers.push(row.id)
     } else {
       sources.set(route.key, { covers: [row.id], open: route.open, owner })
+    }
+  }
+
+  // Bot Chat is intentionally hidden from recents. Its existing roster owns
+  // the route even after reload, before any conversation tile has attached.
+  for (const { owner, covers, scope } of bots) {
+    const route = routeOf(owner)
+    const sourceScopesBySession = scope ? Object.fromEntries(covers.map(id => [id, scope])) : undefined
+    const source = sources.get(route.key)
+
+    if (source) {
+      source.covers.push(...covers)
+      source.sourceScopesBySession = { ...source.sourceScopesBySession, ...sourceScopesBySession }
+    } else {
+      sources.set(route.key, { covers, open: route.open, owner, sourceScopesBySession })
     }
   }
 
@@ -96,6 +146,13 @@ export function useLiveWorkRoster() {
     }
 
     let cancelled = false
+    let botSources = (): BotRosterSource[] => []
+    let groupSources = (): BotRosterSource[] => []
+    const extraSources = () => [...botSources(), ...groupSources()]
+
+    let stopBotRoster = () => {}
+
+    let stopGroupLive = () => {}
     let lastHydrate = -Infinity
     let current = new Set<string>()
     const inFlight = new Set<string>()
@@ -107,20 +164,49 @@ export function useLiveWorkRoster() {
 
     const readSource = async (
       key: string,
-      { covers, owner }: RosterSource,
+      { covers, owner, sourceScopesBySession }: RosterSource,
       ambient: ReturnType<typeof ambientRequestFor>
     ) => {
       const at = Date.now()
+      const connectionId = activeGatewayConnectionId()
+
+      const observedOwner =
+        owner ?? (connectionId ? { connectionId, profile: activeGatewayProfileKey() } : activeGatewayProfileKey())
+
+      const stillOwnsSource = () =>
+        owner
+          ? JSON.stringify(rosterSources(extraSources()).get(key)?.owner) === JSON.stringify(owner)
+          : connectionId === activeGatewayConnectionId() &&
+            (isSessionOwnerRoute(observedOwner) ? observedOwner.profile : observedOwner) === activeGatewayProfileKey()
+
       sentAt.set(key, at)
       inFlight.add(key)
 
       try {
-        const result = await requestForSessionProfile<RosterResult>(owner, ambient, 'subagent.roster', {}, POLL_MS)
+        const profile = isSessionOwnerRoute(observedOwner)
+          ? (observedOwner.targetProfile ?? observedOwner.profile)
+          : String(observedOwner)
+
+        const result = await requestForSessionProfile<RosterResult>(
+          owner,
+          ambient,
+          'subagent.roster',
+          { profile },
+          POLL_MS
+        )
+
         backoff.delete(key)
 
         // A source whose rows left the sidebar mid-read stays pruned.
-        if (!cancelled && current.has(key)) {
-          setLiveWorkRosterSource(key, Array.isArray(result?.sessions) ? result.sessions : [], at, covers)
+        if (!cancelled && current.has(key) && stillOwnsSource()) {
+          setLiveWorkRosterSource(
+            key,
+            Array.isArray(result?.sessions) ? result.sessions : [],
+            at,
+            covers,
+            observedOwner,
+            sourceScopesBySession
+          )
         }
       } catch (error) {
         if (isMissingRpcMethod(error)) {
@@ -130,7 +216,7 @@ export function useLiveWorkRoster() {
           backoff.set(key, { failures, until: Date.now() + Math.min(POLL_MS * 2 ** failures, MAX_BACKOFF_MS) })
         }
 
-        if (!cancelled) {
+        if (!cancelled && stillOwnsSource()) {
           setLiveWorkRosterSource(key, null)
         }
       } finally {
@@ -138,7 +224,7 @@ export function useLiveWorkRoster() {
       }
     }
 
-    const refresh = (hydrate: boolean) => {
+    const refresh = (hydrate: boolean, onlyNew = false, groupOnly = false) => {
       const gateway = $gateway.get()
 
       if (cancelled || !gateway) {
@@ -146,7 +232,8 @@ export function useLiveWorkRoster() {
       }
 
       const ambient = ambientRequestFor(gateway)
-      const sources = rosterSources()
+      const sources = rosterSources(extraSources())
+      const groupKeys = new Set(groupSources().map(source => routeOf(source.owner).key))
       const roster = $liveWorkRoster.get()
       const now = Date.now()
       // Rows lit right now: a closed source covering one is re-read on the busy
@@ -164,7 +251,13 @@ export function useLiveWorkRoster() {
 
       for (const [key, source] of sources) {
         const last = sentAt.get(key)
-        const due = !inFlight.has(key) && !unsupported.has(key) && now >= (backoff.get(key)?.until ?? 0)
+
+        const due =
+          groupReadDue(groupOnly, groupKeys, key, last, now) &&
+          (!onlyNew || last === undefined) &&
+          !inFlight.has(key) &&
+          !unsupported.has(key) &&
+          now >= (backoff.get(key)?.until ?? 0)
 
         const warm =
           hydrate ||
@@ -186,6 +279,74 @@ export function useLiveWorkRoster() {
     }
 
     hydrate()
+    // Plugin SDK initialization itself imports the desktop integrations. Load
+    // the existing Bot roster after that module graph has settled.
+    void Promise.all([
+      import('@/plugins/hermes-bots/data'),
+      import('@/plugins/hermes-bots/routing'),
+      import('@/plugins/hermes-bots/labels'),
+      import('@/plugins/hermes-bots/canonical-group-details')
+    ]).then(
+      ([
+        { $lastRoster },
+        { resolveBotConnectionRoute, botWorkspaceOwnerKey },
+        { displayName },
+        { $canonicalRoomLive }
+      ]) => {
+        if (cancelled) {
+          return
+        }
+
+        botSources = () =>
+          $lastRoster.get().flatMap(bot => {
+            const owner = resolveBotConnectionRoute(bot).route
+
+            return owner && !bot.ghost && !bot.unserved && !bot.sourceMissing
+              ? [
+                  {
+                    owner,
+                    scope: {
+                      ownerRoute: owner,
+                      workspaceMode: 'bots',
+                      workspaceOwnerKey: botWorkspaceOwnerKey(bot),
+                      workspaceTabTitle: displayName(bot)
+                    },
+                    covers: [
+                      ...new Set(
+                        [bot.canonical_session?.id, bot.canonical_session?.resolved_id].filter(
+                          (id): id is string => !!id
+                        )
+                      )
+                    ]
+                  }
+                ]
+              : []
+          })
+        stopBotRoster = $lastRoster.listen(() => refresh(false, true))
+        groupSources = () =>
+          Object.entries($canonicalRoomLive.get()).flatMap(([key, live]) => {
+            if (!live.workerProfiles?.length) {
+              return []
+            }
+
+            const [connectionId, profile, roomId] = JSON.parse(key) as [string, string, string]
+
+            if (
+              !live.working &&
+              Date.now() - (live.updatedAt ?? 0) >= GROUP_DISCOVERY_MS &&
+              !groupHasLiveWork(connectionId, profile, roomId)
+            ) {
+              return []
+            }
+
+            return live.workerProfiles.map(profile => ({ covers: [], owner: { connectionId, profile } }))
+          })
+        // A room's durable update opens a bounded discovery window even if an async delegation's
+        // parent turn finished before the room poll. Real discovered children extend that window.
+        stopGroupLive = $canonicalRoomLive.listen(() => refresh(true, false, true))
+        refresh(false, true)
+      }
+    )
 
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -193,11 +354,20 @@ export function useLiveWorkRoster() {
       }
     }, POLL_MS)
 
+    const groupTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refresh(true, false, true)
+      }
+    }, ACTIVE_GROUP_POLL_MS)
+
     window.addEventListener('focus', hydrate)
 
     return () => {
       cancelled = true
+      stopBotRoster()
+      stopGroupLive()
       window.clearInterval(timer)
+      window.clearInterval(groupTimer)
       window.removeEventListener('focus', hydrate)
     }
   }, [gatewayState, primaryConnection, primaryMode])

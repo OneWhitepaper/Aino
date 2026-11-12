@@ -25,16 +25,18 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { renameSession } from '@/hermes'
+import { getApiRequestConnection, getApiRequestProfile, renameSession } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { sessionRemovalCopy, type SessionRemovalCopy } from '@/i18n/session-removal'
 import { triggerHaptic } from '@/lib/haptics'
 import { ArchiveOff } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { PROFILE_SWATCHES } from '@/lib/profile-color'
 import { exportSession } from '@/lib/session-export'
 import { useStoresSelector } from '@/lib/use-session-slice'
+import { $botChatScopes } from '@/store/bot-chat-scope'
 import { activeGateway } from '@/store/gateway'
-import { notify, notifyError } from '@/store/notifications'
+import { $notificationEpoch, notify, notifyError } from '@/store/notifications'
 import {
   $projectTree,
   applyRenamedSessionTitle,
@@ -57,11 +59,11 @@ import {
 import { $sessionColorOverrides, setSessionColorOverride } from '@/store/session-color'
 import { ambientRequestFor } from '@/store/session-gone-latch'
 import {
-  $botChatScopes,
   $sessionStates,
   $sessionTiles,
   closeAllOpenSessionTiles,
-  requestForOwnedSession
+  requestForOwnedSession,
+  sessionTileDelegate
 } from '@/store/session-states'
 import { ackStoredSessionId } from '@/store/session-unread'
 import { canOpenSessionInTerminal, canOpenSessionWindow, openSessionInTerminal } from '@/store/windows'
@@ -192,6 +194,40 @@ interface SessionActions {
   onHideTabBar?: () => void
 }
 
+interface DeleteSessionTarget {
+  sessionId: string
+  title: string
+  workspace: string
+  epoch: number
+  connection: ReturnType<typeof getApiRequestConnection>
+  profile: ReturnType<typeof getApiRequestProfile>
+  confirm: () => Promise<void> | void
+  archive?: () => Promise<void>
+}
+
+function captureDeleteTarget(
+  sessionId: string,
+  title: string,
+  profile: string | undefined,
+  confirm: () => Promise<void> | void,
+  archived: boolean,
+  copy: SessionRemovalCopy
+): DeleteSessionTarget {
+  const rowProfile = profile || $sessions.get().find(row => sessionMatchesStoredId(row, sessionId))?.profile
+  const delegate = sessionTileDelegate()
+
+  return {
+    sessionId,
+    title,
+    workspace: rowProfile === 'default' ? copy.defaultWorkspace : rowProfile || copy.unknownWorkspace,
+    epoch: $notificationEpoch.get(),
+    connection: getApiRequestConnection(),
+    profile: getApiRequestProfile(),
+    confirm,
+    ...(!archived && delegate ? { archive: () => delegate.archiveSession(sessionId, { throwOnError: true }) } : {})
+  }
+}
+
 // The color picker inside the session menu's Appearance submenu. Its own
 // component so only an OPEN submenu subscribes to the stores (not every row's
 // menu). Reads/writes the override keyed by the DURABLE id so a color survives
@@ -279,8 +315,9 @@ function useSessionActions({
   surface = 'row',
   tabPaneId
 }: SessionActions) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const r = t.sidebar.row
+  const removalCopy = sessionRemovalCopy(locale)
   const [renameOpen, setRenameOpen] = useState(false)
   // The rename item opens a Dialog. When a menu closes, Radix restores focus to
   // its trigger — for a sidebar row that trigger is the row's own <button>, so
@@ -290,7 +327,7 @@ function useSessionActions({
   // action leaves the restore alone (it's the correct behavior for them). Mirrors
   // the project menu's appearance-popover guard.
   const suppressCloseFocusRef = useRef(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteSessionTarget | null>(null)
   const tiles = useStore($sessionTiles)
 
   // Canonical bot-chat titles are registry keys. The confirmation names the
@@ -556,7 +593,8 @@ function useSessionActions({
         // through this menu (sidebar rows, tab menus, the chat header) gets the
         // guard for free.
         if (onDelete) {
-          setDeleteOpen(true)
+          suppressCloseFocusRef.current = true
+          setDeleteTarget(captureDeleteTarget(sessionId, deleteTitle, profile, onDelete, archived, removalCopy))
         }
       },
       variant: 'destructive'
@@ -643,22 +681,16 @@ function useSessionActions({
   }
 
   const deleteDialog = (
-    <DeleteSessionDialog
-      onConfirm={() => onDelete?.()}
-      onOpenChange={setDeleteOpen}
-      open={deleteOpen}
-      sessionTitle={deleteTitle}
-    />
+    <DeleteSessionDialog onClose={() => setDeleteTarget(null)} sessionId={sessionId} target={deleteTarget} />
   )
 
   return { deleteDialog, onCloseAutoFocus, renameDialog, renderItems }
 }
 
 interface DeleteSessionDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onConfirm: () => Promise<void> | void
-  sessionTitle: string
+  onClose: () => void
+  sessionId: string
+  target: DeleteSessionTarget | null
 }
 
 // Thin wrapper over ConfirmDialog — the single choke point for every session
@@ -666,22 +698,73 @@ interface DeleteSessionDialogProps {
 // session is irreversible and the desktop used to fire it instantly on click
 // (#61470); this mirrors the CLI's y/N guard. The deletion promise reaches
 // ConfirmDialog so failure stays in the decision instead of showing success.
-function DeleteSessionDialog({ open, onOpenChange, onConfirm, sessionTitle }: DeleteSessionDialogProps) {
-  const { t } = useI18n()
+function DeleteSessionDialog({ sessionId, onClose, target }: DeleteSessionDialogProps) {
+  return target ? (
+    <SessionDeleteDecision
+      key={`${target.epoch}:${target.sessionId}`}
+      onClose={onClose}
+      sessionId={sessionId}
+      target={target}
+    />
+  ) : null
+}
+
+function SessionDeleteDecision({
+  sessionId,
+  onClose,
+  target
+}: Omit<DeleteSessionDialogProps, 'target'> & { target: DeleteSessionTarget }) {
+  const { t, locale } = useI18n()
   const r = t.sidebar.row
+  const copy = sessionRemovalCopy(locale)
+  const notificationEpoch = useStore($notificationEpoch)
+  const open = target.sessionId === sessionId && target.epoch === notificationEpoch
+
+  const run = (action: () => Promise<void> | void) => {
+    if (
+      target.epoch !== $notificationEpoch.get() ||
+      target.connection !== getApiRequestConnection() ||
+      target.profile !== getApiRequestProfile()
+    ) {
+      throw new Error(copy.unavailable)
+    }
+
+    return action()
+  }
 
   return (
     <ConfirmDialog
       busyLabel={r.deleting}
       confirmLabel={t.common.delete}
-      description={r.deleteDesc(sessionTitle)}
+      description={r.deleteDesc(target.title)}
       destructive
       doneLabel={r.deleted}
-      onClose={() => onOpenChange(false)}
-      onConfirm={onConfirm}
+      onClose={onClose}
+      onConfirm={() => run(target.confirm)}
       open={open}
+      secondaryAction={
+        target.archive
+          ? { label: copy.remove, busyLabel: copy.removing, onClick: () => run(target.archive!) }
+          : undefined
+      }
       title={r.deleteTitle}
-    />
+    >
+      <dl className="min-w-0 space-y-3 text-[length:var(--aino-text-body)] leading-relaxed">
+        {[
+          { label: copy.object, value: target.title },
+          { label: copy.workspace, value: target.workspace },
+          { label: copy.scope, value: copy.impact }
+        ].map(({ label, value }) => (
+          <div className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] gap-3" key={label}>
+            <dt className="text-muted-foreground [overflow-wrap:anywhere]">{label}</dt>
+            <dd className="m-0 min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {target.archive && (
+        <p className="text-[length:var(--aino-text-body)] leading-relaxed text-muted-foreground">{copy.archiveHint}</p>
+      )}
+    </ConfirmDialog>
   )
 }
 

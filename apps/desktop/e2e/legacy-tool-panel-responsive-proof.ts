@@ -153,7 +153,7 @@ export async function verifyLegacyPanelResponsive({
       JSON.stringify(narrowTabGeometry, null, 2)
     )
     expect(tabGeometry.bounds.height).toBe(32)
-    expect(tabGeometry.borderRadius).toBe('7px')
+    expect(tabGeometry.borderRadius).toBe('6px')
     await expect(page.locator('[data-tree-track="legacy-review-files"]:visible')).toHaveCount(0)
     await expect(page.locator('[data-tree-track="legacy-review-separated"]:visible')).toHaveCount(0)
     await expect(page.locator('[data-tree-track="legacy-terminal-separated"]:visible')).toHaveCount(0)
@@ -218,8 +218,9 @@ export async function verifyLegacyPanelResponsive({
             [...document.querySelectorAll<HTMLElement>(selector)].filter(element => {
               const rect = element.getBoundingClientRect()
 
-              if (getComputedStyle(element).visibility !== 'visible' || rect.width <= 0 || rect.height <= 0)
-                {return false}
+              if (getComputedStyle(element).visibility !== 'visible' || rect.width <= 0 || rect.height <= 0) {
+                return false
+              }
 
               let top = Math.max(rect.top, 0)
               let bottom = Math.min(rect.bottom, innerHeight)
@@ -229,7 +230,10 @@ export async function verifyLegacyPanelResponsive({
               for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
                 const style = getComputedStyle(ancestor)
 
-                if (style.display === 'none' || Number(style.opacity) === 0) {return false}
+                if (style.display === 'none' || Number(style.opacity) === 0) {
+                  return false
+                }
+
                 const clip = ancestor.getBoundingClientRect()
 
                 if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
@@ -361,7 +365,10 @@ export async function verifyLegacyPanelResponsive({
     const modeOption = palette.getByRole('option').filter({ hasText: 'Simple mode' })
     await expect(modeOption).toHaveCount(1)
 
-    if ((await modeOption.getAttribute('aria-selected')) !== 'true') {await search.press('ArrowDown')}
+    if ((await modeOption.getAttribute('aria-selected')) !== 'true') {
+      await search.press('ArrowDown')
+    }
+
     await expect(modeOption).toHaveAttribute('aria-selected', 'true')
     await search.press('Enter')
     await expect

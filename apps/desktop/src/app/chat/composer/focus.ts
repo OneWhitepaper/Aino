@@ -305,7 +305,11 @@ export const requestComposerInsert = (
  *  silent no-op. Internal callers keep the fire-and-forget form above. */
 export const requestComposerInsertAcked = (
   text: string,
-  { mode = 'block', target = 'active' }: { mode?: ComposerInsertMode; target?: ComposerTarget | 'active' } = {}
+  {
+    mode = 'block',
+    stillCurrent,
+    target = 'active'
+  }: { mode?: ComposerInsertMode; stillCurrent?: () => boolean; target?: ComposerTarget | 'active' } = {}
 ): Promise<boolean> => {
   const trimmed = text.trim()
   const pending = insertReplies
@@ -320,7 +324,16 @@ export const requestComposerInsertAcked = (
   return new Promise<boolean>(resolve => {
     pending.set(token, resolve)
 
-    dispatch<InsertDetail>(INSERT_EVENT, { mode, target: resolvedTarget, text: trimmed, token })
+    window.setTimeout(() => {
+      if (stillCurrent && !stillCurrent()) {
+        pending.delete(token)
+        resolve(false)
+
+        return
+      }
+
+      dispatchNow<InsertDetail>(INSERT_EVENT, { mode, target: resolvedTarget, text: trimmed, token })
+    }, 0)
 
     // No claimant (unmounted address, input disabled, mid-teardown) must not
     // strand the promise: settle false and drop the slot.

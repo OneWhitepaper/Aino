@@ -17,6 +17,8 @@ export interface SubagentProgress {
   id: string
   parentId: null | string
   goal: string
+  /** Optional backend-authored friendly name, independent of the original goal. */
+  displayName?: string
   /** The child's own stored session id — lets UIs open its session window. */
   sessionId?: string
   /** Batch (delegation) id — exact grouping key for one fan-out's workers,
@@ -223,8 +225,12 @@ function streamFromPayload(
   return out
 }
 
-function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined, eventType = ''): SubagentProgress {
-  const at = Date.now()
+function toProgress(
+  payload: SubagentPayload,
+  prev: SubagentProgress | undefined,
+  eventType = '',
+  at = Date.now()
+): SubagentProgress {
   const status = asStatus(payload.status, eventType === 'subagent.complete')
   const tool = str(payload.tool_name)
   const stream = streamFromPayload(payload, status, eventType, at).reduce(appendStream, prev?.stream ?? [])
@@ -235,6 +241,7 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
     id: prev?.id ?? idOf(payload),
     parentId: str(payload.parent_id) || prev?.parentId || null,
     goal: str(payload.goal) || prev?.goal || translateNow('agents.defaultGoal'),
+    displayName: [str(payload.display_name), prev?.displayName].find(Boolean),
     sessionId: str(payload.child_session_id) || prev?.sessionId,
     delegationId: str(payload.delegation_id) || prev?.delegationId,
     model: str(payload.model) || prev?.model,
@@ -254,6 +261,18 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
     summary: str(payload.summary) || timeoutSummary(payload) || prev?.summary || undefined,
     currentTool: TERMINAL.has(status) ? undefined : tool || prev?.currentTool
   }
+}
+
+/** Read-only profile roster projection. Observing a child never grants control of its runtime. */
+export function projectSubagentSnapshot(payload: SubagentPayload, at: number): SubagentProgress {
+  const child = toProgress(payload, undefined, '', at)
+  child.startedAt = (num(payload.started_at) ?? 0) * 1000 || at
+
+  if (!child.stream.length && str(payload.last_tool)) {
+    child.stream = [{ at, kind: 'tool', text: formatTool(str(payload.last_tool)) }]
+  }
+
+  return child
 }
 
 const failedDelegationId = (p: SubagentPayload) => `delegation:${str(p.delegation_id)}:${num(p.task_index) ?? 0}`

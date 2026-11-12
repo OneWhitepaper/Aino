@@ -11,7 +11,7 @@ import { host, translateNow } from '@hermes/plugin-sdk'
 
 import type { BotMeta, GroupMessageAuthor, ProfileRoute, RosterRow } from './types'
 
-export function botRouteKey(route: ProfileRoute): string {
+export function botRouteKey(route: Pick<ProfileRoute, 'connectionId' | 'profile'>): string {
   return `${route.connectionId}::${route.profile}`
 }
 
@@ -96,11 +96,7 @@ export function botWorkspaceOwnerKey(bot: RosterRow) {
   return `bot:${route ? botRouteKey(route) : String(bot?.name || 'default')}`
 }
 
-export function setBotsWorkspaceOwner(
-  ownerKey: string,
-  bot: null | RosterRow = null,
-  blockedMessage?: string
-) {
+export function setBotsWorkspaceOwner(ownerKey: string, bot: null | RosterRow = null, blockedMessage?: string) {
   // Render-reachable (sidebar listener fires on visibility flips). An
   // orphaned row degrades to the blocked target instead of throwing.
   const route = bot ? resolveBotConnectionRoute(bot).route : null
@@ -111,9 +107,9 @@ export function setBotsWorkspaceOwner(
         route
       }
     : {
-      kind: 'blocked',
-      message: blockedMessage ?? translateNow('desktop.botMode.selectBotOrGroup')
-    }
+        kind: 'blocked',
+        message: blockedMessage ?? translateNow('desktop.botMode.selectBotOrGroup')
+      }
 
   host.setWorkspaceScope?.('bots', ownerKey, target)
 }
@@ -457,7 +453,10 @@ export function botRosterMeta(bot: RosterRow, metaByName: Record<string, BotMeta
 type TranscriptEntry = { from?: GroupMessageAuthor } | null | undefined
 
 function speaksAs(from: GroupMessageAuthor, bot: Partial<RosterRow>): boolean {
-  return bot.name === from.name && (from.source ? (bot.connectionLabel || bot.connectionId) === from.source : !bot.remoteSource)
+  return (
+    bot.name === from.name &&
+    (from.source ? (bot.connectionLabel || bot.connectionId) === from.source : !bot.remoteSource)
+  )
 }
 
 /** The row a transcript line's speaker is named from. Seated members first; a

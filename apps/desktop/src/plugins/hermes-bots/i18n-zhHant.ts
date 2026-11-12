@@ -17,6 +17,11 @@ export const zhHant: BotsMessages = {
     gatewayDefault: '閘道預設值',
     modelNameExample: '例如：模型名稱',
     modelSwitchFailed: '模型切換失敗',
+    draftResetTitle: '重設草稿設定？',
+    draftResetDescription:
+      '變更範本或共用選項會移除目前草稿及已設定的技能、工具和 MCP 連線。已填寫的名稱、描述與待套用模型會保留。',
+    draftResetAction: '重設草稿',
+    draftResetStale: '建立時的工作區已變更，請重新開啟視窗後再重設草稿。',
     newDescription: '擁有獨立記憶、技能和聊天的具名隊友，可以與你的其他智慧代理互傳訊息。',
     name: '名稱',
     title: '顯示名稱',
@@ -73,7 +78,7 @@ export const zhHant: BotsMessages = {
   },
   roster: {
     modeDescription: '機器人、群組聊天與協作',
-    title: 'Agent Hub',
+    title: 'Bot',
     search: '搜尋機器人和群組聊天',
     searchPlaceholder: '搜尋機器人和群組聊天…',
     newBotOrGroup: '新增機器人或群組聊天',

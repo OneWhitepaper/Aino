@@ -10,6 +10,7 @@ than offered a call that fails."""
 import json
 from typing import Callable, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.registry import registry, tool_error
 from tools.tour_presets import TourPreset
@@ -28,7 +29,7 @@ def tour_tool(action: str = "", surface: Optional[str] = None, selector: Optiona
               preset: Optional[str] = None, callback: Optional[Callable] = None) -> str:
     """Dispatch one tour action to the desktop renderer and return its outcome."""
     if callback is None:
-        return tool_error("tour is only available in the Hermes desktop app.")
+        return tool_error(f"tour is only available in the {PRODUCT_NAME} desktop app.")
     verb = (action or "").strip().lower()
     if verb not in ACTIONS:
         return tool_error(f"action must be one of: {', '.join(ACTIONS)}.")
@@ -94,7 +95,7 @@ TOUR_SCHEMA = {
     # without them the model guesses selectors on re-rendering UI.
     # See #95681.
     "description": (
-        "Run a guided desktop GUI tour: dim the screen, highlight elements, add popovers. Surfaces: 'app' (Hermes itself) "
+        f"Run a guided desktop GUI tour: dim the screen, highlight elements, add popovers. Surfaces: 'app' ({PRODUCT_NAME} itself) "
         "or 'preview' (the page in the preview pane). A general look around "
         "the app is ONE call: action='start' with no steps runs the app's "
         "built-in tour (preset 'quick' or 'full', default full). For a "

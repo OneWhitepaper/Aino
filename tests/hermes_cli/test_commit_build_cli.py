@@ -17,6 +17,9 @@ def payload(tmp_path_factory):
     root = tmp_path_factory.mktemp("commit-payload")
     source = Path(__file__).resolve().parents[2]
     shutil.copytree(source / "hermes_cli", root / "hermes_cli", ignore=shutil.ignore_patterns("__pycache__"))
+    # Sealed runtimes carry product identity beside Python, without Desktop sources.
+    (root / "hermes_cli/data").mkdir(exist_ok=True)
+    shutil.copy2(source / "apps/desktop/brand.json", root / "hermes_cli/data/brand.json")
     (root / "install-stamp.json").write_text(json.dumps({
         "source": "commit-build", "distribution": "desktop-app", "payload": "bundled",
         "updateMechanism": "external", "commit": "a" * 40,

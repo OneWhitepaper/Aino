@@ -9,13 +9,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { registry } from '@/contrib/registry'
 import { en } from '@/i18n/en'
 import type { ErrorCardCopy } from '@/i18n/types'
 import { applyProductBrand } from '@/lib/brand'
 import { $touchPointer } from '@/lib/touch-interaction'
+import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
 import { $displayTimestamps } from '@/store/display-timestamps'
 import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
-import { $botChatSessionIds, type SessionTileDelegate, setSessionTileDelegate } from '@/store/session-states'
+import { type SessionTileDelegate, setSessionTileDelegate } from '@/store/session-states'
 
 import { stubThreadEnvironment } from '../test-utils'
 
@@ -33,6 +35,13 @@ const openExternalLink = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/external-link', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),
   openExternalLink: (href: string) => openExternalLink(href)
+}))
+
+vi.mock('@/components/model-picker', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ModelPickerDialog: ({ confirmation }: { confirmation?: { title: string } }) => (
+    <div role="dialog">{confirmation?.title}</div>
+  )
 }))
 
 vi.mock('@/app/chat/composer/focus', async importOriginal => ({
@@ -168,7 +177,10 @@ function oauthExpiredMessage(): ThreadMessage {
 }
 
 /** A failed turn carrying an arbitrary error_surface descriptor. */
-function failedMessage(errorSurface: Record<string, unknown>, error = 'HTTP 400: raw provider body'): ThreadMessage {
+function failedMessage(
+  errorSurface: Record<string, unknown>,
+  error = 'HTTP 400: raw provider body'
+): Extract<ThreadMessage, { role: 'assistant' }> {
   return {
     id: 'assistant-error-3',
     role: 'assistant',
@@ -182,7 +194,7 @@ function failedMessage(errorSurface: Record<string, unknown>, error = 'HTTP 400:
       steps: [],
       custom: { errorSurface }
     }
-  } as unknown as ThreadMessage
+  } as Extract<ThreadMessage, { role: 'assistant' }>
 }
 
 /** Renders the router's current URL so a test can assert where a deep link went. */
@@ -232,6 +244,26 @@ function Harness({
 }
 
 describe('merged hover timestamps and touch actions', () => {
+  it('keeps a resolved model error as collapsed history without an active alert or model picker', async () => {
+    const failed = failedMessage({ layer: 'provider', code: 'managed_model_access_denied', retryable: false })
+
+    const assistant = {
+      ...failed,
+      metadata: { ...failed.metadata, custom: { ...failed.metadata.custom, errorResolved: 'model_changed' } }
+    }
+
+    const { container } = render(<Harness assistant={assistant} />)
+
+    expect(await screen.findByText('Model changed')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Choose a model' })).toBeNull()
+    const history = container.querySelector('details[data-slot="aui_resolved-model-error"]') as HTMLDetailsElement
+    expect(history.open).toBe(false)
+    fireEvent.click(screen.getByText('View previous error'))
+    expect(history.open).toBe(true)
+    expect(history.textContent).toContain('HTTP 400: raw provider body')
+  })
+
   it('shows both hover times without Stop or Restore and suppresses them with timeline timestamps', async () => {
     $displayTimestamps.set(false)
     const { container } = render(<Harness />)
@@ -286,6 +318,48 @@ describe('merged hover timestamps and touch actions', () => {
 })
 
 describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
+  it('renders a bot portrait for the reply session owner and drops it when that owner becomes ordinary', async () => {
+    const previousActive = $activeSessionId.get()
+    const previousSelected = $selectedStoredSessionId.get()
+    const previousBots = $botChatSessionIds.get()
+    const previousScopes = $botChatScopes.get()
+    const avatarFor = vi.fn((ownerKey: string) => <span data-testid="bot-portrait">{ownerKey}</span>)
+
+    const unregister = registry.register({
+      id: 'test.bot-portrait',
+      area: 'workspace.ownerAvatar',
+      data: { avatarFor }
+    })
+
+    try {
+      $activeSessionId.set('portrait-runtime')
+      $selectedStoredSessionId.set('portrait-session')
+      $botChatSessionIds.set(new Set(['portrait-session']))
+      $botChatScopes.set({ 'portrait-session': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:remote-a::default' } })
+      const { container } = render(<Harness />)
+      await screen.findByText('done')
+      expect(screen.getByTestId('bot-portrait').textContent).toBe('bot:remote-a::default')
+      expect(container.querySelector('[data-slot="aui_assistant-brand"]')).toBeNull()
+
+      act(() =>
+        $botChatScopes.set({
+          'portrait-session': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:remote-b::default' }
+        })
+      )
+      expect(screen.getByTestId('bot-portrait').textContent).toBe('bot:remote-b::default')
+
+      act(() => $botChatSessionIds.set(new Set()))
+      expect(screen.queryByTestId('bot-portrait')).toBeNull()
+      expect(container.querySelector('[data-slot="aui_assistant-brand"]')).toBeTruthy()
+    } finally {
+      unregister()
+      $activeSessionId.set(previousActive)
+      $selectedStoredSessionId.set(previousSelected)
+      $botChatSessionIds.set(previousBots)
+      $botChatScopes.set(previousScopes)
+    }
+  })
+
   it('shows the Aino mark only for a known ordinary session, never a bot or unknown owner', async () => {
     const previousActive = $activeSessionId.get()
     const previousSelected = $selectedStoredSessionId.get()
@@ -833,7 +907,9 @@ describe('switch provider on a live session (#95066)', () => {
       'HTTP 403: blocked'
     )
 
-  it('opens the live session model menu instead of leaving the chat for Settings', async () => {
+  it('opens a staged recovery for the failed session without leaving for default-model settings', async () => {
+    const previous = $activeSessionId.get()
+    $activeSessionId.set('recovery-runtime')
     render(
       <MemoryRouter>
         <LocationProbe />
@@ -844,15 +920,17 @@ describe('switch provider on a live session (#95066)', () => {
     const button = await screen.findByRole('button', { name: 'Switch provider' })
     const before = screen.getByTestId('location').textContent
 
-    button.click()
+    fireEvent.click(button)
 
-    expect(requestModelMenuToggle).toHaveBeenCalledTimes(1)
-    // Still on the chat: the pick lands on THIS session through model.switch.
+    expect(screen.getByRole('dialog').textContent).toBe('Choose an available model')
+    expect(requestModelMenuToggle).not.toHaveBeenCalled()
     expect(screen.getByTestId('location').textContent).toBe(before)
+    $activeSessionId.set(previous)
   })
 
-  it('falls back to Settings → Models only when no chat surface is on screen', async () => {
-    requestModelMenuToggle.mockReturnValue(false)
+  it('keeps recovery unavailable without a bound session instead of editing defaults', async () => {
+    const previous = $activeSessionId.get()
+    $activeSessionId.set(null)
     render(
       <MemoryRouter>
         <LocationProbe />
@@ -860,10 +938,10 @@ describe('switch provider on a live session (#95066)', () => {
       </MemoryRouter>
     )
 
-    ;(await screen.findByRole('button', { name: 'Switch provider' })).click()
-
-    expect(requestModelMenuToggle).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toMatch(/\?tab=config:model$/))
+    expect((await screen.findByRole('button', { name: 'Switch provider' })).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByTestId('location').textContent).not.toMatch(/\?tab=config:model$/)
+    $activeSessionId.set(previous)
   })
 })
 

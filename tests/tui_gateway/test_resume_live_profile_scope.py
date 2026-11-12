@@ -52,8 +52,6 @@ class _DB:
 
 @pytest.fixture()
 def homes(monkeypatch, tmp_path):
-    # This profile-routing double has no durable cloud import generation.
-    monkeypatch.setattr('tui_gateway.session_cloud_sync.refresh_cloud_history', lambda *a, **k: False)
     homes = {name: tmp_path / name for name in ("a", "b")}
     for home in homes.values():
         home.mkdir()

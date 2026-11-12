@@ -279,7 +279,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
         </span>
       </div>
       <div className="aino-roster-bot-copy">
-        <div className="aino-roster-bot-title">
+        <div className="aino-roster-row-title">
           <div className="aino-roster-bot-name">
             {pinned ? (
               <Tip label={b.roster.pinned}>
@@ -313,11 +313,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
           {isOpening ? (
             <GlyphSpinner ariaLabel={b.bot.openingChat} className="shrink-0 text-xs text-(--ui-text-secondary)" />
           ) : null}
-          {rowAgeTs ? (
-            <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-              {rowAge(rowAgeTs * 1000, t.sidebar.row)}
-            </span>
-          ) : null}
+          {rowAgeTs ? <span className="aino-roster-row-age">{rowAge(rowAgeTs * 1000, t.sidebar.row)}</span> : null}
         </div>
         {showDetailsRow ? (
           <div className="aino-roster-bot-preview">
@@ -571,13 +567,9 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
 
   const row = (
     <RowButton
+      aria-current={active || undefined}
       aria-label={`${group}, ${b.group.memberCount(members.length)}, ${availabilityLabel}`}
-      className={cn(
-        'flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-(--aino-radius-row) px-2 py-2 text-left transition-colors',
-        'hover:bg-(--chrome-action-hover)',
-        active && 'bg-(--ui-row-active-background)',
-        dragging && 'opacity-40'
-      )}
+      className={cn('aino-group-roster-row', dragging && 'opacity-40')}
       draggable
       onClick={() => {
         haptic('tap')
@@ -590,7 +582,7 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
         $draggingBot.set(dragKey)
       }}
     >
-      <div className="relative flex w-[34px] shrink-0 items-center justify-center">
+      <div className="aino-roster-bot-avatar">
         {room.image ? (
           <img
             alt=""
@@ -621,9 +613,9 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
           </Tip>
         ) : null}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="min-w-0 flex-1 truncate text-[length:var(--aino-text-body)] font-medium">{group}</span>
+      <div className="aino-roster-group-copy">
+        <div className="aino-roster-row-title">
+          <span className="aino-group-roster-name">{group}</span>
           {room.pinned ? (
             <Tip label={b.roster.pinned}>
               <Codicon
@@ -637,13 +629,9 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
               <Codicon aria-label={b.roster.needsInput} className="shrink-0 text-(--ui-accent)" name="question" />
             </Tip>
           ) : null}
-          {lastAt ? (
-            <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-              {rowAge(lastAt, t.sidebar.row)}
-            </span>
-          ) : null}
+          {lastAt ? <span className="aino-roster-row-age">{rowAge(lastAt, t.sidebar.row)}</span> : null}
         </div>
-        <div className="min-w-0 truncate text-xs text-(--ui-text-tertiary)">{preview}</div>
+        <div className="aino-roster-group-preview">{preview}</div>
       </div>
     </RowButton>
   )
@@ -661,11 +649,14 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
             const pinned = toggleGroupChatPinned(group)
 
             if (pinned !== null) {
-              host.notify({ kind: 'info', message: `${group} ${pinned ? 'pinned to top' : 'unpinned'}` })
+              host.notify({
+                kind: 'info',
+                message: pinned ? b.bot.pinnedToast(group) : b.bot.unpinnedToast(group)
+              })
             }
           }}
         >
-          {room.pinned ? 'Unpin' : 'Pin to top'}
+          {room.pinned ? b.bot.unpin : b.bot.pinToTop}
         </ContextMenuItem>
         {/* Filing — the same submenu a bot row gets, driving the room-record
             assignment instead of profile meta. */}

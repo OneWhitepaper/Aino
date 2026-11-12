@@ -11,7 +11,7 @@ import {
 import { fuzzyRank, modelSearchText } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
-import { type ReactElement, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactElement, useMemo, useRef, useState } from 'react'
 
 import { useI18n } from '@/i18n'
 import { catalogProviderMatches, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
@@ -32,24 +32,30 @@ import {
   useLocalModelsStatus,
   useLocalRuntimeJobs
 } from '@/store/local-runtime-jobs'
-import { notifyError } from '@/store/notifications'
 import type { LocalModelLoadProgress, LocalRuntimeJob } from '@/types/hermes'
 
 import type { HermesGateway } from '../hermes'
 import { startManualOnboarding } from '../store/onboarding'
 
+import {
+  displayedPickerSelection,
+  ModelPickerActions,
+  type ModelPickerConfirmation,
+  useModelPickerSelection
+} from './model-picker-selection'
 import { InlineNotice } from './notifications'
 import { PlatformModelList } from './platform-model-list'
 import { ProviderStatusChip } from './provider-status-chip'
 import { Badge } from './ui/badge'
-import { Button } from './ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { HighlightMatches } from './ui/highlight-matches'
 import { SegmentedControl } from './ui/segmented-control'
 import { Skeleton } from './ui/skeleton'
 
 interface ModelPickerDialogProps {
+  /** Recovery holds a temporary choice; ordinary pickers keep immediate selection. */
+  confirmation?: ModelPickerConfirmation
   open: boolean
   onOpenChange: (open: boolean) => void
   gw?: HermesGateway
@@ -74,6 +80,7 @@ interface ModelPickerDialogProps {
 }
 
 interface CurrentModelDescriptionProps {
+  confirmation?: ModelPickerConfirmation
   optionsModel: string
   currentModel: string
   optionsProvider: string
@@ -81,6 +88,7 @@ interface CurrentModelDescriptionProps {
 }
 
 function CurrentModelDescription({
+  confirmation,
   optionsModel,
   currentModel,
   optionsProvider,
@@ -90,14 +98,22 @@ function CurrentModelDescription({
   const copy = t.modelPicker
 
   return (
-    <DialogDescription className="text-[length:var(--aino-text-caption)] leading-relaxed">
-      {copy.current} {optionsModel || currentModel || copy.unknown}
-      {optionsProvider || currentProvider ? ` · ${optionsProvider || currentProvider}` : ''}
-    </DialogDescription>
+    <DialogHeader className="border-b border-border px-4 py-3">
+      <DialogTitle>{confirmation?.title ?? copy.title}</DialogTitle>
+      {confirmation ? (
+        <DialogDescription>{confirmation.description}</DialogDescription>
+      ) : (
+        <DialogDescription className="text-[length:var(--aino-text-caption)] leading-relaxed">
+          {copy.current} {optionsModel || currentModel || copy.unknown}
+          {optionsProvider || currentProvider ? ` · ${optionsProvider || currentProvider}` : ''}
+        </DialogDescription>
+      )}
+    </DialogHeader>
   )
 }
 
 export function ModelPickerDialog({
+  confirmation,
   open,
   onOpenChange,
   gw,
@@ -121,19 +137,28 @@ export function ModelPickerDialog({
   // it: an empty query shows the curated list verbatim (like the `hermes
   // model` CLI picker) and a query ranks with the shared fuzzyRank.
   const [search, setSearch] = useState('')
-  const selecting = useRef(false)
-  const selectionEpoch = useRef(0)
-  const [pending, setPending] = useState(false)
+
+  const {
+    pending,
+    staged,
+    error: selectionError,
+    selectModel,
+    apply
+  } = useModelPickerSelection({
+    scope: JSON.stringify([open, sessionId, ownerConnectionId, profile]),
+    currentProvider,
+    busy,
+    confirmation,
+    onOpenChange,
+    onSelect
+  })
+
   const managedCapabilities = useStoreSelector($gatewayManagedCapabilities, value => value)
 
   const managedCapability = managedModelRouteCapabilityFrom(managedCapabilities, {
     connectionId: ownerConnectionId,
     profile
   })
-
-  useLayoutEffect(() => {
-    selectionEpoch.current += 1
-  }, [open, sessionId, ownerConnectionId, profile])
 
   const [source, setSource] = useState<'aino' | 'custom'>(() =>
     currentProvider && currentProvider !== 'aino' ? 'custom' : 'aino'
@@ -201,6 +226,7 @@ export function ModelPickerDialog({
     modelOptions.data
   )
 
+  const selected = displayedPickerSelection(staged, optionsModel || currentModel, optionsProvider || currentProvider)
   const loading = modelOptions.isPending && !modelOptions.data
 
   const error = modelOptions.error
@@ -210,33 +236,6 @@ export function ModelPickerDialog({
     : null
 
   const blocked = managedModelSwitchBlocked(currentProvider, source === 'aino' && includePlatform ? 'aino' : '', busy)
-
-  const selectModel = async (provider: string, model: string): Promise<boolean> => {
-    if (selecting.current || managedModelSwitchBlocked(currentProvider, provider, busy)) {
-      return false
-    }
-
-    selecting.current = true
-    const epoch = selectionEpoch.current
-    setPending(true)
-
-    try {
-      const accepted = (await onSelect({ provider, model })) !== false
-
-      if (accepted && epoch === selectionEpoch.current) {
-        onOpenChange(false)
-      }
-
-      return accepted
-    } catch (error) {
-      notifyError(error, t.desktop.modelSwitchFailed)
-
-      return false
-    } finally {
-      selecting.current = false
-      setPending(false)
-    }
-  }
 
   const selectCustomModel = (provider: ModelOptionProvider, model: string) => {
     addCustomModel(provider.slug, model, provider)
@@ -268,15 +267,13 @@ export function ModelPickerDialog({
         bodyClassName="gap-0 overflow-hidden p-0"
         className={cn('max-h-[85vh] max-w-2xl', contentClassName)}
       >
-        <DialogHeader className="border-b border-border px-4 py-3">
-          <DialogTitle>{copy.title}</DialogTitle>
-          <CurrentModelDescription
-            currentModel={currentModel}
-            currentProvider={currentProvider}
-            optionsModel={optionsModel}
-            optionsProvider={optionsProvider}
-          />
-        </DialogHeader>
+        <CurrentModelDescription
+          confirmation={confirmation}
+          currentModel={currentModel}
+          currentProvider={currentProvider}
+          optionsModel={optionsModel}
+          optionsProvider={optionsProvider}
+        />
 
         {includePlatform && window.hermesDesktop?.platformModels && (
           <div className="px-4 py-2">
@@ -298,13 +295,14 @@ export function ModelPickerDialog({
         {includePlatform && source === 'aino' && window.hermesDesktop?.platformModels ? (
           <PlatformModelList
             disabled={blocked || pending}
+            fitContent
             managedCapability={managedCapability}
             onChooseCustom={() => setSource('custom')}
             onSelect={model => selectModel('aino', model.id)}
-            selectedId={currentProvider === 'aino' ? currentModel : undefined}
+            selectedId={selected.provider === 'aino' ? selected.model : undefined}
           />
         ) : (
-          <Command className="rounded-none bg-card" shouldFilter={false}>
+          <Command className="h-auto rounded-none bg-card" shouldFilter={false}>
             <CommandInput
               autoFocus
               onValueChange={setSearch}
@@ -315,8 +313,9 @@ export function ModelPickerDialog({
             <CommandList className="max-h-96">
               {!loading && !error && <CommandEmpty>{copy.noModels}</CommandEmpty>}
               <ModelResults
-                currentModel={optionsModel || currentModel}
-                currentProvider={optionsProvider || currentProvider}
+                allowUnlisted={!confirmation}
+                currentModel={selected.model}
+                currentProvider={selected.provider}
                 disabled={blocked || pending}
                 downloads={downloads}
                 error={error}
@@ -333,17 +332,17 @@ export function ModelPickerDialog({
           </Command>
         )}
 
-        <DialogFooter className="flex-row items-center justify-end gap-2 bg-card p-3">
-          <Button className="mr-auto" onClick={enterSlug} variant="ghost">
-            {copy.addCustomModelAction}
-          </Button>
-          <Button onClick={addProvider} variant="ghost">
-            {copy.addProvider}
-          </Button>
-          <Button onClick={() => onOpenChange(false)} variant="outline">
-            {t.common.cancel}
-          </Button>
-        </DialogFooter>
+        <ModelPickerActions
+          blocked={blocked}
+          confirmation={confirmation}
+          error={selectionError}
+          onAddCustom={enterSlug}
+          onAddProvider={addProvider}
+          onApply={() => void apply()}
+          onCancel={() => onOpenChange(false)}
+          pending={pending}
+          staged={staged}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -362,6 +361,7 @@ function ModelResults({
   onSelectModel,
   onSelectCustomModel,
   offerCustom,
+  allowUnlisted = true,
   search
 }: {
   disabled: boolean
@@ -377,6 +377,7 @@ function ModelResults({
   onSelectCustomModel: (provider: ModelOptionProvider, model: string) => void
   /** Offer the typed id as a custom model even while catalog rows match. */
   offerCustom: boolean
+  allowUnlisted?: boolean
   search: string
 }): ReactElement {
   const { t } = useI18n()
@@ -445,7 +446,7 @@ function ModelResults({
   // provider first, so the slug is one Enter away and remembered afterwards.
   // While the query still matches catalog rows the section stays out of the
   // way unless the user asked for it via "Add custom model…".
-  const customSlug = offerCustom || !hasMatches ? customModelCandidate(search, configured) : null
+  const customSlug = allowUnlisted && (offerCustom || !hasMatches) ? customModelCandidate(search, configured) : null
 
   const customProviders = customSlug
     ? [...configured].sort(

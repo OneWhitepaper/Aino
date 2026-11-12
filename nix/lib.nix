@@ -194,6 +194,10 @@ let
       in
       if relPath == "" then
         true
+      else if builtins.elem relPath [ "apps" "apps/desktop" "apps/desktop/brand.json" "docs" "docs/aino" ]
+        || lib.hasPrefix "docs/aino/" relPath then
+        # Python consumes the same product identity and offline user help as Desktop.
+        true
       else if lib.hasPrefix "scripts/build/" relPath && lib.hasSuffix ".mjs" relPath then
         # Frontend recipes belong to their product source filters, not Python.
         false

@@ -25,11 +25,19 @@
   min-width: 0;
 }
 .aino-group-header[data-main-tab='true'] {
-  min-height: 54px;
-  padding-block: 8px;
+  height: var(--aino-tool-strip-height);
+  min-height: var(--aino-tool-strip-height);
+  padding-block: 6px;
 }
 .aino-group-header[data-main-tab='true'] .aino-group-heading p {
   margin-top: 0;
+}
+.aino-group-header[data-main-tab='true'] .aino-group-attention {
+  min-width: 0;
+  max-width: 35%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .aino-group-heading h2 {
   overflow: hidden;
@@ -93,29 +101,30 @@
   min-width: 0;
 }
 .aino-group-chat {
+  --aino-conversation-inset: clamp(1rem, 3cqw, 2rem);
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
   container: aino-group-chat / inline-size;
-  --aino-group-content-max: 1120px;
-  --aino-group-inline-gutter: 40px;
 }
 .aino-group-messages-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
   overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
 }
 .aino-group-messages,
 .aino-group-composer-zone {
-  width: min(100%, var(--aino-group-content-max));
-  margin-inline: auto;
-  padding-inline: var(--aino-group-inline-gutter);
+  width: min(var(--aino-conversation-width), calc(100cqw - var(--aino-conversation-inset) * 2));
+  margin-inline: max(var(--aino-conversation-inset), calc((100cqw - var(--aino-conversation-width)) / 2));
+  padding-inline: 0;
 }
 .aino-group-messages {
+  /* Center within symmetric scrollbar gutters without overflowing the scrollport. */
+  margin-inline: auto;
   padding-block: 36px 20px;
 }
 .aino-group-message {
@@ -315,10 +324,10 @@
   padding: 16px 18px 12px;
   border: 1px solid var(--ui-stroke-secondary);
   border-radius: var(--aino-radius-composer, 1.25rem);
-  background: var(--ui-bg-elevated);
+  background: var(--aino-composer-fill);
 }
 .aino-group-composer:focus-within {
-  border-color: var(--ui-text-secondary);
+  border-color: var(--aino-composer-focus-stroke);
 }
 .aino-group-composer-toolbar {
   display: flex;
@@ -630,44 +639,6 @@
   max-height: 75vh;
   border: 0;
 }
-.aino-group-roster-row {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  justify-content: flex-start;
-  gap: 10px;
-  text-align: start;
-}
-.aino-group-roster-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-}
-.aino-group-roster-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aino-group-roster-count {
-  font-size: var(--aino-text-caption);
-  color: var(--ui-text-secondary);
-}
-@container aino-group-chat (min-width: 1400px) {
-  .aino-group-messages,
-  .aino-group-composer-zone {
-    --aino-group-inline-gutter: 48px;
-  }
-}
-@container aino-group-chat (max-width: 960px) {
-  .aino-group-messages,
-  .aino-group-composer-zone {
-    --aino-group-inline-gutter: 24px;
-  }
-}
 @container aino-group-workspace (max-width: 680px) {
   .aino-group-header {
     padding-inline: 18px;
@@ -699,10 +670,6 @@
   }
 }
 @container aino-group-chat (max-width: 480px) {
-  .aino-group-messages,
-  .aino-group-composer-zone {
-    --aino-group-inline-gutter: 16px;
-  }
   .aino-group-composer-tools > span {
     display: none;
   }

@@ -122,6 +122,8 @@ export function summaryDelegations(
       rows: [
         {
           id: item.id,
+          subagentId: item.id,
+          displayName: item.displayName,
           goal: item.goal,
           status: item.status,
           sessionId: item.sessionId,

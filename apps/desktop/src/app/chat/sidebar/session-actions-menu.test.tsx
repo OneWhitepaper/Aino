@@ -3,9 +3,11 @@ import { atom } from 'nanostores'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { $workspaceOwnerLabels, setWorkspaceOwnerLabel } from '@/components/pane-shell/workspace-scope'
-import { renameSession } from '@/hermes'
+import { getApiRequestConnection, renameSession } from '@/hermes'
+import { $botChatScopes } from '@/store/bot-chat-scope'
+import { $notificationEpoch } from '@/store/notifications'
 import { refreshProjectTree } from '@/store/projects'
-import { $botChatScopes, $sessionTiles } from '@/store/session-states'
+import { $sessionTiles, sessionTileDelegate } from '@/store/session-states'
 
 import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
 
@@ -14,6 +16,8 @@ afterEach(() => {
   $workspaceOwnerLabels.set({})
   $botChatScopes.set({})
   $sessionTiles.set([])
+  vi.mocked(sessionTileDelegate).mockReturnValue(null)
+  vi.mocked(getApiRequestConnection).mockReturnValue(null)
 })
 
 // Exercises the real SessionActionsMenu end-to-end (no DropdownMenu mock) so
@@ -27,6 +31,8 @@ vi.mock('@/components/pane-shell/tree/store', () => ({
   treeTabCloseTargets: vi.fn(() => null)
 }))
 vi.mock('@/hermes', () => ({
+  getApiRequestConnection: vi.fn(() => null),
+  getApiRequestProfile: vi.fn(() => 'default'),
   renameSession: vi.fn(),
   setApiRequestProfile: vi.fn(),
   setSessionUnreadRemote: vi.fn(() => Promise.resolve({ ok: true }))
@@ -85,7 +91,7 @@ vi.mock('@/lib/haptics', () => ({ triggerHaptic: vi.fn() }))
 vi.mock('@/lib/profile-color', () => ({ PROFILE_SWATCHES: [] }))
 vi.mock('@/lib/session-export', () => ({ exportSession: vi.fn() }))
 vi.mock('@/store/gateway', () => ({ activeGateway: vi.fn(() => null) }))
-vi.mock('@/store/notifications', () => ({ notify: vi.fn(), notifyError: vi.fn() }))
+vi.mock('@/store/notifications', () => ({ $notificationEpoch: atom(0), notify: vi.fn(), notifyError: vi.fn() }))
 vi.mock('@/store/projects', () => ({
   applyRenamedSessionTitle: vi.fn(),
   $projectTree: atom<unknown[]>([]),
@@ -113,11 +119,11 @@ vi.mock('@/store/session-color', () => ({
   setSessionColorOverride: vi.fn()
 }))
 vi.mock('@/store/session-states', () => ({
-  $botChatScopes: atom<Record<string, unknown>>({}),
   $sessionStates: atom<Record<string, unknown>>({}),
   $sessionTiles: atom<unknown[]>([]),
   closeAllOpenSessionTiles: vi.fn(),
-  openSessionTile: vi.fn()
+  openSessionTile: vi.fn(),
+  sessionTileDelegate: vi.fn(() => null)
 }))
 vi.mock('@/store/windows', () => ({
   canOpenSessionInTerminal: () => false,
@@ -293,7 +299,7 @@ describe('SessionActionsMenu', () => {
 
     // The confirm dialog is up and names the session being deleted.
     expect(await screen.findByRole('dialog')).toBeTruthy()
-    expect(screen.getByText(/My session/)).toBeTruthy()
+    expect(screen.getAllByText(/My session/).length).toBeGreaterThan(0)
 
     // Cancel: nothing is deleted.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -322,7 +328,12 @@ describe('SessionActionsMenu', () => {
       'bot-chat': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:right', workspaceTabTitle: 'Bot Chat' }
     })
     $sessionTiles.set([
-      { storedSessionId: 'other-chat', workspaceMode: 'bots', workspaceOwnerKey: 'bot:other', workspaceTabTitle: 'Bot Chat' }
+      {
+        storedSessionId: 'other-chat',
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:other',
+        workspaceTabTitle: 'Bot Chat'
+      }
     ])
     render(
       <SessionActionsMenu onDelete={onDelete} renameable={false} sessionId="bot-chat" title="Bot Chat">
@@ -372,7 +383,11 @@ describe('SessionActionsMenu', () => {
 
   it('retains a rejected deletion in the original dialog for retry', async () => {
     const onDelete = vi.fn().mockRejectedValueOnce(new Error('Delete refused')).mockResolvedValue(undefined)
-    render(<SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session"><button>Actions</button></SessionActionsMenu>)
+    render(
+      <SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session">
+        <button>Actions</button>
+      </SessionActionsMenu>
+    )
     const trigger = screen.getByRole('button', { name: 'Actions' })
     fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
     fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
@@ -384,6 +399,85 @@ describe('SessionActionsMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('Session deleted')).toBeTruthy()
     expect(onDelete).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([SessionActionsMenu, SessionContextMenu])(
+    'offers reversible sidebar removal through the captured action owner',
+    async Component => {
+      let reject!: (error: Error) => void
+
+      const archiveSession = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((_resolve, fail) => {
+              reject = fail
+            })
+        )
+        .mockResolvedValueOnce(undefined)
+
+      const onDelete = vi.fn()
+      vi.mocked(sessionTileDelegate).mockReturnValue({ archiveSession } as never)
+      render(
+        <Component onDelete={onDelete} profile="Research workspace" sessionId="owned-session" title="Notes">
+          <button>Actions</button>
+        </Component>
+      )
+      const trigger = screen.getByRole('button', { name: 'Actions' })
+
+      if (Component === SessionContextMenu) {
+        fireEvent.contextMenu(trigger)
+      } else {
+        fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
+        fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
+        fireEvent.click(trigger)
+      }
+
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText('Research workspace')).toBeTruthy()
+      expect(within(dialog).getByText(/compressed history and delegated subtask history/)).toBeTruthy()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove from sidebar' }))
+      expect(archiveSession).toHaveBeenCalledWith('owned-session', { throwOnError: true })
+      expect(onDelete).not.toHaveBeenCalled()
+      expect(within(dialog).getByRole('button', { name: 'Delete' }).hasAttribute('disabled')).toBe(true)
+      await act(async () => reject(new Error('Archive refused')))
+      expect(within(dialog).getByRole('alert').textContent).toBe('Archive refused')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove from sidebar' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(archiveSession).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it('retires the captured decision on account reset and never retargets it after a session switch', async () => {
+    const firstDelete = vi.fn()
+    const nextDelete = vi.fn()
+
+    const view = (sessionId: string, onDelete: () => void) => (
+      <SessionActionsMenu onDelete={onDelete} sessionId={sessionId} title={sessionId}>
+        <button>Actions</button>
+      </SessionActionsMenu>
+    )
+
+    const { rerender } = render(view('first-session', firstDelete))
+
+    const openDelete = async () => {
+      const trigger = screen.getByRole('button', { name: 'Actions' })
+      fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
+      fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
+      fireEvent.click(trigger)
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+      await screen.findByRole('dialog')
+    }
+
+    await openDelete()
+    rerender(view('next-session', nextDelete))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await openDelete()
+    act(() => $notificationEpoch.set($notificationEpoch.get() + 1))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(firstDelete).not.toHaveBeenCalled()
+    expect(nextDelete).not.toHaveBeenCalled()
   })
 
   // The sidebar's Archived view reuses this menu; its rows must offer the

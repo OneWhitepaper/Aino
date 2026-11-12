@@ -11,6 +11,7 @@ import {
   closeSecondaryGateways,
   configureGatewayRegistry,
   disposeSecondariesForConnection,
+  gatewayRouteState,
   liveSecondaryConnectionIds,
   openGatewayForAgent,
   pruneSecondaryGateways,
@@ -18,6 +19,7 @@ import {
   setPrimaryGateway,
   setPrimaryGatewayConnectionId
 } from './gateway'
+import { $gatewayRouteRevision } from './gateway-route-observation'
 import { $poolLimits, POOL_LIMITS_DEFAULTS } from './pool-limits'
 import { requestForSessionProfile } from './session-request-router'
 
@@ -177,6 +179,38 @@ afterEach(() => {
 })
 
 describe('background remote turn reconnect', () => {
+  it('passively reports only the exact owner socket lifecycle without dialing or foregrounding it', async () => {
+    const changed = vi.fn()
+    const stop = $gatewayRouteRevision.listen(changed)
+    expect(gatewayRouteState(owner.connectionId, owner.profile).state).toBeNull()
+    expect(sockets).toHaveLength(1)
+
+    const opened = openGatewayForAgent(owner.connectionId, owner.profile)
+    await vi.advanceTimersByTimeAsync(10)
+    await opened
+    expect(gatewayRouteState(owner.connectionId, owner.profile)).toMatchObject({
+      open: true,
+      state: 'open',
+      primary: false
+    })
+    expect(gatewayRouteState('other-source', owner.profile).socket).toBeNull()
+    expect(changed).toHaveBeenCalled()
+    changed.mockClear()
+    const remote = sockets.find(socket => socket.url === remoteUrl)!
+    remote.networkDrop(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(gatewayRouteState(owner.connectionId, owner.profile)).toMatchObject({
+      open: false,
+      state: 'closed',
+      gateway: null
+    })
+    expect(gatewayRouteState('local', 'default')).toMatchObject({ open: true, state: 'open', primary: true })
+    expect(activeGateway()).toBe(primary)
+    expect(onActiveRouteChanged).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalled()
+    stop()
+  })
+
   it.each([
     { name: 'turn lease only, network close', retained: false, drop: true, error: false },
     { name: 'turn lease only, network error and close', retained: false, drop: true, error: true },

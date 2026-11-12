@@ -6,8 +6,9 @@ import { I18nProvider } from '@/i18n'
 import { $connectionsRegistry } from '@/store/connections'
 import { $bindings } from '@/store/keybinds'
 import { $activeGatewayProfile } from '@/store/profile'
-import { $connection } from '@/store/session'
+import { $connection, $currentCwd, $selectedStoredSessionId, $sessions, $workspaceCwdOwner } from '@/store/session'
 import { stubResizeObserver } from '@/test/jsdom'
+import { makeSessionInfo } from '@/test/session-info'
 
 import { $terminalTakeover, setTerminalTakeover } from '../store'
 
@@ -195,6 +196,47 @@ describe('TerminalRail', () => {
       $activeGatewayProfile.set(profile)
       $connection.set(null)
       $connectionsRegistry.set(null)
+    }
+  })
+
+  it('the current SSH host menu preserves a pooled Bot profile and its directory', async () => {
+    const previous = {
+      connection: $connection.get(),
+      cwd: $currentCwd.get(),
+      cwdOwner: $workspaceCwdOwner.get(),
+      selected: $selectedStoredSessionId.get(),
+      sessions: $sessions.get()
+    }
+
+    $connectionsRegistry.set({
+      connections: [
+        { id: 'local', kind: 'local', label: 'This device' },
+        { id: 'nas', kind: 'ssh', label: 'NAS' }
+      ],
+      primary: 'local',
+      version: 2
+    } as unknown as DesktopConnectionsRegistry)
+    $connection.set({ connectionId: 'nas', mode: 'remote', remoteKind: 'ssh' } as never)
+    $selectedStoredSessionId.set('pooled-bot')
+    $sessions.set([makeSessionInfo({ connection_id: 'nas', id: 'pooled-bot', profile: 'writer' })])
+    $currentCwd.set('/bot-project')
+    $workspaceCwdOwner.set('pooled-bot')
+
+    try {
+      render(<TerminalRail />)
+      fireEvent.contextMenu(screen.getByRole('button', { name: 'New terminal' }))
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'NAS' }))
+
+      expect($terminals.get().at(-1)).toMatchObject({ connectionId: 'nas', cwd: '/bot-project', profile: 'writer' })
+    } finally {
+      act(() => {
+        $connection.set(previous.connection)
+        $selectedStoredSessionId.set(previous.selected)
+        $sessions.set(previous.sessions)
+        $currentCwd.set(previous.cwd)
+        $workspaceCwdOwner.set(previous.cwdOwner)
+        $connectionsRegistry.set(null)
+      })
     }
   })
 })

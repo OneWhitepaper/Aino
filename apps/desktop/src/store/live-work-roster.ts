@@ -1,6 +1,9 @@
 import { atom } from 'nanostores'
 
 import { lineageAliases } from './session'
+import type { SessionOwnerScope } from './session-request-router'
+import type { SessionTileWorkspaceScope } from './session-states'
+import { projectSubagentSnapshot, type SubagentProgress } from './subagents'
 
 // App-wide answer to "which conversations still have work running outside
 // their turn?" from the backend's `subagent.roster` read. The event-fed stores
@@ -18,12 +21,23 @@ export interface LiveWorkCounts {
   subagents: number
 }
 
+export interface LiveWorkSessionSource {
+  kind: 'bot_room'
+  room_id: string
+  room_name?: string
+  profile: string
+}
+
 export interface LiveWorkBucket {
   at: number
+  owner?: SessionOwnerScope
   /** Stored ids of the sidebar rows this source answers for: a row it covers
    *  and does not list has no live work as of `at`. */
   covers: ReadonlySet<string>
   sessions: Record<string, LiveWorkCounts>
+  workersBySession?: Record<string, SubagentProgress[]>
+  sourcesBySession?: Record<string, LiveWorkSessionSource>
+  sourceScopesBySession?: Record<string, SessionTileWorkspaceScope>
 }
 
 export type LiveWorkRoster = Record<string, LiveWorkBucket>
@@ -34,7 +48,9 @@ export function setLiveWorkRosterSource(
   source: string,
   entries: readonly unknown[] | null,
   at = Date.now(),
-  covers: readonly string[] = []
+  covers: readonly string[] = [],
+  owner?: SessionOwnerScope,
+  sourceScopesBySession?: Record<string, SessionTileWorkspaceScope>
 ) {
   const current = $liveWorkRoster.get()
 
@@ -50,6 +66,8 @@ export function setLiveWorkRosterSource(
   }
 
   const bucket: Record<string, LiveWorkCounts> = {}
+  const workersBySession: Record<string, SubagentProgress[]> = {}
+  const sourcesBySession: Record<string, LiveWorkSessionSource> = {}
 
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object') {
@@ -64,9 +82,45 @@ export function setLiveWorkRosterSource(
     }
 
     bucket[sid] = { background: Number(row.background) || 0, subagents: Number(row.subagents) || 0 }
+
+    const room = row.source as Record<string, unknown> | undefined
+
+    if (
+      room?.kind === 'bot_room' &&
+      typeof room.room_id === 'string' &&
+      room.room_id &&
+      typeof room.profile === 'string'
+    ) {
+      sourcesBySession[sid] = {
+        kind: 'bot_room',
+        room_id: room.room_id,
+        room_name: typeof room.room_name === 'string' ? room.room_name : undefined,
+        profile: room.profile
+      }
+    }
+
+    if (Array.isArray(row.workers)) {
+      workersBySession[sid] = row.workers
+        .filter(
+          (worker): worker is Record<string, unknown> =>
+            !!worker && typeof worker === 'object' && typeof worker.subagent_id === 'string' && !!worker.subagent_id
+        )
+        .map(worker => projectSubagentSnapshot(worker, at))
+    }
   }
 
-  $liveWorkRoster.set({ ...current, [source]: { at, covers: new Set(covers), sessions: bucket } })
+  $liveWorkRoster.set({
+    ...current,
+    [source]: {
+      at,
+      owner,
+      covers: new Set(covers),
+      sessions: bucket,
+      workersBySession,
+      sourcesBySession,
+      sourceScopesBySession
+    }
+  })
 }
 
 /** Stored ids (all lineage aliases) the roster says have `kind` running.

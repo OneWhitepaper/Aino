@@ -1,12 +1,18 @@
 import { capturePlatformDraftAuthority, createPlatformDraft } from '@/api/platform-session-binding'
 import { resolveModelDefault } from '@/lib/model-default'
+import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS } from '@/lib/with-timeout'
 import { $gateway, requestGatewayForAgent, retainGatewayForAgent, type SpawnPriority } from '@/store/gateway'
-import { $gatewayManagedCapabilities, type ManagedModelRoute, managedModelRouteCapability } from '@/store/gateway-managed-capability'
+import {
+  $gatewayManagedCapabilities,
+  type ManagedModelRoute,
+  managedModelRouteCapability
+} from '@/store/gateway-managed-capability'
 import { samePlatformAccount } from '@/store/platform-model-owner'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { $connection } from '@/store/session'
+import type { SessionRuntimeInfo } from '@/types/hermes'
 
 import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 
@@ -22,14 +28,38 @@ export interface PluginSessionCreateRoute {
 type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
 
 function usesPluginPlatformDefault(method: string, params: Record<string, unknown>): boolean {
-  if (window.hermesDesktop?.accountAdapter !== 'platform' || !hasPlatformModelIdentity(platformModelCatalog().account.get())) {
+  if (
+    window.hermesDesktop?.accountAdapter !== 'platform' ||
+    !hasPlatformModelIdentity(platformModelCatalog().account.get())
+  ) {
     return false
   }
 
   return method === 'setup.runtime_check'
     ? !params.provider
-    : method === 'session.create' && params.follow_profile_config === true &&
-      !['model', 'provider', 'model_source', 'model_id'].some(key => Boolean(params[key]))
+    : method === 'session.create' &&
+        params.follow_profile_config === true &&
+        !['model', 'provider', 'model_source', 'model_id'].some(key => Boolean(params[key]))
+}
+
+function isCanonicalBotParams(params: Record<string, unknown>): boolean {
+  return params.title === 'Bot Chat' && params.hidden === true && params.follow_profile_config === true
+}
+
+function normalizeCanonicalSelection<T extends { session_id?: string; info?: SessionRuntimeInfo }>(created: T): T {
+  // The resolver proved that this account/profile has no selection. An
+  // ambient route chosen by native prewarm cannot turn that into consent.
+  return {
+    ...created,
+    info: {
+      ...(created.info || {}),
+      model: '',
+      provider: '',
+      model_source: undefined,
+      model_id: undefined,
+      model_status: undefined
+    }
+  }
 }
 
 async function resolvePluginActiveRoute(route: PluginSessionCreateRoute): Promise<PluginSessionCreateRoute> {
@@ -41,13 +71,17 @@ async function resolvePluginActiveRoute(route: PluginSessionCreateRoute): Promis
 
   const routes = await getProfileRoutes([route.profile, route.targetProfile])
   const sourceRoutes = routes.filter(candidate => candidate.connectionId === route.connectionId)
-  const active = sourceRoutes.find(candidate => candidate.profile === route.profile && candidate.targetProfile === route.targetProfile)
+  const active = sourceRoutes.find(
+    candidate => candidate.profile === route.profile && candidate.targetProfile === route.targetProfile
+  )
 
   if (active) {
     return { ...active }
   }
 
-  const target = sourceRoutes.filter(candidate => candidate.profile === route.targetProfile && candidate.targetProfile === route.targetProfile)
+  const target = sourceRoutes.filter(
+    candidate => candidate.profile === route.targetProfile && candidate.targetProfile === route.targetProfile
+  )
 
   if (target.length !== 1) {
     throw new PlatformSelectionError('unsupported_gateway')
@@ -73,7 +107,9 @@ function waitForManagedCapability(route: ManagedModelRoute): Promise<void> {
   const current = managedModelRouteCapability(route)
 
   if (current !== 'unknown') {
-    return current === 'supported' ? Promise.resolve() : Promise.reject(new PlatformSelectionError('unsupported_gateway'))
+    return current === 'supported'
+      ? Promise.resolve()
+      : Promise.reject(new PlatformSelectionError('unsupported_gateway'))
   }
 
   return new Promise((resolve, reject) => {
@@ -81,14 +117,19 @@ function waitForManagedCapability(route: ManagedModelRoute): Promise<void> {
       clearTimeout(timer)
       unlisten()
 
-      if (managedModelRouteCapability(route) === 'supported') { resolve() }
-      else { reject(new PlatformSelectionError('unsupported_gateway')) }
+      if (managedModelRouteCapability(route) === 'supported') {
+        resolve()
+      } else {
+        reject(new PlatformSelectionError('unsupported_gateway'))
+      }
     }
 
     const timer = setTimeout(finish, RECONNECT_ATTEMPT_TIMEOUT_MS)
 
     const unlisten = $gatewayManagedCapabilities.listen(() => {
-      if (managedModelRouteCapability(route) !== 'unknown') { finish() }
+      if (managedModelRouteCapability(route) !== 'unknown') {
+        finish()
+      }
     })
   })
 }
@@ -100,16 +141,52 @@ async function resolvePluginModelDefault(route: PluginSessionCreateRoute, profil
   assertAccount()
 
   // Explicit third-party configuration does not depend on managed capability.
-  if (resolved.model || resolved.provider) { return resolved }
+  if (resolved.model || resolved.provider) {
+    return resolved
+  }
 
   await waitForManagedCapability(managedRoute)
   assertAccount()
   const ready = await resolveModelDefault(scope, managedRoute)
   assertAccount()
 
-  if (!ready.model && !ready.provider) { throw new PlatformSelectionError('unsupported_gateway') }
+  if (!ready.model && !ready.provider) {
+    throw new PlatformSelectionError('unsupported_gateway')
+  }
 
   return ready
+}
+
+/** Opening an empty Bot is navigation, not permission to guess its first model. */
+async function resolveCanonicalChatDefault(
+  route: PluginSessionCreateRoute,
+  params: Record<string, unknown>,
+  assertAccount: () => void
+) {
+  try {
+    return await resolvePluginModelDefault(route, route.targetProfile, assertAccount)
+  } catch (error) {
+    assertAccount()
+    const catalog = platformModelCatalog()
+    const state = catalog.state.get()
+
+    const selectable =
+      state.phase === 'ready' &&
+      state.models.some(model => model.state === 'available' && platformModelSupportsPurpose(model, 'chat'))
+
+    if (
+      error instanceof PlatformSelectionError &&
+      error.code === 'model_unavailable' &&
+      isCanonicalBotParams(params) &&
+      selectable &&
+      managedModelRouteCapability({ connectionId: route.connectionId ?? undefined, profile: route.profile }) ===
+        'supported'
+    ) {
+      return { model: '', provider: '', platform: null }
+    }
+
+    throw error
+  }
 }
 
 async function requestPluginRuntimeReadiness<T>(
@@ -120,7 +197,8 @@ async function requestPluginRuntimeReadiness<T>(
   spawnPriority?: SpawnPriority
 ): Promise<T> {
   const assertAccount = pluginAccountFence()
-  const targetProfile = typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : route.targetProfile
+  const targetProfile =
+    typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : route.targetProfile
   const release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
 
   try {
@@ -135,9 +213,12 @@ async function requestPluginRuntimeReadiness<T>(
     }
 
     return await (timeoutMs === undefined
-      ? request<T>('setup.runtime_check', params) : request<T>('setup.runtime_check', params, timeoutMs))
+      ? request<T>('setup.runtime_check', params)
+      : request<T>('setup.runtime_check', params, timeoutMs))
   } catch (error) {
-    if (!(error instanceof PlatformSelectionError)) { throw error }
+    if (!(error instanceof PlatformSelectionError)) {
+      throw error
+    }
 
     return { ok: false, provider: 'aino', error: error.message, error_code: error.code } as T
   } finally {
@@ -156,8 +237,12 @@ function groupSendNotDispatched(error: unknown): Error {
 }
 
 async function requestPreparedPluginGroup<T>(
-  route: PluginSessionCreateRoute, request: Request, method: string,
-  params: Record<string, unknown>, send: () => Promise<T>, spawnPriority?: SpawnPriority
+  route: PluginSessionCreateRoute,
+  request: Request,
+  method: string,
+  params: Record<string, unknown>,
+  send: () => Promise<T>,
+  spawnPriority?: SpawnPriority
 ): Promise<T> {
   let release: (() => void) | undefined
   let dispatched = false
@@ -166,9 +251,14 @@ async function requestPreparedPluginGroup<T>(
     const assertAccount = pluginAccountFence()
     release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
     assertAccount()
-    await preparePluginGroupModels(route, request, params.room_id as string,
-      profile => resolvePluginModelDefault(route, profile, assertAccount), assertAccount,
-      method === 'groups.retry' ? params.member_id as string : undefined)
+    await preparePluginGroupModels(
+      route,
+      request,
+      params.room_id as string,
+      profile => resolvePluginModelDefault(route, profile, assertAccount),
+      assertAccount,
+      method === 'groups.retry' ? (params.member_id as string) : undefined
+    )
     assertAccount()
     // From this point even a synchronous transport error may have posted the
     // intent. Only the gateway can prove otherwise; preserve its exact error.
@@ -179,8 +269,11 @@ async function requestPreparedPluginGroup<T>(
     throw method === 'groups.send' && !dispatched ? groupSendNotDispatched(error) : error
   } finally {
     // Lease cleanup must not replace a receipt or its admission evidence.
-    try { release?.() }
-    catch (error) { console.warn('[plugin-session-create] group lease release failed', error) }
+    try {
+      release?.()
+    } catch (error) {
+      console.warn('[plugin-session-create] group lease release failed', error)
+    }
   }
 }
 
@@ -200,11 +293,12 @@ export async function requestPluginActiveGateway<T>(
 
   const profile = normalizeProfileKey($activeGatewayProfile.get())
 
-  const targetProfile = typeof params.profile === 'string' && params.profile.trim()
-    ? params.profile.trim() : profile
+  const targetProfile = typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : profile
 
   let route: PluginSessionCreateRoute = {
-    connectionId: connection?.connectionId || (connection?.mode === 'local' ? 'local' : null), profile, targetProfile
+    connectionId: connection?.connectionId || (connection?.mode === 'local' ? 'local' : null),
+    profile,
+    targetProfile
   }
 
   let request: Request = (requestMethod, payload, deadline) =>
@@ -217,9 +311,10 @@ export async function requestPluginActiveGateway<T>(
 
     if (route.profile !== profile) {
       const captured = route
-      request = (requestMethod, payload = {}, deadline) => deadline === undefined
-        ? requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload)
-        : requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload, deadline)
+      request = (requestMethod, payload = {}, deadline) =>
+        deadline === undefined
+          ? requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload)
+          : requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload, deadline)
     }
   }
 
@@ -235,7 +330,7 @@ export async function requestPluginSession<T>(
   timeoutMs?: number,
   spawnPriority?: SpawnPriority
 ): Promise<T> {
-  const send = () => timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs)
+  const send = () => (timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs))
 
   if (method === 'profiles.create') {
     return requestPluginProfileCreate(route, params, send)
@@ -243,7 +338,8 @@ export async function requestPluginSession<T>(
 
   if (
     (method === 'groups.send' || (method === 'groups.retry' && typeof params.member_id === 'string')) &&
-    typeof params.room_id === 'string' && params.room_id &&
+    typeof params.room_id === 'string' &&
+    params.room_id &&
     window.hermesDesktop?.accountAdapter === 'platform'
   ) {
     return requestPreparedPluginGroup(route, request, method, params, send, spawnPriority)
@@ -263,29 +359,41 @@ export async function requestPluginSession<T>(
 
   try {
     assertAccount()
-    const resolved = await resolvePluginModelDefault(route, route.targetProfile, assertAccount)
+    const resolved = await resolveCanonicalChatDefault(route, capturedParams, assertAccount)
     assertAccount()
 
     if (!resolved.platform) {
-      return await send()
+      if (resolved.model || resolved.provider) {
+        return await send()
+      }
+
+      const created = await send()
+      assertAccount()
+
+      return normalizeCanonicalSelection(created as T & { session_id?: string; info?: SessionRuntimeInfo })
     }
 
-    const authority = await capturePlatformDraftAuthority(resolved.platform.ownerUserId, resolved.platform.platformOrigin)
+    const authority = await capturePlatformDraftAuthority(
+      resolved.platform.ownerUserId,
+      resolved.platform.platformOrigin
+    )
     assertAccount()
     const owner = route.connectionId ? { connectionId: route.connectionId, profile: route.profile } : route.profile
 
     const createRequest: Request = (requestMethod, payload, requestTimeout) =>
       requestMethod === 'session.create' && timeoutMs !== undefined
         ? request(requestMethod, payload, timeoutMs)
-        : requestTimeout === undefined ? request(requestMethod, payload) : request(requestMethod, payload, requestTimeout)
+        : requestTimeout === undefined
+          ? request(requestMethod, payload)
+          : request(requestMethod, payload, requestTimeout)
 
-    return await createPlatformDraft(
+    return (await createPlatformDraft(
       createRequest,
       { ...capturedParams, profile: route.targetProfile, model_source: 'aino', model_id: resolved.platform.modelId },
       resolved.platform.ownerUserId,
       owner,
       authority
-    ) as T
+    )) as T
   } finally {
     release()
   }

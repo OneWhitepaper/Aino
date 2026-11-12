@@ -50,6 +50,7 @@ export type { SpawnPriority } from './gateway-types'
 
 import { recordGatewayCapabilityState, recordGatewayReadyCapability } from './gateway-managed-capability'
 import type { RegistryConfig } from './gateway-registry-config'
+import { gatewayRouteChanged, type GatewayRouteState, observedGatewayRouteState } from './gateway-route-observation'
 import type { Secondary } from './gateway-socket-entry'
 import type { GatewayRegistryState, SpawnPriority } from './gateway-types'
 export { useGatewayActivationEpoch } from '@/store/gateway-activation-epoch'
@@ -115,13 +116,8 @@ function createRegistryState(): GatewayRegistryState {
   }
 }
 
-// Dev only: park the singletons on globalThis so an HMR re-eval of this module
-// (self-accepted at the bottom) hands back the SAME live sockets/atoms instead
-// of resetting them — that's what keeps the agent session alive across UI edits.
-// `import.meta.hot` is undefined in production, so Vite dead-code-eliminates the
-// entire globalThis branch and prod uses a plain module-local singleton — no
-// globalThis, no Symbol.for. Both realms load the module once, so the container's
-// shape and lifetime are identical either way.
+// Registry state and its atoms survive dev HMR so unrelated edits preserve live sockets.
+// Production uses one module-local container.
 function gatewayState(): GatewayRegistryState {
   if (import.meta.hot) {
     const store = globalThis as unknown as { [STATE_KEY]?: GatewayRegistryState }
@@ -171,17 +167,14 @@ export function activeGatewayProfileKey(): string {
 
 /** Never dials or asks main: the socket a request for (connectionId, profile) would ride (`primary:<profile>` for the
  *  window primary and profiles known to share its backend, else the pooled scope), and that socket only while open. */
-export function gatewayRouteState(
-  connectionId: null | string,
-  profile: string
-): { gateway: HermesGateway | null; key: string; open: boolean } {
+export function gatewayRouteState(connectionId: null | string, profile: string): GatewayRouteState {
   const key = normKey(profile)
   const scope = registryBackendScopeKey(connectionId, key)
   const onPrimary = key === g.primaryProfile && (scope === key || isPrimaryRegistryRoute(connectionId, key))
   const primary = onPrimary || isPrimaryRider(scope, primaryIdentity())
   const gateway = primary ? g.primaryGateway : (g.secondaries.get(scope)?.gateway ?? null)
 
-  return { gateway: isOpen(gateway) ? gateway : null, key: primary ? `primary:${key}` : scope, open: isOpen(gateway) }
+  return observedGatewayRouteState(gateway, primary ? `primary:${key}` : scope, primary)
 }
 
 export function configureGatewayRegistry(cfg: RegistryConfig): void {
@@ -258,6 +251,7 @@ export function setPrimaryGateway(gateway: HermesGateway | null, profile = 'defa
 
   g.primaryGateway = gateway
   g.primaryProfile = next
+  gatewayRouteChanged()
   setPrimaryManagedCapabilityOwner(primaryIdentity())
   g.$activeConnectionId.set(activeGatewayConnectionId())
 
@@ -477,6 +471,7 @@ export function reportPrimaryGatewayState(gateway: HermesGateway, state: Connect
     resetPrimaryManagedCapability(primaryIdentity())
   }
 
+  gatewayRouteChanged()
   reportGatewayState(g.primaryProfile, state)
 
   return true
@@ -942,7 +937,9 @@ function createSecondary(profile: string, connectionId: null | string = null): S
       return
     }
 
-    if (event.type === 'gateway.ready') { recordSecondaryWire(connectionId, entry.connection, gateway.sessionWire) }
+    if (event.type === 'gateway.ready') {
+      recordSecondaryWire(connectionId, entry.connection, gateway.sessionWire)
+    }
 
     const scopedEvent = stampSecondaryProfileOwner(
       { ...event, ...(connectionId ? { connectionId } : {}) },
@@ -967,6 +964,7 @@ function createSecondary(profile: string, connectionId: null | string = null): S
       return
     }
 
+    gatewayRouteChanged()
     recordGatewayCapabilityState({ connectionId, profile }, state)
     reportGatewayState(scope, state)
 
@@ -996,6 +994,7 @@ function createSecondary(profile: string, connectionId: null | string = null): S
   })
 
   g.secondaries.set(scope, entry)
+  gatewayRouteChanged()
 
   return entry
 }
@@ -2067,6 +2066,7 @@ function disposeSecondary(entry: Secondary): void {
   entry.offRequest()
   entry.offState()
   entry.gateway.close()
+  gatewayRouteChanged()
   // Release can re-enter disposal at refcount zero. wantOpen is already false,
   // and listeners are detached, so explicit teardown never rearms reconnect.
   releaseTurnLeasesForScope(entry.scope)

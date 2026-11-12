@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.registry import tool_error
 
 ACTIONS = ("search", "install")
@@ -21,7 +22,7 @@ _ITEM_KEYS = frozenset({"kind", "id"})
 SEARCH_LIMIT = 10
 
 NOT_HERE = (
-    "manage_catalog is available only in the Hermes desktop app, where the approval card can be drawn. "
+    f"manage_catalog is available only in the {PRODUCT_NAME} desktop app, where the approval card can be drawn. "
     "Tell the user to install from a terminal instead: `hermes plugins install <id>` for a plugin, "
     "`hermes skills install <id>` for a skill."
 )
@@ -36,7 +37,8 @@ NOTE = (
 MANAGE_CATALOG_SCHEMA = {
     "name": "manage_catalog",
     "description": (
-        "Find and install Hermes catalog plugins and hub skills for the user. 'search' lists matches "
+        f"Find and install shared catalog plugins and Skills Hub skills for {PRODUCT_NAME}. "
+        "Each item retains its actual source and service provider. 'search' lists matches "
         "(id, kind, display, tier, platforms, installed) and changes nothing. 'install' shows the user "
         "one approval card with a row per item and blocks until every row is installed, skipped or "
         "failed, or the card is closed; the host installs each approved row into this chat's profile at "

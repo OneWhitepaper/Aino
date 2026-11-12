@@ -492,6 +492,18 @@ event("todo.updated", TodoUpdatedPayload, doc="Full todo snapshot after a todo t
 # ── notifications ─────────────────────────────────────────────────────────────────────────────
 
 
+class StorageNoticeMetrics(Payload):
+    """Measured storage values; a failed history estimate stays unknown, never zero."""
+
+    free_bytes: int
+    total_bytes: int
+    db_bytes: int
+    estimate_ok: bool
+    prunable_sessions: int | None = None
+    total_sessions: int | None = None
+    reclaim_bytes: int | None = None
+
+
 class NotificationShowPayload(Payload):
     """``agent/credits_tracker.py::AgentNotice`` via notice_callback, and ``server._await_agent_ready``'s
     slow-build notice. ``level``: info | warn | error | success; ``kind``: sticky | ttl | agent.
@@ -510,6 +522,7 @@ class NotificationShowPayload(Payload):
     detail: str | None = None
     owner_user_id: str | None = None
     managed_credential_version: int | None = None
+    metrics: StorageNoticeMetrics | None = None
 
 
 class NotificationClearPayload(Payload):
@@ -650,6 +663,7 @@ class SubagentEventPayload(Payload):
     """``tool_progress._progress_subagent`` — every ``subagent.*`` frame; identity fields are optional
     because older emitters omit them and the TUI spawn tree falls back to flat rendering."""
 
+    display_name: str | None = None
     goal: str
     task_count: int
     task_index: int

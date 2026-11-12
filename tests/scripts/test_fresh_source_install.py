@@ -67,6 +67,9 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     source.mkdir()
     for name in ("pm", "hermes_cli", "hermes_platform"):
         shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__"))
+    # CLI publication imports product identity from the selected checkout's shared resource.
+    (source / "apps/desktop").mkdir(parents=True)
+    shutil.copy2(ROOT / "apps/desktop/brand.json", source / "apps/desktop/brand.json")
     for name in ("utils.py", "hermes_constants.py", "hermes_dir_acl.py", "hermes_yaml.py", "hermes_bootstrap.py",
                  "setup-hermes.sh"):
         shutil.copy2(ROOT / name, source / name)

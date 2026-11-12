@@ -4,10 +4,11 @@ import { useContext } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { $workspaceIsPage } from '@/app/routes'
+import { $workspaceIsPage, navigateToWorkspacePage, syncWorkspaceRoute } from '@/app/routes'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { SidebarBrandContext } from '@/components/pane-shell/pane-visibility'
 import { registry } from '@/contrib/registry'
+import { $selectedStoredSessionId } from '@/store/session'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
 import { group, split } from '../model'
@@ -53,6 +54,7 @@ beforeEach(() => {
         placement: 'left',
         hideOnly: true,
         collapsible: true,
+        sidebarMode: 'sessions',
         sidebarDescription: () => 'Projects and conversations'
       },
       render: SessionContents
@@ -63,7 +65,13 @@ beforeEach(() => {
     area: 'panes',
     title: 'Agent Hub',
     source: 'plugin:example-agent-plugin',
-    data: { placement: 'left', hideOnly: true, collapsible: true, sidebarDescription: () => 'Bots and collaboration' },
+    data: {
+      placement: 'left',
+      hideOnly: true,
+      collapsible: true,
+      sidebarMode: 'bots',
+      sidebarDescription: () => 'Bots and collaboration'
+    },
     render: () => <div>Bot roster</div>
   })
   disposers.push(disableHub)
@@ -76,6 +84,8 @@ afterEach(() => {
   $narrowViewport.set(false)
   disposers.splice(0).forEach(dispose => dispose())
   vi.unstubAllGlobals()
+  $selectedStoredSessionId.set(null)
+  window.location.hash = '#/'
 })
 
 function chooseHub() {
@@ -86,7 +96,97 @@ function chooseHub() {
   fireEvent.click(screen.getByRole('menuitemradio', { name: /Agent Hub/ }))
 }
 
+function usePageNavigationPanes() {
+  disableHub()
+  disposers.push(
+    registry.register({
+      id: 'hermes-bots:pane',
+      area: 'panes',
+      title: 'Agent Hub',
+      source: 'plugin:hermes-bots',
+      data: {
+        placement: 'left',
+        hideOnly: true,
+        collapsible: true,
+        sidebarMode: 'bots',
+        sidebarDescription: () => 'Bots and collaboration'
+      },
+      render: () => <div>Bot roster</div>
+    })
+  )
+  $layoutTree.set(group(['sessions', 'hermes-bots:pane'], { id: 'navigation', active: 'sessions' }))
+}
+
 describe('shared navigation brand menu', () => {
+  it('leaves a tools page on an explicit mode switch while retaining the current conversation and draft', () => {
+    usePageNavigationPanes()
+    $selectedStoredSessionId.set('ordinary-chat')
+    window.location.hash = '#/capabilities?tab=tools'
+    syncWorkspaceRoute('/capabilities?tab=tools')
+    render(
+      <MemoryRouter>
+        <LiveGroup />
+      </MemoryRouter>
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'Session draft' }), { target: { value: 'Unsaved text' } })
+    chooseHub()
+
+    expect($workspaceIsPage.get()).toBe(false)
+    expect(window.location.hash).toBe('#/ordinary-chat')
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+
+    act(() =>
+      navigateToWorkspacePage(to => {
+        window.location.hash = `#${to}`
+      }, '/capabilities?tab=tools')
+    )
+    act(() => syncWorkspaceRoute('/capabilities?tab=tools'))
+    expect($workspaceIsPage.get()).toBe(true)
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Switch conversation mode: Agent Hub/ }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Aino/ }))
+
+    expect($workspaceIsPage.get()).toBe(false)
+    expect(window.location.hash).toBe('#/ordinary-chat')
+    expect((screen.getByRole('textbox', { name: 'Session draft' }) as HTMLInputElement).value).toBe('Unsaved text')
+  })
+
+  it('does not leave a tools page when pane visibility changes without a mode selection', () => {
+    usePageNavigationPanes()
+    window.location.hash = '#/capabilities?tab=tools'
+    syncWorkspaceRoute('/capabilities?tab=tools')
+    render(
+      <MemoryRouter>
+        <LiveGroup />
+      </MemoryRouter>
+    )
+    act(() => activateTreePane('navigation', 'hermes-bots:pane'))
+
+    expect($workspaceIsPage.get()).toBe(true)
+    expect(window.location.hash).toBe('#/capabilities?tab=tools')
+  })
+
+  it('leaves the tools page through the narrow mode menu without replacing its retained conversation', () => {
+    usePageNavigationPanes()
+    $layoutTree.set(split('row', [group(['sessions', 'hermes-bots:pane'], { id: 'navigation', active: 'sessions' })]))
+    $narrowViewport.set(true)
+    $selectedStoredSessionId.set('ordinary-chat')
+    window.location.hash = '#/capabilities?tab=tools'
+    syncWorkspaceRoute('/capabilities?tab=tools')
+    render(<NarrowOverlays />)
+    act(() =>
+      window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: 'sessions', mode: 'open' } }))
+    )
+    chooseHub()
+
+    expect($workspaceIsPage.get()).toBe(false)
+    expect(window.location.hash).toBe('#/ordinary-chat')
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+    expect(screen.getByText('Bot roster')).toBeTruthy()
+  })
+
   it('activates the existing pane, preserves the session draft and falls back when the plugin unloads', () => {
     const { container } = render(
       <MemoryRouter>

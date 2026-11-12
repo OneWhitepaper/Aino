@@ -11,13 +11,9 @@ import titlebarRightSidebarIcon from '@/assets/aino-home/titlebar-right-sidebar.
 import titlebarSidebarToggleIcon from '@/assets/aino-home/titlebar-sidebar-toggle.svg'
 import titlebarSwapIcon from '@/assets/aino-home/titlebar-swap.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
+import { NotificationStack } from '@/components/notifications'
 import { toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
-import {
-  $paneVisible,
-  $treeSideVisible,
-  resetLayoutTree,
-  togglePaneVisible
-} from '@/components/pane-shell/tree/store'
+import { $paneVisible, resetLayoutTree, togglePaneVisible } from '@/components/pane-shell/tree/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
@@ -72,11 +68,7 @@ export interface TitlebarTool extends Tiered {
 }
 
 export type TitlebarToolSide = 'left' | 'right'
-export type SetTitlebarToolGroup = (
-  id: string,
-  tools: readonly TitlebarTool[],
-  side?: TitlebarToolSide
-) => void
+export type SetTitlebarToolGroup = (id: string, tools: readonly TitlebarTool[], side?: TitlebarToolSide) => void
 
 interface TitlebarControlsProps extends ComponentProps<'div'> {
   leftTools?: readonly TitlebarTool[]
@@ -97,11 +89,7 @@ function LayoutGlyph({ modHeld }: { modHeld: boolean }) {
       <span className={cn('relative hidden', modHeld && 'group-hover/tool:inline-flex')}>
         <AinoDesignIcon className="size-[18px]" src={titlebarLayoutIcon} />
         <span className="absolute -bottom-1 -right-1.5 grid place-items-center rounded-full bg-(--ui-bg-chrome) p-px">
-          <TitlebarIcon
-            className="-scale-x-100"
-            name="refresh"
-            size={titlebarIconSizeCss(TITLEBAR_ICON_BADGE_SCALE)}
-          />
+          <TitlebarIcon className="-scale-x-100" name="refresh" size={titlebarIconSizeCss(TITLEBAR_ICON_BADGE_SCALE)} />
         </span>
       </span>
     </>
@@ -150,21 +138,14 @@ function useModifierHeld(): boolean {
 
 export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControlsProps) {
   const { t } = useI18n()
-  const navigate = useNavigate()
   const location = useLocation()
   const modHeld = useModifierHeld()
   const hapticsMuted = useStore($hapticsMuted)
-  const leftSideVisible = useStore($treeSideVisible('left'))
   const panesFlipped = useStore($panesFlipped)
   const unreadCount = useStore($unreadSessionCount)
   const terminalVisible = useStore($paneVisible('terminal'))
-  const appActionsSide = useStore($titlebarAppActionsSide)
-  const interfaceMode = useStore($interfaceMode)
   const unreadBadge = unreadCount > 0 ? unreadCount : undefined
   const unreadHint = unreadBadge ? ` · ${t.titlebar.unreadSessions(unreadBadge)}` : ''
-  // One filter for every cluster: a tool's own `hidden`, then the mode's tier.
-  const shown = shownInMode(interfaceMode)
-  const visibleTool = (tool: TitlebarTool) => !tool.hidden && shown(tool)
 
   const toggleHaptics = () => {
     if (!hapticsMuted) {
@@ -317,12 +298,62 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     window.dispatchEvent(new CustomEvent(TITLEBAR_CHROME_CHANGED_EVENT))
   }, [location.pathname, pageOwnsTitlebar])
 
+  return (
+    <TitlebarClusters
+      flipTool={flipTool}
+      leftTools={leftTools}
+      pageOwnsTitlebar={pageOwnsTitlebar}
+      rightSidebarTool={rightSidebarTool}
+      sidebarTool={sidebarTool}
+      systemTools={systemTools}
+      terminalTool={terminalTool}
+      tools={tools}
+      view={view}
+    />
+  )
+}
+
+interface TitlebarClustersProps {
+  leftTools: readonly TitlebarTool[]
+  tools: readonly TitlebarTool[]
+  sidebarTool: TitlebarTool
+  flipTool: TitlebarTool
+  rightSidebarTool: TitlebarTool
+  terminalTool: TitlebarTool
+  systemTools: readonly TitlebarTool[]
+  pageOwnsTitlebar: boolean
+  view: ReturnType<typeof appViewForPath>
+}
+
+function TitlebarClusters({
+  leftTools,
+  tools,
+  sidebarTool,
+  flipTool,
+  rightSidebarTool,
+  terminalTool,
+  systemTools,
+  pageOwnsTitlebar,
+  view
+}: TitlebarClustersProps) {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const appActionsSide = useStore($titlebarAppActionsSide)
+  const interfaceMode = useStore($interfaceMode)
+  // Every cluster respects the same hidden flag and interface-mode tier.
+  const shown = shownInMode(interfaceMode)
+  const visibleTool = (tool: TitlebarTool) => !tool.hidden && shown(tool)
+
   // Overlays own the window. These clusters are `fixed` at a higher z-index
   // than the overlay card, so they'd otherwise bleed over it — hide them (and
   // the nested titleBar slots) and let the overlay's own chrome take over.
-  if (isRouteBlockingSurface(view)) {
+  if (isRouteBlockingSurface(view) && view !== 'settings') {
     return null
   }
+
+  const routeOwnsWindow = isRouteBlockingSurface(view)
+  const pageOwnsChrome = !routeOwnsWindow && hidesFixedTitlebarClusters(view) && pageOwnsTitlebar
+  const showFixedTools = !routeOwnsWindow && !pageOwnsChrome
 
   const leftClusterClass = cn(
     titlebarToolClusterClass,
@@ -335,54 +366,35 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // the app's controls; an empty claim would leave a bare strip on every plugin
   // route. Contributed `titleBar.tools` items keep rendering here too, so a
   // chrome-owning page never silently drops a registered item.
-  if (hidesFixedTitlebarClusters(view) && pageOwnsTitlebar) {
-    const pageTools = [...leftTools, ...tools].filter(visibleTool)
-
-    // Both markers are required even when a page contributes to only one side.
-    return (
-      <>
-        <div className={leftClusterClass} data-titlebar-cluster="left">
-          {pageTools.map(tool => (
-            <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
-          ))}
-          <Slot area="titleBar.left" />
-        </div>
-        <div
-          className={cn(
-            titlebarToolClusterClass,
-            'right-(--titlebar-tools-right) top-(--titlebar-controls-top)'
-          )}
-          data-titlebar-cluster="right"
-        >
-          <Slot area="titleBar.right" />
-        </div>
-      </>
-    )
-  }
-
   const visibleLeftTools = (
-    appActionsSide === 'left'
-      ? [sidebarTool, flipTool, ...systemTools, ...leftTools]
-      : [sidebarTool, flipTool, ...leftTools]
+    pageOwnsChrome
+      ? [...leftTools, ...tools]
+      : appActionsSide === 'left'
+        ? [sidebarTool, flipTool, ...systemTools, ...leftTools]
+        : [sidebarTool, flipTool, ...leftTools]
   ).filter(visibleTool)
 
   const visibleSystemTools = appActionsSide === 'right' ? systemTools.filter(visibleTool) : []
   const visiblePaneTools = tools.filter(visibleTool)
+  const visibleEndTools = [terminalTool, rightSidebarTool].filter(visibleTool)
 
   return (
     <>
-      <div
-        aria-label={t.shell.windowControls}
-        className={leftClusterClass}
-        data-slot="titlebar-window-controls"
-        data-titlebar-cluster="left"
-      >
-        {visibleLeftTools.map(tool => (
-          <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
-        ))}
-      </div>
+      {!routeOwnsWindow && (
+        <div
+          aria-label={pageOwnsChrome ? undefined : t.shell.windowControls}
+          className={leftClusterClass}
+          data-slot={pageOwnsChrome ? undefined : 'titlebar-window-controls'}
+          data-titlebar-cluster="left"
+        >
+          {visibleLeftTools.map(tool => (
+            <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
+          ))}
+          {pageOwnsChrome && <Slot area="titleBar.left" />}
+        </div>
+      )}
 
-      {visiblePaneTools.length > 0 && (
+      {showFixedTools && visiblePaneTools.length > 0 && (
         <div
           aria-label={t.shell.paneControls}
           className={cn(
@@ -397,38 +409,64 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
         </div>
       )}
 
-      <div
-        aria-label={t.shell.appControls}
-        className={cn(
-          titlebarToolClusterClass,
-          'right-(--titlebar-tools-right) top-(--titlebar-controls-top) translate-y-[3.5px] gap-1'
-        )}
-        data-slot="titlebar-app-controls"
-        data-titlebar-cluster="right"
-      >
-        {visibleSystemTools.map(tool => (
-          <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
-        ))}
-        {shown({ tier: 'advanced' }) && <SummaryToggle />}
-        {visibleTool(terminalTool) && (
-          <TitlebarToolButton navigate={navigate} tool={terminalTool} />
-        )}
-        {visibleTool(rightSidebarTool) && (
-          <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />
-        )}
-        <Slot area="titleBar.right" />
-      </div>
+      <TitlebarAppControls
+        endTools={visibleEndTools}
+        routeOwnsWindow={routeOwnsWindow}
+        showFixedTools={showFixedTools}
+        showSummary={shown({ tier: 'advanced' })}
+        systemTools={visibleSystemTools}
+      />
     </>
   )
 }
 
-function TitlebarToolButton({
-  navigate,
-  tool
-}: {
-  navigate: ReturnType<typeof useNavigate>
-  tool: TitlebarTool
-}) {
+interface TitlebarAppControlsProps {
+  routeOwnsWindow: boolean
+  showFixedTools: boolean
+  showSummary: boolean
+  systemTools: readonly TitlebarTool[]
+  endTools: readonly TitlebarTool[]
+}
+
+/** The right cluster stays mounted when Settings replaces the workspace. */
+function TitlebarAppControls({
+  routeOwnsWindow,
+  showFixedTools,
+  showSummary,
+  systemTools,
+  endTools
+}: TitlebarAppControlsProps) {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+
+  return (
+    <div
+      aria-label={showFixedTools ? t.shell.appControls : undefined}
+      className={cn(
+        titlebarToolClusterClass,
+        'right-(--titlebar-tools-right) top-(--titlebar-controls-top) translate-y-[3.5px] gap-1'
+      )}
+      data-slot={showFixedTools ? 'titlebar-app-controls' : undefined}
+      data-titlebar-cluster="right"
+    >
+      <NotificationStack placement="toolbar" triggerClassName={titlebarButtonClass} />
+      {showFixedTools && (
+        <>
+          {systemTools.map(tool => (
+            <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
+          ))}
+          {showSummary && <SummaryToggle />}
+          {endTools.map(tool => (
+            <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
+          ))}
+        </>
+      )}
+      {!routeOwnsWindow && <Slot area="titleBar.right" />}
+    </div>
+  )
+}
+
+function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof useNavigate>; tool: TitlebarTool }) {
   // Titlebar actions never show an active background — state reads from the
   // icon itself (e.g. the mute/unmute glyph). aria-pressed still carries it
   // for a11y.

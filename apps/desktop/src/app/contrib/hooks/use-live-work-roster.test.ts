@@ -2,6 +2,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { HermesGateway } from '@/hermes'
+import { $lastRoster } from '@/plugins/hermes-bots/data'
+import type { RosterRow } from '@/plugins/hermes-bots/types'
 import type * as GatewayStore from '@/store/gateway'
 import { $liveWorkRoster } from '@/store/live-work-roster'
 import type * as SessionStore from '@/store/session'
@@ -14,6 +16,7 @@ const h = vi.hoisted(() => ({
   owners: new Map<string, unknown>(),
   open: new Set<string>(),
   request: vi.fn(),
+  ambientConnection: 'local',
   rows: [] as { id: string }[]
 }))
 
@@ -22,6 +25,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/store/gateway', async importOriginal => ({
   ...(await importOriginal<typeof GatewayStore>()),
   activeGatewayProfileKey: () => 'default',
+  activeGatewayConnectionId: () => h.ambientConnection,
   gatewayRouteState: (connectionId: null | string, profile: string) => {
     const key = (profile || 'default') === 'default' ? 'primary:default' : `${connectionId ?? ''}::${profile}`
 
@@ -42,18 +46,14 @@ vi.mock('@/store/session-states', async importOriginal => ({
 
 vi.mock('@/store/session-request-router', async importOriginal => ({
   ...(await importOriginal<typeof RequestRouter>()),
-  requestForSessionProfile: (
-    owner: unknown,
-    _ambient: unknown,
-    _method: string,
-    _params: unknown,
-    timeoutMs?: number
-  ) => h.request(owner, timeoutMs)
+  requestForSessionProfile: (owner: unknown, _ambient: unknown, _method: string, params: unknown, timeoutMs?: number) =>
+    h.request(owner, timeoutMs, params)
 }))
 
 const { $gateway } = await import('@/store/gateway')
 const { $gatewayState } = await import('@/store/session')
 const { $primaryGatewayRoute } = await import('@/store/gateway-primary-route')
+const { $canonicalRoomLive, canonicalRoomLiveKey } = await import('@/plugins/hermes-bots/canonical-group-details')
 
 const ownerOf = (call: unknown[]) => JSON.stringify(call[0] ?? 'ambient')
 const callsFor = (owner: unknown) => h.request.mock.calls.filter(c => ownerOf(c) === JSON.stringify(owner)).length
@@ -69,11 +69,15 @@ beforeEach(() => {
   h.owners.clear()
   h.open.clear()
   h.rows = []
+  h.ambientConnection = 'local'
+  $lastRoster.set([])
+  $canonicalRoomLive.set({})
   h.request.mockReset()
   h.request.mockResolvedValue({ sessions: [] })
   $gateway.set({ request: vi.fn() } as unknown as HermesGateway)
   $gatewayState.set('open')
   $liveWorkRoster.set({})
+  $lastRoster.set([])
 })
 
 afterEach(() => {
@@ -89,6 +93,151 @@ function withRows(owners: Record<string, unknown>) {
 }
 
 describe('useLiveWorkRoster', () => {
+  it('discovers background children after a short group parent already returned', async () => {
+    renderHook(() => useLiveWorkRoster())
+    await tick(0)
+    h.request.mockClear()
+    const key = canonicalRoomLiveKey({ connectionId: 'local', profile: 'room-authority' }, 'brief-room')
+    act(() =>
+      $canonicalRoomLive.set({
+        [key]: {
+          working: false,
+          failed: false,
+          needsYou: false,
+          workerProfiles: ['designer'],
+          updatedAt: Date.now()
+        }
+      })
+    )
+    await tick(0)
+    expect(h.request).toHaveBeenCalledTimes(1)
+    expect(h.request).toHaveBeenLastCalledWith({ connectionId: 'local', profile: 'designer' }, 10_000, {
+      profile: 'designer'
+    })
+    await tick(2_000)
+    expect(h.request).toHaveBeenCalledTimes(2)
+    await tick(8_000)
+
+    const count = h.request.mock.calls.filter(
+      ([owner]) => (owner as { profile?: string })?.profile === 'designer'
+    ).length
+
+    await tick(2_000)
+    expect(
+      h.request.mock.calls.filter(([owner]) => (owner as { profile?: string })?.profile === 'designer')
+    ).toHaveLength(count)
+  })
+
+  it('hydrates active group members immediately and every two seconds without accelerating other profiles', async () => {
+    renderHook(() => useLiveWorkRoster())
+    await tick(0)
+    h.request.mockClear()
+    const key = canonicalRoomLiveKey({ connectionId: 'local', profile: 'room-authority' }, 'design-room')
+    h.request.mockResolvedValue({
+      sessions: [
+        {
+          session_id: 'private-member',
+          subagents: 1,
+          source: { kind: 'bot_room', room_id: 'design-room', room_name: 'Design review', profile: 'room-authority' },
+          workers: [{ subagent_id: 'child', status: 'running' }]
+        }
+      ]
+    })
+    act(() =>
+      $canonicalRoomLive.set({ [key]: { working: true, failed: false, needsYou: false, workerProfiles: ['designer'] } })
+    )
+    await tick(0)
+
+    expect(h.request).toHaveBeenCalledTimes(1)
+    expect(h.request).toHaveBeenLastCalledWith({ connectionId: 'local', profile: 'designer' }, 10_000, {
+      profile: 'designer'
+    })
+    expect($liveWorkRoster.get()['local::designer'].sourcesBySession?.['private-member']).toEqual({
+      kind: 'bot_room',
+      room_id: 'design-room',
+      room_name: 'Design review',
+      profile: 'room-authority'
+    })
+    await tick(2_000)
+    expect(h.request).toHaveBeenCalledTimes(2)
+    act(() => $canonicalRoomLive.set({}))
+    await tick(2_000)
+    expect(h.request).toHaveBeenCalledTimes(2)
+  })
+
+  it('hydrates hidden Bot conversations on their owning connection and backend profile', async () => {
+    const owner = { connectionId: 'remote-host', mode: 'remote', profile: 'design-alias', targetProfile: 'designer' }
+    $lastRoster.set([
+      {
+        name: 'design-alias',
+        sourceScoped: true,
+        route: owner,
+        canonical_session: { id: 'bot-chat', resolved_id: 'bot-tip' }
+      }
+    ] as RosterRow[])
+    h.request.mockImplementation(async (route: unknown) =>
+      route === owner || JSON.stringify(route) === JSON.stringify(owner)
+        ? {
+            sessions: [
+              {
+                session_id: 'bot-chat',
+                subagents: 1,
+                workers: [{ subagent_id: 'worker', goal: 'Review layout', status: 'running' }]
+              }
+            ]
+          }
+        : { sessions: [] }
+    )
+
+    renderHook(() => useLiveWorkRoster())
+    await tick(0)
+
+    const bucket = $liveWorkRoster.get()['remote-host::design-alias']
+    expect(h.request).toHaveBeenCalledWith(owner, 10_000, { profile: 'designer' })
+    expect(bucket.owner).toEqual(owner)
+    expect([...bucket.covers]).toEqual(['bot-chat', 'bot-tip'])
+    expect(bucket.workersBySession?.['bot-chat'][0]).toMatchObject({ id: 'worker', goal: 'Review layout' })
+    expect(bucket.sourceScopesBySession?.['bot-chat']).toMatchObject({
+      ownerRoute: owner,
+      workspaceMode: 'bots',
+      workspaceOwnerKey: 'bot:remote-host::design-alias'
+    })
+    expect(bucket.sourceScopesBySession?.['bot-tip']).toEqual(bucket.sourceScopesBySession?.['bot-chat'])
+  })
+
+  it('rejects an ambient response that resolves after its source changed', async () => {
+    let finish: (value: unknown) => void = () => undefined
+    h.request.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
+    renderHook(() => useLiveWorkRoster())
+    await tick(0)
+    h.ambientConnection = 'other-host'
+    await act(async () => finish({ sessions: [{ session_id: 'original-chat', subagents: 1 }] }))
+    expect($liveWorkRoster.get()['primary:default']).toBeUndefined()
+  })
+
+  it('discovers a Bot roster loaded after connect without waiting for the next interval', async () => {
+    renderHook(() => useLiveWorkRoster())
+    await tick(0)
+    const owner = { connectionId: 'local', mode: 'local', profile: 'late-bot', targetProfile: 'late-bot' }
+    act(() =>
+      $lastRoster.set([
+        {
+          name: 'late-bot',
+          sourceScoped: true,
+          route: owner,
+          canonical_session: { id: 'hidden-chat' }
+        }
+      ] as RosterRow[])
+    )
+    await tick(0)
+
+    expect(h.request).toHaveBeenCalledWith(owner, 10_000, { profile: 'late-bot' })
+  })
   it('asks the launch profile once a tick however many spellings its rows carry', async () => {
     withRows({ a: 'default', b: { connectionId: 'local', profile: 'default' } })
     renderHook(() => useLiveWorkRoster())

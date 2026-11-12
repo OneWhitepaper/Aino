@@ -101,6 +101,9 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
     for name in ("pm", "hermes_cli"):
         shutil.copytree(source / name, repo / name,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # CLI config and Desktop identity read the source checkout's shared brand.
+    (repo / "apps/desktop").mkdir(parents=True)
+    shutil.copy2(source / "apps/desktop/brand.json", repo / "apps/desktop/brand.json")
     for name in ("utils.py", "hermes_constants.py", "hermes_yaml.py",
                  "hermes_bootstrap.py"):
         shutil.copy2(source / name, repo / name)

@@ -34,7 +34,7 @@ test('identical backend codes on different owners remain independent and clear o
   expect($notifications.get()[0].id).toBe(noticeToToast(payload, b)?.id)
 })
 
-test('disk snooze calls the original source and only retires after a positive acknowledgement', async () => {
+test('disk snooze calls the original source and becomes deferred history only after a positive acknowledgement', async () => {
   const owner = { connectionId: 'local', profile: 'bot', sessionId: 'owned-session' }
   showAgentNotice(payload, owner)
   const id = $notifications.get()[0].id
@@ -47,7 +47,47 @@ test('disk snooze calls the original source and only retires after a positive ac
   expect($notifications.get()[0].actionError).toContain('administrator')
   request.mockResolvedValueOnce({ output: "OK, I'll ask again in a week if the disk is still low." })
   await runNotificationAction(id, 'secondaryAction')
-  expect($notifications.get()).toHaveLength(0)
+  expect($notifications.get()).toHaveLength(1)
+  expect($notifications.get()[0].deferredUntil).toBeGreaterThan(Date.now())
+  expect($notifications.get()[0].actionError).toBeUndefined()
+})
+
+test('the slash clear mirror cannot remove an in-flight snooze or its acknowledged history', async () => {
+  const owner = { connectionId: 'local', profile: 'bot', sessionId: 'owned-session' }
+  let finish!: (value: { output: string }) => void
+  request.mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
+  showAgentNotice(payload, owner)
+  const id = $notifications.get()[0].id
+  const pending = runNotificationAction(id, 'secondaryAction')
+  await vi.waitFor(() => expect(request).toHaveBeenCalledOnce())
+  clearAgentNotice(payload.key, owner)
+  expect($notifications.get()).toHaveLength(1)
+  finish({ output: "OK, I'll ask again in a week if the disk is still low." })
+  await pending
+  clearAgentNotice(payload.key, owner)
+  expect($notifications.get()[0].deferredUntil).toBeGreaterThan(Date.now())
+})
+
+test('a snooze finishing after account reset cannot defer a new owner notice with the same ID', async () => {
+  const owner = { connectionId: 'local', profile: 'bot', sessionId: 'owned-session' }
+  let finish!: (value: { output: string }) => void
+  request.mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
+  showAgentNotice(payload, owner)
+  const pending = runNotificationAction($notifications.get()[0].id, 'secondaryAction')
+  await vi.waitFor(() => expect(request).toHaveBeenCalledOnce())
+  resetNotifications()
+  showAgentNotice(payload, owner)
+  finish({ output: "OK, I'll ask again in a week if the disk is still low." })
+  await pending
+  expect($notifications.get()[0].deferredUntil).toBeUndefined()
 })
 
 test('maintenance never opens the current workspace on behalf of another source', async () => {
@@ -56,4 +96,11 @@ test('maintenance never opens the current workspace on behalf of another source'
   await runNotificationAction($notifications.get()[0].id, 'action')
   expect($routeRequest.get()).toBe(before)
   expect($notifications.get()[0].actionError).toBeTruthy()
+})
+
+test('opening Maintenance does not report that the disk warning was resolved', async () => {
+  showAgentNotice(payload, { connectionId: 'local', profile: 'default' })
+  await runNotificationAction($notifications.get()[0].id, 'action')
+  expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')
+  expect($notifications.get()).toHaveLength(1)
 })

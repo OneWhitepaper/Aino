@@ -4,10 +4,20 @@ import type { Terminal } from '@xterm/xterm'
 import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
+import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { terminalSourceCopy } from '@/i18n/terminal-source'
 import { readKey, writeKey } from '@/lib/storage'
+import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { notifyError } from '@/store/notifications'
+import { $profiles } from '@/store/profile'
 import { $connection } from '@/store/session'
-import { $toolSession, $toolWorkspaceCwd, toolSessionHasCurrentSource } from '@/store/tool-session'
+import { ownerConnectionMode } from '@/store/session-states'
+import {
+  $toolSession,
+  type ToolSession,
+  toolSessionHasCurrentConnection,
+  toolSessionHasCurrentSource
+} from '@/store/tool-session'
 
 import { setTerminalTakeover } from '../store'
 
@@ -298,6 +308,30 @@ let $defaultGateway: ReadableAtom<TerminalGateway | undefined> = atom(undefined)
 
 let unbindDefaultGateway = () => {}
 
+const $terminalWorkspaceCwd = computed([$toolSession, $connection, $connectionsRegistry, $profiles], session =>
+  sessionHasTerminalHost(session) ? session.cwd : ''
+)
+
+function sessionHasTerminalHost(session: ToolSession): boolean {
+  if (!toolSessionHasCurrentConnection(session)) {
+    return false
+  }
+
+  const mode = ownerConnectionMode(session.owner)
+
+  if (mode === 'remote' && session.scope.connectionId === 'local') {
+    return false
+  }
+
+  if (mode && mode !== ($connection.get()?.mode ?? 'local')) {
+    return false
+  }
+
+  // A bare profile can carry a legacy remote override. Without an exact
+  // connection route, only a dialed local pool proves it shares this host.
+  return typeof session.owner !== 'string' || mode === 'local' || toolSessionHasCurrentSource(session)
+}
+
 /** Append a fresh terminal and focus it. Captures the current cwd once (its only
  *  tie to session/project state); pass an explicit cwd to override. Returns the id. */
 export function createTerminal(cwd: string, gateway?: TerminalGateway): string
@@ -308,16 +342,24 @@ export function createTerminal(cwd?: string, gateway?: TerminalGateway): string 
 export function createTerminal(cwd?: string, gateway?: TerminalGateway): string | null {
   const session = $toolSession.get()
   const connection = $connection.get()
-  const owner = gateway ?? $defaultGateway.get()
+  const currentHost = sessionHasTerminalHost(session)
+  const noShell = connection?.mode === 'remote' && connection.remoteKind !== 'ssh'
+  let owner = gateway ?? $defaultGateway.get()
+  const shellMatchesHost = !owner || owner.connectionId === session.scope.connectionId
 
-  if (
-    cwd === undefined &&
-    !gateway &&
-    (!toolSessionHasCurrentSource(session) || (connection?.mode === 'remote' && connection.remoteKind !== 'ssh'))
-  ) {
-    notifyError(new Error(translateNow('summary.state.unavailable')), translateNow('summary.state.unavailable'))
+  if (cwd === undefined && !gateway && (!currentHost || noShell || !shellMatchesHost)) {
+    const copy = terminalSourceCopy(getRuntimeI18nLocale())
+    notifyError(new Error(noShell ? copy.noShell : copy.sourceUnavailable), copy.title, {
+      id: 'terminal-source-unavailable'
+    })
 
     return null
+  }
+
+  // Bot chats keep the gateway's presentation profile unchanged. Pin a new
+  // shell to the proven conversation profile before an SSH start can await.
+  if (!gateway && cwd === undefined && currentHost && owner?.connectionId === session.scope.connectionId) {
+    owner = { ...owner, profile: session.scope.profile }
   }
 
   const id = newId()
@@ -327,7 +369,7 @@ export function createTerminal(cwd?: string, gateway?: TerminalGateway): string 
       id,
       title: 'Terminal',
       auto: true,
-      cwd: cwd ?? (toolSessionHasCurrentSource(session) ? session.cwd : ''),
+      cwd: cwd ?? (currentHost && shellMatchesHost ? session.cwd : ''),
       kind: 'user',
       ...owner,
       ...(!owner && cwd === undefined ? { sourceKey: session.sourceKey } : {})
@@ -463,7 +505,7 @@ export function bindTerminalDefaultGateway(source: ReadableAtom<TerminalGateway 
   unbindDefaultGateway = source.listen(gateway => {
     if (gateway?.connectionId !== host) {
       host = gateway?.connectionId
-      followSessionCwd($toolWorkspaceCwd.get())
+      followSessionCwd($terminalWorkspaceCwd.get())
     }
   })
 }
@@ -496,8 +538,8 @@ function followSessionCwd(cwd: string) {
   }
 }
 
-computed([$toolWorkspaceCwd, $toolSession], (cwd, session) => JSON.stringify([cwd, session.sourceKey])).listen(() =>
-  followSessionCwd($toolWorkspaceCwd.get())
+computed([$terminalWorkspaceCwd, $toolSession], (cwd, session) => JSON.stringify([cwd, session.sourceKey])).listen(() =>
+  followSessionCwd($terminalWorkspaceCwd.get())
 )
 
 /** Move the active tab by `direction` (+1 next / -1 prev), wrapping around. */

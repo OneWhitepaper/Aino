@@ -47,6 +47,9 @@ def completion(tmp_path, monkeypatch):
     for name in ("hermes_cli", "hermes_platform", "pm", "agent", "gateway", "tools", "cron"):
         shutil.copytree(ROOT / name, source / name,
                         ignore=shutil.ignore_patterns("__pycache__", "web_dist", "tui_dist"))
+    # Native maintenance resolves product identity from the selected source, as a real checkout does.
+    (source / "apps/desktop").mkdir(parents=True)
+    shutil.copy2(ROOT / "apps/desktop/brand.json", source / "apps/desktop/brand.json")
     shutil.copytree(ROOT / "scripts/build", source / "scripts/build",
                     ignore=shutil.ignore_patterns("__pycache__"))
     _put(source, "pyproject.toml", '[project]\nname="takeover-fixture"\nversion="2.0"\n')

@@ -156,7 +156,7 @@ function mergeTileTranscript(
 }
 
 interface SessionTileDelegateParams {
-  archiveSession: (storedSessionId: string) => Promise<unknown>
+  archiveSession: (storedSessionId: string, options?: { throwOnError?: boolean }) => Promise<unknown>
   branchLoadedSession: ReturnType<typeof useSessionActions>['branchLoadedSession']
   branchStoredSession: (storedSessionId: string) => Promise<unknown>
   executeSlashCommand: ReturnType<typeof usePromptActions>['executeSlashCommand']
@@ -239,8 +239,8 @@ export function useSessionTileDelegate({
     }
 
     setSessionTileDelegate({
-      archiveSession: async storedSessionId => {
-        await archiveSession(storedSessionId)
+      archiveSession: async (storedSessionId, options) => {
+        await archiveSession(storedSessionId, options)
       },
       branchSession: async storedSessionId => {
         await branchStoredSession(storedSessionId)

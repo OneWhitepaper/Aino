@@ -2,11 +2,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { ProjectedCollaborationTasks } from '@/app/agents/collaboration-task-test-helper'
 import * as gateway from '@/store/gateway'
 import { _resetSessionOwnerHintsForTests, setSessionOwnerHint } from '@/store/session'
 import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
 
+import { useSubagentSnapshot } from './use-subagent-snapshot'
+
 import { ComposerStatusStack } from './index'
+
+function RecoveredTasks({ sessionId }: { sessionId: string }) {
+  useSubagentSnapshot(sessionId, false)
+
+  return <ProjectedCollaborationTasks sessionId={sessionId} />
+}
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -24,7 +33,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('hydrates the empty owner composer and exposes an extended owner-routed transcript without leaking on session change', async () => {
+it('hydrates an empty owner and exposes its transcript through the capsule without leaking on session change', async () => {
   const text = '  Full transcript\tline with preserved whitespace  \n\n'.repeat(100)
 
   const request = vi.spyOn(gateway, 'requestGatewayForAgent').mockImplementation(async (_c, _p, method) => {
@@ -48,27 +57,29 @@ it('hydrates the empty owner composer and exposes an extended owner-routed trans
 
   const view = render(
     <MemoryRouter>
-      <ComposerStatusStack queue={null} sessionId="parent" />
+      <RecoveredTasks sessionId="parent" />
     </MemoryRouter>
   )
 
-  fireEvent.click(await screen.findByRole('button', { name: /1 Subagent/ }))
-  await screen.findByText('Recovered work')
-  expect(screen.getByText('Read File')).toBeTruthy()
+  const worker = await screen.findByRole('button', { name: /Recovered work/ })
+  expect(worker.textContent).toContain('Read File')
   expect(request).toHaveBeenCalledWith('remote-owner', 'research', 'subagent.list', { session_id: 'parent' })
   expect($subagentsBySession.get().parent[0].startedAt).toBe(1000000)
-  fireEvent.click(screen.getByRole('button', { name: /Recovered work/ }))
-  await waitFor(() => expect(document.querySelector('[data-slot="subagent-transcript"]')?.textContent).toContain(text))
+  fireEvent.click(worker)
+  fireEvent.click(screen.getByText('Extended transcript'))
+  await waitFor(() =>
+    expect(view.container.querySelector('[data-slot="subagent-transcript"]')?.textContent).toContain(text)
+  )
   expect(request).toHaveBeenCalledWith('remote-owner', 'research', 'subagent.tail', {
     session_id: 'parent',
     subagent_id: 'worker'
   })
   view.rerender(
     <MemoryRouter>
-      <ComposerStatusStack queue={null} sessionId="other" />
+      <RecoveredTasks sessionId="other" />
     </MemoryRouter>
   )
-  expect(document.querySelector('[data-slot="subagent-transcript"]')).toBeNull()
+  expect(view.container.querySelector('[data-slot="subagent-transcript"]')).toBeNull()
 })
 
 it('does not resurrect a child completed while the roster snapshot was in flight', async () => {

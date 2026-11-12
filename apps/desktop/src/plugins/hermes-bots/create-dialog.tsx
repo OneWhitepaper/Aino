@@ -32,7 +32,7 @@ import {
   useI18n,
   useValue
 } from '@hermes/plugin-sdk'
-import { useEffect, useRef, useState } from 'react'
+import { type ComponentProps, useEffect, useRef, useState } from 'react'
 
 import { avatarColor, blobatarSvg, BotFace } from './avatar'
 import { AvatarPicker } from './avatar-picker'
@@ -51,6 +51,13 @@ import { refreshGatewayGroupRooms, registerCanonicalGroup } from './canonical-gr
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
 import { canonicalGroupCreateError, canonicalGroupRequest, createCanonicalGroup } from './canonical-groups'
 import type { CanonicalGroupRoute } from './canonical-groups'
+import {
+  type CapabilityCatalog,
+  type DraftResetSnapshot,
+  useDraftBaseChange,
+  useDraftCapabilities
+} from './create-draft-change'
+import { applyCreatedModelChoice, readCreatedModelReadiness } from './create-model-choice'
 import { $botMeta, $lastRoster, botRosterKey, filterBots, ROSTER_KEY, saveBotMeta } from './data'
 import { labeled, ResizableFrame } from './dialog-parts'
 import { GROUP_CHAT_MAX_MEMBERS, mintGroupRoomId, uniqueGroupChatName, updateGroupChat } from './group-chat'
@@ -69,12 +76,7 @@ import { useBots } from './i18n'
 import { botProfileIdentity, displayName } from './labels'
 import { McpSetupButton } from './mcp-setup'
 import { ModelPicker } from './model-picker'
-import type {
-  CapabilityEntry,
-  McpCatalogResponse,
-  ProfileConfigurePayload,
-  ProfileDescribeResponse
-} from './profile-config'
+import type { McpCatalogResponse, ProfileConfigurePayload, ProfileDescribeResponse } from './profile-config'
 import { CapabilitiesView, capabilitiesViewRoutesConnections, CheckList } from './profile-config'
 import { deleteBot } from './profile-ops'
 import { openRosterBot } from './roster-actions'
@@ -128,13 +130,99 @@ export function singleFlight<T>(ref: { current: null | Promise<T> }, start: () =
 
 // ── create dialog ────────────────────────────────────────────────────────────
 
-/** The clone source's capability catalog, staged before the profile exists. */
-interface CapabilityCatalog {
-  mcp: CapabilityEntry[]
-  skills: CapabilityEntry[]
-  source: string
-  toolsets: CapabilityEntry[]
+interface CreateAgentAppearanceProps extends Omit<ComponentProps<typeof AvatarPicker>, 'generateSeed'> {
+  slug: string
+  title: string
+  description: string
 }
+
+function CreateAgentAppearance({ slug, title, description, ...picker }: CreateAgentAppearanceProps) {
+  const name = slug || 'agent'
+
+  return (
+    <>
+      <div className="flex justify-center py-1">
+        <BotFace
+          color={avatarColor(picker.color, name)}
+          image={picker.image}
+          name={name}
+          shape={picker.shape}
+          size={56}
+        />
+      </div>
+      <AvatarPicker {...picker} generateSeed={{ name, title, description }} />
+    </>
+  )
+}
+
+interface CreateAgentDescriptionFieldsProps {
+  title: string
+  description: string
+  onTitle: (value: string) => void
+  onDescription: (value: string) => void
+}
+
+function CreateAgentDescriptionFields({
+  title,
+  description,
+  onTitle,
+  onDescription
+}: CreateAgentDescriptionFieldsProps) {
+  const { t } = useI18n()
+  const b = useBots()
+
+  return (
+    <>
+      {labeled(
+        t.profiles.displayNameLabel,
+        <Input onChange={event => onTitle(event.target.value)} placeholder={b.bot.titlePlaceholder} value={title} />
+      )}
+      {labeled(
+        b.bot.descriptionLabel,
+        <Textarea
+          className="min-h-16"
+          onChange={event => onDescription(event.target.value)}
+          placeholder={b.bot.helpPromptPlaceholder}
+          value={description}
+        />
+      )}
+    </>
+  )
+}
+
+interface CreateAgentNameFieldProps {
+  name: string
+  onName: (value: string) => void
+  taken: boolean
+  slug: string
+  remoteTarget: boolean
+  targetLabel: string
+}
+
+function CreateAgentNameField({ name, onName, taken, slug, remoteTarget, targetLabel }: CreateAgentNameFieldProps) {
+  const { t } = useI18n()
+  const b = useBots()
+
+  return (
+    <>
+      {labeled(
+        t.profiles.nameLabel,
+        <Input
+          autoFocus
+          onChange={event => onName(event.target.value)}
+          placeholder={b.bot.namePlaceholder}
+          value={name}
+        />
+      )}
+      {taken ? (
+        <div className="text-xs text-(--ui-accent)">
+          {remoteTarget ? b.bot.nameTakenOn(slug, targetLabel) : b.bot.nameTaken(slug)}
+        </div>
+      ) : null}
+    </>
+  )
+}
+
 interface CreateAgentDialogProps {
   onClose: () => void
   /** Refresh the mounted roster before selecting a just-created owner. */
@@ -279,12 +367,26 @@ function requestOnTarget<T>(target: string, method: string, params: Record<strin
  *  with a toast. A cancel while profiles.create is still in flight is caught by
  *  that flight itself (the dialog's draftGenRef), since the draft is only
  *  recorded once the RPC returns (#141623). */
-function discardDraftProfile(draft: string, target: string, b: ReturnType<typeof useBots>) {
-  const discard = target
-    ? requestOnTarget(target, 'cli.exec', { argv: ['profile', 'delete', draft, '--yes'] })
-    : deleteBot({ name: draft })
+async function deleteDraftProfile(draft: string, target: string, failureMessage: string): Promise<void> {
+  if (!target) {
+    await deleteBot({ name: draft })
 
-  void Promise.resolve(discard)
+    return
+  }
+
+  const result = await requestOnTarget<{ blocked?: boolean; code?: number; hint?: string; output?: string }>(
+    target,
+    'cli.exec',
+    { argv: ['profile', 'delete', draft, '--yes'] }
+  )
+
+  if (result.blocked || result.code !== 0) {
+    throw new Error(result.hint || result.output || failureMessage)
+  }
+}
+
+function discardDraftProfile(draft: string, target: string, b: ReturnType<typeof useBots>) {
+  void deleteDraftProfile(draft, target, b.bot.draftCleanupFailed(draft))
     .then(() => host.notify({ kind: 'success', message: b.bot.draftDiscarded(draft) }))
     .catch(err => host.notifyError(err, b.bot.draftCleanupFailed(draft)))
 }
@@ -388,6 +490,48 @@ function useDraftProfile(
     }
   }
 
+  const captureReset = (): DraftResetSnapshot | null => {
+    if (!createdRef.current && !flightRef.current) {
+      return null
+    }
+
+    const generation = draftGenRef.current
+    const source = activeCreationSource()
+    const owner = draftSourceRef.current
+    const target = draftTargetRef.current
+    const creating = flightRef.current
+
+    const current = () =>
+      generation === draftGenRef.current &&
+      source === activeCreationSource() &&
+      owner === draftSourceRef.current &&
+      target === draftTargetRef.current &&
+      (Boolean(target) || owner?.identity === source)
+
+    return {
+      remove: async () => {
+        await creating
+
+        if (!current()) {
+          throw new Error(b.editor.draftResetStale)
+        }
+
+        const draft = createdRef.current
+
+        if (draft) {
+          await deleteDraftProfile(draft, target, b.bot.draftCleanupFailed(draft))
+        }
+
+        if (!current()) {
+          throw new Error(b.editor.draftResetStale)
+        }
+
+        draftGenRef.current += 1
+        createdRef.current = flightRef.current = null
+      }
+    }
+  }
+
   useEffect(
     () => () => {
       draftGenRef.current += 1
@@ -395,7 +539,7 @@ function useDraftProfile(
     []
   )
 
-  return { discardDraft, draftGenRef, draftTargetRef, draftSourceRef }
+  return { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef }
 }
 
 export function CreateAgentDialog({
@@ -417,7 +561,12 @@ export function CreateAgentDialog({
   // button + MCP setup buttons). Distinct from createdRef on purpose:
   // createdRef must stay a slug string for its sibling consumers.
   const flightRef = useRef<Promise<null | string> | null>(null)
-  const { discardDraft, draftGenRef, draftTargetRef, draftSourceRef } = useDraftProfile(createdRef, flightRef)
+
+  const { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef } = useDraftProfile(
+    createdRef,
+    flightRef
+  )
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   // Default shapes mode: deterministic blob face drawn from the agent's name
@@ -469,19 +618,36 @@ export function CreateAgentDialog({
   // Set once ensureAgentCreated() materializes the profile for the live
   // Capabilities tab (CapabilitiesView needs a real backend to point at). State —
   // not just createdRef — because the render must flip when it lands.
-  const [createdForCaps, setCreatedForCaps] = useState<null | string>(null)
-  const [caps, setCaps] = useState<CapabilityCatalog | null>(null)
-  const [capsFailed, setCapsFailed] = useState(false)
+  const {
+    createdForCaps,
+    setCreatedForCaps,
+    caps,
+    setCaps,
+    capsFailed,
+    setCapsFailed,
+    dirtyCaps,
+    setDirtyCaps,
+    capFilter,
+    setCapFilter,
+    resetCapabilities
+  } = useDraftCapabilities()
 
-  const [dirtyCaps, setDirtyCaps] = useState({
-    skills: false,
-    toolsets: false,
-    mcp: false
-  })
-
-  const [capFilter, setCapFilter] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<null | string>(null)
+
+  const draftBaseChange = useDraftBaseChange({
+    capture: captureReset,
+    labels: {
+      title: b.editor.draftResetTitle,
+      description: b.editor.draftResetDescription,
+      confirmLabel: b.editor.draftResetAction
+    },
+    afterReset: () => {
+      resetCapabilities()
+      queryClient.invalidateQueries({ queryKey: ROSTER_KEY })
+    }
+  })
+
   const { slug, title: botTitle } = botProfileIdentity(name, title)
   const descriptionText = [botTitle, description].filter(Boolean).join(' — ')
   const valid = slug.length > 0 && NAME_RE.test(slug)
@@ -511,15 +677,7 @@ export function CreateAgentDialog({
     setNoSkills(false)
     setShareAuth(true)
     setAdvTab('general')
-    setCreatedForCaps(null)
-    setCaps(null)
-    setCapsFailed(false)
-    setDirtyCaps({
-      skills: false,
-      toolsets: false,
-      mcp: false
-    })
-    setCapFilter('')
+    resetCapabilities()
     setTargetConnection('')
     setBusy(false)
     setError(null)
@@ -645,6 +803,8 @@ export function CreateAgentDialog({
     const sourceCurrent = () => Boolean(target) || source === activeCreationSource()
 
     const flight = singleFlight(flightRef, async () => {
+      draftTargetRef.current = target
+      draftSourceRef.current = { identity: source, connectionId: target || sourceConnection }
       await requestForTarget('profiles.create', {
         name: slug,
         description: descriptionText,
@@ -664,13 +824,7 @@ export function CreateAgentDialog({
           description,
           roster,
           customSoul: soul
-        }),
-        ...(model.trim() && provider.trim()
-          ? {
-              model: model.trim(),
-              provider: provider.trim()
-            }
-          : {})
+        })
       })
 
       // The create request already landed on its captured socket. A later
@@ -695,8 +849,6 @@ export function CreateAgentDialog({
       }
 
       createdRef.current = slug
-      draftTargetRef.current = target
-      draftSourceRef.current = { identity: source, connectionId: target || sourceConnection }
 
       // Apply capability picks from the Advanced tabs (best-effort; the
       // profile exists either way and Edit Profile can finish the job).
@@ -805,9 +957,12 @@ export function CreateAgentDialog({
     )
 
     const openingStillCurrent = () => openingHash === window.location.hash && openingSource === activeCreationSource()
+    const openingCurrent = () => openingGeneration === getBotOpenGeneration() && openingStillCurrent()
 
     try {
-      const slugCreated = await ensureAgentCreated()
+      const creating = ensureAgentCreated()
+      const draftGeneration = draftGenRef.current
+      const slugCreated = await creating
 
       if (!slugCreated) {
         setBusy(false)
@@ -819,10 +974,28 @@ export function CreateAgentDialog({
       const who = displayName({ name: slug, title: botTitle })
       const createdMessage = remoteTarget ? b.editor.createdOn(who, targetLabel) : b.editor.created(who)
 
-      if (!remoteTarget && openingSource !== activeCreationSource()) {
-        host.notify({ kind: 'success', message: createdMessage })
-        reset()
-        onClose()
+      const modelApplied = await applyCreatedModelChoice({
+        model,
+        provider,
+        confirmLabel: t.common.confirm,
+        failureMessage: b.editor.modelSwitchFailed,
+        isCurrent: () => openingStillCurrent() && draftGeneration === draftGenRef.current,
+        onStale: () => {
+          if (draftGeneration !== draftGenRef.current) {
+            return
+          }
+
+          host.notify({ kind: 'success', message: createdMessage })
+          reset()
+          onClose()
+        },
+        request: selection => requestForTarget('profiles.configure', { name: slugCreated, ...selection })
+      })
+
+      if (!modelApplied) {
+        if (draftGeneration === draftGenRef.current) {
+          setBusy(false)
+        }
 
         return
       }
@@ -831,17 +1004,16 @@ export function CreateAgentDialog({
       // first so a bot whose machine has no usable credential lands as
       // "created, needs a model" instead of a doomed "No LLM provider" turn.
       // Only an explicit `ok: false` counts; older gateways proceed as before.
-      const readiness = await requestForTarget<RuntimeReadiness>('setup.runtime_check', {
-        profile: slugCreated
-      }).catch(() => null)
+      const needsModel = await readCreatedModelReadiness(
+        () => requestForTarget<RuntimeReadiness>('setup.runtime_check', { profile: slugCreated }),
+        () => draftGeneration === draftGenRef.current,
+        readiness =>
+          notifyCreatedBot(readiness, { bot, createdMessage, editor: b.editor, onConfigureModel, remoteTarget })
+      )
 
-      const needsModel = notifyCreatedBot(readiness, {
-        bot,
-        createdMessage,
-        editor: b.editor,
-        onConfigureModel,
-        remoteTarget
-      })
+      if (needsModel === null) {
+        return
+      }
 
       const wasRemote = remoteTarget
       reset()
@@ -858,7 +1030,7 @@ export function CreateAgentDialog({
         return
       }
 
-      if (openingGeneration === getBotOpenGeneration() && openingStillCurrent()) {
+      if (openingCurrent()) {
         if (onRefreshRoster) {
           try {
             const refreshed = await onRefreshRoster()
@@ -875,7 +1047,7 @@ export function CreateAgentDialog({
           }
         }
 
-        if (openingGeneration !== getBotOpenGeneration() || !openingStillCurrent()) {
+        if (!openingCurrent()) {
           return
         }
 
@@ -910,43 +1082,26 @@ export function CreateAgentDialog({
           <DialogTitle>{b.bot.newTitle}</DialogTitle>
           <DialogDescription>{b.editor.newDescription}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3.5">
-          <div className="flex justify-center py-1">
-            <BotFace
-              color={avatarColor(color, slug || 'agent')}
-              image={image}
-              name={slug || 'agent'}
-              shape={shape}
-              size={56}
-            />
-          </div>
-          <AvatarPicker
+        <fieldset className="grid min-w-0 gap-3.5 border-0 p-0" disabled={busy}>
+          <CreateAgentAppearance
             color={color}
-            generateSeed={{
-              name: slug || 'agent',
-              title,
-              description
-            }}
+            description={description}
             image={image}
             onColor={setColor}
             onImage={setImage}
             onShape={setShape}
             shape={shape}
+            slug={slug}
+            title={title}
           />
-          {labeled(
-            t.profiles.nameLabel,
-            <Input
-              autoFocus
-              onChange={event => setName(event.target.value)}
-              placeholder={b.bot.namePlaceholder}
-              value={name}
-            />
-          )}
-          {taken ? (
-            <div className="text-xs text-(--ui-accent)">
-              {remoteTarget ? b.bot.nameTakenOn(slug, targetLabel) : b.bot.nameTaken(slug)}
-            </div>
-          ) : null}
+          <CreateAgentNameField
+            name={name}
+            onName={setName}
+            remoteTarget={remoteTarget}
+            slug={slug}
+            taken={taken}
+            targetLabel={targetLabel}
+          />
           {/* Multi-connection desktops choose WHERE the agent lives. Hidden */
           /* on single-connection setups — the active gateway is the only */
           /* possible home, exactly the old behavior. */}
@@ -989,23 +1144,12 @@ export function CreateAgentDialog({
               {b.bot.remoteCreateHint(targetLabel)}
             </div>
           ) : null}
-          {labeled(
-            t.profiles.displayNameLabel,
-            <Input
-              onChange={event => setTitle(event.target.value)}
-              placeholder={b.bot.titlePlaceholder}
-              value={title}
-            />
-          )}
-          {labeled(
-            b.bot.descriptionLabel,
-            <Textarea
-              className="min-h-16"
-              onChange={event => setDescription(event.target.value)}
-              placeholder={b.bot.helpPromptPlaceholder}
-              value={description}
-            />
-          )}
+          <CreateAgentDescriptionFields
+            description={description}
+            onDescription={setDescription}
+            onTitle={setTitle}
+            title={title}
+          />
           <Button
             className="flex items-center gap-1 text-xs font-medium text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)"
             onClick={() => {
@@ -1050,9 +1194,11 @@ export function CreateAgentDialog({
                     remoteTarget ? b.editor.cloneFromOn(targetLabel) : b.editor.cloneFrom,
                     <Select
                       onValueChange={value => {
-                        setCloneFrom(value)
-                        setCaps(null)
-                        setCapsFailed(false)
+                        draftBaseChange.change(() => {
+                          setCloneFrom(value)
+                          setCaps(null)
+                          setCapsFailed(false)
+                        })
                       }}
                       value={remoteTarget && cloneFrom !== '__none__' ? 'default' : cloneFrom}
                     >
@@ -1098,14 +1244,20 @@ export function CreateAgentDialog({
                     />
                   )}
                   <label className="flex items-center gap-2 text-xs text-(--ui-text-secondary)">
-                    <Checkbox checked={shareAuth} onCheckedChange={value => setShareAuth(Boolean(value))} />
+                    <Checkbox
+                      checked={shareAuth}
+                      onCheckedChange={value => draftBaseChange.change(() => setShareAuth(Boolean(value)))}
+                    />
                     {remoteTarget ? b.editor.shareKeysOn(targetLabel) : b.editor.shareKeys}
                   </label>
                   <div className="pl-6 pt-0.5 text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)">
                     {b.editor.shareKeysHint}
                   </div>
                   <label className="flex items-center gap-2 text-xs text-(--ui-text-secondary)">
-                    <Checkbox checked={noSkills} onCheckedChange={value => setNoSkills(Boolean(value))} />
+                    <Checkbox
+                      checked={noSkills}
+                      onCheckedChange={value => draftBaseChange.change(() => setNoSkills(Boolean(value)))}
+                    />
                     {b.bot.noSkills}
                   </label>
                 </div>
@@ -1274,7 +1426,7 @@ export function CreateAgentDialog({
             </div>
           ) : null}
           {error ? <div className="px-0 py-2 text-xs text-(--ui-accent)">{error}</div> : null}
-        </div>
+        </fieldset>
         <DialogFooter>
           <Button
             disabled={busy}
@@ -1292,6 +1444,7 @@ export function CreateAgentDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {draftBaseChange.dialog}
     </Dialog>
   )
 }

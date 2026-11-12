@@ -1,13 +1,17 @@
 import './notifications.css'
 
+import { compactNumber } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react'
 
+import { NotificationFacts, NotificationMetadata } from '@/components/notification-content'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
-import { useMediaQuery } from '@/hooks/use-media-query'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { AlertCircle, AlertTriangle, CheckCircle2, type IconComponent, Info } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -66,7 +70,7 @@ function NoticeActions({ notification, compact = false }: { notification: AppNot
       {(['action', 'secondaryAction'] as const).map(slot => {
         const action = notification[slot]
 
-        if (!action) {
+        if (!action || (notification.deferredUntil && action.deferForMs)) {
           return null
         }
 
@@ -87,13 +91,21 @@ function NoticeActions({ notification, compact = false }: { notification: AppNot
   )
 }
 
-/** In-flow desktop chrome: a bounded summary and a dedicated reading panel.
- * The existing notification store remains the sole queue and action owner. */
-export function NotificationStack({ children, active = true }: { children?: ReactNode; active?: boolean }) {
+interface NotificationStackProps {
+  children?: ReactNode
+  active?: boolean
+  placement?: 'workspace' | 'toolbar'
+  triggerClassName?: string
+}
+
+/** One queue and reading panel, with a titlebar card in the main window. */
+export function NotificationStack({
+  children,
+  active = true,
+  placement = 'workspace',
+  triggerClassName
+}: NotificationStackProps) {
   const notifications = useStore($notifications)
-  const { t } = useI18n()
-  const copy = t.notificationCenter
-  const narrow = useMediaQuery('(max-width: 64rem)')
   const [selection, setPanel] = useState<'list' | AppNotification | null>(null)
 
   const { selectedItem, panel, panelKey, detailId } = notificationSelectionState(selection, notifications)
@@ -106,8 +118,12 @@ export function NotificationStack({ children, active = true }: { children?: Reac
   const close = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const panelBody = useRef<HTMLDivElement>(null)
-  const available = notifications.filter(item => !hiddenSummaries.has(summaryKey(item)))
+  const available = notifications.filter(item => !item.deferredUntil && !hiddenSummaries.has(summaryKey(item)))
   const summary = available.find(item => summaryKey(item) === readingId) ?? available[0]
+
+  const feedback =
+    available.find(item => item.transient && summaryKey(item) === readingId) ?? available.find(item => item.transient)
+
   const liveDetail = selectedItem
   const summaryId = summary?.id
   const panelOpen = active && Boolean(panel)
@@ -126,12 +142,6 @@ export function NotificationStack({ children, active = true }: { children?: Reac
 
     close.current?.focus()
   }, [active, panelKey])
-
-  useEffect(() => {
-    if (active && narrow && panelOpen && !panelRef.current?.contains(document.activeElement)) {
-      close.current?.focus()
-    }
-  }, [active, narrow, panelOpen])
 
   useEffect(() => {
     if (!active || !detailId) {
@@ -178,56 +188,43 @@ export function NotificationStack({ children, active = true }: { children?: Reac
     trigger.current?.focus()
   }
 
+  const toolbar = (
+    <NotificationToolbar
+      active={active}
+      close={close}
+      closePanel={closePanel}
+      feedback={!panelOpen ? (placement === 'workspace' ? summary : feedback) : undefined}
+      hideFeedback={() => {
+        const visible = placement === 'workspace' ? summary : feedback
+
+        if (visible) {
+          setHiddenSummaries(current => new Set([...current, summaryKey(visible)]))
+        }
+      }}
+      liveDetail={liveDetail}
+      notifications={notifications}
+      onFocusChange={setFocusedId}
+      onHoverChange={setHoveredId}
+      openPanel={openPanel}
+      panel={panel}
+      panelBody={panelBody}
+      panelOpen={panelOpen}
+      panelRef={panelRef}
+      setPanel={setPanel}
+      summary={summary}
+      trigger={trigger}
+      triggerClassName={triggerClassName}
+    />
+  )
+
+  if (placement === 'toolbar') {
+    return toolbar
+  }
+
   return (
     <section className="notification-workspace" data-notification-workspace="">
-      {active && (notifications.length > 0 || panel) && (
-        <div className="notification-bar">
-          <Button
-            aria-expanded={Boolean(panel)}
-            aria-label={copy.title}
-            className="notification-trigger"
-            onClick={() => (panel ? closePanel() : openPanel('list'))}
-            ref={trigger}
-            size="sm"
-            variant="ghost"
-          >
-            <Codicon name="bell" size="1rem" />
-            <span>{copy.title}</span>
-            {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}
-          </Button>
-          {!panel && summary && (
-            <NotificationSummary
-              onFocusChange={setFocusedId}
-              onHide={() => setHiddenSummaries(current => new Set([...current, summaryKey(summary)]))}
-              onHoverChange={setHoveredId}
-              openPanel={openPanel}
-              summary={summary}
-            />
-          )}
-        </div>
-      )}
-      <div className="notification-workspace-row">
-        <div
-          aria-hidden={Boolean(panelOpen && narrow) || undefined}
-          className={cn('notification-workspace-content', panelOpen && narrow && 'notification-content-hidden')}
-          inert={Boolean(panelOpen && narrow)}
-        >
-          {children}
-        </div>
-        {active && panel && (
-          <NotificationPanel
-            close={close}
-            closePanel={closePanel}
-            liveDetail={liveDetail}
-            notifications={notifications}
-            openPanel={openPanel}
-            panel={panel}
-            panelBody={panelBody}
-            panelRef={panelRef}
-            setPanel={setPanel}
-          />
-        )}
-      </div>
+      {active && (notifications.length > 0 || panel) && <div className="notification-workspace-overlay">{toolbar}</div>}
+      <div className="notification-workspace-content">{children}</div>
     </section>
   )
 }
@@ -242,6 +239,101 @@ interface NotificationPanelProps {
   closePanel: () => void
   openPanel: (value: 'list' | AppNotification) => void
   setPanel: (value: 'list' | AppNotification | null) => void
+}
+
+interface NotificationToolbarProps extends Omit<NotificationPanelProps, 'panel'> {
+  active: boolean
+  panel: NotificationPanelProps['panel'] | null
+  panelOpen: boolean
+  summary: AppNotification | undefined
+  trigger: RefObject<HTMLButtonElement | null>
+  triggerClassName?: string
+  feedback?: AppNotification
+  hideFeedback: () => void
+  onFocusChange: (id: string | null) => void
+  onHoverChange: (id: string | null) => void
+}
+
+function NotificationToolbar({
+  active,
+  panel,
+  panelOpen,
+  summary,
+  trigger,
+  triggerClassName,
+  feedback,
+  hideFeedback,
+  onFocusChange,
+  onHoverChange,
+  ...panelProps
+}: NotificationToolbarProps) {
+  const { t } = useI18n()
+  const copy = t.notificationCenter
+  const { notifications, openPanel, setPanel, close } = panelProps
+  const pendingCount = notifications.filter(item => !item.deferredUntil).length
+  const triggerLabel = pendingCount ? `${copy.title} (${pendingCount})` : copy.title
+
+  return (
+    <div className="notification-toolbar-host" hidden={!active}>
+      <Popover onOpenChange={open => (open ? openPanel('list') : setPanel(null))} open={panelOpen}>
+        <Tip label={copy.title} placement="toolbar">
+          <PopoverTrigger asChild>
+            <Button
+              aria-label={triggerLabel}
+              className={cn('relative bg-transparent select-none', triggerClassName)}
+              ref={trigger}
+              size="icon-titlebar"
+              type="button"
+              variant="ghost"
+            >
+              <Codicon name="bell" size="1.125rem" />
+              {pendingCount > 0 && (
+                <span className="pointer-events-none absolute -top-2 -right-1.5">
+                  <Badge aria-hidden size="overlay" variant="solid">
+                    {compactNumber(pendingCount)}
+                  </Badge>
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+        </Tip>
+        <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+          {summary && summary.kind !== 'error' && [summary.title, summary.message].filter(Boolean).join(': ')}
+        </span>
+        <span aria-atomic="true" aria-live="assertive" className="sr-only" role="alert">
+          {summary?.kind === 'error' && [summary.title, summary.message].filter(Boolean).join(': ')}
+        </span>
+        {panel && (
+          <PopoverContent
+            align="end"
+            aria-label={copy.title}
+            className="notification-popover"
+            onOpenAutoFocus={event => {
+              event.preventDefault()
+              close.current?.focus()
+            }}
+            showArrow={false}
+            side="bottom"
+            variant="card"
+          >
+            <NotificationPanel {...panelProps} panel={panel} />
+          </PopoverContent>
+        )}
+      </Popover>
+      {feedback && (
+        <div className="notification-feedback">
+          <NotificationSummary
+            announce={false}
+            onFocusChange={onFocusChange}
+            onHide={hideFeedback}
+            onHoverChange={onHoverChange}
+            openPanel={openPanel}
+            summary={feedback}
+          />
+        </div>
+      )}
+    </div>
+  )
 }
 
 function NotificationPanel({
@@ -332,15 +424,23 @@ interface NotificationSummaryProps {
   onFocusChange: (id: string | null) => void
   onHoverChange: (id: string | null) => void
   onHide: () => void
+  announce?: boolean
 }
 
-function NotificationSummary({ summary, openPanel, onFocusChange, onHoverChange, onHide }: NotificationSummaryProps) {
+function NotificationSummary({
+  summary,
+  openPanel,
+  onFocusChange,
+  onHoverChange,
+  onHide,
+  announce = true
+}: NotificationSummaryProps) {
   const { t } = useI18n()
   const copy = t.notificationCenter
 
   return (
     <article
-      aria-live={summary.kind === 'error' ? 'assertive' : 'polite'}
+      aria-live={announce ? (summary.kind === 'error' ? 'assertive' : 'polite') : undefined}
       className="notification-summary"
       onBlur={event => {
         if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -360,7 +460,7 @@ function NotificationSummary({ summary, openPanel, onFocusChange, onHoverChange,
         resumeNotification(summary.id, 'hover')
         onHoverChange(null)
       }}
-      role={summary.kind === 'error' ? 'alert' : 'status'}
+      role={announce ? (summary.kind === 'error' ? 'alert' : 'status') : undefined}
     >
       <NoticeIcon notification={summary} />
       <div className="notification-summary-copy">
@@ -410,6 +510,7 @@ function NotificationDetail({
         <NoticeIcon notification={panel} />
         <h3>{panel.title ?? panel.message}</h3>
       </div>
+      <NotificationMetadata notification={panel} />
       {liveDetail?.actionError && (
         <div className="notification-action-error" role="alert">
           <p>{liveDetail.actionError}</p>
@@ -425,6 +526,7 @@ function NotificationDetail({
         </div>
       )}
       {panel.title && <p>{panel.message}</p>}
+      <NotificationFacts notification={panel} />
       {panel.meta && <p className="notification-meta">{panel.meta}</p>}
       {(panel.repeatCount ?? 0) > 1 && <p className="notification-meta">{copy.repeated(panel.repeatCount ?? 1)}</p>}
       {panel.sourceKey === 'sessions.auto_prune' && (
@@ -461,13 +563,61 @@ function NotificationList({
 }) {
   const { t } = useI18n()
   const copy = t.notificationCenter
+  const listId = useId()
+  const readers = useRef(new Map<string, { id: string; instance: string }>())
+
+  function setReading(notification: AppNotification, reason: 'hover' | 'focus', reading: boolean) {
+    const instance = summaryKey(notification)
+    const reader = `${listId}:${reason}:${instance}`
+
+    if (reading) {
+      readers.current.set(reader, { id: notification.id, instance })
+      pauseNotification(notification.id, reader)
+    } else {
+      readers.current.delete(reader)
+      resumeNotification(notification.id, reader)
+    }
+  }
+
+  useEffect(() => {
+    const present = new Set(notifications.map(summaryKey))
+
+    for (const [reader, notification] of readers.current) {
+      if (!present.has(notification.instance)) {
+        resumeNotification(notification.id, reader)
+        readers.current.delete(reader)
+      }
+    }
+  }, [notifications])
+
+  useEffect(
+    () => () => {
+      for (const [reader, notification] of readers.current) {
+        resumeNotification(notification.id, reader)
+      }
+
+      readers.current.clear()
+    },
+    []
+  )
 
   return (
     <>
       {!notifications.length && <p className="notification-empty">{copy.empty}</p>}
       <ul className="notification-list">
         {notifications.map(notification => (
-          <li key={notification.id}>
+          <li
+            className="notification-list-row"
+            key={summaryKey(notification)}
+            onBlurCapture={event => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setReading(notification, 'focus', false)
+              }
+            }}
+            onFocusCapture={() => setReading(notification, 'focus', true)}
+            onMouseEnter={() => setReading(notification, 'hover', true)}
+            onMouseLeave={() => setReading(notification, 'hover', false)}
+          >
             <button className="notification-list-item" onClick={() => openPanel(notification)} type="button">
               <NoticeIcon notification={notification} />
               <span>
@@ -477,6 +627,10 @@ function NotificationList({
               </span>
               <Codicon name="chevron-right" size="0.875rem" />
             </button>
+            <div className="notification-list-context">
+              <NotificationMetadata notification={notification} />
+              <NoticeActions compact notification={notification} />
+            </div>
           </li>
         ))}
       </ul>
@@ -516,5 +670,10 @@ function notificationSelectionState(selection: 'list' | AppNotification | null, 
 
   const panel = selection && selection !== 'list' ? (selectedItem ?? 'list') : selection
 
-  return { selectedItem, panel, panelKey: panel === 'list' ? 'list' : selectedItem?.id, detailId: selectedItem?.id ?? null }
+  return {
+    selectedItem,
+    panel,
+    panelKey: panel === 'list' ? 'list' : selectedItem?.id,
+    detailId: selectedItem?.id ?? null
+  }
 }

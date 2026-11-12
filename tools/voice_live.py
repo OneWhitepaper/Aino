@@ -28,6 +28,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
+from hermes_cli.product_identity import AGENT_NAME, PRODUCT_NAME
+
 logger = logging.getLogger(__name__)
 
 GPT_LIVE_MODE = "gpt-live"
@@ -46,7 +48,7 @@ GPT_LIVE_VOICES = (
 # the vendor guide asks for role + style + a labelled delegation policy, nothing more. The
 # backend (Hermes) carries the real instructions, tools and memory.
 LIVE_PERSONA = (
-    "You are Hermes, a calm and friendly voice assistant. Speak naturally at an unhurried pace. "
+    f"You are {PRODUCT_NAME}, a calm and friendly voice assistant. Speak naturally at an unhurried pace. "
     "Be clear and direct, not overly cheerful. If the user is frustrated, acknowledge it briefly "
     "and focus on the next helpful step.\n\n"
     "Backchannel policy: Use moderate backchannels. Acknowledge naturally without competing with "
@@ -54,7 +56,7 @@ LIVE_PERSONA = (
     "Interruption policy: Stop speaking when the user interrupts. Listen to what they say.\n\n"
     "Delegation policy:\n"
     "Backend tools:\n"
-    "- Hermes agent: a full AI agent with tools — it can run commands, read and edit files, "
+    f"- {AGENT_NAME}: a full AI agent with tools — it can run commands, read and edit files, "
     "browse the web, search, remember things across sessions, schedule tasks, and reason "
     "carefully about anything. It is the one who actually does work and knows facts.\n\n"
     "Delegate to the backend when:\n"

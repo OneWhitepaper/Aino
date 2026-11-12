@@ -1,11 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import * as gateway from '@/store/gateway'
 import { _resetSessionOwnerHintsForTests, setSessionOwnerHint } from '@/store/session'
 import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
 
-import { SubagentSection } from './subagent-section'
+import { SubagentControls } from './subagent-controls'
+
+function Controls({ sessionId }: { sessionId: string }) {
+  const [text, setText] = useState('')
+
+  return <SubagentControls sessionId={sessionId} setText={setText} subagentId="worker" text={text} />
+}
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -27,9 +34,7 @@ it('sends steer and stop to the child parent owner, never the active gateway or 
   const request = vi.spyOn(gateway, 'requestGatewayForAgent').mockResolvedValue({ status: 'queued', found: true })
   setSessionOwnerHint('parent', { connectionId: 'remote-owner', profile: 'research' })
   upsertSubagent('parent', { subagent_id: 'worker', child_session_id: 'child-transcript', goal: 'Owned work' })
-  render(<SubagentSection sessionId="parent" />)
-  fireEvent.click(screen.getByRole('button', { name: /1 Subagent/ }))
-  fireEvent.click(screen.getByRole('button', { name: /Owned work/ }))
+  render(<Controls sessionId="parent" />)
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Check the negative control' } })
   fireEvent.click(screen.getByRole('button', { name: 'Steer' }))
   await waitFor(() =>
@@ -53,9 +58,7 @@ it('sends steer and stop to the child parent owner, never the active gateway or 
 it('keeps rejected steer text and does not retarget when the owner is unknown', async () => {
   const request = vi.spyOn(gateway, 'requestGatewayForAgent').mockResolvedValue({ status: 'rejected' })
   upsertSubagent('unknown', { subagent_id: 'worker', goal: 'Unbound work' })
-  render(<SubagentSection sessionId="unknown" />)
-  fireEvent.click(screen.getByRole('button', { name: /1 Subagent/ }))
-  fireEvent.click(screen.getByRole('button', { name: /Unbound work/ }))
+  render(<Controls sessionId="unknown" />)
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this instruction' } })
   fireEvent.click(screen.getByRole('button', { name: 'Steer' }))
   await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())

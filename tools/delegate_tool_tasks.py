@@ -84,7 +84,7 @@ def _normalize_task_list(
                 f"Either reduce the task count, split into multiple delegate_task calls, or increase "
                 f"delegation.max_concurrent_children in config.yaml."
             )
-        task_list = tasks
+        task_list = list(tasks)
     elif goal and isinstance(goal, str) and goal.strip():
         task_list = [{"goal": goal, "context": context, "role": top_role}]
         if output_schema is not None:
@@ -100,6 +100,11 @@ def _normalize_task_list(
             return None, f"Task {i} must be an object, got {type(task).__name__}."
         if not task.get("goal", "").strip():
             return None, f"Task {i} is missing a 'goal'."
+        name = task.get("display_name")
+        if name is not None:
+            if not isinstance(name, str) or len(" ".join(name.split())) > 48:
+                return None, f"Task {i} display_name must be a short string of at most 48 characters."
+            task_list[i] = {**task, "display_name": " ".join(name.split())}
     # The single-goal form is exempt from the batch gate (short goals are valid there).
     batch_error = _validate_batch_tasks(task_list) if isinstance(tasks, list) else None
     return (None, batch_error) if batch_error else (task_list, None)

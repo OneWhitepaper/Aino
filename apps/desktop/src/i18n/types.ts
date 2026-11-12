@@ -2,7 +2,6 @@ import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
 
 import type { AppearancePageCopy } from './appearance-page'
-import type { CloudSyncCopy } from './cloud-sync'
 import type { NotificationCenterTranslations } from './notification-center'
 // health: allow FILE_LINES -- the copy contract for the usage-window plan keys every locale adds (allowance gauges, Large/Free tags, the limit card)
 // `Translations` is the single source of truth for every translatable string
@@ -97,7 +96,6 @@ interface ModeOptionCopy {
 }
 
 export interface UpstreamTranslations extends NoticeTranslations {
-  cloudSync: CloudSyncCopy
   toolPanel: ToolPanelCopy
   appearancePage: AppearancePageCopy
   workspacePage: WorkspacePageCopy

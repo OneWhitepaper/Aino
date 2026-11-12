@@ -11,16 +11,18 @@ import { numberValue, parseMaybeObject } from './fallback-model'
  * all three of those views of the same child.
  */
 export interface DelegateRow {
-  /** Relayed activity, oldest → newest, revealed when the child row is expanded. */
+  /** Relayed activity, oldest → newest, available in the child's panel detail. */
   activity: string[]
   durationSeconds?: number
   /** Receipt identities, never inferred from a task's display text. */
   delegationId?: string
   subagentId?: string
+  /** Optional friendly name, while goal retains the original instructions. */
+  displayName?: string
   goal: string
   id: string
   model?: string
-  /** The child's own session id, when it reported one — opens its window. */
+  /** The child's own stored session id, when reported by the runtime. */
   sessionId?: string
   status: DelegateRowStatus
 }
@@ -86,6 +88,8 @@ function dispatchedGoals(result: unknown): string[] {
  */
 export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId = ''): DelegateRow[] {
   const record = parseMaybeObject(result)
+  const input = parseMaybeObject(args)
+  const tasks = Array.isArray(input.tasks) ? input.tasks.map(parseMaybeObject) : [input]
   const goals = delegateGoals(args)
   const finished = resultRows(result)
   const dispatched = dispatchedGoals(result)
@@ -109,10 +113,14 @@ export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId 
       activity: summary ? [summary] : [],
       durationSeconds: entry ? (numberValue(entry.duration_seconds) ?? undefined) : undefined,
       delegationId,
-      subagentId: typeof subagentIds[index] === 'string' && subagentIds[index] ? subagentIds[index] : undefined,
+      subagentId:
+        (entry && field(entry, 'subagent_id')) ||
+        (typeof subagentIds[index] === 'string' && subagentIds[index] ? subagentIds[index] : undefined),
+      displayName: (entry && field(entry, 'display_name')) || field(tasks[index] ?? {}, 'display_name') || undefined,
       goal,
       id: `${toolCallId}:${index}`,
       model: entry ? field(entry, 'model') || undefined : undefined,
+      sessionId: entry ? field(entry, 'child_session_id') || field(entry, 'session_id') || undefined : undefined,
       status: entry ? settledRowStatus(field(entry, 'status')) : idle
     }
   })
@@ -124,6 +132,9 @@ function fromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: 
       .map(entry => (entry.kind === 'summary' ? live.summary || entry.text : entry.text))
       .filter(Boolean),
     durationSeconds: live.durationSeconds,
+    displayName: live.displayName,
+    delegationId: live.delegationId,
+    subagentId: live.id,
     goal: live.goal || fallbackGoal,
     id: live.id || fallbackId,
     model: live.model,
@@ -173,7 +184,13 @@ export function mergeDelegateRows(
       return row
     }
 
-    const merged = { ...row, ...fromSubagent(matched, row.id, row.goal) }
+    const merged = {
+      ...row,
+      ...fromSubagent(matched, row.id, row.goal),
+      displayName: matched.displayName || row.displayName,
+      delegationId: matched.delegationId || row.delegationId,
+      sessionId: matched.sessionId || row.sessionId
+    }
 
     if (!isDelegateRowLive(row.status) && (row.status !== 'dispatched' || !native)) {
       return {

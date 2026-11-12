@@ -82,12 +82,12 @@ function CommandInput({ className, right, ...props }: CommandInputProps) {
   )
 }
 
-function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
+function CommandList({
+  className,
+  onPointerMoveCapture,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.List>) {
   const variant = React.useContext(CommandVariantContext)
-  // cmdk selects on pointer-enter, so a list that opens under a parked cursor —
-  // or re-flows under one as the query narrows — hands the selection to
-  // whatever row slid beneath the mouse, and Enter commits THAT. Inert until
-  // the pointer actually moves (see usePointerQuiet).
   const pointerQuiet = usePointerQuiet()
 
   return (
@@ -95,10 +95,18 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
       className={cn(
         'overflow-y-auto overflow-x-hidden',
         variant === 'menu' ? 'dt-portal-scrollbar max-h-72' : 'max-h-100',
-        pointerQuiet && 'pointer-events-none',
         className
       )}
       data-slot="command-list"
+      onPointerMoveCapture={event => {
+        // A parked cursor must not steal keyboard selection, but a direct click
+        // still carries intent. Block hover events rather than hit testing.
+        if (pointerQuiet) {
+          event.stopPropagation()
+        }
+
+        onPointerMoveCapture?.(event)
+      }}
       {...props}
     />
   )

@@ -10,6 +10,7 @@ renderer resolves refs and owns the overlay). ``desktop_ui`` toolset only.
 import json
 from typing import Callable, Optional
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.registry import registry, tool_error
 
 ACTIONS = ("add", "hold", "remove", "clear")
@@ -24,7 +25,7 @@ def annotate_preview_tool(
 ) -> str:
     """Put one annotation up, take one down, or clear them all."""
     if callback is None:
-        return tool_error("annotate_preview is only available in the Hermes desktop app.")
+        return tool_error(f"annotate_preview is only available in the {PRODUCT_NAME} desktop app.")
     verb = (action or "add").strip().lower()
     if verb not in ACTIONS:
         return tool_error(f"action must be one of: {', '.join(ACTIONS)}.")

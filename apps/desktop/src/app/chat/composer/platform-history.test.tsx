@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
 import { useModelControls } from '@/app/session/hooks/use-model-controls'
+import { I18nProvider } from '@/i18n'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { $freshSessionRequest } from '@/store/profile'
 import { $activeSessionId } from '@/store/session'
@@ -12,7 +13,7 @@ import { platformSnapshot } from '@/test/platform-model'
 
 import type { PlatformAccountSnapshot } from '../../../../shared/platform-contract'
 
-import { PlatformHistoryNotice, usePlatformHistoryOwner } from './platform-history'
+import { PlatformHistoryNotice, usePlatformSessionAccess } from './platform-history'
 
 afterEach(() => {
   cleanup()
@@ -63,7 +64,7 @@ it('rejects an overlay model change on same-user history from another platform b
   expect($sessionStates.get()['runtime-a']).toBe(history)
 })
 
-it('keeps original account history read-only and requests a new chat without rewriting its ownership', async () => {
+it.each(['en', 'zh'] as const)('keeps foreign history read-only without exposing account IDs (%s)', async locale => {
   let changed!: (snapshot: PlatformAccountSnapshot) => void
   let ownerUserId = 'user-b'
   Object.defineProperty(window, 'hermesDesktop', {
@@ -91,7 +92,7 @@ it('keeps original account history read-only and requests a new chat without rew
     provider: 'aino',
     model: 'catalog-a',
     platformModel: {
-      ownerUserId: 'user-a',
+      ownerUserId: '10',
       platformOrigin: 'http://127.0.0.1:7001',
       modelId: 'catalog-a',
       status: 'ready' as const
@@ -101,25 +102,31 @@ it('keeps original account history read-only and requests a new chat without rew
   $sessionStates.set({ 'runtime-a': history })
 
   function History() {
-    const owner = usePlatformHistoryOwner('runtime-a')
+    const access = usePlatformSessionAccess('runtime-a')
+    const owner = access.kind === 'foreign' ? access.ownerUserId : null
 
     return (
       <>
-        <button disabled={owner !== null}>Send</button>
+        <button disabled={access.kind !== 'allowed'}>Send</button>
         {owner !== null && <PlatformHistoryNotice ownerUserId={owner} />}
       </>
     )
   }
 
-  render(<History />)
+  render(
+    <I18nProvider configClient={null} initialLocale={locale}>
+      <History />
+    </I18nProvider>
+  )
   expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
-  expect(screen.getByRole('status').textContent).toContain('user-a')
+  await waitFor(() => expect(screen.queryByRole('status')).not.toBeNull())
+  expect(screen.getByRole('status').textContent).not.toContain('10')
   const prior = $freshSessionRequest.get()
-  fireEvent.click(screen.getByRole('button', { name: /New chat/ }))
+  fireEvent.click(screen.getByRole('button', { name: locale === 'zh' ? /新建会话/ : /New chat/ }))
   expect($freshSessionRequest.get()).toBe(prior + 1)
   expect($sessionStates.get()['runtime-a']).toBe(history)
-  ownerUserId = 'user-a'
-  act(() => changed(platformSnapshot('user-a', 2)))
+  ownerUserId = '10'
+  act(() => changed(platformSnapshot('10', 2)))
   await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false))
   expect(screen.queryByRole('status')).toBeNull()
 })

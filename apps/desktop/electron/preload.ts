@@ -70,16 +70,6 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       return () => ipcRenderer.removeListener('aino:platform-account:changed', listener)
     }
   },
-  cloudSync: {
-    status: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-sync:status')),
-    retry: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-sync:retry')),
-    onChanged: callback => {
-      const listener = (_event, status) => callback(status)
-      ipcRenderer.on('aino:platform-sync:changed', listener)
-
-      return () => ipcRenderer.removeListener('aino:platform-sync:changed', listener)
-    }
-  },
   platformModels: {
     nativeDeviceKeys: true,
     credentialRejected: async (revision, version) =>
@@ -161,7 +151,8 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   openSessionWindow: (sessionId, opts) => ipcRenderer.invoke('hermes:window:openSession', sessionId, opts),
   openSessionInTerminal: (sessionId, opts) => ipcRenderer.invoke('hermes:window:openInTerminal', sessionId, opts),
   openWindow: (options?: DesktopProfileRoute) => ipcRenderer.invoke('hermes:window:openInstance', options),
-  setAccountWindowMode: (mode, height, expected) => ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
+  setAccountWindowMode: (mode, height, expected) =>
+    ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
   openBrowserWindow: tabId => ipcRenderer.invoke('hermes:window:openBrowser', tabId),
   windowRelay: {
     send: payload => ipcRenderer.send('hermes:window:relay', payload),

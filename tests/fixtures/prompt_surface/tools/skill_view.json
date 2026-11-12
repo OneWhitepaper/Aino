@@ -4,7 +4,7 @@
   "parameters": {
     "properties": {
       "file_path": {
-        "description": "OPTIONAL: Path to a linked file within the skill (e.g., 'references/api.md', 'templates/config.yaml', 'scripts/validate.py'). Omit to get the main SKILL.md content.",
+        "description": "OPTIONAL: Linked file path (e.g., 'references/api.md', 'templates/config.yaml', 'scripts/validate.py'); the built-in help also supports 'aino-docs/README.md'. Omit to get the main SKILL.md content.",
         "type": "string"
       },
       "name": {

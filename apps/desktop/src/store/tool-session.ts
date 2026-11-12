@@ -125,13 +125,19 @@ export const $toolSession = computed(
 
 export type ToolSession = ReturnType<typeof $toolSession.get>
 
-/** Filesystem/Git/terminal bridges belong to the foreground source. A tile on
- * another owner must never send its path to a same-named local directory. */
-export function toolSessionHasCurrentSource(session: Pick<ToolSession, 'owner' | 'scope' | 'storedId'>): boolean {
+/** A shell can use another profile on this same host, but must never borrow
+ * a path from an unknown owner or another connection. */
+export function toolSessionHasCurrentConnection(session: Pick<ToolSession, 'owner' | 'scope' | 'storedId'>): boolean {
   return (
     (!session.storedId || Boolean(session.owner) || ambientGatewayOwnsEverySession()) &&
-    session.scope.connectionId === ($connection.get()?.connectionId || 'local') &&
-    session.scope.profile === ($activeGatewayProfile.get() || 'default')
+    session.scope.connectionId === ($connection.get()?.connectionId || 'local')
+  )
+}
+
+/** Filesystem/Git bridges belong to the foreground profile as well as its host. */
+export function toolSessionHasCurrentSource(session: Pick<ToolSession, 'owner' | 'scope' | 'storedId'>): boolean {
+  return (
+    toolSessionHasCurrentConnection(session) && session.scope.profile === ($activeGatewayProfile.get() || 'default')
   )
 }
 

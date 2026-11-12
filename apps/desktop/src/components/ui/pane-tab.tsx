@@ -318,7 +318,7 @@ export const PaneTabStrip = React.forwardRef<HTMLDivElement, PaneTabStripProps>(
         titlebar
           ? 'h-full flex-1 [-webkit-app-region:drag]'
           : variant === 'tool'
-            ? 'h-[45px] [-webkit-app-region:no-drag]'
+            ? 'h-(--aino-tool-strip-height) [-webkit-app-region:no-drag]'
             : variant === 'conversation'
               ? 'h-[43px] [-webkit-app-region:no-drag]'
               : 'h-7 [-webkit-app-region:no-drag]',

@@ -7,7 +7,9 @@ explicit legacy rung so an existing upstream installation can be upgraded or
 removed safely.
 """
 
-DESKTOP_PRODUCT_NAME = "Aino"
+from hermes_cli.product_identity import APP_ID, PRODUCT_NAME
+
+DESKTOP_PRODUCT_NAME = PRODUCT_NAME
 LEGACY_DESKTOP_PRODUCT_NAME = "Hermes"
-DESKTOP_APP_ID = "com.ablankpaper.aino"
+DESKTOP_APP_ID = APP_ID
 LEGACY_DESKTOP_APP_ID = "com.nousresearch.hermes"

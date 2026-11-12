@@ -3,6 +3,8 @@ or ``theme.pick`` for a card that waits for the user."""
 
 from __future__ import annotations
 
+from hermes_cli.product_identity import PRODUCT_NAME
+
 import json
 import time
 
@@ -10,7 +12,7 @@ import time
 THEME_TIMEOUT_S = 15
 THEME_PICK_TIMEOUT_S = 300
 
-_UNANSWERED = {"success": False, "error": "No Hermes Desktop window answered the theme request."}
+_UNANSWERED = {"success": False, "error": f"No {PRODUCT_NAME} Desktop window answered the theme request."}
 
 
 def theme_request(sid: str, payload: dict) -> dict:

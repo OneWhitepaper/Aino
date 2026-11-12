@@ -16,7 +16,9 @@ import type {
   PlatformDevice,
   PlatformDevicesBridge
 } from '../../../../shared/platform-contract'
-import { ListRowSkeleton, Pill, SettingsGroup } from '../primitives'
+import { ListRowSkeleton, SettingsGroup } from '../primitives'
+
+import { DeviceAuthorizationList } from './device-authorization-list'
 
 export interface PlatformDevicesProps {
   scope: PlatformBillingScope
@@ -53,18 +55,6 @@ function pageVisible() {
   return document.visibilityState !== 'hidden'
 }
 
-function deviceStatus(device: PlatformDevice) {
-  // Older APIs report expired credentials as revoked, even while their sign-in remains revocable.
-  return (
-    device.status ??
-    (device.expires_at !== null && Date.parse(device.expires_at) <= Date.now()
-      ? 'expired'
-      : device.revoked
-        ? 'revoked'
-        : 'active')
-  )
-}
-
 function mergeDeviceAuthorizations(rows: PlatformDevice[], previous: PlatformDevice[] = []) {
   const revoked = new Map(
     previous.filter(device => device.status === 'revoked').map(device => [device.device_id, device.expires_at])
@@ -83,7 +73,7 @@ function mergeDeviceAuthorizations(rows: PlatformDevice[], previous: PlatformDev
 }
 
 function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { bridge: PlatformDevicesBridge }) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const copy = t.platformDevices
   const { user_id: user, generation, origin } = scope
 
@@ -258,7 +248,6 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
       </summary>
       <div className="account-devices-body">
         <div className="account-devices-toolbar">
-          <span>{t.accountPage.deviceIdentifier}</span>
           <Button disabled={loading || busy} onClick={() => void read()} size="sm" variant="ghost">
             <RefreshCw />
             {copy.refresh}
@@ -323,44 +312,14 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
         )}
         {devices?.length === 0 && <p className="text-sm text-muted-foreground">{copy.empty}</p>}
         {devices && devices.length > 0 && (
-          <div className="account-devices-list" role="list">
-            {devices.map(device => {
-              const status = deviceStatus(device)
-
-              return (
-                <div className="account-device" key={device.device_id} role="listitem">
-                  <div className="account-device-main">
-                    <div className="account-device-identity">
-                      <span>{device.device_id}</span>
-                      <Pill tone={status === 'active' ? 'success' : 'muted'}>{copy[status]}</Pill>
-                    </div>
-                    <Button
-                      disabled={status === 'revoked' || busy || loading || !!stepUp}
-                      onClick={() => {
-                        setSelected(device.device_id)
-                        setError(null)
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      {copy.revoke}
-                    </Button>
-                  </div>
-                  <div className="account-device-times">
-                    <span>
-                      {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
-                    </span>
-                    <span>
-                      {copy.expires}:{' '}
-                      {device.expires_at === null
-                        ? t.platformModels.permanent
-                        : new Date(device.expires_at).toLocaleString(locale)}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <DeviceAuthorizationList
+            devices={devices}
+            disabled={busy || loading || !!stepUp}
+            onSelect={id => {
+              setSelected(id)
+              setError(null)
+            }}
+          />
         )}
         {selected && (
           <ConfirmDialog

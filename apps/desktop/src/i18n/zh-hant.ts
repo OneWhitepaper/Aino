@@ -2,7 +2,6 @@ import { mergeTranslations } from '@hermes/shared/i18n'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
@@ -31,7 +30,6 @@ const zhHantBaseOverrides = {
   home: homeGuidance['zh-hant'],
   toolPanel: toolPanel['zh-hant'],
   workspacePage: workspacePage['zh-hant'],
-  cloudSync: cloudSync['zh-hant'],
   accountPage: accountPage['zh-hant'],
   connectorOffer: {
     heading: '保留已連接的應用程式',
@@ -465,17 +463,16 @@ const zhHantBaseOverrides = {
     vision: '圖片',
     reasoning: '推理',
     defaultModel: '新對話預設模型',
-    historyReadOnly: (owner: string) =>
-      `此對話屬於原 Aino 帳戶 ${owner}。可以查看本機歷史，但不能使用目前帳戶繼續傳送。`,
+    historyReadOnly: (_owner: string) => '這段對話屬於其他帳戶。請切回原帳戶，或使用目前帳戶開啟新對話。',
     newChatCurrentAccount: '使用目前帳戶建立新對話',
     followCustom: '使用自訂模型預設設定',
     defaultTag: '預設',
     not_authenticated: '請先登入 Aino 再使用此模型',
     platform_account_changed: '此模型屬於其他帳戶。請登入原帳戶或重新選擇模型。',
-    permanent: "不限期",
-    reauthorize: "重新授權此裝置",
-    reauthorizeDescription: "替換此裝置的模型授權。如帳戶管理登入已過期，請先重新登入。",
-    deviceRevoked: "此裝置的模型存取已被撤銷，請在模型設定中重新授權。",
+    permanent: '不限期',
+    reauthorize: '重新授權此裝置',
+    reauthorizeDescription: '替換此裝置的模型授權。如帳戶管理登入已過期，請先重新登入。',
+    deviceRevoked: '此裝置的模型存取已被撤銷，請在模型設定中重新授權。',
     bindingFailed: '模型授權失敗，訊息尚未傳送。請重新選擇模型後重試。',
     unsupported: '此連線不支援 Aino 內建模型',
     rate: '帳戶倍率',

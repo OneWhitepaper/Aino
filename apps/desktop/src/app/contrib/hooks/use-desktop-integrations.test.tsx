@@ -182,6 +182,31 @@ describe('useDesktopIntegrations', () => {
     )
   }
 
+  it('never connects a retired cloud-sync bridge exposed by an older preload', () => {
+    const cloudSync = {
+      status: vi
+        .fn()
+        .mockResolvedValue({
+          state: 'disabled',
+          pending: 0,
+          error: null,
+          revision: 0,
+          changed_session_ids: [],
+          changed_profile_ids: []
+        }),
+      retry: vi.fn(),
+      onChanged: vi.fn(() => () => {})
+    }
+
+    Object.assign(desktopWindow.hermesDesktop!, { cloudSync })
+    const hook = render({ profileReady: true, sessionsLoading: false })
+
+    expect(hook.result.current).toBe(true)
+    expect(cloudSync.status).not.toHaveBeenCalled()
+    expect(cloudSync.onChanged).not.toHaveBeenCalled()
+    expect(cloudSync.retry).not.toHaveBeenCalled()
+  })
+
   describe('profile-ready gate', () => {
     it('allows a fresh chat after an empty fetch without erasing remembered history or navigating on later refresh', () => {
       const rememberedKey = 'hermes.desktop.lastRoute.profile.default'
@@ -268,9 +293,7 @@ describe('useDesktopIntegrations', () => {
       const result = render({ profileReady: true, sessions: [] })
 
       expect(navigate).not.toHaveBeenCalled()
-      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe(
-        '/remembered-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/remembered-session')
 
       result.rerender({
         activeProfile: 'default',
@@ -300,12 +323,8 @@ describe('useDesktopIntegrations', () => {
 
       expect(navigate).not.toHaveBeenCalled()
       // The remembered values stay intact for the primary window's next boot.
-      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe(
-        '/remembered-session'
-      )
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
-        'remembered-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/remembered-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('remembered-session')
     })
   })
 
@@ -331,9 +350,7 @@ describe('useDesktopIntegrations', () => {
         sessions: [...sessions, session({ id: 'other-session', profile: 'default' })]
       })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
-        'other-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('other-session')
     })
 
     it('holds the restore until the config record answers, then restores when on', () => {
@@ -381,9 +398,7 @@ describe('useDesktopIntegrations', () => {
       render({ profileReady: true, sessions })
 
       await waitFor(() => expect(navigate).toHaveBeenCalledWith('/parent-session', { replace: true }))
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
-        'parent-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('parent-session')
     })
 
     // Pins the reachability contract of the by-id resolve branch: the
@@ -439,9 +454,7 @@ describe('useDesktopIntegrations', () => {
         sessions
       })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
-        'parent-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('parent-session')
       expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/parent-session')
     })
 
@@ -884,9 +897,7 @@ describe('useDesktopIntegrations', () => {
         sessions: [session({ id: 'other-session', profile: 'default' })]
       })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
-        'other-session'
-      )
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('other-session')
     })
   })
 
@@ -908,14 +919,11 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('navigates hermes://index-network/intent/1 deep links through the same path vocabulary', () => {
-      let deepLink:
-        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
 
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (
-          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
-        ) => {
+        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
           deepLink = cb
 
           return () => undefined
@@ -929,14 +937,11 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('routes hermes://mcp/install to the pending-install dialog, not navigation', () => {
-      let deepLink:
-        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
 
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (
-          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
-        ) => {
+        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
           deepLink = cb
 
           return () => undefined
@@ -951,14 +956,11 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('routes hermes://plugin/install?catalog= to the catalog lookup, not the git-path modal', () => {
-      let deepLink:
-        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
 
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (
-          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
-        ) => {
+        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
           deepLink = cb
 
           return () => undefined

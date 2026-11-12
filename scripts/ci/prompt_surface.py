@@ -114,6 +114,8 @@ def _scrub(text: str, home: Path) -> str:
     import platform as _platform
     replacements = {
         f"{_platform.system()} ({_platform.release()})": "<HOST_OS>",
+        # Installed help points at this checkout; its mount path is not prompt policy.
+        str(ROOT): "<SOURCE_ROOT>",
     }
     # macOS can expose the same temporary home through /var and /private/var.
     for alias in (home, Path(os.environ.get("HOME", str(home)))):

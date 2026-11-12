@@ -2059,13 +2059,7 @@ body.guest-pointer-lock :is(webview, iframe) {
 [data-contrib-shell]:has([data-chat-surface]) [data-pane-surface='main'] {
   height: var(--aino-band-row2);
   background: var(--aino-landing-surface);
-  border-bottom: 1px solid var(--aino-landing-stroke);
-}
-
-/* Vertical zone seams start BELOW the band so nothing cuts the top row; the
-   sash keeps its full-height grab band, only the resting hairline moves. */
-[data-contrib-shell]:has([data-chat-surface]) [role='separator'][data-sash-axis='x'] > span:first-child {
-  top: var(--aino-band-row2);
+  border-bottom: 1px solid var(--ui-stroke-secondary);
 }
 
 /* A chat tile has one current-session heading, not a row of conversation
@@ -2115,12 +2109,10 @@ body.guest-pointer-lock :is(webview, iframe) {
 }
 
 [data-zone-tabstrip]:has([data-tree-tab='sessions']) > [role='tablist'] > [data-tree-tab='hermes-bots:pane'] {
-  /* Agent Hub is longer than the legacy “机器人” label. Let the tab size to
-     its label so the brand name remains readable instead of becoming
-     “Age…” inside the fixed 70px slot. The minimum keeps the rail rhythm
-     stable when a host supplies a shorter fallback label. */
+  /* Bot keeps the same minimum as Sessions in guest/edit-mode strips while
+     the label can still grow to its localized content. */
   width: max-content;
-  min-width: 6.5rem;
+  min-width: 3.5rem;
 }
 
 [data-zone-tabstrip]:has([data-tree-tab='sessions'])
@@ -2203,7 +2195,7 @@ body.guest-pointer-lock :is(webview, iframe) {
 [data-contrib-shell]:not(:has([data-settings-workspace])) > [data-titlebar-rail]::before {
   position: absolute;
   top: 0;
-  bottom: -1px;
+  bottom: 0;
   left: var(--titlebar-rail-left);
   width: var(--titlebar-rail-width);
   background: var(--aino-navigation-rail);
@@ -2262,35 +2254,20 @@ body.guest-pointer-lock :is(webview, iframe) {
   left: 1px;
 }
 
-/* The primary chat projects its existing title/menu into the window bar.
-   Other panes retain their local strips for tab navigation and layout edits. */
-[data-contrib-shell]:has([data-window-session-title]) > [data-slot='app-titlebar'] {
-  border-bottom: 1px solid var(--aino-landing-stroke);
+/* Home and live conversations share one continuous header boundary. Its rail
+   painter ends above this border, so no segment paints over the hairline. */
+[data-contrib-shell] > [data-slot='app-titlebar'] {
+  border-bottom: 1px solid var(--ui-stroke-secondary);
 }
 
-/* Keep the three titlebar roles in stable columns. The session title may
-   shorten inside the left column, but it must not push the search field away
-   from the center of the usable titlebar area. */
-[data-titlebar-content] {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, clamp(5rem, calc(100% - 16rem), 20rem)) minmax(0, 1fr);
-}
-
-[data-titlebar-content] [data-titlebar-slot='titleBar.left'] {
-  grid-column: 1;
-}
-
-[data-titlebar-content] [data-titlebar-slot='titleBar.center'] {
-  grid-column: 2;
-  justify-self: center;
+/* The center is independent of the bounded title/tool content so a long
+   session title cannot move search or live collaboration off the chat axis. */
+[data-titlebar-slot='titleBar.center'] > [data-session-search-shell] {
+  width: min(20rem, 100%);
 }
 
 [data-session-search-shell] input {
   text-overflow: ellipsis;
-}
-
-[data-titlebar-content] [data-titlebar-slot='titleBar.right'] {
-  grid-column: 3;
 }
 
 [data-window-session-title] {
@@ -2312,10 +2289,6 @@ body.guest-pointer-lock :is(webview, iframe) {
 
 [data-window-session-title] [data-current-session-title] > span {
   text-overflow: ellipsis;
-}
-
-[data-contrib-shell]:has([data-window-session-title]) [role='separator'][data-sash-axis='x'] > span:first-child {
-  top: 0;
 }
 
 body:not(:has([data-settings-workspace])):has([data-chat-surface][data-home-layout])
@@ -3008,15 +2981,17 @@ button[data-slot='aui_msg-reactions'] svg {
   }
 }
 
-/* Floating "jump to bottom" control (see scroll-to-bottom-button.tsx).
-   Directional scale: it contracts toward 1 as it arrives (from 1.1) and keeps
-   contracting to 0.9 as it leaves — always shrinking in the direction of
-   travel, so the motion reads as a soft settle / recede rather than a pop. The
-   X half-offset stays baked into every transform so `left-1/2` centering holds
-   through the animation. */
+/* Overlay composers need height clearance. In-flow conversation docks already
+   shrink composer-bounds, so subtracting their height again lifts this control
+   into the middle of the transcript. */
 .thread-jump-button {
+  bottom: calc(var(--composer-measured-height) + 0.75rem);
   opacity: 0;
-  transform: translateX(-50%) translateY(0.3rem) scale(0.9);
+  transform: translateX(-50%) translateY(0.25rem);
+}
+
+[data-chat-surface][data-conversation-layout] .thread-jump-button {
+  bottom: 0.75rem;
 }
 
 .thread-jump-button[data-state='in'] {
@@ -3030,24 +3005,24 @@ button[data-slot='aui_msg-reactions'] svg {
 @keyframes thread-jump-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(0.3rem) scale(1.1);
+    transform: translateX(-50%) translateY(0.25rem);
   }
 
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
 @keyframes thread-jump-out {
   from {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) translateY(0);
   }
 
   to {
     opacity: 0;
-    transform: translateX(-50%) translateY(0.3rem) scale(0.9);
+    transform: translateX(-50%) translateY(0.25rem);
   }
 }
 
@@ -3055,12 +3030,12 @@ button[data-slot='aui_msg-reactions'] svg {
   .thread-jump-button[data-state='in'],
   .thread-jump-button[data-state='out'] {
     animation: none;
-    transition: opacity 120ms linear;
+    transition: none;
   }
 
   .thread-jump-button[data-state='in'] {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) translateY(0);
   }
 }
 

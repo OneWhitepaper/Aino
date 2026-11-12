@@ -18,6 +18,11 @@ export const ja: BotsMessages = {
     gatewayDefault: 'ゲートウェイの既定値',
     modelNameExample: '例：モデル名',
     modelSwitchFailed: 'モデルの切り替えに失敗しました',
+    draftResetTitle: '下書きの設定をリセットしますか？',
+    draftResetDescription:
+      'テンプレートや共有設定を変えると、下書きと設定済みのスキル・ツール・MCP接続が削除されます。入力した名前・説明・適用前のモデル選択は保持されます。',
+    draftResetAction: '下書きをリセット',
+    draftResetStale: '作成元のワークスペースが変わりました。画面を開き直してから下書きをリセットしてください。',
     newDescription:
       '独自のメモリ、スキル、チャットを持つ名前付きの仲間です。他のエージェントとメッセージをやり取りできます。',
     name: '名前',
@@ -79,7 +84,7 @@ export const ja: BotsMessages = {
   },
   roster: {
     modeDescription: 'ボット、グループチャット、共同作業',
-    title: 'Agent Hub',
+    title: 'Bot',
     search: 'ボットとグループチャットを検索',
     searchPlaceholder: 'ボットとグループチャットを検索…',
     newBotOrGroup: '新しいボットまたはグループチャット',

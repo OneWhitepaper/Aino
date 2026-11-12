@@ -34,6 +34,11 @@
               "pattern": "^(none|all|[1-9][0-9]*)$",
               "type": "string"
             },
+            "display_name": {
+              "description": "A short, recognizable name for this subagent, such as 'Source review' or '资料检索'. Use this name for lists; keep the complete instructions in goal.",
+              "maxLength": 48,
+              "type": "string"
+            },
             "goal": {
               "description": "What this subagent should accomplish. Give a specific bounded goal; include needed background in context or explicitly select visible history with context_turns.",
               "type": "string"

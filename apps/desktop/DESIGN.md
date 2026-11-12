@@ -98,14 +98,17 @@ SVG/ref-compatible adapters. Eight compatibility symbols retain their original
 sources where Codicons has no equivalent; brand portraits, provider logos, file
 types and specialized geometry keep their identity.
 
-The notification summary is a 380px right-aligned card with its own footprint
-below the page header, 14px corners, restrained shadow and text actions. It never
-covers a transcript or composer. The primary workspace owns the visible frame;
-a shell fallback keeps notices reachable when that workspace is hidden or
-Settings is active. Hidden frames keep their children mounted and release timer
-readers. There is one existing notification queue and no duplicated action owner.
-While a shared dialog is open, CSS hides the summary and disables its pointer
-events while retaining its footprint; closing the dialog restores the summary.
+The main window has one notification bell in the window titlebar, including
+Home, ordinary and Bot conversations, and Settings. Its count reflects the
+existing notification queue. Clicking opens a bounded, right-aligned floating
+card with shared panel elevation, list and detail views, and original recovery
+actions. It reserves no second header row or conversation width. Escape and
+explicit Close return focus to the bell; outside dismissal preserves the user's
+new focus target. New notices remain
+announced accessibly without opening the card. Auxiliary HUD and Browser windows
+use the same floating card and overlay feedback; there is one queue and no duplicated action
+owner. Notification timing, account/source epochs and exact-request action
+lifecycles remain authoritative.
 
 ## Approved Aino interface direction (2026-10-28)
 
@@ -137,7 +140,7 @@ that the mockup does not show.
   Workspace selection still previews; only the explicit switch action activates it.
 - Native OS file pickers and third-party embedded documents keep their native
   presentation. Only app-owned surrounding chrome is themed.
-- The default Sessions/Agent Hub rail uses a shared 56px brand row below the
+- The default Sessions/Bot rail uses a shared 56px brand row below the
   native window controls. Its current title (Aino or the contributed pane name)
   opens the existing dropdown menu, with descriptions and a checked current item.
   This two-option menu uses a compact 240px width capped by the viewport,
@@ -160,13 +163,13 @@ contracts in [the group design system](../../docs-local/group-human-redesign/DES
 Robot messages stay on the left and human messages on the right, using existing
 32px avatars, 14px body text, 12px metadata and a 66ch maximum message measure.
 Historical human labels are preserved unless the current user's identity is
-known. Messages and composer share a centered 1120px maximum column with 40px
-horizontal gutters; actual chat containers at least 1400px use 48px, at most
-960px use 24px, and at most 480px use 16px. Container width owns these rules,
-including when files or group information reduce the available reading area.
+known. Messages and composer share one centered 832px maximum column and the
+same container-aware gutters, which become 16px in narrow panes. Container width owns
+these rules, including when files or group information reduce the available reading area.
 
 A main group has one shell-owned title. Its content begins with a compact
-54px-minimum participant toolbar: existing portraits, readable names and state,
+45px participant toolbar, sharing its height with the adjacent tool tabs:
+existing portraits, readable names and state,
 search and group information. Standalone and older in-rail fallback surfaces
 retain their own title and Back; loading and failure gates follow the same
 main-versus-fallback rule. The information panel is 320px wide beside workspaces
@@ -189,8 +192,13 @@ parser, including its existing code/email rules; duplicate display names retain
 an explicit count instead of being deduplicated. Historical display and search
 may show names, but copying history and exact retries preserve original bytes.
 
-Agent Hub keeps its monitor and shared search above one scrolling Groups/Bots
-region. Existing remembered width, custom sections, hidden bots, filters, drag
+Bot keeps its shared search above one scrolling roster with separate
+Bots and Group chats sections. They stay visibly separate even on one gateway,
+with group counts beside their heading; activity never interleaves the two kinds.
+Bot and group rows share 32px portraits and a compact two-line layout:
+name, state and time above a real message preview or member summary. Time never
+adds a third row; long names truncate inside the available rail. Existing
+remembered width, custom sections, hidden bots, filters, drag
 operations, context menus, notifications and host-owned account controls retain
 their owners. Group rows without real message previews show member information,
 never invented activity. Conversation navigation presents one current title
@@ -313,7 +321,7 @@ animation invents streamed reply text or rewrites historical facts.
   Auxiliary task tables and MoA sections retain dynamic tasks, all routing,
   reasoning and existing autosave; schema-backed fallback/delegation controls
   keep their original owners. Hidden sources retain their local drafts.
-- **Route overlays are short tasks.** Command Center, Cron, Agents,
+- **Route overlays are short tasks.** Command Center, Cron,
   and Starmap render as `OverlayView` cards and return to the previous route on
   close. Settings is a full-page workspace with its own navigation and return
   affordance. Model/session pickers and dialogs layer above the current
@@ -325,6 +333,10 @@ animation invents streamed reply text or rewrites historical facts.
   tab, including split chats. Clicking a tool does not silently switch back to
   the main chat. Existing shells keep their processes and directories; moving
   their tab into the shared tool host never recreates or retargets the shell.
+  A new shell may use a known Bot profile on the same host without switching
+  the foreground gateway profile; SSH startup captures that exact route.
+  Unknown owners, other connections and URL-only connections cannot borrow a
+  local shell. Terminal failures name the missing source and explain recovery.
   Unscoped Review follows the same
   chat, while an explicitly opened repository stays pinned until another explicit
   review action. Source/profile ownership gates filesystem actions; delayed reads
@@ -342,6 +354,13 @@ animation invents streamed reply text or rewrites historical facts.
   startup provider picker over the workspace. A request-time notice opens the
   existing Model settings for its owner; explicit service authorization retains
   the existing OAuth/API key flow. Account sign-in remains separate.
+- **Return to latest stays beside the composer.** The shared floating button sits
+  12px above the conversation dock, centered within its own chat even with tools
+  open. The in-flow dock already reserves its height; never subtract that height
+  from the transcript again. Use a quiet solid surface, the shared downward arrow,
+  and a compact message count only when known; without a count show the circular
+  arrow with its accessible tooltip. Counts describe messages below the viewport,
+  not unread messages. Pending approvals retain their existing direct jump.
 - **Summary is a persistent workspace card.** Its list icon precedes Terminal
   and the right-sidebar toggle. The titlebar button alone opens and closes it;
   outside clicks, Escape, conversation switches and opening other panes leave
@@ -352,17 +371,22 @@ animation invents streamed reply text or rewrites historical facts.
   together within that chat. It sits in a 320px rail with 12px outer gutters.
   The rail shares the active chat
   canvas instead of painting a separate full-height sidebar; its compact paper
-  card uses 14px corners, quiet elevation, 12px section labels and 13px regular
+  card uses 14px corners, the compact `--shadow-sm` elevation, 12px section labels and 13px regular
   resource rows. Outputs and Sources keep their add actions in the section
-  header. Empty Outputs retains that action without a large placeholder row.
+  header. Its shadow stays close to the card instead of tinting the full-height
+  rail or forming a clipped dark band. Empty Outputs retains that action without a large placeholder row.
   The card scrolls independently and never mutates the user's saved tiling tree
   or remounts chat/terminal surfaces. When its owning chat has less than 960px
   available, it floats at that chat's top-right, within the same pane. It never
   stacks beneath the composer or enters the file/tool panel. The compact card
   keeps the same 320px width capped by its chat, scrolls independently, and uses
   a scoped CSS anchor to stop above the existing composer dock. It does not
-  reduce the chat's height. Opening uses a 200ms slide/resize transition, disabled
-  under reduced motion. Closing and transferring ownership hide the old card immediately.
+  reduce the chat's height. Opening takes 240ms and closing 160ms with a
+  decelerating ease. Docked mode crops a fixed-width card as its rail expands;
+  floating mode keeps its width and lightly shifts/fades the card. Closing
+  immediately removes interaction and keyboard access; changing the owning pane
+  hides the old card immediately. Rapid toggles reverse the same card in place.
+  Reduced motion settles immediately.
   Its contents follow the selected
   conversation: an overview leads with the live turn state (turn ended never
   means task completed), followed by outputs, plans and execution details.
@@ -592,9 +616,8 @@ for the added insets; narrower groups stack. Use shared stroke tokens in
 both brightness modes, without flattening native Glass surfaces.
 
 My account uses one profile card, a wallet/subscription overview and a ledger
-section, followed by a collapsed device-authorisation section. Its direct-child
-cloud-sync card has a 24px top margin and 16px vertical / 18px horizontal padding,
-scoped to the account page. Profile editing
+section, followed by a collapsed device-authorisation section. Conversation history
+remains local; cloud-history syncing and its recovery notices are retired. Profile editing
 uses the existing dialog; sign-out reuses the shared confirmation and pending
 state. Wallet display may round its decimal string to two places, with the full
 authoritative amount available in the adjacent disclosure. Account changes
@@ -948,6 +971,12 @@ focusing its composer.
   second header row for a session-only primary group. Mixed pane tabs,
   secondary chat splits and layout edit mode retain their local strips;
   Settings and auxiliary windows never borrow the primary window's header.
+- **Shell boundaries:** titlebar, navigation, tool tab strips and tree sashes use
+  one 1px `--ui-stroke-secondary` border at full opacity, aligned to whole pixels.
+  The header boundary stays visible on Home and in conversations; vertical seams
+  begin immediately beneath it, including alongside tool tabs. Rail paint stops
+  above the header border. The existing 8px resize target and hover/drag band
+  remain independent of the resting line; panes never add competing edge borders.
 - **Gutters:** generic overlays reuse `PAGE_INSET_X` / `PAGE_INSET_NEG_X`
   (`src/app/layout-constants.ts`). Management page owners align heading, tabs,
   search and results on one 1088px outer column with 32px side gutters, reducing
@@ -977,6 +1006,14 @@ focusing its composer.
   behind its existing account and runtime capability gates. Preview fixtures
   must exercise that native account path rather than treating a legacy dev
   identity's missing capabilities as product content removal.
+- **Account devices:** current active installation comes first, with a readable
+  application/channel/OS name and an In use status. Other active installations
+  follow separately. Expired and revoked authorizations stay in a closed History
+  disclosure, preserving their existing revocation and step-up flows. Full device
+  IDs, version and credential kind belong in each row's Details, never the primary
+  label. Unknown historical metadata remains unnamed rather than guessing a channel
+  or OS. Native identifies the current installation locally; server metadata is
+  display-only and never influences Key identity, model access or billing.
 - **About settings:** a compact centered identity, live version, one short update
   status and one neutral primary action. Website and release notes remain small
   text links. Installation details, supported source-channel controls and remote
@@ -1098,20 +1135,22 @@ so glass and message-bubble transparency do not reveal scrolling text.
   that wants the answer inline instead of a mounted dialog calls `confirm()`
   from `src/store/confirm.ts`, which renders this same primitive through the
   single `ConfirmHost` at the shell — the way `notify()` backs notifications.
-- **Notifications:** `NotificationStack` owns a right-aligned summary card below
-  the current page header and a dedicated reading panel beside the workspace. Main, HUD and
-  popped-out Browser each mount this same frame inside their actual shell;
-  there are no competing corner stacks or over-modal toast portals. Only one
-  concise summary appears; the notification/status button keeps every pending
-  entry reachable. Hiding a summary preserves its recovery entry. Short feedback
+- **Notifications:** the main titlebar mounts `NotificationStack` with its
+  toolbar placement once. The bell and count open the shared floating card,
+  with list and detail navigation, fixed header/actions and a scrolling body.
+  Home, conversations and Settings use this same instance. HUD and popped-out
+  Browser anchor the same floating card in their workspace without reserving
+  layout space. There are no competing corner stacks or duplicated queues.
+  Closing presentation preserves recovery entries. Short feedback
   expires after five seconds unless its caller specifies otherwise; pointer,
   keyboard and detail readers independently pause the remaining time. Actions
   await their real callback, stay single-flight across same-ID updates and retain
   failures for retry. Dispatching a restart intent means only that it was started,
   not that the service recovered. Native OS notification chrome remains OS-owned.
   Long details wrap in one panel-body scroll region, with header and actions
-  fixed. On narrow windows the panel temporarily owns the workspace area while
-  its conversation and draft stay mounted and inert. Account/source resets
+  fixed. The main card is capped by the viewport and never remounts the
+  conversation or composer. Auxiliary windows keep their draft active even in
+  narrow viewports. Account/source resets
   retire callbacks and the reading epoch; an ID reused by another owner cannot
   inherit old details or hidden state. Backend notices are keyed by connection,
   profile and notice code. Maintenance/snooze actions retain their source and
@@ -1124,6 +1163,35 @@ so glass and message-bubble transparency do not reveal scrolling text.
   with their full content available in the reading panel. Group, account,
   connection, install and model-form errors reuse this presentation without
   changing their data owner or recovery action.
+- **Reminder detail and feedback:** the bell card lists the actual source, received
+  time, repetition count and scenario facts. Storage facts use measured byte/count
+  fields; older runtimes explicitly show that structured measurements are unavailable.
+  A successfully acknowledged snooze remains readable with its deferred-until time,
+  excluded from the pending count. Short success/Undo feedback is anchored below
+  the bell, outside header flow, and shares the queue's reading/timer ownership.
+- **History synchronization:** the same native worker snapshot feeds account settings,
+  the notification detail and a compact composer status. Pending counts describe
+  saved history for the current account, never an unsent draft or a promise that
+  the current conversation was uploaded. Healthy idle synchronization adds no
+  permanent composer row. Normal pending/busy work and routine background syncing
+  stay out of the composer and notification queue; their real progress remains
+  visible in account settings. An existing interrupted-sync reminder stays visible
+  during its retry, then retires on success or recovery to normal pending work.
+  Settings keep Details available after success. Retry
+  appears only for failed, offline or unavailable synchronization, never for success,
+  active synchronization or normal pending/idle deferral. Retry is single-flight;
+  native states determine whether recovery still requires attention. Account changes retire the
+  previous account's reading context and late initial reads/retry results.
+- **Conversation recovery:** failed model recovery uses temporary selection followed
+  by Apply/Cancel; ordinary model selection retains its immediate-selection flow.
+  Apply targets the exact session owner and leaves default model settings unchanged.
+  Deferred sign-in remains beside that conversation's draft. Reconnection does not
+  claim the original request was checked and never automatically resends it.
+- **Deletion and archive:** a session deletion names the captured conversation and
+  owner workspace, explains its real scope and says permanent deletion cannot be
+  undone. Where supported, Archive is a third alternative using the same async
+  confirmation lifecycle. Successful archive offers an eight-second Undo bound to
+  the original session, source, profile and account; irreversible deletion has no Undo.
 - **Dialog reading and actions:** `DialogContent.header` and `.footer` are optional
   fixed title and action regions outside its sole `dialog-body` scroller. Existing
   form layouts retain their default body when omitted. `dismissDisabled` locks the shared X,
@@ -1140,6 +1208,20 @@ so glass and message-bubble transparency do not reveal scrolling text.
   `docs-local/notification-redesign/implementation.md` for coverage.
 
 ## Chat typography
+
+Ordinary, Bot and group transcripts and composers share a bounded 832px maximum
+and the same centered column in their actual chat container.
+The transcript measures that outer container, including its scrollbar, so
+scrolling cannot shift its edges away from the composer in narrow panes.
+Opening tools or Summary reduces that container instead of borrowing the window
+width. Narrow panes reduce their gutters; resizing the window never stretches
+the editor across an unbounded reading surface. The home composition retains
+its existing measure. Composer surfaces use one lightly tinted theme fill for
+the editor and attached drawers, a fine border, and a stronger editor-focus
+border shared with group chat; light and dark palettes come from ThemeProvider.
+Bot reply portraits resolve through the message's
+exact workspace owner and existing Bot artwork; another selected Bot cannot
+replace a split conversation's identity. Ordinary replies retain the Aino mark.
 
 Appearance → Theme & text keeps **Global UI Scale** as whole-window zoom (100% by
 default), including navigation, settings, controls and chat text. **Chat Text Size**
@@ -1519,6 +1601,19 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   doesn't swallow the inner animation. Don't let a global fade race the detail.
 - Motion follows state; it never delays state. Selection, drag targets, cancel,
   and pressed feedback paint in the current frame.
+- Tool decks open over 220ms and close over 160ms, retaining the existing pane
+  hosts. Horizontal opening holds native guest viewports at their final width
+  and reveals them through a synchronized edge crop. The slot's shared resize
+  observer follows subsequent resizing without handing the viewport back to
+  an animated anchor size. Stable browser and terminal
+  hosts never move, remount, or add a second opacity reveal. Inline tool content
+  reveals on explicit tab selection over 140ms with a short crop and fade.
+  The flex run fills its container throughout the transition, including unequal
+  pane widths. Closing a side deck retains only its outgoing guest's cropped
+  paint until the track animation ends; focus, keyboard access and visible
+  activity stop immediately. Hidden sibling tabs never join that exit.
+  Sash gestures, window resizing and workspace changes take over immediately.
+  Reduced motion keeps these actions instant.
 - Do not animate layout geometry with `transition-all` on a hot interaction.
   Name the properties, avoid backdrop-filter repaints during movement, and
   remove animation before masking a performance problem.
@@ -1651,3 +1746,47 @@ The detailed state contract lives in the scoped
 - [ ] `cursor-pointer`, focus ring, and `Esc`-to-close behave?
 - [ ] Touched a primitive, token, or variant? Its named-contract entry in this
       file is updated in the same change.
+
+
+### Collaboration capsule
+
+Subagent inspection uses one standing **Subagents** tab in the existing tool
+panel. It opens only on explicit intent from Summary or a transcript delegation,
+alongside files, review and terminal; it never creates a new window or activates
+the child as the main conversation. Summary and transcript rows lead with the
+same receipt-bound portrait and short name. Full instructions and execution
+activity belong in the detail view, with Back returning to the list. New
+delegations can supply a short display name; older unnamed tasks retain a short
+title without changing the original goal. Names never participate in routing.
+When no child is running or queued, Summary collapses to one clickable row of
+up to four receipt-bound portraits and truthful status counts, without task names
+or a separate view-all link. Only live children expand into named rows; the compact
+row still opens the same Subagents tab and never treats an old dispatch as completion.
+The tab follows the existing tool-session owner and conversation. Changing that
+source clears the visible selection; hidden tabs do not poll transcripts. Live
+stop and instruction controls require the original native child's authority.
+Historical child conversations are read-only; technical live-log tails stay
+collapsed until requested. Capsule appearance and expansion retain the approved
+geometry below, sharing these same task portraits.
+
+Delegated work uses one shared capsule centered over the conversation workspace for
+ordinary and Bot conversations; no permanent monitor button or duplicate composer task card.
+Its upper edge retains the prototype's 15px window inset (11px below 560px), floating
+over the existing native titlebar rather than changing the shell's height. When
+horizontal space runs out, the expanded head yields below the native controls.
+The approved local geometry is 286 × 42px collapsed, 436px wide expanded, with
+25/22px outer radii, a 54px expanded head and an 18px paper inset inside a 4px
+charcoal rim. The exact prototype palette and responsive geometry are isolated in
+`src/app/agents/collaboration-capsule.css`. Width morphs over 440ms with
+`cubic-bezier(.16,1,.3,1)`; reduced motion disables it.
+
+Only backend delegation facts cause automatic appearance. Expansion is explicit,
+never steals focus, and never moves the foreground conversation. Tasks group by
+exact owning connection/profile and durable parent conversation. Source navigation
+uses the existing workspace and session opener. A read-only roster fact cannot
+confer interrupt or steer authority. A stop acknowledgement remains a request until
+a terminal event arrives. Success and interruption have distinct receipts and
+dismiss after six seconds while collapsed; failures stay until reviewed or dismissed.
+Returning to retry prepares the original goal in that conversation's existing draft
+without sending it or pretending to revive a terminated child. Details retain live
+activity, files, model/usage and optional additional instructions.

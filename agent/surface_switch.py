@@ -32,8 +32,16 @@ def split_runtime_boundary(prompt: str) -> tuple:
     """``(identity, runtime_marker, runtime)`` of a persisted prompt.  Legacy prose may quote
     the runtime heading, but only the new renderer ENDS in the boundary; when the marker is
     empty the whole prompt is identity."""
-    identity, runtime_marker, runtime = prompt.rpartition(f"\n\n{RUNTIME_ENVIRONMENT_HEADING}\n\n")
-    return (identity, runtime_marker, runtime) if prompt.endswith(RUNTIME_ENVIRONMENT_END) else (prompt, "", "")
+    boundaries = (
+        (RUNTIME_ENVIRONMENT_HEADING, RUNTIME_ENVIRONMENT_END),
+        ("# Hermes runtime environment", "<!-- End Hermes runtime environment -->"),
+    )
+    for heading, ending in boundaries:
+        if prompt.endswith(ending):
+            identity, runtime_marker, runtime = prompt.rpartition(f"\n\n{heading}\n\n")
+            if runtime_marker:
+                return identity, runtime_marker, runtime
+    return prompt, "", ""
 
 
 def runtime_host_value(prompt: str, label: str) -> str:

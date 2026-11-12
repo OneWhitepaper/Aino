@@ -63,6 +63,7 @@ import { getServers } from '@/lib/mcp-servers'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 import { $repoWorktrees } from '@/store/coding-status'
+import { openCollaborationCapsule } from '@/store/collaboration-capsule-view'
 import {
   $commandPaletteOpen,
   $commandPalettePage,
@@ -80,16 +81,13 @@ import { $cronSessions, $messagingSessions, $sessions } from '@/store/session'
 import { $unconfirmedPinWrites } from '@/store/session-pin-sync'
 import { $removedSessionIds } from '@/store/session-removal'
 import { runGatewayRestart } from '@/store/system-actions'
-import {
-  requestActiveUpdate
-} from '@/store/updates'
+import { requestActiveUpdate } from '@/store/updates'
 import { canOpenNewWindow, openNewWindow } from '@/store/windows'
 import { type ThemeMode, useTheme } from '@/themes/context'
 
 import { buildSessionByAnyId, resolvePinnedSessions } from '../chat/sidebar/session-index'
 import { openSessionFromPicker, openSessionIntentFromModifiers } from '../open-session'
 import {
-  AGENTS_ROUTE,
   ARTIFACTS_ROUTE,
   CAPABILITIES_ROUTE,
   COMMAND_CENTER_ROUTE,
@@ -829,7 +827,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             run: go(CRON_ROUTE)
           },
           { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
-          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) },
+          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: openCollaborationCapsule },
           {
             icon: Starmap,
             id: 'nav-starmap',

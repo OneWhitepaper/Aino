@@ -102,6 +102,28 @@ def _serve_skill_file(
         "file_type": target.suffix})
 
 
+def _serve_local_skill_file(
+    skill_root: Path, file_path: str, name: str, *, resolved_name: str,
+) -> str:
+    """Serve skill-owned files or installed help independently of the terminal backend."""
+    prefix = "aino-docs/"
+    # User-authored skill files keep their existing meaning, including containment failures.
+    local_docs = skill_root / "aino-docs"
+    if (resolved_name != "hermes-agent" or not file_path.startswith(prefix)
+            or local_docs.exists() or local_docs.is_symlink()):
+        return _serve_skill_file(
+            skill_root, file_path, name, list_available=True, mark_read=True,
+            hint="Use a relative path within the skill directory")
+    from hermes_cli.product_identity import LOCAL_DOCUMENTATION_PATH
+
+    result = json.loads(_serve_skill_file(
+        LOCAL_DOCUMENTATION_PATH, file_path[len(prefix):], name, read_error_prefix=True,
+        hint="Use a relative document path under aino-docs/"))
+    if result.get("success"):
+        result["file"] = file_path
+    return _json(result)
+
+
 def _mark_background_review_read(path: Path) -> None:
     try:
         from tools.skill_manager_guards import mark_background_review_skill_read

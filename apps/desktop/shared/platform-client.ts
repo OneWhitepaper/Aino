@@ -8,6 +8,7 @@ import type {
   PlatformCheckoutInfo,
   PlatformCreateOrderInput,
   PlatformDevice,
+  PlatformDeviceInfo,
   PlatformDiagnosticReceipt,
   PlatformModel,
   PlatformOrder,
@@ -17,7 +18,7 @@ import type {
   PlatformWalletSummary
 } from './platform-contract'
 import type { PlatformUsagePage, PlatformUsageQuery } from './platform-contract'
-import { parsePlatformDeviceId, parsePlatformDevices } from './platform-device-contract'
+import { parsePlatformDeviceId, parsePlatformDeviceInfo, parsePlatformDevices } from './platform-device-contract'
 import { parseDiagnosticReceipt } from './platform-diagnostic-receipt'
 import { parsePlatformModel } from './platform-model-contract'
 import {
@@ -29,7 +30,6 @@ import {
   parsePlatformOrderPage,
   parsePlatformOrderQuery
 } from './platform-payment-contract'
-import { parseSyncResponse, SYNC_BLOB_LIMIT, SYNC_JSON_LIMIT, type SyncExchange, type SyncResponse } from './platform-sync-contract'
 import type { PlatformDeviceKey, PlatformTokenSet } from './platform-token-contract'
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
 
@@ -55,10 +55,9 @@ interface AuthExchange {
   tempToken?: string
 }
 export interface PlatformClient {
-  syncExchange(token: string, input: SyncExchange, signal: AbortSignal): Promise<SyncResponse>
-  syncBlob(token: string, hash: string, bytes: Uint8Array | null, signal: AbortSignal): Promise<Uint8Array>
   uploadDiagnostics(accessToken: string, bundle: string): Promise<PlatformDiagnosticReceipt>
   listDevices(accessToken: string): Promise<PlatformDevice[]>
+  updateDeviceInfo(accessToken: string, deviceId: string, info: PlatformDeviceInfo): Promise<PlatformDeviceInfo>
   revokeDevice(accessToken: string, deviceId: string): Promise<{ revoked: true }>
   quote(accessToken: string, input: PaymentQuoteInput): Promise<PaymentQuote>
   createOrder(accessToken: string, input: PlatformCreateOrderInput): Promise<string>
@@ -197,38 +196,15 @@ export function resolvePlatformOrigin({
   return { origin, development: true }
 }
 
-async function readSyncBody(response: Response, limit: number): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = []
-  let size = 0
-  const reader = response.body?.getReader()
-
-  if (reader) {
-    while (true) {
-      const chunk = await reader.read()
-
-      if (chunk.done) { break }
-      size += chunk.value.byteLength
-
-      if (size > limit) { await reader.cancel(); throw new PlatformClientError('sync_response_too_large') }
-      chunks.push(chunk.value)
-    }
-  }
-
-  const bytes = new Uint8Array(size)
-  let offset = 0
-
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-
-  return bytes
-}
-
 export function createPlatformClient({
   origin: rawOrigin,
   allowInsecureLoopback = false,
   timeoutMs = 10_000,
   fetchImpl = fetch,
   now = Date.now,
-  validateDiagnostics = () => { throw new PlatformClientError('diagnostics_unavailable') }
+  validateDiagnostics = () => {
+    throw new PlatformClientError('diagnostics_unavailable')
+  }
 }: {
   origin: string
   allowInsecureLoopback?: boolean
@@ -239,7 +215,13 @@ export function createPlatformClient({
 }): PlatformClient {
   const origin = validatePlatformOrigin(rawOrigin, allowInsecureLoopback)
 
-  async function request(method: string, endpoint: string, body?: unknown, token?: string, requestTimeoutMs = timeoutMs): Promise<unknown> {
+  async function request(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    token?: string,
+    requestTimeoutMs = timeoutMs
+  ): Promise<unknown> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs)
 
@@ -318,43 +300,6 @@ export function createPlatformClient({
     } finally {
       clearTimeout(timer)
     }
-  }
-
-  async function syncRequest(token: string, endpoint: string, body: string | Uint8Array | null, signal: AbortSignal, blob: boolean) {
-    const controller = new AbortController()
-    const abort = () => controller.abort()
-    signal.addEventListener('abort', abort, { once: true })
-
-    if (signal.aborted) { abort() }
-    const timer = setTimeout(abort, 60_000)
-
-    try {
-      const response = await fetchImpl(`${origin}/api/v1/desktop/sync/${endpoint}`, {
-        method: body === null ? 'GET' : blob ? 'PUT' : 'POST', redirect: 'manual', signal: controller.signal,
-        headers: { authorization: `Bearer ${token}`, 'content-type': blob ? 'application/octet-stream' : 'application/json' },
-        body: body === null ? undefined : body as BodyInit
-      })
-
-      const bytes = await readSyncBody(response, !response.ok ? 65536 : blob ? SYNC_BLOB_LIMIT : SYNC_JSON_LIMIT)
-
-      if (!response.ok) {
-        let code = [404, 405, 501].includes(response.status) ? 'sync_unavailable' : `http_${response.status}`
-
-        try {
-          const error = JSON.parse(new TextDecoder().decode(bytes))
-          const reason = error.reason ?? error.code
-
-          if (typeof reason === 'string' && /^DESKTOP_SYNC_[A-Z_]{1,50}$/.test(reason)) { code = reason }
-        } catch { /* Older gateways may answer a non-JSON 404. */ }
-
-        throw new PlatformClientError(code, response.status === 401)
-      }
-
-      return bytes
-    } catch (error) {
-      if (error instanceof PlatformClientError) { throw error }
-      throw new PlatformClientError('network_unavailable')
-    } finally { clearTimeout(timer); signal.removeEventListener('abort', abort) }
   }
 
   function tokens(value: unknown): PlatformTokenSet {
@@ -439,25 +384,11 @@ export function createPlatformClient({
 
   return {
     origin,
-    async syncExchange(token, input, signal) {
-      const body = JSON.stringify(input)
-
-      if (new TextEncoder().encode(body).byteLength > SYNC_JSON_LIMIT) { throw new PlatformClientError('sync_request_too_large') }
-      const bytes = await syncRequest(token, 'exchange', body, signal, false)
-      const envelope = JSON.parse(new TextDecoder().decode(bytes))
-
-      if (envelope.code !== 0) { throw new PlatformClientError('invalid_response') }
-
-      return parseSyncResponse(envelope.data)
-    },
-    async syncBlob(token, hash, bytes, signal) {
-      if (!/^[a-f0-9]{64}$/.test(hash) || bytes && bytes.byteLength > SYNC_BLOB_LIMIT) { throw new PlatformClientError('invalid_sync_blob') }
-
-      return syncRequest(token, `blobs/${hash}`, bytes, signal, true)
-    },
     async supportsDeviceKey(token, deviceId) {
       try {
-        const data = object(await request('GET', `/desktop/bootstrap?device_id=${encodeURIComponent(deviceId)}`, undefined, token))
+        const data = object(
+          await request('GET', `/desktop/bootstrap?device_id=${encodeURIComponent(deviceId)}`, undefined, token)
+        )
 
         return data.capabilities !== undefined && object(data.capabilities).managed_device_key === 1
       } catch (error) {
@@ -476,15 +407,31 @@ export function createPlatformClient({
     },
     async uploadDiagnostics(token, bundle) {
       // Bundles are much larger than account JSON; give slow links time without changing login deadlines.
-      return parseDiagnosticReceipt(await request('POST', '/desktop/diagnostics', { bundle_base64: validateDiagnostics(bundle) }, token, 120_000))
+      return parseDiagnosticReceipt(
+        await request('POST', '/desktop/diagnostics', { bundle_base64: validateDiagnostics(bundle) }, token, 120_000)
+      )
     },
     async listDevices(token) {
       return parsePlatformDevices(await request('GET', '/desktop/devices', undefined, token))
     },
+    async updateDeviceInfo(token, deviceId, info) {
+      return parsePlatformDeviceInfo(
+        await request(
+          'PUT',
+          `/desktop/devices/${parsePlatformDeviceId(deviceId)}/info`,
+          parsePlatformDeviceInfo(info, 'invalid_platform_input'),
+          token
+        )
+      )
+    },
     async revokeDevice(token, deviceId) {
-      const data = object(await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token))
+      const data = object(
+        await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token)
+      )
 
-      if (data.revoked !== true) { throw new PlatformClientError('invalid_response') }
+      if (data.revoked !== true) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return { revoked: true }
     },
@@ -494,9 +441,18 @@ export function createPlatformClient({
     async createOrder(token, input) {
       const { amount, ...intent } = parsePlatformCreateOrderInput(input)
 
-      const data = object(await request('POST', '/payment/orders', {
-        ...intent, amount_decimal: amount, payment_source: 'aino_desktop'
-      }, token))
+      const data = object(
+        await request(
+          'POST',
+          '/payment/orders',
+          {
+            ...intent,
+            amount_decimal: amount,
+            payment_source: 'aino_desktop'
+          },
+          token
+        )
+      )
 
       return parsePlatformOrderId(data.order_id, 'invalid_response')
     },
@@ -504,7 +460,9 @@ export function createPlatformClient({
       const id = parsePlatformOrderId(orderId)
       const order = parsePlatformOrder(await request('GET', `/payment/orders/${id}`, undefined, token), now())
 
-      if (order.order_id !== id) { throw new PlatformClientError('invalid_response') }
+      if (order.order_id !== id) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return order
     },
@@ -637,7 +595,9 @@ export function createPlatformClient({
       return data.map(parsePlatformModel)
     },
     async listUsage(token, input) {
-      const query = new URLSearchParams(Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)]))
+      const query = new URLSearchParams(
+        Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)])
+      )
 
       return parsePlatformUsagePage(await request('GET', `/usage?${query}`, undefined, token))
     },
@@ -665,7 +625,8 @@ export function createPlatformClient({
         model.state !== 'available' ||
         returnedPurpose !== purpose ||
         model.purpose !== purpose ||
-        (purpose === 'image' ? model.api_mode !== 'images_generations' || model.capabilities.image_generation !== true
+        (purpose === 'image'
+          ? model.api_mode !== 'images_generations' || model.capabilities.image_generation !== true
           : !model.capabilities.tools || model.api_mode === 'images_generations') ||
         !Number.isFinite(Date.parse(expiresAt)) ||
         Date.parse(expiresAt) <= now() ||

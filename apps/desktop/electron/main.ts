@@ -1,7 +1,5 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 
-import { createAccountCloudSync } from './account-cloud-sync'
-import { createCloudSyncLocalAdapter } from './account-cloud-sync-local'
 import type { GatewayEndpoint } from './local-gateway'
 import {
   configurePythonGatewayTicketClient,
@@ -13,7 +11,7 @@ import {
   runGatewayEnsure,
   runGatewayOwnerRestart
 } from './local-gateway'
-import { closeGatewayTicketBridges, createGatewayTicketResolver, ticketRuntimeFor } from './local-gateway-python'
+import { closeGatewayTicketBridges, createGatewayTicketResolver } from './local-gateway-python'
 import { createPluginWsUrlHandler } from './plugin-ws-url'
 const localGatewayDials = createLocalGatewayDials()
 configurePythonGatewayTicketClient(
@@ -33,7 +31,6 @@ import { pathToFileURL } from 'node:url'
 import {
   app,
   BrowserWindow,
-  clipboard,
   crashReporter,
   dialog,
   ipcMain as electronIpcMain,
@@ -61,13 +58,16 @@ import type { PlatformAccountWindowOwner } from '../shared/platform-contract'
 import { createPlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 
 import { createAccountWindowController } from './account-window'
-import { accountWorkspace, createAccountWorkspaceIpc, createAccountWorkspaceSwitch, matchesAccountWindowOwner, prepareAccountWorkspace } from './account-workspace'
+import {
+  accountWorkspace,
+  createAccountWorkspaceIpc,
+  createAccountWorkspaceSwitch,
+  matchesAccountWindowOwner,
+  prepareAccountWorkspace
+} from './account-workspace'
 import { type ActiveRuntimeState, classifyActiveRuntime } from './active-runtime-state'
 import { HERMES_API_EXPECTED_404 } from './api-expected-404'
-import {
-  destroyKeepaliveAgents,
-  readStatusCode
-} from './api-transport'
+import { destroyKeepaliveAgents, readStatusCode } from './api-transport'
 import { appIconCandidates, resolveAppIcon, shouldOverrideDockIcon } from './app-icon'
 import { stageAppInstallerFile } from './app-installer-file'
 import { createAppRelauncher, relaunchApp } from './app-relaunch'
@@ -134,14 +134,10 @@ import {
 import { CHALLENGE_PARTITION } from './challenge-window'
 import { registerChallengeWindowIpc } from './challenge-window-ipc'
 import { provisionCliLinks } from './cli-provision'
-import { readClipboardImagePng } from './clipboard-image'
-import { registerClipboardTextIpc } from './clipboard-ipc'
 import { closeStopFailureMessage, finishWindowsCloseStop, type RuntimeLock } from './close-stop-kill'
 import { shouldAttemptCloudBootCascade } from './cloud-boot-cascade'
 import { createCloudSessionRecovery } from './cloud-session-recovery'
 import { installCommandScreenshot } from './command-screenshot'
-import { saveImageFromUrl, writeComposerImage } from './composer-image-files'
-import { writeComposerPaste } from './composer-paste'
 import { applyConnectionChange, teardownSshState } from './connection-apply'
 import {
   connectionInstallIds,
@@ -313,7 +309,15 @@ import {
   writeSecretFileAtomic
 } from './hardening'
 import { assertNotPassiveSpawn } from './host-backend-singleton'
-import { HERMES_HUB_FALLBACK_ORIGIN, HERMES_HUB_ORIGIN, isHermesHubClipboardWrite } from './hub-iframe-policy'
+import {
+  findFrameByIdentifier,
+  focusedFrameOrigin,
+  HERMES_HUB_FALLBACK_ORIGIN,
+  HERMES_HUB_ORIGIN,
+  isHermesHubClipboardWrite,
+  isHermesHubPickerUrl,
+  safeFrameOrigin
+} from './hub-iframe-policy'
 import { requestHudClose } from './hud-close'
 import { cursorPointInWindow } from './hud-cursor'
 import { startHudGameOverlayWatch } from './hud-game-overlay'
@@ -430,7 +434,7 @@ import { platformBindingPrompt } from './platform-binding-prompt'
 import { resolvePlatformBindingTarget } from './platform-binding-target'
 import { createPlatformCaptcha } from './platform-captcha'
 import { registerPlatformIpc } from './platform-ipc'
-import { createNativePlatformAuth } from './platform-native-auth'
+import { createNativePlatformAuth, resolveNativePlatformDeviceInfo } from './platform-native-auth'
 import {
   buildRegistryProfileRoutes,
   isLocalEnumerationFailure,
@@ -441,11 +445,10 @@ import { clampPoolLimits, parsePoolLimits, POOL_LIMITS_DEFAULTS, type PoolLimits
 import { createPortalSession, resolvePortalBaseUrl } from './portal-session'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
 import { registerPreparedSubmissions } from './prepared-submissions'
-import { capturePreviewContents } from './preview-capture'
 import { extensionForMimeType } from './preview-file-metadata'
 import { registerPreviewFileReadIpc } from './preview-file-read-ipc'
-import { createPreviewTargetResolver, expandUserPath } from './preview-file-target'
-import { closePreviewWatchers, stopPreviewFileWatch, watchDirectory, watchPreviewFile } from './preview-file-watch'
+import { expandUserPath } from './preview-file-target'
+import { closePreviewWatchers } from './preview-file-watch'
 import { hasClosePreviewFlag, previewGuestInputAction } from './preview-guest-escape'
 import { registerPreviewGuestIpc } from './preview-guest-ipc'
 import { commandFocusedGuest } from './preview-guest-offscreen'
@@ -557,12 +560,12 @@ import {
 } from './remote-ws-headers'
 import { enableRendererAccessibility } from './renderer-accessibility'
 import { missingRendererAssets, presentRendererIndexes } from './renderer-bundle'
+import { registerRendererContentIpc } from './renderer-content-ipc'
 import { applyLaunchSwitches, readDesktopLaunchConfig } from './renderer-heap-flags'
 import { loadRendererLoadErrorPage } from './renderer-load-error-page'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
 import { fetchRosterSourceData } from './roster-source-fetch'
 import { rosterSourceStatus } from './roster-source-status'
-import { registerSaveDialogIpc } from './save-text-file'
 import {
   classifyStoredSecret,
   readSecretStoragePolicy,
@@ -570,7 +573,6 @@ import {
   type SecretStoragePolicy,
   writeSecretStoragePolicy
 } from './secret-storage-policy'
-import { selectPathsDialogProperties } from './select-paths-dialog'
 import { selectRunnableBinary } from './select-runnable-binary'
 import {
   buildInstanceWindowUrl,
@@ -585,7 +587,6 @@ import { ensureLoginShellPath } from './shell-path'
 import { removeStaleSingletonLock } from './singleton-lock'
 import { createSourcePythonBackend, resolveSourceInstallationBackend, type SourceBackend } from './source-backend'
 import { resolveSourcePython } from './source-python'
-import { registerSpellcheckDictionaryIpc } from './spellcheck-dictionary-ipc'
 import { resolveSshBinary } from './ssh-binary'
 import { createBootstrapCoordinator, sshConfigFingerprint } from './ssh-bootstrap-coordinator'
 import { collectSshConfigHosts, parseSshGOutput } from './ssh-config'
@@ -737,8 +738,7 @@ import {
 } from './windows-stack-cookie-fallback'
 import { readWindowsUserEnvVar } from './windows-user-env'
 import { isPackagedInstallPath as isPackagedInstallPathUnderRoots } from './workspace-cwd'
-import { readWslWindowsClipboardImage } from './wsl-clipboard-image'
-import { resolvePickerDefaultPath, setActiveGatewayProfile, setWslBridgeProfileState } from './wsl-path-bridge'
+import { setActiveGatewayProfile, setWslBridgeProfileState } from './wsl-path-bridge'
 
 const IDENTITY_APP_NAME: string | null = applyDesktopIdentity(app)
 const USER_DATA_OVERRIDE: string | undefined = process.env.HERMES_DESKTOP_USER_DATA_DIR
@@ -1233,7 +1233,13 @@ if (IS_WINDOWS || process.platform === 'linux') {
 }
 
 const accountWindowScopes = new Map<number, string>()
-const accountIpcFence = createAccountWorkspaceIpc(electronIpcMain, senderId => accountDataReady() && accountWindowScopes.get(senderId) === activeAccountWorkspace.key, () => ACCOUNT_SCOPED)
+
+const accountIpcFence = createAccountWorkspaceIpc(
+  electronIpcMain,
+  senderId => accountDataReady() && accountWindowScopes.get(senderId) === activeAccountWorkspace.key,
+  () => ACCOUNT_SCOPED
+)
+
 const ipcMain = accountIpcFence.ipc
 
 ipcMain.handle('hermes:get-remote-display-reason', () => REMOTE_DISPLAY_REASON)
@@ -1275,7 +1281,9 @@ if (INSTALL_STAMP) {
 
 const ACCOUNT_SCOPED = resolveDesktopAccountAdapter({ isPackaged: IS_PACKAGED, argv: process.argv }) === 'platform'
 
-const desktopLaunchRemote = ACCOUNT_SCOPED ? {} : { token: process.env.HERMES_DESKTOP_REMOTE_TOKEN, url: process.env.HERMES_DESKTOP_REMOTE_URL }
+const desktopLaunchRemote = ACCOUNT_SCOPED
+  ? {}
+  : { token: process.env.HERMES_DESKTOP_REMOTE_TOKEN, url: process.env.HERMES_DESKTOP_REMOTE_URL }
 
 const INSTALLATION_HOME: string = resolveDesktopHermesHome({
   home: app.getPath('home'),
@@ -1283,7 +1291,11 @@ const INSTALLATION_HOME: string = resolveDesktopHermesHome({
   readWindowsHome: (): string | null => readWindowsUserEnvVar('HERMES_HOME')
 })
 
-const platformOrigin = resolvePlatformOrigin({ isPackaged: IS_PACKAGED, readDevelopmentConfig: () => fs.readFileSync(path.join(app.getPath('userData'), 'platform-development.json'), 'utf8') })
+const platformOrigin = resolvePlatformOrigin({
+  isPackaged: IS_PACKAGED,
+  readDevelopmentConfig: () => fs.readFileSync(path.join(app.getPath('userData'), 'platform-development.json'), 'utf8')
+})
+
 let activeAccountWorkspace = accountWorkspace(app.getPath('userData'), platformOrigin.origin, null)
 let accountWorkspaceUiRoot = ACCOUNT_SCOPED ? activeAccountWorkspace.ui : app.getPath('userData')
 let HERMES_HOME = ACCOUNT_SCOPED ? activeAccountWorkspace.home : INSTALLATION_HOME
@@ -1701,7 +1713,6 @@ function getTitleBarOverlayOptions(win?) {
   })
 }
 
-
 app.setName(APP_NAME)
 
 // No application menu until the first window exists. Electron would otherwise
@@ -1801,8 +1812,11 @@ function registerMediaProtocol(targetProtocol: Pick<Electron.Protocol, 'handle'>
   })
 
   const accountKey = activeAccountWorkspace.key
-  targetProtocol.handle(MEDIA_PROTOCOL, request => ACCOUNT_SCOPED && (accountKey !== activeAccountWorkspace.key || !accountDataReady())
-    ? new Response(null, { status: 403 }) : handler(request))
+  targetProtocol.handle(MEDIA_PROTOCOL, request =>
+    ACCOUNT_SCOPED && (accountKey !== activeAccountWorkspace.key || !accountDataReady())
+      ? new Response(null, { status: 403 })
+      : handler(request)
+  )
 }
 
 let mainWindow = null
@@ -2759,7 +2773,12 @@ async function waitForUpdateToFinish() {
     dialog,
     shell,
     openUpdates: sendOpenUpdatesRequested,
-    closeHoldersAndRetry: releaseHolderRetry({ isWindows: IS_WINDOWS, resolveUpdateRoot, applyUpdates, log: rememberLog })
+    closeHoldersAndRetry: releaseHolderRetry({
+      isWindows: IS_WINDOWS,
+      resolveUpdateRoot,
+      applyUpdates,
+      log: rememberLog
+    })
   })
 
   if (outcome === 'cancelled') {
@@ -4653,30 +4672,63 @@ function resolveRendererIndex() {
   return resolveRendererIndexWithMissing().index
 }
 
-const { client: platformClient, auth: platformAuth } = createNativePlatformAuth(platformOrigin, app.getPath('userData'), {
-  isAvailable: () => safeStorage.isEncryptionAvailable(),
-  backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
-  encrypt: value => safeStorage.encryptString(value),
-  decrypt: value => safeStorage.decryptString(value)
-}, () => desktopInstallationId)
+const { client: platformClient, auth: platformAuth } = createNativePlatformAuth(
+  platformOrigin,
+  app.getPath('userData'),
+  {
+    isAvailable: () => safeStorage.isEncryptionAvailable(),
+    backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
+    encrypt: value => safeStorage.encryptString(value),
+    decrypt: value => safeStorage.decryptString(value)
+  },
+  () => desktopInstallationId,
+  () =>
+    resolveNativePlatformDeviceInfo({
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      stamp: INSTALL_STAMP,
+      root: resolveUpdateRoot(),
+      hermesHome: INSTALLATION_HOME,
+      packageVersion: app.getVersion()
+    })
+)
 
-const accountCloudSync = createAccountCloudSync({ auth: platformAuth, deviceId: () => desktopInstallationId,
-  local: createCloudSyncLocalAdapter(async () => ticketRuntimeFor(await resolveHermesBackend([])), resolveHermesCwd) })
-
-app.on('will-quit', () => { void accountCloudSync.stop() })
-
-const accountWorkspaceSwitch = createAccountWorkspaceSwitch({ initial: activeAccountWorkspace, resolve: userId => accountWorkspace(app.getPath('userData'), platformOrigin.origin, userId), retire: retireAccountWorkspace, activate: activateAccountWorkspace, ready: () => { accountRehomeInProgress = false; createWindow(); accountCloudSync.start(activeAccountWorkspace) } })
-platformAuth.subscribe(snapshot => {
-  if (ACCOUNT_SCOPED && snapshot.phase !== 'loading') { void accountWorkspaceSwitch.change(snapshot.account?.id || null).catch(error => rememberLog(`Account workspace unavailable: ${error instanceof Error ? error.message : String(error)}`)) }
+const accountWorkspaceSwitch = createAccountWorkspaceSwitch({
+  initial: activeAccountWorkspace,
+  resolve: userId => accountWorkspace(app.getPath('userData'), platformOrigin.origin, userId),
+  retire: retireAccountWorkspace,
+  activate: activateAccountWorkspace,
+  ready: () => {
+    accountRehomeInProgress = false
+    createWindow()
+  }
 })
 
+platformAuth.subscribe(snapshot => {
+  if (ACCOUNT_SCOPED && snapshot.phase !== 'loading') {
+    void accountWorkspaceSwitch
+      .change(snapshot.account?.id || null)
+      .catch(error =>
+        rememberLog(`Account workspace unavailable: ${error instanceof Error ? error.message : String(error)}`)
+      )
+  }
+})
 
 function accountDataReady(): boolean {
-  return !ACCOUNT_SCOPED || Boolean(accountWorkspaceSwitch.ready() && activeAccountWorkspace.userId && activeAccountWorkspace.userId === platformAuth.snapshot().account?.id)
+  return (
+    !ACCOUNT_SCOPED ||
+    Boolean(
+      accountWorkspaceSwitch.ready() &&
+      activeAccountWorkspace.userId &&
+      activeAccountWorkspace.userId === platformAuth.snapshot().account?.id
+    )
+  )
 }
 
 function assertAccountDataReady(): void {
-  if (!accountDataReady()) { throw new Error('account_workspace_unavailable') }
+  if (!accountDataReady()) {
+    throw new Error('account_workspace_unavailable')
+  }
 }
 
 function accountPartition(partition: string): string {
@@ -4699,7 +4751,11 @@ function newAccountWindow(options: Electron.BrowserWindowConstructorOptions): Br
     accountMediaSessions.add(accountSession)
   }
 
-  const win = new BrowserWindow({ ...options, webPreferences: { ...options.webPreferences, session: options.webPreferences?.session || accountSession } })
+  const win = new BrowserWindow({
+    ...options,
+    webPreferences: { ...options.webPreferences, session: options.webPreferences?.session || accountSession }
+  })
+
   const senderId = win.webContents.id
   accountWindowScopes.set(senderId, activeAccountWorkspace.key)
   win.once('closed', () => accountWindowScopes.delete(senderId))
@@ -4712,15 +4768,20 @@ const nativeLoginControllers = new Set<AbortController>()
 
 async function retireAccountWorkspace(): Promise<void> {
   accountRehomeInProgress = true
-  await accountCloudSync.stop()
   remoteSessionCookies.retire()
   oauthLoginFlights.retire()
   recoverCloudCookieSession.retire()
   retirePortalSession()
 
-  for (const controller of nativeLoginControllers) { controller.abort() }
+  for (const controller of nativeLoginControllers) {
+    controller.abort()
+  }
 
-  for (const win of BrowserWindow.getAllWindows()) { win.hide(); win.destroy() }
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.hide()
+    win.destroy()
+  }
+
   disposeMcpOauthCallbacks()
   nativeNotifications.dispose()
   platformBindingController.invalidateConnections()
@@ -4733,11 +4794,17 @@ async function retireAccountWorkspace(): Promise<void> {
   await remoteRevalidation.drain()
   await registryDispatchRevalidation.drain()
 
-  for (const win of BrowserWindow.getAllWindows()) { win.destroy() }
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.destroy()
+  }
+
   await teardownPrimaryBackendAndWait({ soft: true })
   await Promise.allSettled([...backendPool.values()].map(entry => entry.connectionPromise))
 
-  for (const scope of [...sshConnections.keys()]) { await sshBootstrapCoordinator.cancelAndWait(scope, () => teardownSshConnection(scope || null)) }
+  for (const scope of [...sshConnections.keys()]) {
+    await sshBootstrapCoordinator.cancelAndWait(scope, () => teardownSshConnection(scope || null))
+  }
+
   backendPool.clear()
   closeGatewayTicketBridges()
   localGatewayDials.clear()
@@ -4762,7 +4829,10 @@ async function retireAccountWorkspace(): Promise<void> {
   gatewayAuthProvidersCache.clear()
   remoteOwnerCache.clear()
 
-  for (const cache of [sshRosterCache, sshInventoryAttemptedAt, connectionInstallIds, rosterSourceErrors]) { cache.clear() }
+  for (const cache of [sshRosterCache, sshInventoryAttemptedAt, connectionInstallIds, rosterSourceErrors]) {
+    cache.clear()
+  }
+
   remoteHeaderSourcesCache = remoteHeaderSourcesConfigKey = remoteHeaderSourcesRegistryKey = null
   flushDesktopLogBufferSync()
   await desktopLogFlushPromise
@@ -4804,7 +4874,8 @@ const platformCaptcha = createPlatformCaptcha({
   randomNonce: () => crypto.randomBytes(32).toString('base64url')
 })
 
-const platformBindingController = createPlatformRuntimeBindingController({ nativeDeviceKeys: true,
+const platformBindingController = createPlatformRuntimeBindingController({
+  nativeDeviceKeys: true,
   auth: platformAuth,
   origin: platformClient.origin,
   deviceId: () => desktopInstallationId,
@@ -4833,7 +4904,8 @@ const platformBindingController = createPlatformRuntimeBindingController({ nativ
           profile: routeProfile
         })
     }),
-  confirmRemote: async (window, host) => (await dialog.showMessageBox(window as BrowserWindow, platformBindingPrompt(app.getLocale(), host))).response === 1,
+  confirmRemote: async (window, host) =>
+    (await dialog.showMessageBox(window as BrowserWindow, platformBindingPrompt(app.getLocale(), host))).response === 1,
   onBindingFailure: failure => rememberLog(`[platform-model-binding] stage=${failure.stage} code=${failure.code}`)
 })
 
@@ -4849,8 +4921,7 @@ const platformIpc = registerPlatformIpc({
   trustedRendererUrl: DEV_SERVER
     ? new URL('/', DEV_SERVER).toString()
     : pathToFileURL(resolveRendererIndex()).toString(),
-  bindingController: platformBindingController,
-  cloudSync: accountCloudSync
+  bindingController: platformBindingController
 })
 
 // True when `dir` lives inside the packaged app bundle / install tree.
@@ -5111,7 +5182,10 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
     //    fixed user-bin location: a Finder/Dock launch inherits a PATH without
     //    ~/.local/bin. The reported root is then resolved and probed like any
     //    installed runtime; HERMES_DESKTOP_IGNORE_EXISTING=1 skips it too.
-    const userInstall: ReturnType<typeof userLauncherInstallRoot> = userLauncherInstallRoot(IS_WINDOWS, INSTALLATION_HOME)
+    const userInstall: ReturnType<typeof userLauncherInstallRoot> = userLauncherInstallRoot(
+      IS_WINDOWS,
+      INSTALLATION_HOME
+    )
 
     if (userInstall) {
       const userBackend: SourceBackend | null = await installedRuntimeGate.resolve(userInstall.root, () =>
@@ -6163,9 +6237,11 @@ function installContextMenuBridge(window: BrowserWindow) {
 function installDownloadHandling(targetSession: Session = session.defaultSession) {
   const accountKey = activeAccountWorkspace.key
   targetSession.on('will-download', (_event, item) => {
-    if (ACCOUNT_SCOPED && (accountKey !== activeAccountWorkspace.key || !accountDataReady())) { item.cancel();
+    if (ACCOUNT_SCOPED && (accountKey !== activeAccountWorkspace.key || !accountDataReady())) {
+      item.cancel()
 
- return }
+      return
+    }
 
     const suggested = mediaProtocolDownloadName(item.getURL()) || item.getFilename() || 'download'
     const hasExtension = Boolean(path.extname(suggested))
@@ -6219,76 +6295,6 @@ function installMediaPermissions(targetSession: Session = session.defaultSession
 
     return isMediaCapturePermission(permission, undefined)
   })
-}
-
-// Origin of the frame a permission request came from. The request handler is
-// given the webContents of the TOP document (Chromium routes subframe
-// permission requests through it in Electron 40 without exposing the frame
-// directly), so when the top document is NOT on a hub origin we fall back to
-// the request's own `requestingUrl` — the URL the frame actually asked for —
-// whose origin is exact for both hub deployments and `null` for anything
-// sandboxed or opaque.
-function focusedFrameOrigin(
-  webContents: { getURL?: () => string } | null | undefined,
-  details?: { requestingUrl?: string }
-): string | null {
-  try {
-    if (details?.requestingUrl) {
-      return new URL(details.requestingUrl).origin
-    }
-
-    if (webContents?.getURL) {
-      return new URL(webContents.getURL()).origin
-    }
-  } catch {
-    // Unparseable URL — report no origin; callers deny.
-  }
-
-  return null
-}
-
-/** The picker embed URL the hub iframe starts on (both deployments). */
-function isHermesHubPickerUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    const isHubOrigin = parsed.origin === HERMES_HUB_ORIGIN || parsed.origin === HERMES_HUB_FALLBACK_ORIGIN
-    const isPickerPath = parsed.pathname === '/hermes-agent/docs/skills' || parsed.pathname === '/docs/skills'
-
-    return isHubOrigin && isPickerPath
-  } catch {
-    return false
-  }
-}
-
-/** Look up a subframe by its process/routing id; never throws. */
-function findFrameByIdentifier(
-  webContents: { frames?: readonly unknown[]; framesInSubtree?: readonly unknown[] } | null | undefined,
-  frameProcessId: number,
-  frameRoutingId: number
-): { origin?: string; reload?: () => void } | null {
-  const candidates = [...(webContents?.frames ?? []), ...(webContents?.framesInSubtree ?? [])] as Array<{
-    processId?: number
-    routingId?: number
-    frameProcessId?: number
-    frameRoutingId?: number
-    origin?: string
-    reload?: () => void
-  }>
-
-  return (
-    candidates.find(
-      f => (f.frameProcessId ?? f.processId) === frameProcessId && (f.frameRoutingId ?? f.routingId) === frameRoutingId
-    ) ?? null
-  )
-}
-
-/** `frame.origin` as a safe string; destroyed frames report opaque/'null'. */
-function safeFrameOrigin(frame: { origin?: string } | null | undefined): string | null {
-  if (!frame?.origin || frame.origin === 'null') {
-    return null
-  }
-
-  return frame.origin
 }
 
 // ---------------------------------------------------------------------------
@@ -6345,13 +6351,15 @@ const oauthSessionsByPartition = new Map()
 
 function resolveOauthPartitionForUrl(url, { connectionId = '', pendingAuthMode = '', pendingKind = '' } = {}) {
   try {
-    return accountPartition(resolveOauthPartition(url, {
-      connectionId,
-      pendingAuthMode,
-      pendingKind,
-      registry: readDesktopConnectionsRegistry(),
-      v1RemoteUrl: readDesktopConnectionConfig()?.remote?.url
-    }))
+    return accountPartition(
+      resolveOauthPartition(url, {
+        connectionId,
+        pendingAuthMode,
+        pendingKind,
+        registry: readDesktopConnectionsRegistry(),
+        v1RemoteUrl: readDesktopConnectionConfig()?.remote?.url
+      })
+    )
   } catch {
     // A broken registry read must never take cookie auth down with it.
     return accountPartition(OAUTH_SESSION_PARTITION)
@@ -6439,34 +6447,49 @@ function warmOauthCookieStore(url?) {
 // Best-effort: a failed read just means the next response's Set-Cookie
 // capture populates the mirror instead.
 async function captureRemoteSessionCookiesIntoMirror(sess, scope: RemoteSessionCookieScope, baseUrl) {
-  if (!sess || !scope.isCurrent()) { return }
+  if (!sess || !scope.isCurrent()) {
+    return
+  }
 
   try {
     await scope.captureFromJar(baseUrl, () => sess.cookies.get({ url: baseUrl }))
   } catch (error) {
-    if (scope.isCurrent()) { rememberLog(`Remote session cookie mirror capture failed: ${error?.message || error}`) }
+    if (scope.isCurrent()) {
+      rememberLog(`Remote session cookie mirror capture failed: ${error?.message || error}`)
+    }
   }
 }
 
 async function sessionCookiesMatch(sess, scope: RemoteSessionCookieScope, baseUrl, matches = cookiesHaveSession) {
-  if (!sess || !scope.isCurrent()) { return false }
+  if (!sess || !scope.isCurrent()) {
+    return false
+  }
 
   let cookies
 
   try {
     cookies = await sess.cookies.get({ url: baseUrl })
   } catch {
-    if (!scope.isCurrent()) { return false }
+    if (!scope.isCurrent()) {
+      return false
+    }
 
-    try { cookies = await sess.cookies.get({ domain: new URL(baseUrl).hostname }) }
-    catch { return false }
+    try {
+      cookies = await sess.cookies.get({ domain: new URL(baseUrl).hostname })
+    } catch {
+      return false
+    }
   }
 
   return scope.isCurrent() && matches(cookies)
 }
 
 function hasOauthSessionCookie(baseUrl, identity = {}) {
-  return sessionCookiesMatch(getOauthSessionForUrl(baseUrl, identity), remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl, identity)), baseUrl)
+  return sessionCookiesMatch(
+    getOauthSessionForUrl(baseUrl, identity),
+    remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl, identity)),
+    baseUrl
+  )
 }
 
 // Returns true when EITHER a live access-token
@@ -6498,11 +6521,16 @@ async function hasLiveOauthSession(baseUrl) {
   // trusting a negative, force the store to hydrate and re-read a couple of
   // times with a short backoff. A genuinely signed-out user still resolves
   // false quickly (≤ ~180ms); a signed-in user racing the load now wins.
-  if (!scope.isCurrent()) { return false }
+  if (!scope.isCurrent()) {
+    return false
+  }
+
   await warmOauthCookieStore(baseUrl)
 
   for (const delayMs of [30, 60, 90]) {
-    if (!scope.isCurrent()) { return false }
+    if (!scope.isCurrent()) {
+      return false
+    }
 
     if (await readLive()) {
       return true
@@ -6701,7 +6729,13 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
           url,
           isTimedOut: (): boolean => timedOut,
           clearTimer: (): void => clearTimeout(timer),
-          resolve: value => { if (scope.isCurrent()) { resolve(value) } else { reject(new NativeAuthChangedError()) } },
+          resolve: value => {
+            if (scope.isCurrent()) {
+              resolve(value)
+            } else {
+              reject(new NativeAuthChangedError())
+            }
+          },
           reject,
           onSetCookies: setCookie => scope.record(url, setCookie)
         })
@@ -7026,7 +7060,11 @@ async function mintGatewayWsTicket(baseUrl: string, headers: Record<string, stri
   return recoverCloudCookieSession(baseUrl, () =>
     withTransientRetries(
       (): Promise<string> =>
-        mintOauthGatewayWsTicket(baseUrl, { assertCurrent: scope.assertCurrent, ensureNativeAccessToken, fetchJson, fetchJsonViaOauthSession }, headers),
+        mintOauthGatewayWsTicket(
+          baseUrl,
+          { assertCurrent: scope.assertCurrent, ensureNativeAccessToken, fetchJson, fetchJsonViaOauthSession },
+          headers
+        ),
       {
         isRetryable: (error: Error): boolean =>
           !(error instanceof NativeAuthChangedError) && !isGatewayAuthRejection(error)
@@ -7078,15 +7116,20 @@ async function freshGatewayWsUrl(profile, webContentsId) {
 // Existing Nous-hosted connections still use portal SSO during recovery. New
 // cloud discovery and account-level instance selection have been retired.
 
-const { hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow, retire: retirePortalSession } =
-  createPortalSession({
-    isReady: () => app.isReady(),
-    getOauthSession,
-    resolvePortalBaseUrl,
-    warmOauthCookieStore,
-    createWindow: options => newAccountWindow(options),
-    rememberLog
-  })
+const {
+  hasLivePortalSession,
+  hasPortalAccessToken,
+  renewPortalAccessSilently,
+  openPortalLoginWindow,
+  retire: retirePortalSession
+} = createPortalSession({
+  isReady: () => app.isReady(),
+  getOauthSession,
+  resolvePortalBaseUrl,
+  warmOauthCookieStore,
+  createWindow: options => newAccountWindow(options),
+  rememberLog
+})
 
 // Refresh an existing Nous-hosted connection's session through portal SSO.
 // Kept only for compatibility with connections saved by older Aino versions.
@@ -7525,7 +7568,11 @@ function installRemoteHeaderRulesOnSession(sess) {
 
   remoteHeaderSessions.add(sess)
   const accountKey = activeAccountWorkspace.key
-  const scopedHeaders = (url: string) => !ACCOUNT_SCOPED || accountKey === activeAccountWorkspace.key && accountDataReady() ? headersForRemoteRequest(url) : {}
+
+  const scopedHeaders = (url: string) =>
+    !ACCOUNT_SCOPED || (accountKey === activeAccountWorkspace.key && accountDataReady())
+      ? headersForRemoteRequest(url)
+      : {}
 
   if (sess === session.defaultSession || sess === accountRendererSession()) {
     // Native one-use gateway dials (renderer WebSocket) drop Origin and ride
@@ -10030,10 +10077,12 @@ async function ensureRegistryBackend(
   const existing = backendPool.get(key)
 
   // One remote `hermes serve` per SSH host: a named profile rides the default backend when it can.
-  const shared = existing ? null : await resolveSharedSshProfileBackend(source, profile, {
-    ensureDefault: (): Promise<any> => ensureRegistryBackend(id, 'default', managedUpdateCorrelation, { passive }),
-    listProfiles: descriptor => getJsonForBackend(descriptor, '/api/profiles', { timeoutMs: 8_000 })
-  })
+  const shared = existing
+    ? null
+    : await resolveSharedSshProfileBackend(source, profile, {
+        ensureDefault: (): Promise<any> => ensureRegistryBackend(id, 'default', managedUpdateCorrelation, { passive }),
+        listProfiles: descriptor => getJsonForBackend(descriptor, '/api/profiles', { timeoutMs: 8_000 })
+      })
 
   if (shared) {
     setWslBridgeProfileState(shared.profile, false)
@@ -10741,7 +10790,11 @@ async function dialPoolBackend(profile, entry, opts: { forceLocal?: boolean; poo
         { ...backend, env: desktopBackendSpawnEnv(backend.env || {}) },
         resolveHermesCwd(),
         HERMES_HOME,
-        profileBackendParentEnv({ hermesHome: HERMES_HOME, sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined, profile })
+        profileBackendParentEnv({
+          hermesHome: HERMES_HOME,
+          sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined,
+          profile
+        })
       )
     },
     async () => {
@@ -10790,7 +10843,11 @@ async function restartLocalGatewayOwner(ownerProfile: string): Promise<void> {
       { ...backend, env: desktopBackendSpawnEnv(backend.env || {}) },
       resolveHermesCwd(),
       HERMES_HOME,
-      profileBackendParentEnv({ hermesHome: HERMES_HOME, sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined, profile: ownerProfile }),
+      profileBackendParentEnv({
+        hermesHome: HERMES_HOME,
+        sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined,
+        profile: ownerProfile
+      }),
       { timeoutMs: GATEWAY_RESTART_CLIENT_TIMEOUT_MS, label: 'hermes gateway restart' }
     )
   }, ownerProfile)
@@ -11026,7 +11083,9 @@ async function startHermes(requestedProfile?: string, inheritsPrimary = false) {
   await reapOrphanedBackendsOnce()
   assertAccountDataReady()
 
-  if (ACCOUNT_SCOPED && activeAccountWorkspace.key !== accountKey) { throw new Error('account_workspace_unavailable') }
+  if (ACCOUNT_SCOPED && activeAccountWorkspace.key !== accountKey) {
+    throw new Error('account_workspace_unavailable')
+  }
 
   return localBackendLifecycle.start(
     () => startHermesAttempt(requestedProfile, inheritsPrimary),
@@ -11112,7 +11171,12 @@ async function startHermesAttempt(requestedProfile?: string, inheritsPrimary = f
       connectPrimaryRemote(remote, {
         profile: primaryProfile,
         restoreRememberedProfile: () =>
-          primaryProfileRestorable(requestedProfile, inheritsPrimary, parseLaunchProfile(process.argv), readDesktopConnectionConfig()),
+          primaryProfileRestorable(
+            requestedProfile,
+            inheritsPrimary,
+            parseLaunchProfile(process.argv),
+            readDesktopConnectionConfig()
+          ),
         signal: localBackendLifecycle.signal,
         assertCurrentAttempt: () => backendConnectionState.assertCurrentAttempt(connectionAttempt),
         advanceBootProgress,
@@ -11225,7 +11289,11 @@ async function startHermesAttempt(requestedProfile?: string, inheritsPrimary = f
           { ...setup.backend, env: desktopBackendSpawnEnv(setup.backend.env || {}) },
           resolveHermesCwd(),
           HERMES_HOME,
-          profileBackendParentEnv({ hermesHome: HERMES_HOME, sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined, profile: primaryProfile })
+          profileBackendParentEnv({
+            hermesHome: HERMES_HOME,
+            sourceHermesHome: ACCOUNT_SCOPED ? INSTALLATION_HOME : undefined,
+            profile: primaryProfile
+          })
         ),
       undefined,
       restartStaleLocalGateway
@@ -11516,7 +11584,9 @@ function installPreviewGuestPreload() {
     contents.on('will-attach-webview', (_attachEvent, webPreferences, params) => {
       applyPreviewGuestAttachPrefs(webPreferences, params.partition, PREVIEW_GUEST_PRELOAD_PATH)
 
-      if (ACCOUNT_SCOPED && params.partition === 'persist:hermes-preview') { webPreferences.partition = accountPartition(params.partition) }
+      if (ACCOUNT_SCOPED && params.partition === 'persist:hermes-preview') {
+        webPreferences.partition = accountPartition(params.partition)
+      }
     })
   })
 }
@@ -12036,7 +12106,9 @@ function spawnPetOverlayWindow(bounds) {
 }
 
 function openPetOverlay(bounds) {
-  if (ACCOUNT_SCOPED && !accountDataReady()) { return null }
+  if (ACCOUNT_SCOPED && !accountDataReady()) {
+    return null
+  }
 
   if (petOverlayWindow && !petOverlayWindow.isDestroyed() && !petOverlayClosing) {
     if (bounds) {
@@ -12597,7 +12669,10 @@ function destroyHudWindow(win: BrowserWindow) {
 }
 
 function openHudWindow(sessionId, profile) {
-  if (ACCOUNT_SCOPED && !accountDataReady()) { return null }
+  if (ACCOUNT_SCOPED && !accountDataReady()) {
+    return null
+  }
+
   const profileKey = typeof profile === 'string' && profile.trim() ? profile.trim() : null
 
   if (hudWindow && !hudWindow.isDestroyed()) {
@@ -12810,7 +12885,9 @@ function repositionQuickEntryWindow(win) {
 }
 
 function showQuickEntryWindow() {
-  if (ACCOUNT_SCOPED && !accountDataReady()) { return null }
+  if (ACCOUNT_SCOPED && !accountDataReady()) {
+    return null
+  }
 
   if (!quickEntryWindow || quickEntryWindow.isDestroyed()) {
     // Reveal the window this call created, not whatever `quickEntryWindow`
@@ -12887,13 +12964,19 @@ function closeQuickEntryWindow() {
 }
 
 function startPrimaryWindowBackend(defaultRoute: ReturnType<typeof desktopProfilePreferences.getDefault>): void {
-  if (!accountDataReady()) { return }
+  if (!accountDataReady()) {
+    return
+  }
+
   const startup = defaultRoute ? connectDesktopProfileRoute(defaultRoute) : startHermes()
   startup.catch(error => rememberLog(error.stack || error.message))
 }
 
 function createWindow() {
-  if (accountRehomeInProgress) { return }
+  if (accountRehomeInProgress) {
+    return
+  }
+
   const icon = getAppIconPath()
   const savedWindowState = readWindowState()
   mainWindow = newAccountWindow({
@@ -13539,7 +13622,9 @@ const suspectPoolSweepScope = {}
 // down the dead ones (pool entry + SSH bootstrap + tunnel/master) and rebuild
 // them through the claim-guarded dial path.
 function revalidateSuspectPoolAfterResume() {
-  if (!accountDataReady()) { return Promise.resolve() }
+  if (!accountDataReady()) {
+    return Promise.resolve()
+  }
 
   return remoteRevalidation.run(suspectPoolSweepScope, () =>
     revalidateSuspectPooledRemoteBackends({
@@ -13578,12 +13663,24 @@ ipcMain.handle('hermes:window:openSession', async (_event, sessionId, opts) => {
 ipcMain.handle('aino:account:windowMode', async (event, mode, height, expected?: PlatformAccountWindowOwner) => {
   const win = BrowserWindow.fromWebContents(event.sender)
 
-  if (!win || ACCOUNT_SCOPED && (accountWindowScopes.get(event.sender.id) !== activeAccountWorkspace.key || mode === 'workspace' && (!matchesAccountWindowOwner(platformAuth.snapshot(), expected) || !accountDataReady()))) { return false }
+  if (
+    !win ||
+    (ACCOUNT_SCOPED &&
+      (accountWindowScopes.get(event.sender.id) !== activeAccountWorkspace.key ||
+        (mode === 'workspace' &&
+          (!matchesAccountWindowOwner(platformAuth.snapshot(), expected) || !accountDataReady()))))
+  ) {
+    return false
+  }
 
   if (win === mainWindow) {
-    if (mode === 'login') { accountWindowController.showLogin(win, typeof height === 'number' && Number.isFinite(height) ? height : undefined) }
-    else if (mode === 'workspace') { accountWindowController.showWorkspace(win) }
-    else { return false }
+    if (mode === 'login') {
+      accountWindowController.showLogin(win, typeof height === 'number' && Number.isFinite(height) ? height : undefined)
+    } else if (mode === 'workspace') {
+      accountWindowController.showWorkspace(win)
+    } else {
+      return false
+    }
   }
 
   return true
@@ -14696,25 +14793,29 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl, ra
     nativeLoginControllers.add(controller)
 
     try {
-      const tokens = await runNativeLogin(baseUrl, {
-        // Route the browser-open through the single external-open path so it
-        // gets the WSL handling and the open-failure modal. Fail fast (throw)
-        // so runNativeLogin reports the real reason instead of waiting out the
-        // loopback timeout.
-        openExternal: async url => {
-          const result = await openExternalUrl(url)
+      const tokens = await runNativeLogin(
+        baseUrl,
+        {
+          // Route the browser-open through the single external-open path so it
+          // gets the WSL handling and the open-failure modal. Fail fast (throw)
+          // so runNativeLogin reports the real reason instead of waiting out the
+          // loopback timeout.
+          openExternal: async url => {
+            const result = await openExternalUrl(url)
 
-          if (result.ok === false) {
-            throw new Error(
-              result.reason === 'failed' && result.message
-                ? result.message
-                : 'Could not open the system browser for native sign-in'
-            )
-          }
+            if (result.ok === false) {
+              throw new Error(
+                result.reason === 'failed' && result.message
+                  ? result.message
+                  : 'Could not open the system browser for native sign-in'
+              )
+            }
+          },
+          postJson: (url, body, opts) => postJsonNoAuth(url, body, opts),
+          rememberLog
         },
-        postJson: (url, body, opts) => postJsonNoAuth(url, body, opts),
-        rememberLog
-      }, { signal: controller.signal })
+        { signal: controller.signal }
+      )
 
       if (!authIsCurrent()) {
         throw new NativeAuthChangedError()
@@ -15173,7 +15274,12 @@ async function remoteOwnerProfileForSession(sessionId: string) {
 // returns data (never `undefined`) so a batched caller can compose slices. A
 // specific local profile reads from the local primary; a remote-override profile
 // reads from its remote; 'all' merges every remote into the primary aggregate.
-async function fetchProfilesSessionSlice(searchParams, remoteProfiles, registrySources = null, pinnedConnectionId = null) {
+async function fetchProfilesSessionSlice(
+  searchParams,
+  remoteProfiles,
+  registrySources = null,
+  pinnedConnectionId = null
+) {
   const requested = (searchParams.get('profile') || 'all').trim() || 'all'
 
   if (requested !== 'all') {
@@ -15563,147 +15669,18 @@ const nativeNotifications = registerNativeNotifications({
 
 registerPreviewFileReadIpc({ rememberLog })
 
-ipcMain.handle('hermes:selectPaths', async (_event, options: any = {}) => {
-  const properties = selectPathsDialogProperties(options || {})
-
-  let resolvedDefaultPath
-
-  if (options?.defaultPath) {
-    try {
-      // On a Windows host with a WSL backend the cwd may be a POSIX/WSL path;
-      // bridge it to a UNC/drive form the native dialog can actually open.
-      const bridged = IS_WINDOWS
-        ? resolvePickerDefaultPath(String(options.defaultPath), undefined, options?.profile)
-        : String(options.defaultPath)
-
-      resolvedDefaultPath = bridged ? path.resolve(bridged) : undefined
-    } catch {
-      resolvedDefaultPath = undefined
-    }
-  }
-
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: options?.title || 'Add context',
-    defaultPath: resolvedDefaultPath,
-    properties: properties as any,
-    filters: Array.isArray(options?.filters) ? options.filters : undefined
-  })
-
-  if (result.canceled) {
-    return []
-  }
-
-  return result.filePaths
-})
-
-// Clipboard text read/write for the renderer (clipboard-ipc.ts).
-registerClipboardTextIpc(ipcMain, clipboard)
-
-// Save dialogs: the path picker (profile export) and /save's main-process write (save-text-file.ts).
-registerSaveDialogIpc(ipcMain, {
-  defaultDir: () => app.getPath('documents'),
-  showSaveDialog: options => dialog.showSaveDialog(mainWindow, options)
-})
-
-ipcMain.handle('hermes:saveGatewayFile', (_event, payload) => saveGatewayFile(payload))
-
-ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || ''), mainWindow))
-
-// The custom context menu's edit verbs. They act on the SENDER's focused
-// element, so the renderer restores focus to the editable before invoking.
-ipcMain.handle('hermes:context-menu:edit', (event, command) => {
-  const contents = event.sender
-
-  if (command === 'copy') {
-    contents.copy()
-  } else if (command === 'cut') {
-    contents.cut()
-  } else if (command === 'paste') {
-    contents.paste()
-  } else if (command === 'selectAll') {
-    contents.selectAll()
-  }
-})
-
-// Copy the image under the sender's LAST context-menu gesture. Chromium only
-// exposes image bytes through copyImageAt, and only main saw the coordinates.
-ipcMain.handle('hermes:context-menu:copy-image', event => {
-  const point = lastContextMenuPoint.get(event.sender.id)
-
-  if (point) {
-    event.sender.copyImageAt(point.x, point.y)
-  }
-})
-
-registerSpellcheckDictionaryIpc(ipcMain, electronWebContents)
-
-ipcMain.handle('hermes:capturePreview', async (_event, payload) => {
-  const guest = electronWebContents.fromId(Number(payload?.webContentsId))
-
-  return capturePreviewContents(guest, payload?.rect, payload?.viewport)
-})
-
-ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
-  const data = payload?.data
-
-  if (!data) {
-    throw new Error('saveImageBuffer: missing data')
-  }
-
-  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
-
-  return writeComposerImage(buffer, payload?.ext || '.png', payload?.name, accountWorkspaceUiRoot)
-})
-
-ipcMain.handle('hermes:savePastedText', async (_event, payload) => {
-  const text = typeof payload?.text === 'string' ? payload.text : ''
-
-  if (!text) {
-    throw new Error('savePastedText: missing text')
-  }
-
-  return writeComposerPaste(HERMES_HOME, text)
-})
-
-ipcMain.handle('hermes:saveClipboardImage', async () => {
-  // Electron 44 removed clipboard.readImage(); PNG bytes now arrive through
-  // clipboard.read() + ClipboardItem.getType('image/png') as a Blob.
-  const png = await readClipboardImagePng(clipboard)
-
-  if (png) {
-    return writeComposerImage(png, '.png', '', accountWorkspaceUiRoot)
-  }
-
-  // WSL2/WSLg doesn't bridge clipboard *images* from the Windows host to the
-  // Linux clipboard Electron reads, so a host screenshot looks empty above.
-  // Pull it straight off the Windows clipboard via PowerShell as a fallback.
-  if (IS_WSL) {
-    const png = readWslWindowsClipboardImage()
-
-    if (png) {
-      return writeComposerImage(png, '.png', '', accountWorkspaceUiRoot)
-    }
-  }
-
-  return ''
-})
-
-const normalizePreviewTarget = createPreviewTargetResolver({
-  hermesHome: () => HERMES_HOME,
+registerRendererContentIpc(ipcMain, {
+  getMainWindow: () => mainWindow,
+  getHermesHome: () => HERMES_HOME,
+  getAccountUiRoot: () => accountWorkspaceUiRoot,
+  getLastContextMenuPoint: contentsId => lastContextMenuPoint.get(contentsId),
+  saveGatewayFile,
   resolveHermesCwd,
   fileExists,
-  directoryExists
+  directoryExists,
+  isWindows: IS_WINDOWS,
+  isWsl: IS_WSL
 })
-
-ipcMain.handle('hermes:normalizePreviewTarget', (_event, target, baseDir) =>
-  normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
-)
-
-ipcMain.handle('hermes:watchPreviewFile', (event, url) => watchPreviewFile(event.sender, String(url || '')))
-
-ipcMain.handle('hermes:watchDirectory', (event, dir) => watchDirectory(event.sender, String(dir || '')))
-
-ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
 
 // Each renderer reports the turns it has in flight; the quit guard reads the
 // merged picture. Keyed by webContents id so a closed window stops counting.
@@ -15735,6 +15712,7 @@ const streamThrottle = createStreamThrottle(undefined, undefined, {
   // normal idle throttling contract.
   keepFullscreenPainting: process.platform === 'linux' && linuxOzoneBackend(process.env, process.argv) === 'wayland'
 })
+
 registerStreamWorkClock(ipcMain, sender => BrowserWindow.fromWebContents(sender))
 
 function isAnyTurnInFlight() {
@@ -15761,9 +15739,11 @@ ipcMain.on('hermes:active-work', (event, payload) => {
       event.sender.off('destroyed', forget)
       event.sender.off('render-process-gone', forget)
       activeWorkByWebContents.delete(id)
+
       if (owner) {
         streamThrottle.setVoiceActive(owner, false)
       }
+
       updateStreamThrottleFromActiveWork()
     }
 
@@ -15777,9 +15757,11 @@ ipcMain.on('hermes:active-work', (event, payload) => {
   const work = normalizeActiveWork(payload)
   activeWorkByWebContents.set(id, work)
   lastActiveWorkSeen = work
+
   if (owner?.webContents === event.sender && event.senderFrame === event.sender.mainFrame) {
     streamThrottle.setVoiceActive(owner, payload?.voiceActive === true)
   }
+
   updateStreamThrottleFromActiveWork()
 })
 
@@ -16254,7 +16236,12 @@ ipcMain.on('hermes:logs:renderer-error', (_event, report) => {
 
 // Pre-paint payloads the preload reads synchronously: the local skin, and this
 // machine's shared UI preferences (#145213) — see local-skin.ts, ui-preferences.ts.
-registerLocalSkinIpc(ipcMain, () => HERMES_HOME, id => windowConnectionRoutes.get(id)?.profile, primaryProfileKey)
+registerLocalSkinIpc(
+  ipcMain,
+  () => HERMES_HOME,
+  id => windowConnectionRoutes.get(id)?.profile,
+  primaryProfileKey
+)
 registerMachineUiPreferences(() => HERMES_HOME)
 
 // Renderer error toasts (notifyError): the toast shows the summarized copy,
@@ -16353,7 +16340,10 @@ const checkRendererSkew = createBundleSkewChecker(
   (args, options) => execGit(resolveGitBinary(), args, options),
   // Only a LIVE marker defers the warning: Desktop never deletes a dead one,
   // so a leftover file would otherwise suppress it indefinitely.
-  { isUpdating: async () => updateInFlight || isQuittingForHandoff || Boolean(await readLiveUpdateMarker(INSTALLATION_HOME)) }
+  {
+    isUpdating: async () =>
+      updateInFlight || isQuittingForHandoff || Boolean(await readLiveUpdateMarker(INSTALLATION_HOME))
+  }
 )
 
 async function detectRendererSkew() {
@@ -17004,7 +16994,9 @@ app.whenReady().then(() => {
     startChromiumLogWatcher(CHROMIUM_LOG_PATH)
   }
 
-  if (ACCOUNT_SCOPED) { prepareAccountWorkspace(activeAccountWorkspace) }
+  if (ACCOUNT_SCOPED) {
+    prepareAccountWorkspace(activeAccountWorkspace)
+  }
 
   const systemCa = installSystemCaTrust(tls)
 
@@ -17152,7 +17144,6 @@ app.whenReady().then(() => {
 // won't enable any without an explicit language.
 function configureSpellChecker(defaultSession: Session = session.defaultSession) {
   try {
-
     if (!defaultSession || typeof defaultSession.setSpellCheckerLanguages !== 'function') {
       return
     }
@@ -17451,7 +17442,9 @@ app.on('before-quit', event => {
 })
 
 app.on('window-all-closed', () => {
-  if (accountRehomeInProgress) { return }
+  if (accountRehomeInProgress) {
+    return
+  }
 
   // macOS convention: keep the process alive in the Dock when the user closes
   // the last window. But when we're handing off to a detached updater / swap /

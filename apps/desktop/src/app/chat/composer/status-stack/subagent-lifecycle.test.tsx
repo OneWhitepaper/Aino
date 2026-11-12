@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { ProjectedCollaborationTasks } from '@/app/agents/collaboration-task-test-helper'
+import { _resetSessionOwnerHintsForTests, setSessionOwnerHint } from '@/store/session'
 import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
-
-import { SubagentSection } from './subagent-section'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -17,35 +18,49 @@ Element.prototype.animate = vi.fn(() => ({ cancel() {} }) as Animation)
 afterEach(() => {
   cleanup()
   $subagentsBySession.set({})
+  _resetSessionOwnerHintsForTests()
   vi.restoreAllMocks()
 })
 
-it('keeps each worker draft while inspecting siblings and removes settled selection', () => {
+it('keeps each worker instruction draft across capsule detail folds and disables settled controls', () => {
+  setSessionOwnerHint('parent', { connectionId: 'owner', profile: 'research' })
   upsertSubagent('parent', { subagent_id: 'a', goal: 'Worker A' })
   upsertSubagent('parent', { subagent_id: 'b', goal: 'Worker B' })
-  render(<SubagentSection sessionId="parent" />)
-  fireEvent.click(screen.getByRole('button', { name: /2 Subagents/ }))
+  render(
+    <MemoryRouter>
+      <ProjectedCollaborationTasks sessionId="parent" />
+    </MemoryRouter>
+  )
   fireEvent.click(screen.getByRole('button', { name: /Worker A/ }))
-  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Preserve my instruction' } })
+  const a = screen.getByRole('button', { name: /Worker A/ }).closest('article')!
+  const b = screen.getByRole('button', { name: /Worker B/ }).closest('article')!
+  fireEvent.click(within(a).getByRole('button', { name: 'Add instructions' }))
+  fireEvent.change(within(a).getByRole('textbox'), { target: { value: 'Preserve my instruction' } })
   fireEvent.click(screen.getByRole('button', { name: /Worker B/ }))
-  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('')
+  fireEvent.click(within(b).getByRole('button', { name: 'Add instructions' }))
+  expect((within(b).getByRole('textbox') as HTMLInputElement).value).toBe('')
   fireEvent.click(screen.getByRole('button', { name: /Worker A/ }))
-  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Preserve my instruction')
+  expect(within(a).queryByRole('textbox')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Worker A/ }))
+  expect((within(a).getByRole('textbox') as HTMLInputElement).value).toBe('Preserve my instruction')
   act(() => upsertSubagent('parent', { subagent_id: 'a', status: 'completed' }, false, 'subagent.complete'))
-  expect(screen.queryByText('Worker A')).toBeNull()
-  expect(screen.queryByRole('textbox')).toBeNull()
+  expect(a.querySelector('[data-state="completed"]')).toBeTruthy()
+  expect(within(a).queryByRole('textbox')).toBeNull()
+  expect(within(b).getByRole('textbox')).toBeTruthy()
 })
 
 it('measures detail elapsed from worker start rather than first inspection', () => {
   const now = vi.spyOn(Date, 'now').mockReturnValue(100000)
+  setSessionOwnerHint('parent', { connectionId: 'owner', profile: 'research' })
   upsertSubagent('parent', { subagent_id: 'timed', goal: 'Timed worker' })
   now.mockReturnValue(117000)
-  const { container } = render(<SubagentSection sessionId="parent" />)
-  fireEvent.click(screen.getByRole('button', { name: /1 Subagent/ }))
+
+  const { container } = render(
+    <MemoryRouter>
+      <ProjectedCollaborationTasks sessionId="parent" />
+    </MemoryRouter>
+  )
+
   fireEvent.click(screen.getByRole('button', { name: /Timed worker/ }))
-  expect(
-    container.querySelector(
-      '[data-slot="composer-subagent-detail"] [data-slot="tool-block"] > button > span:last-child'
-    )?.textContent
-  ).toBe('17s')
+  expect(container.querySelector('.cc-detail-meta')?.textContent).toBe('17s')
 })

@@ -2611,6 +2611,7 @@ export interface SubagentSnapshot {
   subagent_id: string
   parent_id?: string | null
   depth?: number | null
+  display_name?: string | null
   goal?: string | null
   delegation_id?: string | null
   model?: string | null
@@ -2619,6 +2620,7 @@ export interface SubagentSnapshot {
   tool_count?: number | null
   last_tool?: string | null
   accepting_steer?: boolean | null
+  child_session_id?: string | null
 }
 /** Lifecycle of one delegated child (``tools/delegate_tool_child_run.py``); ``failed`` / ``error`` / ``timeout`` / ``interrupted`` / ``completed`` are terminal. */
 export type SubagentStatus = 'queued' | 'running' | 'completed' | 'failed' | 'error' | 'timeout' | 'interrupted'
@@ -2639,6 +2641,15 @@ export interface SubagentRosterEntry {
   session_id: string
   subagents?: number
   background?: number
+  workers?: SubagentSnapshot[]
+  source?: LiveWorkRoomSource | null
+}
+/** Native group's authority route; never inferred from a hidden producer's title. */
+export interface LiveWorkRoomSource {
+  kind: 'bot_room'
+  room_id: string
+  room_name?: string | null
+  profile: string
 }
 export interface SubagentIdParams {
   session_id: string
@@ -6280,6 +6291,17 @@ export interface NotificationShowPayload {
   detail?: string | null
   owner_user_id?: string | null
   managed_credential_version?: number | null
+  metrics?: StorageNoticeMetrics | null
+}
+/** Measured storage values; a failed history estimate stays unknown, never zero. */
+export interface StorageNoticeMetrics {
+  free_bytes: number
+  total_bytes: number
+  db_bytes: number
+  estimate_ok: boolean
+  prunable_sessions?: number | null
+  total_sessions?: number | null
+  reclaim_bytes?: number | null
 }
 export interface NotificationClearPayload {
   key: string
@@ -6335,6 +6357,7 @@ export interface PreviewRestartProgressPayload {
 }
 /** ``tool_progress._progress_subagent`` — every ``subagent.*`` frame; identity fields are optional because older emitters omit them and the TUI spawn tree falls back to flat rendering. */
 export interface SubagentEventPayload {
+  display_name?: string | null
   goal: string
   task_count: number
   task_index: number
@@ -6950,7 +6973,7 @@ export interface RpcMethods {
   'subagent.interrupt': { params: SubagentIdParams; result: SubagentInterruptResult }
   /** Live children owned by this session (other sessions' children never leak). */
   'subagent.list': { params: SessionParams; result: SubagentListResult }
-  /** Per-conversation counts of live delegated children and running background processes, limited to conversations stored in the named profile (launch profile when omitted). Needs no attached session. */
+  /** Per-conversation counts and read-only child snapshots, plus running background processes, limited to conversations stored in the named profile (launch profile when omitted). Needs no attached session. */
   'subagent.roster': { params: ProfileParams; result: SubagentRosterResult }
   /** Queue steering text into a live delegated child owned by this session. */
   'subagent.steer': { params: SubagentSteerParams; result: SubagentSteerResult }
