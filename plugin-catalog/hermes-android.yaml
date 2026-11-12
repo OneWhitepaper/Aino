@@ -1,6 +1,8 @@
 name: hermes-android
 repo: https://github.com/TechFlipsi/FlipsiBridge
-sha: 5f185b2d5ac8b88d127815c13ee31970d31f678a
+# Reachable replacement for 5f185b2d5ac8b88d127815c13ee31970d31f678a:
+# hermes-android-plugin tree remains 0a1236fa8057ea0c52acd2265b22800c57073dc9.
+sha: 51f95106651d75c7e1e1c79e7f4556310f241762
 subdir: hermes-android-plugin
 description: "Remote Android device control for Hermes Agent: 58 android_* tools (read screen, tap/type/swipe, open apps, camera, screenshots & screen recording, files, notifications, microphone streaming, media, clipboard, SMS/calls, Health Connect) plus a companion Android bridge app (Kotlin/Compose). The phone dials out to a relay you host — works behind NAT, no port forwarding, no VPN. Chat and media are end-to-end encrypted with a Double Ratchet (the relay sees only ciphertext); device commands travel over your own TLS-authenticated relay. Disclosure — drives a paired Android phone (screen reading and input, camera, microphone, files, notifications, clipboard, SMS/calls, Health Connect) through a relay the plugin starts inside Hermes (localhost by default; a non-localhost bind requires TLS or an explicit ANDROID_RELAY_ALLOW_PLAINTEXT=1); SMS, calls, file deletion, intents/broadcasts, APK install and relay setup go through Hermes' approval prompt (cron follows approvals.cron_mode, other unattended runs refuse); chat and media are Double-Ratchet end-to-end encrypted, but device commands are protected only by the relay's TLS when configured."
 maintainer: TechFlipsi
@@ -9,10 +11,10 @@ category: tools
 requires_hermes: ">=0.23.0"
 docs_url: https://github.com/TechFlipsi/FlipsiBridge
 readme: true
-image: https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/5f185b2d5ac8b88d127815c13ee31970d31f678a/docs/img/fb-chat.png
+image: https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/51f95106651d75c7e1e1c79e7f4556310f241762/docs/img/fb-chat.png
 screenshots:
-  - https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/5f185b2d5ac8b88d127815c13ee31970d31f678a/docs/img/fb-home.png
-  - https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/5f185b2d5ac8b88d127815c13ee31970d31f678a/docs/img/fb-chat.png
+  - https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/51f95106651d75c7e1e1c79e7f4556310f241762/docs/img/fb-home.png
+  - https://raw.githubusercontent.com/TechFlipsi/FlipsiBridge/51f95106651d75c7e1e1c79e7f4556310f241762/docs/img/fb-chat.png
 platforms: []
 capabilities:
   provides_tools:

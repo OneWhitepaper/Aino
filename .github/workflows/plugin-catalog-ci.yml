@@ -79,7 +79,7 @@ jobs:
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
           UPSTREAM=3b421578588243f920886e6fe79a6faa87ea026e
-          CATALOG_TREE=ebac95f647cfc01fe5c909f28808c3d764ee1ea0
+          CATALOG_TREE=3df55a3c113e79a77db5f6826668aabaf3bea7f8
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
@@ -88,7 +88,7 @@ jobs:
             # existing Experiential Labs entry and excludes AtmoRouter because
             # its pinned repository could not be cloned during review. Other
             # imported entries continue through the pinned-source gate below.
-            # AI SENSE and Toll use reachable replacement commits with plugin
+            # AI SENSE, Toll and Hermes Android use reachable replacement commits with plugin
             # subtrees identical to their original pins (recorded in each entry).
             # Any unreviewed catalog edit is rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then

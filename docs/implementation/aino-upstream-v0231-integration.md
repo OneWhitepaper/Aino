@@ -87,3 +87,11 @@ unabbreviated asset sizes reported by the Linux CI failure match these outputs.
 The generator's full `--check` passes for all 99 canonical outputs. Aino's source
 art and rendered appearance are preserved; the original strict regeneration,
 structure and Git byte-diff gate remains enabled without exceptions.
+
+The catalog's Hermes Android pin was no longer present in a fresh complete
+clone of its repository, although a direct SHA fetch could still retrieve it.
+Its replacement, `51f95106651d75c7e1e1c79e7f4556310f241762`, is an ancestor of
+the advertised main branch. Both pins have the identical
+`hermes-android-plugin` tree `0a1236fa8057ea0c52acd2265b22800c57073dc9`; the
+linked screenshots also have no content changes. The catalog snapshot guard
+was updated to this reviewed data while keeping all source-validation gates.

@@ -473,7 +473,7 @@ def test_changed_entries_step(tmp_path, change, rc, listed, text):
         assert text in res.stdout
 
 
-def _import_merge(tmp_path: Path, *, changes=None, trim_catalog: bool = False) -> tuple[Path, str, str, str]:
+def _import_merge(tmp_path: Path, *, changes=None, reviewed_entry: str | None = None) -> tuple[Path, str, str, str]:
     """Model Aino main, an upstream merge plus compatibility fix, and GitHub's merge."""
     repo = tmp_path / "import"
     _write(repo, {"plugin-catalog/base.yaml": "name: base\n", "code.py": "base = 1\n"})
@@ -488,8 +488,8 @@ def _import_merge(tmp_path: Path, *, changes=None, trim_catalog: bool = False) -
     _git(repo, "checkout", "-qb", "pr")
     _git(repo, "merge", "-q", "--no-ff", "-m", "import release", "release")
     _write(repo, {"code.py": "aino_compatibility = True\n"})
-    if trim_catalog:
-        _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n"})
+    if reviewed_entry is not None:
+        _write(repo, {"plugin-catalog/imported.yaml": reviewed_entry})
     _commit(repo, "Aino compatibility after import")
     # Capture the reviewed snapshot before injecting an unreviewed mutation.
     catalog_tree = _git(repo, "rev-parse", "HEAD:plugin-catalog")
@@ -522,9 +522,13 @@ def _reviewed_tag_source(tmp_path, repo, release, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("trim_catalog", [False, True], ids=["release-catalog", "reviewed-whitespace-cleanup"])
-def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, trim_catalog):
-    repo, release, _, catalog_tree = _import_merge(tmp_path, trim_catalog=trim_catalog)
+@pytest.mark.parametrize("reviewed_entry", [
+    None,
+    "name: imported\n",
+    "name: imported\nsha: " + "1" * 40 + "\n",
+], ids=["release-catalog", "reviewed-whitespace-cleanup", "reviewed-reachable-pin"])
+def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, reviewed_entry):
+    repo, release, _, catalog_tree = _import_merge(tmp_path, reviewed_entry=reviewed_entry)
     monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
     monkeypatch.setenv("CATALOG_CI_TREE", catalog_tree)
     out = tmp_path / "gh-output.txt"
@@ -550,7 +554,7 @@ def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, trim_ca
     assert not (repo / "aino.py").exists()
     assert not (repo / "shadow.py").exists()
     assert out.read_text(encoding="utf-8") == output
-    expected_entry = "name: imported\n" if trim_catalog else "name: imported\n\n"
+    expected_entry = reviewed_entry if reviewed_entry is not None else "name: imported\n\n"
     assert (repo / "plugin-catalog/imported.yaml").read_text() == expected_entry
     assert _git(repo, "write-tree", "--prefix=plugin-catalog/") == catalog_tree
     # Exercise Hermes' real runtime identity resolution, which otherwise falls

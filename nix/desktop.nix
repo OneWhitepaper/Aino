@@ -205,6 +205,7 @@ stdenv.mkDerivation {
     mkdir -p "$PYTHONPATH/hermes_cli/data"
     cp ${../hermes_cli/desktop_identity.py} "$PYTHONPATH/hermes_cli/desktop_identity.py"
     cp ${../hermes_cli/product_identity.py} "$PYTHONPATH/hermes_cli/product_identity.py"
+    cp ${../hermes_cli/_startup_fast.py} "$PYTHONPATH/hermes_cli/_startup_fast.py"
     cp ${../apps/desktop/brand.json} "$PYTHONPATH/hermes_cli/data/brand.json"
     cp ${../hermes_cli/linux_desktop_entry.py} "$PYTHONPATH/linux_desktop_entry.py"
     export DESKTOP_EXEC="$out/bin/hermes-desktop"
