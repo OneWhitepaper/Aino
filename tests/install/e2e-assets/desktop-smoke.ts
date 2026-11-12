@@ -12,6 +12,7 @@ import { resolveDesktopHermesHome } from '../../../apps/desktop/electron/data-pa
 import { applyBundleEnvironment } from '../../../apps/desktop/scripts/bundle-env.mjs'
 import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatReady } from '../../../tests-js/scripts/desktop-chat-smoke.ts'
 import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit, reusedDesktopBuildCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
+import { desktopToolMarker } from '../../../tests-js/scripts/desktop-tool-smoke.ts'
 import { _electron, type ElectronApplication, type Page, z } from '../../../tests-js/scripts/e2e-driver-deps.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
 import { bundledUpgradeHealth } from '../../../tests-js/scripts/bundled-upgrade-probe.ts'
@@ -481,7 +482,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit })
     let tool
     if (options['tool-smoke']) {
-      const marker = path.join(options.home, `native-tool-${randomUUID()}.txt`)
+      const marker = desktopToolMarker(identity, options.home, predictedHome)
       const content = `Native tool verified ${options['expect-commit']} ${randomUUID()}`
       const toolChat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase,
         outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit,
