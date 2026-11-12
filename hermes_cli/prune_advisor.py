@@ -318,7 +318,12 @@ def notice_payload(advice: Advice) -> dict:
     d = advice.disk
     return {"text": f"⚠ Low disk ({_gb(d.free_bytes)} free) · /autoprune on|off|later",
             "detail": "\n".join(advice_lines(advice)), "level": "warn", "kind": "sticky", "ttl_ms": None,
-            "key": NOTICE_KEY, "id": NOTICE_KEY}
+            "key": NOTICE_KEY, "id": NOTICE_KEY,
+            "metrics": {"free_bytes": d.free_bytes, "total_bytes": d.total_bytes,
+                        "db_bytes": d.db_bytes, "estimate_ok": advice.estimate_ok,
+                        "prunable_sessions": advice.prunable_sessions if advice.estimate_ok else None,
+                        "total_sessions": advice.total_sessions if advice.estimate_ok else None,
+                        "reclaim_bytes": advice.reclaim_bytes if advice.estimate_ok else None}}
 
 
 def answered(home: Optional[Path] = None) -> bool:

@@ -1,0 +1,183 @@
+{
+  "description": "Complete built-in help resource migration into the installed Aino documentation.",
+  "sourceRoot": "skills/autonomous-ai-agents/hermes-agent",
+  "resources": [
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/SKILL.md",
+      "sourceSha256": "a8a8aae1aa2297b1683e4e07c60ea168a276332e32ccbd151c1559cbb01c0db3",
+      "sourceLines": 130,
+      "destination": "help-skill.md",
+      "adaptation": "Added document introduction; complete current skill content retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/aino-help.md",
+      "sourceSha256": "e5512ebc13bc76473f32c536d1cf5882e3e4d0c58a9c1b37223926cab20216e3",
+      "sourceLines": 85,
+      "destination": "references/aino-help.md",
+      "adaptation": "Complete current Aino local routing copied byte-for-byte."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/background-systems.md",
+      "sourceSha256": "6fcab147215c2e52716fe1ae650ed8972e3ad13f7a50477fb5ca6082adca143b",
+      "sourceLines": 103,
+      "destination": "references/background-systems.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/cli-reference.md",
+      "sourceSha256": "d1ceaa55fd1cb0ed11c1b15dde254ea755850924b477fbdac0a2a3fe5a537f27",
+      "sourceLines": 151,
+      "destination": "references/cli-reference.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/configuration.md",
+      "sourceSha256": "60e98213eda62521ec21fdc10dc916fb30858025de34e52437482ef68a2fcfe1",
+      "sourceLines": 92,
+      "destination": "references/configuration.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/contributor-guide.md",
+      "sourceSha256": "c92ea1a35fff35a665bfd19618198960d3afac10dab793f9372e16fb45895059",
+      "sourceLines": 139,
+      "destination": "references/contributor-guide.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/delegate-task-concurrency-diagnosis.md",
+      "sourceSha256": "41019dd37c0c048b002d3639fe01455513b5c9aba142a21ff9c3bd4c7718a77b",
+      "sourceLines": 99,
+      "destination": "references/delegate-task-concurrency-diagnosis.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/desktop-plugins.md",
+      "sourceSha256": "5f043c22ee1fc72cac041c3ef060b5bb6b6cc6dc36de0040319ad2107d493fe7",
+      "sourceLines": 245,
+      "destination": "references/desktop-plugins.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/native-mcp.md",
+      "sourceSha256": "123740d7628f0a1de139d70cfc6f1ebbe8d4f3f6078aaa0a3c099b679ac4d42e",
+      "sourceLines": 371,
+      "destination": "references/native-mcp.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/petdex.md",
+      "sourceSha256": "2254eabf40c360efb54e4df482f3b84820b54a15e6954c4a7e9e7fee4eb90f77",
+      "sourceLines": 75,
+      "destination": "references/petdex.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/portal-auth-for-third-party-apps.md",
+      "sourceSha256": "4890617a80d8c70fc388a49201d5a718049a64c0ddd5fac3f35754641f063b99",
+      "sourceLines": 128,
+      "destination": "references/portal-auth-for-third-party-apps.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/project-context-files.md",
+      "sourceSha256": "20b51406102e6498f62ed837978e5c67ebd91a917b985de7bbddfaaf23c1f593",
+      "sourceLines": 48,
+      "destination": "references/project-context-files.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/projects-and-folders.md",
+      "sourceSha256": "3ef1588e84a454b4cb3c08dc11519eca3c46208dd4d443124cafbb5d4ec0d55a",
+      "sourceLines": 146,
+      "destination": "references/projects-and-folders.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/providers-and-models.md",
+      "sourceSha256": "53a0078adbf69297fea1b38a035ecfabdaad59d4e943648c750497f673eb8562",
+      "sourceLines": 98,
+      "destination": "references/providers-and-models.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/security-privacy.md",
+      "sourceSha256": "f27913f7775915d8065b2dea782197907ff90cf37f07b865135c7f61aee98e83",
+      "sourceLines": 67,
+      "destination": "references/security-privacy.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/slash-commands.md",
+      "sourceSha256": "690dc6c2543dfa028bbf2918c229f27f4962e9d897fce25ebb1de67d56f3b822",
+      "sourceLines": 112,
+      "destination": "references/slash-commands.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/themes.md",
+      "sourceSha256": "f5a8269a7312173f0caa6736156a3f76d32e56b4e15511e84dc2e902f48e8157",
+      "sourceLines": 127,
+      "destination": "references/themes.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/troubleshooting.md",
+      "sourceSha256": "41be52557d43230ff64d78a57c41c592fbd178cab6072ee3a436940d4a078306",
+      "sourceLines": 81,
+      "destination": "references/troubleshooting.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/tui-widgets.md",
+      "sourceSha256": "20e21aabb757a9d3c7d895db8f05a3782fe8b28feef3768ac5550c8860b4a3db",
+      "sourceLines": 137,
+      "destination": "references/tui-widgets.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/upstream-runtime-guide.md",
+      "sourceSha256": "5dc2fbb3deb6ed879f453d142a61fd34c1212075327562e36108a816c3d5d48c",
+      "sourceLines": 229,
+      "destination": "runtime-guide.md",
+      "adaptation": "Added Aino applicability table; entire original body and metadata retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/webhooks.md",
+      "sourceSha256": "f668c57d1900e249cb4b54e5d624e9aacb399ecf1452f9b258a1bf857ffa8a42",
+      "sourceLines": 216,
+      "destination": "references/webhooks.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/references/windows-quirks.md",
+      "sourceSha256": "4af2c0907983376f1b21d2164de17f1229faeb0609c61762cfc026b806bc5501",
+      "sourceLines": 65,
+      "destination": "references/windows-quirks.md",
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/templates/clock.mjs",
+      "sourceSha256": "44ec25d560e16c7815a633039a783ddbba2d8e8cf1659560c0cd1cddec83f89d",
+      "sourceLines": 51,
+      "destination": "templates/clock.mjs",
+      "adaptation": "Byte-for-byte template copy."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/templates/plugin.js",
+      "sourceSha256": "a63c8f879756854b45373f5d6b1ae0a7fefcdd4a5af840be8a60d83b64724744",
+      "sourceLines": 97,
+      "destination": "templates/plugin.js",
+      "adaptation": "Byte-for-byte template copy."
+    },
+    {
+      "source": "skills/autonomous-ai-agents/hermes-agent/templates/skin.yaml",
+      "sourceSha256": "bc8fddd7e5373b074c1c7dd423bb59d6e04769977e8a18354e3a6b3983209994",
+      "sourceLines": 49,
+      "destination": "templates/skin.yaml",
+      "adaptation": "Aino CLI/TUI scope comment and agent_name only; exact original at provenance/original-skin.yaml."
+    }
+  ],
+  "license": "MIT",
+  "originalAuthor": "Hermes Agent + Teknium"
+}

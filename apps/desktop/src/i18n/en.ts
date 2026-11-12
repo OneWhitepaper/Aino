@@ -3,7 +3,6 @@ import { FIELD_DESCRIPTIONS, FIELD_LABELS } from '@/app/settings/constants'
 
 import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { enAppTour } from './en_app_tour'
 import { enBilling } from './en_billing'
@@ -55,7 +54,6 @@ export const en: Translations = {
   appearancePage: appearancePage.en,
   toolPanel: toolPanel['en'],
   workspacePage: workspacePage.en,
-  cloudSync: cloudSync['en'],
   accountPage: accountPage['en'],
   externalOpenFailed: enExternalOpenFailed,
   sharedMetrics: enSharedMetrics,
@@ -2367,7 +2365,8 @@ export const en: Translations = {
         }
       }
     },
-    account: { ...accountLogin.en,
+    account: {
+      ...accountLogin.en,
       browserSessionOnly: 'This browser keeps you signed in only until this tab closes or reloads.',
       displayNameLabel: 'Nickname',
       editDisplayName: 'Edit nickname',
@@ -4717,15 +4716,15 @@ export const en: Translations = {
   },
 
   rightSidebar: {
-    terminalReconnectSame: "Terminal disconnected. Press Enter to reconnect to the same shell.",
-    terminalExpired: "Terminal expired or exited. Press Enter to create a new shell.",
-    terminalSuperseded: "Terminal is attached in another window. Press Enter to take it back.",
-    terminalDenied: "Terminal access denied. Check your sign-in and profile, then press Enter to retry.",
-    terminalCapacity: "Terminal capacity reached. Close another terminal, then press Enter to retry.",
-    terminalSignedOut: "Signed out. Sign this browser in again, then press Enter to reconnect.",
-    terminalReconnecting: "Terminal disconnected. Reconnecting to the same shell…",
-    terminalStartRetry: (error: string) => "Terminal failed to start: " + error + " Press Enter to retry.",
-    terminalCloseFailed: "Could not close terminal",
+    terminalReconnectSame: 'Terminal disconnected. Press Enter to reconnect to the same shell.',
+    terminalExpired: 'Terminal expired or exited. Press Enter to create a new shell.',
+    terminalSuperseded: 'Terminal is attached in another window. Press Enter to take it back.',
+    terminalDenied: 'Terminal access denied. Check your sign-in and profile, then press Enter to retry.',
+    terminalCapacity: 'Terminal capacity reached. Close another terminal, then press Enter to retry.',
+    terminalSignedOut: 'Signed out. Sign this browser in again, then press Enter to reconnect.',
+    terminalReconnecting: 'Terminal disconnected. Reconnecting to the same shell…',
+    terminalStartRetry: (error: string) => 'Terminal failed to start: ' + error + ' Press Enter to retry.',
+    terminalCloseFailed: 'Could not close terminal',
     terminalReadOnly: 'Read-only output',
     terminalReadOnlyHelp:
       'To answer prompts, stop the background command and run it in a new terminal. The new terminal opens a separate shell; it does not connect to this process.',
@@ -4775,23 +4774,19 @@ export const en: Translations = {
 
     unableToReadPlaceholder: error => `Unable to read (${error})`,
 
-    terminalStartFailed: error => `Terminal failed to start: ${error}`
-  ,
-terminalNewOn: 'New terminal on…',
-terminalGatewayRemoved: 'Removed gateway',
-terminalGatewayRemovedBody:
-      'The gateway this terminal ran on was removed, so it can\'t reopen. Close this tab.',
-terminalGatewayNoShellBody:
-      'This gateway has no shell access, so this terminal can\'t reopen. Close this tab.',
-terminalDisconnectedBody:
-      'Terminal disconnected. Press Enter to start a new shell; scrollback is preserved.',
-terminalDropUploadFailed: name => `Could not upload ${name}`,
-terminalDropTooLargeTitle: 'Too large to upload',
-terminalDropTooLarge: (names, limit) => `Each file can be up to ${limit}. Not uploaded: ${names}`,
-terminalDropControlTitle: 'Not typed into the terminal',
-terminalDropControl: paths => `These names hold control characters the shell would act on as keys: ${paths}`,
-terminalDropUnquotable: (shell, paths) => `No safe way to type these names in ${shell}: ${paths}`
-},
+    terminalStartFailed: error => `Terminal failed to start: ${error}`,
+    terminalNewOn: 'New terminal on…',
+    terminalGatewayRemoved: 'Removed gateway',
+    terminalGatewayRemovedBody: "The gateway this terminal ran on was removed, so it can't reopen. Close this tab.",
+    terminalGatewayNoShellBody: "This gateway has no shell access, so this terminal can't reopen. Close this tab.",
+    terminalDisconnectedBody: 'Terminal disconnected. Press Enter to start a new shell; scrollback is preserved.',
+    terminalDropUploadFailed: name => `Could not upload ${name}`,
+    terminalDropTooLargeTitle: 'Too large to upload',
+    terminalDropTooLarge: (names, limit) => `Each file can be up to ${limit}. Not uploaded: ${names}`,
+    terminalDropControlTitle: 'Not typed into the terminal',
+    terminalDropControl: paths => `These names hold control characters the shell would act on as keys: ${paths}`,
+    terminalDropUnquotable: (shell, paths) => `No safe way to type these names in ${shell}: ${paths}`
+  },
 
   preview: {
     tab: 'Preview',
@@ -4987,10 +4982,9 @@ terminalDropUnquotable: (shell, paths) => `No safe way to type these names in ${
       focus: 'Focus',
       terminalDeck: 'Terminal deck',
       quad: 'Quad'
-    }
-  ,
-tabActions: title => `Actions for ${title}`
-},
+    },
+    tabActions: title => `Actions for ${title}`
+  },
 
   contextMenu: {
     link: {
@@ -5509,12 +5503,13 @@ tabActions: title => `Actions for ${title}`
   },
 
   desktop: {
-    localRuntimeUnavailableTitle: "Local runtime unavailable",
-    localRuntimeUnavailableDesktop: "Prepare the local model runtime in Settings → Providers → Local models.",
-    localRuntimeUnavailableWebapp: "Set up local models in Aino Desktop, or choose a hosted model in this browser.",
-    openLocalModels: "Open local models",
-    serviceAuthorizationTitle: "Service authorization",
-    serviceAuthorizationDescription: "Sign in to external services with their own accounts. These authorizations are separate from your Aino account.",
+    localRuntimeUnavailableTitle: 'Local runtime unavailable',
+    localRuntimeUnavailableDesktop: 'Prepare the local model runtime in Settings → Providers → Local models.',
+    localRuntimeUnavailableWebapp: 'Set up local models in Aino Desktop, or choose a hosted model in this browser.',
+    openLocalModels: 'Open local models',
+    serviceAuthorizationTitle: 'Service authorization',
+    serviceAuthorizationDescription:
+      'Sign in to external services with their own accounts. These authorizations are separate from your Aino account.',
     audioReadFailed: 'Could not read recorded audio',
     sessionUnavailable: 'Session unavailable',
     createSessionFailed: 'Could not create a new session',
@@ -6168,18 +6163,18 @@ tabActions: title => `Actions for ${title}`
     vision: 'Images',
     reasoning: 'Reasoning',
     defaultModel: 'Default for new chats',
-    historyReadOnly: (owner: string) =>
-      `This chat belongs to the original Aino account ${owner}. You can read its local history, but cannot send with the current account.`,
+    historyReadOnly: (_owner: string) => 'This chat belongs to another account and is read-only.',
     newChatCurrentAccount: 'New chat with current account',
     followCustom: 'Use custom model default',
     defaultTag: 'Default',
     not_authenticated: 'Sign in to Aino before using this model',
     platform_account_changed:
       'This model belongs to another account. Sign in to the original account or choose a model again.',
-    permanent: "No expiration",
-    reauthorize: "Reauthorize this device",
-    reauthorizeDescription: "Replace this device’s model authorization. Sign in again if your management session has expired.",
-    deviceRevoked: "This device’s model access was revoked. Reauthorize it in Model settings.",
+    permanent: 'No expiration',
+    reauthorize: 'Reauthorize this device',
+    reauthorizeDescription:
+      'Replace this device’s model authorization. Sign in again if your management session has expired.',
+    deviceRevoked: 'This device’s model access was revoked. Reauthorize it in Model settings.',
     bindingFailed: 'Model authorization failed. Your message has not been sent. Select the model again to retry.',
     unsupported: 'This connection does not support Aino models',
     rate: 'Account rate',

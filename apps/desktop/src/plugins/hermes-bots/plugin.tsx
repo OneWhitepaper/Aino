@@ -26,7 +26,6 @@ import {
 } from '@hermes/plugin-sdk'
 import type { ChatEmptyProps, PluginContext, ProfileGroupRoute } from '@hermes/plugin-sdk'
 
-import { startFaceClock, stopFaceClock } from './avatar'
 import {
   $botChatFocused,
   $botsPaneVisible,
@@ -38,6 +37,7 @@ import {
   $selectedRosterKey,
   focusedMentionProfile
 } from './bot-state'
+import { registerBotWorkspaceAvatar } from './bot-workspace-avatar'
 import { isCanonicalChatOnScreen, openBotCanonicalChat } from './canonical-chat'
 import { BotChatEmpty } from './chat-empty'
 import { bindProfileSync, RoutinesPane } from './cron'
@@ -70,7 +70,13 @@ import {
 import { openGroupChat } from './group-chat-view'
 import { stickyGroupEngine } from './group-engine'
 import { groupWorkspaceOwnerKey } from './group-membership'
-import { clearGroupComposerDrafts, groupOpenOrigin, groupOpenOwnerKey, groupOpenRoute } from './group-panes'
+import {
+  clearGroupComposerDrafts,
+  groupOpenOrigin,
+  groupOpenOwnerKey,
+  groupOpenRoute,
+  groupWorkspacePaneId
+} from './group-panes'
 import { annotateOrphanedGroupChatMembers } from './hygiene'
 import { BOTS_LOCALES } from './i18n'
 import { displayName, rosterConnectionLabel } from './labels'
@@ -83,6 +89,7 @@ import {
   selectedRosterBot,
   sessionOwnsWorkspace
 } from './roster-pane'
+import { adoptRequestedBotWorkspace } from './roster-workspace-owner'
 import { botRosterMeta, botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
 import { startScreenAutoRaise } from './screen-autoraise'
 import { ProfileGroupScreenPortal } from './screen-portal'
@@ -136,7 +143,7 @@ function clearEditorOnAccountChange() {
   }
 }
 
-/** The approved Agent Hub glyph lives with the bundled plugin so the plugin fence
+/** The approved Bot glyph lives with the bundled plugin so the plugin fence
  * remains honest: this module imports only its own assets and the public SDK. */
 function BotsTabIcon() {
   return (
@@ -180,45 +187,43 @@ interface ComposerDraftPayload {
 
 export default {
   id: ID,
-  name: 'Agent Hub',
+  name: 'Bot',
   description:
     'Bot Mode — a one-chat-per-agent roster with avatars, routines, group chats, and bot-to-bot messaging. Ships with the app; disable here if unwanted.',
   localized: {
     zh: {
-      name: 'Agent Hub',
+      name: 'Bot',
       description:
         '机器人模式：为每个智能体提供独立聊天、头像、例程、群聊和机器人之间的消息互通。随应用提供，不需要时可在此禁用。'
     },
     'zh-hant': {
-      name: 'Agent Hub',
+      name: 'Bot',
       description:
         '機器人模式：為每個智能體提供獨立聊天、頭像、例程、群聊和機器人之間的訊息互通。隨應用提供，不需要時可在此停用。'
     },
     ja: {
-      name: 'Agent Hub',
+      name: 'Bot',
       description:
         'ボットモード：エージェントごとのチャット、アバター、ルーティン、グループチャット、ボット間メッセージを提供します。アプリ付属で、不要ならここで無効にできます。'
     }
   },
   register(ctx: PluginContext) {
     setPluginCtx(ctx)
+    registerBotWorkspaceAvatar(ctx)
     // The user's own roster sections. Read once at register; every mutation
     // writes through.
     loadBotSections()
     const disposeLocales = ctx.i18n.register(BOTS_LOCALES)
     setGroupChatSyncDisposed(false)
-    startFaceClock()
     // The cross-connection relay rides every gateway socket this Desktop
     // holds: roster sync + envelope drain/deliver/reply loops.
     startBotRelay()
     // Opt-in per bot: raise a bot's Screen tab on its first live screen tool call.
     const stopScreenAutoRaise = startScreenAutoRaise()
 
-    // Disabling the plugin (or a hot reload) must actually stop the clock —
-    // before this, the rAF loop + 1Hz document scan ran until app restart.
+    // Disable and hot reload release the relay, screen listener and editor context.
     if (typeof ctx.onDispose === 'function') {
       ctx.onDispose(disposeLocales)
-      ctx.onDispose(stopFaceClock)
       ctx.onDispose(stopBotRelay)
       ctx.onDispose(stopScreenAutoRaise)
       ctx.onDispose(clearEditorOnAccountChange())
@@ -535,7 +540,7 @@ export default {
       area: 'panes',
       // Pane titles are read once at registration, so resolve the plugin's
       // locale here rather than leaving the static English fallback visible.
-      title: pluginText('roster.title', 'Agent Hub'),
+      title: pluginText('roster.title', 'Bot'),
       // dock: explicit adoption gesture — CENTER-STACK into the sessions zone
       // so the sidebar grows a SESSIONS | BOTS tab strip instead of splitting
       // two cramped panes down the column. Center is safe now: insertAtGroup
@@ -567,9 +572,10 @@ export default {
         collapsible: true,
         hideOnly: true,
         tabLead: () => <BotsTabIcon />,
-        tabTitle: () => <LocalizedTabTitle select={() => pluginText('roster.title', 'Agent Hub')} />,
-        tabTitleText: () => pluginText('roster.title', 'Agent Hub'),
+        tabTitle: () => <LocalizedTabTitle select={() => pluginText('roster.title', 'Bot')} />,
+        tabTitleText: () => pluginText('roster.title', 'Bot'),
         sidebarDescription: () => pluginText('roster.modeDescription', 'Bots, group chats and collaboration'),
+        sidebarMode: 'bots',
         dock: {
           pane: 'sessions',
           pos: 'center',
@@ -710,10 +716,33 @@ export default {
 
         if (visible) {
           restoreDismissedOnRegister = true
+          const group = $groupChatWorkspace.get()
+          const requestedOwner = host.state.workspaceOwnerKey?.get?.()
+
+          if (
+            group &&
+            host.state.workspaceMode?.get?.() === 'bots' &&
+            requestedOwner === (groupOpenOwnerKey(group) ?? groupWorkspaceOwnerKey(group)) &&
+            !host.state.workspaceIsPage?.get?.() &&
+            host.paneVisibility(groupWorkspacePaneId(group)).get()
+          ) {
+            entryGeneration = null
+            syncRoutinesPane()
+
+            return
+          }
+
+          if (adoptRequestedBotWorkspace($lastRoster.get())) {
+            entryGeneration = null
+            $groupChatWorkspace.set(null)
+            syncRoutinesPane()
+
+            return
+          }
+
           entryGeneration = getBotOpenGeneration()
           scheduleSelectedChat()
 
-          const group = $groupChatWorkspace.get()
           const selected = selectedRosterBot($lastRoster.get(), $selectedRosterKey.get())
 
           // Publish routing now; the deferred row action fronts the actual

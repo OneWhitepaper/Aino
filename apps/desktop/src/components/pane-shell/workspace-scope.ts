@@ -14,6 +14,7 @@
  */
 
 import { atom, batch } from 'nanostores'
+import type { ReactNode } from 'react'
 
 import type { WorkspaceMode } from '../../contrib/types'
 
@@ -24,6 +25,13 @@ export type { WorkspaceMode } from '../../contrib/types'
 export interface WorkspacePaneScope {
   mode: WorkspaceMode
   ownerKey?: string | null
+}
+
+/** A workspace supplies its portrait by the exact opaque session owner key. */
+export const WORKSPACE_AVATAR_AREA = 'workspace.ownerAvatar'
+
+export interface WorkspaceAvatarContribution {
+  avatarFor(ownerKey: string, size: number): ReactNode
 }
 
 /** Default workspace mode when the host has not switched surfaces. */

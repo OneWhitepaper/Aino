@@ -83,22 +83,23 @@ describe('useStatusSnapshot', () => {
       )
 
       await flushAsync()
-      expect(screen.queryByText(warning)).toBeNull()
+      const visibleWarning = () => screen.queryByText(warning, { selector: 'p' })
+      expect(visibleWarning()).toBeNull()
       vi.mocked(getStatus).mockResolvedValue({ shared_profile_warning: true } as never)
       await act(async (): Promise<void> => {
         await vi.advanceTimersByTimeAsync(60_000)
       })
-      expect(screen.getByText(warning)).toBeTruthy()
+      expect(visibleWarning()).toBeTruthy()
       // Hide the summary without losing the notification-center entry.
       await act(async (): Promise<void> => {
         fireEvent.click(screen.getByRole('button', { name: copy.notificationCenter.hideSummary }))
         await vi.advanceTimersByTimeAsync(100)
       })
-      expect(screen.queryByText(warning)).toBeNull()
+      expect(visibleWarning()).toBeNull()
       await act(async (): Promise<void> => {
         await vi.advanceTimersByTimeAsync(60_000)
       })
-      expect(screen.queryByText(warning)).toBeNull()
+      expect(visibleWarning()).toBeNull()
 
       vi.mocked(getStatus).mockResolvedValue({ shared_profile_warning: false } as never)
       await act(async (): Promise<void> => {
@@ -108,14 +109,14 @@ describe('useStatusSnapshot', () => {
       await act(async (): Promise<void> => {
         await vi.advanceTimersByTimeAsync(60_000)
       })
-      expect(screen.getByText(warning)).toBeTruthy()
+      expect(visibleWarning()).toBeTruthy()
       vi.mocked(getStatus).mockResolvedValue({ shared_profile_warning: false } as never)
       rerender({ scope: 'local-work' })
       await flushAsync()
       await act(async (): Promise<void> => {
         await vi.advanceTimersByTimeAsync(100)
       })
-      expect(screen.queryByText(warning)).toBeNull()
+      expect(visibleWarning()).toBeNull()
     }
   )
 

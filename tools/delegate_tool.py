@@ -233,6 +233,7 @@ def _build_child_agent(
     override_reasoning_effort: Any = None,
     profile_home: Optional[Path] = None,
     override_service_tier: Optional[str] = None,  # a route's checked speed tier (tools/delegate_tool_tuning.py)
+    display_name: Optional[str] = None,
 ):
     """Build (don't run) a child AIAgent on the main thread. override_* (from delegation config) replace parent
     inheritance so children can run on a different provider:model pair. ``profile_home`` builds (and later runs,
@@ -267,7 +268,7 @@ def _build_child_agent(
 
     # Shared ref: session_id once the child exists, delegation_id once
     # delegate_task stamps it — both ride on every relayed event.
-    child_session_ref: dict[str, Any] = {}
+    child_session_ref: dict[str, Any] = {"display_name": display_name}
     child_progress_cb = _build_child_progress_callback(
         task_index, goal, parent_agent, task_count, subagent_id=subagent_id, parent_id=parent_subagent_id,
         depth=max(0, child_depth - 1),  # 0 = first-level child for the UI
@@ -343,6 +344,7 @@ def _build_child_agent(
     # reference), and no parent teardown can close it out from under a background child (#81267).
     child_session_ref["session_id"] = getattr(child, "session_id", "") or ""
     child._progress_identity_ref = child_session_ref
+    child._delegate_display_name = display_name
     child._delegate_depth, child._delegate_role = child_depth, effective_role  # post-degrade role
     if reasoning_override is not None:
         # Child-specific effort survives a provider swap; ordinary agents still
@@ -489,7 +491,7 @@ def _build_children(
             _child_context = append_output_contract(_child_context, _task_schema)
         try:
             child = _build_child_preserving_parent_tools(
-                task_index=i, goal=t["goal"], context=_child_context,
+                task_index=i, goal=t["goal"], context=_child_context, display_name=t.get("display_name"),
                 toolsets=None,  # always inherit the parent's toolsets
                 model=route.creds["model"], max_iterations=max_iterations, task_count=len(task_list),
                 parent_agent=parent_agent, role=_normalize_role(t.get("role") or top_role), **_route_overrides(route),
@@ -834,6 +836,12 @@ DELEGATE_TASK_SCHEMA = {
                             "string",
                             "What this subagent should accomplish. Give a specific bounded goal; include needed "
                             "background in context or explicitly select visible history with context_turns.",
+                        ),
+                        "display_name": _p(
+                            "string",
+                            "A short, recognizable name for this subagent, such as 'Source review' or '资料检索'. "
+                            "Use this name for lists; keep the complete instructions in goal.",
+                            maxLength=48,
                         ),
                         "context": _p(
                             "string",

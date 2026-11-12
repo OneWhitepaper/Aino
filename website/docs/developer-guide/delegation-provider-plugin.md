@@ -93,10 +93,19 @@ is the default route, and `self.settings(config)` is your backend's own block,
 |---|---|---|
 | `name` | yes | The `delegation.backend` value. `default` belongs to the bundled default strategy. |
 | `route_task(task, config)` | yes | Return the route dict for one task. `task` carries `goal`, `context`, `index` and the values the model supplied for your parameters. Raise `DelegationRouteError` to refuse; its message is the tool error the model reads. |
-| `task_parameters(config)` | no | `{name: json_schema}` merged into `tasks.items.properties`. Core enforces `enum` before `route_task` runs and refuses core-owned names (`goal`, `context`, `index`, `output_schema`, `images`, `group`, `role`, `toolsets`, `provider`, `model`, `base_url`, `api_key`, `api_mode`, `acp_command`, `acp_args`). |
+| `task_parameters(config)` | no | `{name: json_schema}` merged into `tasks.items.properties`. Core enforces `enum` before `route_task` runs and refuses core-owned names (`goal`, `display_name`, `context`, `index`, `output_schema`, `images`, `group`, `role`, `toolsets`, `provider`, `model`, `base_url`, `api_key`, `api_mode`, `acp_command`, `acp_args`). |
 | `description(config)` | no | Guidance appended to the `delegate_task` description. |
 | `is_available()` | no | No network calls. `False` fails delegation closed while your backend is selected: `delegate_task` returns a tool error naming it and the fix (`/delegation default`, or `hermes config set delegation.backend default`); it never switches to `default` on its own. |
 | `settings(config)` | inherited | `delegation.backends.<name>` as a mapping (empty when unset). Do not override. |
+
+`tasks[].display_name` is optional core-owned presentation metadata: a short,
+recognizable child name (at most 48 characters). It is separate from the complete
+`goal` and is not forwarded to `route_task`. The same name accompanies the child’s
+progress, read-only roster and completion receipt. Child IDs remain authoritative
+for routing and controls; changing a display name never selects another child.
+Older calls without a name continue to work. Like other schema changes, this
+field is advertised when the session’s tool definitions are built; existing
+conversations are not refreshed mid-turn.
 
 ### Routes
 

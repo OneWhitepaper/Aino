@@ -8,6 +8,8 @@ all auto-transitions; the fork uses the auxiliary client and never touches the m
 
 from __future__ import annotations
 
+from hermes_cli.product_identity import PRODUCT_NAME
+
 import contextlib
 import json
 import logging
@@ -290,7 +292,7 @@ CURATOR_DRY_RUN_BANNER = (
 
 
 CURATOR_REVIEW_PROMPT = (
-    "You are running as Hermes' background skill CURATOR. This is an "
+    f"You are running as {PRODUCT_NAME}' background skill CURATOR. This is an "
     "UMBRELLA-BUILDING consolidation pass, not a passive audit and not a "
     "duplicate-finder.\n\n"
     "The goal of the skill collection is a LIBRARY OF CLASS-LEVEL "
@@ -1137,7 +1139,7 @@ def _run_llm_review(prompt: str) -> dict[str, Any]:
 
             _reset_background_review_read_marks()
         # Silence the fork's tool-call chatter (CLI synchronous foreground runs).
-        with open(os.devnull, "w", encoding="utf-8") as devnull, \
+        with open(os.devnull, "w", encoding="utf-8") as devnull,\
              contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
             conv_result = review_agent.run_conversation(user_message=prompt)
         final = str(conv_result.get("final_response") or "").strip() if isinstance(conv_result, dict) else ""

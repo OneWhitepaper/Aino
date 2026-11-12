@@ -16,6 +16,7 @@ from typing import Any
 from agent import onboarding_flow as flow
 from agent.onboarding_text import finish_reminder, reminder
 from agent.onboarding_text import question as beat_question
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.registry import registry, tool_error
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ def setup_beat_tool(args: Mapping[str, Any], *, db=None, session_id: str = "", t
             return json.dumps({"next": "done", "reminder": finish_reminder(record)} if flow.is_active(record)
                               else {"error": "Onboarding is over in this chat; it is a normal chat now."})
     if callback is None:
-        return tool_error("setup_beat cards show only in the Hermes desktop app.")
+        return tool_error(f"setup_beat cards show only in the {PRODUCT_NAME} desktop app.")
     if beat == "connectors" and (refused := _unlisted_suggestions(args)):
         return refused
     shown = records.advance(db, session_id, flow.Shown(beat, tool_call_id, args.get("options"), args.get("suggest")))

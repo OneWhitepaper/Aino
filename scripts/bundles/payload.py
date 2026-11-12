@@ -31,7 +31,8 @@ INERT_SNAPSHOT_DIRS = (
 )
 
 
-def snapshot(repo: Path, ref: str, destination: Path, exclude: tuple[str, ...] = ()) -> None:
+def snapshot(repo: Path, ref: str, destination: Path, exclude: tuple[str, ...] = (),
+             retain: tuple[str, ...] = ()) -> None:
     """Archive a resolved git revision without carrying checkout metadata."""
     repo, destination = repo.resolve(), destination.resolve()
     if repo == destination or repo.is_relative_to(destination):
@@ -47,6 +48,14 @@ def snapshot(repo: Path, ref: str, destination: Path, exclude: tuple[str, ...] =
         destination.mkdir(parents=True)
         with tarfile.open(archive) as source:
             source.extractall(destination, filter="data")
+        # Runtime assets can live inside an otherwise build-only workspace.
+        # Extract from the selected revision, never the builder's working copy.
+        if retain:
+            subprocess.run(
+                ["git", "archive", "--format=tar", "--output", str(archive), ref, "--", *retain],
+                cwd=repo, check=True, timeout=120)
+            with tarfile.open(archive) as source:
+                source.extractall(destination, filter="data")
 
 
 def _payload_file(root: Path, relative: str) -> Path:

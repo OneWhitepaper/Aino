@@ -5,7 +5,6 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { deBoot } from './de_boot'
 import { deClarify } from './de_clarify'
@@ -323,17 +322,18 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 const deBaseOverrides = {
   notificationCenter: notificationCenterCopy['de'],
   platformModels: {
-    permanent: "Ohne Ablaufdatum",
-    reauthorize: "Dieses Gerät erneut autorisieren",
-    reauthorizeDescription: "Ersetzen Sie die Modellautorisierung dieses Geräts. Melden Sie sich erneut an, wenn Ihre Verwaltungssitzung abgelaufen ist.",
-    deviceRevoked: "Der Modellzugriff dieses Geräts wurde widerrufen. Autorisieren Sie es in den Modelleinstellungen erneut.",
+    permanent: 'Ohne Ablaufdatum',
+    reauthorize: 'Dieses Gerät erneut autorisieren',
+    reauthorizeDescription:
+      'Ersetzen Sie die Modellautorisierung dieses Geräts. Melden Sie sich erneut an, wenn Ihre Verwaltungssitzung abgelaufen ist.',
+    deviceRevoked:
+      'Der Modellzugriff dieses Geräts wurde widerrufen. Autorisieren Sie es in den Modelleinstellungen erneut.'
   },
   platformDevices: { expired: 'Abgelaufen' },
   appearancePage: appearancePage.de,
   home: homeGuidance.de,
   toolPanel: toolPanel['de'],
   workspacePage: workspacePage.de,
-  cloudSync: cloudSync['de'],
   accountPage: accountPage['de'],
   platformRecharge: {
     description:
@@ -2537,10 +2537,9 @@ const deBaseOverrides = {
           enable: 'Mein Profil verwenden'
         }
       }
-    }
-  ,
-memoryLayers: deMemoryLayers
-},
+    },
+    memoryLayers: deMemoryLayers
+  },
   skills: {
     tabSkills: 'Skills',
     tabToolsets: 'Tools',
@@ -3125,7 +3124,8 @@ memoryLayers: deMemoryLayers
     relayLink: {
       title: 'Team Gateway',
       badge: 'Kein Bot-Token nötig',
-      intro: (platform: string) => `${platform} erreicht diesen Agenten über den gemeinsamen Hermes-Bot. Verknüpfe dein ${platform}-Konto damit und schreib dem Bot, um mit deinem Agenten zu sprechen.`,
+      intro: (platform: string) =>
+        `${platform} erreicht diesen Agenten über den gemeinsamen Hermes-Bot. Verknüpfe dein ${platform}-Konto damit und schreib dem Bot, um mit deinem Agenten zu sprechen.`,
       link: (platform: string) => `${platform} verknüpfen`,
       linkAnother: (platform: string) => `Weiteres ${platform}-Konto verknüpfen`,
       linkedAccounts: 'Verknüpfte Konten',
@@ -3140,13 +3140,16 @@ memoryLayers: deMemoryLayers
       waiting: 'Warte darauf, dass der Bot deine Nachricht sieht. Der Code gilt einmal.',
       linked: (platform: string) => `${platform}-Konto verknüpft. Schreib dem Bot, um mit deinem Agenten zu sprechen.`,
       expired: 'Der Code ist abgelaufen, bevor er benutzt wurde. Hol dir einen neuen Code und versuch es erneut.',
-      refused: (platform: string) => `${platform} hat die Verknüpfung abgelehnt. Hol dir einen neuen Code und versuch es erneut.`,
+      refused: (platform: string) =>
+        `${platform} hat die Verknüpfung abgelehnt. Hol dir einen neuen Code und versuch es erneut.`,
       qrAlt: (platform: string) => `QR-Code für den gemeinsamen ${platform}-Bot`,
       managed: 'Von Team Gateway verwaltet',
-      managedNote: (platform: string) => `Team Gateway übernimmt auf dieser Instanz das Messaging, daher schaltet das Gateway die direkte ${platform}-Verbindung bei jedem Start ab. Um sie parallel zum Relay zu betreiben, setze GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true in der Umgebung des Gateways (eine direkte Verbindung verhindert das Herunterskalieren auf null und kann Nachrichten doppelt zustellen).`,
+      managedNote: (platform: string) =>
+        `Team Gateway übernimmt auf dieser Instanz das Messaging, daher schaltet das Gateway die direkte ${platform}-Verbindung bei jedem Start ab. Um sie parallel zum Relay zu betreiben, setze GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true in der Umgebung des Gateways (eine direkte Verbindung verhindert das Herunterskalieren auf null und kann Nachrichten doppelt zustellen).`,
       managedIntro: 'Die Konten dieses Agenten werden im Nous Portal verknüpft.',
       openPortal: 'Konten im Nous Portal verknüpfen',
-      noNewAccount: (platform: string) => `Der Code ist nicht mehr aktiv und es ist kein neues Konto erschienen. Falls dein ${platform}-Konto nicht aufgeführt ist, hol dir einen neuen Code und versuche es erneut.`
+      noNewAccount: (platform: string) =>
+        `Der Code ist nicht mehr aktiv und es ist kein neues Konto erschienen. Falls dein ${platform}-Konto nicht aufgeführt ist, hol dir einen neuen Code und versuche es erneut.`
     },
     telegramQr: {
       title: 'Wählen Sie, wie Sie Ihren Telegram-Bot verbinden',
@@ -3402,9 +3405,10 @@ memoryLayers: deMemoryLayers
     manageProfiles: 'Profile verwalten…',
     connectGateway: 'Gateways verwalten…',
     fleet: {
-      switchDeviceTitle: "Zu diesem Gerät wechseln?",
-      switchDeviceDesc: "Öffnet eine neue Sitzung auf diesem Computer. Die aktuelle Unterhaltung bleibt auf dem anderen Gateway.",
-      switchDeviceConfirm: "Wechseln",
+      switchDeviceTitle: 'Zu diesem Gerät wechseln?',
+      switchDeviceDesc:
+        'Öffnet eine neue Sitzung auf diesem Computer. Die aktuelle Unterhaltung bleibt auf dem anderen Gateway.',
+      switchDeviceConfirm: 'Wechseln',
       allOnGateway: 'Alle Profile auf diesem Gateway',
       gateway: gateway => `Profile auf ${gateway}`,
       gatewayUnreachable: gateway => `${gateway} · nicht erreichbar`,
@@ -4879,15 +4883,15 @@ memoryLayers: deMemoryLayers
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "Terminal getrennt. Mit Enter dieselbe Shell erneut verbinden.",
-    terminalExpired: "Terminal abgelaufen oder beendet. Mit Enter eine neue Shell erstellen.",
-    terminalSuperseded: "Terminal ist in einem anderen Fenster verbunden. Mit Enter hierher zurückholen.",
-    terminalDenied: "Terminalzugriff verweigert. Anmeldung und Profil prüfen und mit Enter erneut versuchen.",
-    terminalCapacity: "Terminal-Limit erreicht. Ein anderes Terminal schließen und mit Enter erneut versuchen.",
-    terminalSignedOut: "Abgemeldet. In diesem Browser erneut anmelden und mit Enter verbinden.",
-    terminalReconnecting: "Terminal getrennt. Dieselbe Shell wird erneut verbunden…",
-    terminalStartRetry: (error: string) => "Terminal konnte nicht starten: " + error + ". Mit Enter erneut versuchen.",
-    terminalCloseFailed: "Terminal konnte nicht geschlossen werden",
+    terminalReconnectSame: 'Terminal getrennt. Mit Enter dieselbe Shell erneut verbinden.',
+    terminalExpired: 'Terminal abgelaufen oder beendet. Mit Enter eine neue Shell erstellen.',
+    terminalSuperseded: 'Terminal ist in einem anderen Fenster verbunden. Mit Enter hierher zurückholen.',
+    terminalDenied: 'Terminalzugriff verweigert. Anmeldung und Profil prüfen und mit Enter erneut versuchen.',
+    terminalCapacity: 'Terminal-Limit erreicht. Ein anderes Terminal schließen und mit Enter erneut versuchen.',
+    terminalSignedOut: 'Abgemeldet. In diesem Browser erneut anmelden und mit Enter verbinden.',
+    terminalReconnecting: 'Terminal getrennt. Dieselbe Shell wird erneut verbunden…',
+    terminalStartRetry: (error: string) => 'Terminal konnte nicht starten: ' + error + '. Mit Enter erneut versuchen.',
+    terminalCloseFailed: 'Terminal konnte nicht geschlossen werden',
     terminalDropUnquotable: (shell, paths) => `Diese Namen lassen sich in ${shell} nicht sicher eintippen: ${paths}`,
     aria: 'Rechte Sidebar',
     panelsAria: 'Panels der rechten Sidebar',
@@ -5657,12 +5661,13 @@ memoryLayers: deMemoryLayers
     vaultCodeConfirm: 'Code eingeben'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "Lokale Laufzeit nicht verfügbar",
-    localRuntimeUnavailableDesktop: "Die Laufzeit unter Einstellungen → Anbieter → Lokale Modelle einrichten.",
-    localRuntimeUnavailableWebapp: "Lokale Modelle in Aino Desktop einrichten oder hier ein gehostetes Modell wählen.",
-    openLocalModels: "Lokale Modelle öffnen",
-    serviceAuthorizationTitle: "Dienstautorisierung",
-    serviceAuthorizationDescription: "Mit dem jeweiligen Konto des externen Dienstes anmelden. Diese Autorisierung ist vom Aino-Konto getrennt.",
+    localRuntimeUnavailableTitle: 'Lokale Laufzeit nicht verfügbar',
+    localRuntimeUnavailableDesktop: 'Die Laufzeit unter Einstellungen → Anbieter → Lokale Modelle einrichten.',
+    localRuntimeUnavailableWebapp: 'Lokale Modelle in Aino Desktop einrichten oder hier ein gehostetes Modell wählen.',
+    openLocalModels: 'Lokale Modelle öffnen',
+    serviceAuthorizationTitle: 'Dienstautorisierung',
+    serviceAuthorizationDescription:
+      'Mit dem jeweiligen Konto des externen Dienstes anmelden. Diese Autorisierung ist vom Aino-Konto getrennt.',
     audioReadFailed: 'Aufgenommenes Audio konnte nicht gelesen werden',
     sessionUnavailable: 'Session nicht verfügbar',
     createSessionFailed: 'Neue Session konnte nicht erstellt werden',

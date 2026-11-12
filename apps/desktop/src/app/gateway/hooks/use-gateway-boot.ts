@@ -69,6 +69,7 @@ import {
   isCurrentGatewaySwitch,
   registerGatewaySwitchLifecycle
 } from '@/store/gateway-switch'
+import { prepareGatewayReconnect } from '@/store/gateway-targeted-reconnect'
 import { type ScopedServerRequest } from '@/store/gateway-types'
 import { watchLocalRuntimeJobs } from '@/store/local-runtime-jobs'
 import { notify, notifyError, RECOVERY_ACTIONS } from '@/store/notifications'
@@ -193,7 +194,9 @@ async function openWebappTabProfile(desktop: Window['hermesDesktop'], primary: s
   const routes = await desktop.getProfileRoutes?.([profile]).catch(() => null)
 
   if (routes && !routes.some(route => normalizeProfileKey(route.profile) === normalizeProfileKey(profile))) {
-    console.warn(`[gateway] this gateway has no profile "${profile}" or does not serve it; this tab stays on "${primary}"`)
+    console.warn(
+      `[gateway] this gateway has no profile "${profile}" or does not serve it; this tab stays on "${primary}"`
+    )
     await desktop.profile?.remember?.(primary)
 
     return
@@ -492,16 +495,13 @@ export function useGatewayBoot({
 
     const readPrimaryReconnectDescriptor = () =>
       primaryConnection?.registryScoped && primaryConnection.connectionId
-            ? (desktop.getConnectionFor?.({
-                connectionId: primaryConnection.connectionId,
-                profile: primaryConnection.profile
-              }) ?? Promise.reject(new Error('Registry gateway connection is unavailable')))
-            : desktop.getConnection(primaryConnection?.profile)
+        ? (desktop.getConnectionFor?.({
+            connectionId: primaryConnection.connectionId,
+            profile: primaryConnection.profile
+          }) ?? Promise.reject(new Error('Registry gateway connection is unavailable')))
+        : desktop.getConnection(primaryConnection?.profile)
 
-    const attemptReconnect = async (
-      manual?: { profile: string; activationEpoch: number },
-      reportFailure = false
-    ) => {
+    const attemptReconnect = async (manual?: { profile: string; activationEpoch: number }, reportFailure = false) => {
       if (cancelled || primaryReauthError || reconnecting || gatewayOpen() || $gatewaySwitching.get()) {
         return
       }
@@ -1324,9 +1324,18 @@ export function useGatewayBoot({
         return
       }
 
-      // Explicit recovery targets the route the user is viewing, not every
-      // warm profile. A responsive ping does not prove delivery is unstuck.
-      if (!isActivePrimary()) {
+      const recovery = await prepareGatewayReconnect(options, gateway, isActivePrimary(), $activeGatewayProfile.get())
+
+      if (options?.target && !options.target.isCurrent()) {
+        throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
+      }
+
+      if (recovery.handled) {
+        return
+      }
+
+      // A responsive ping does not prove delivery is unstuck.
+      if (!recovery.primary) {
         activeGateway()?.close()
 
         if (!(await ensureActiveGatewayOpen({ explicit: true }))) {
@@ -1347,10 +1356,13 @@ export function useGatewayBoot({
         clearReconnectTimer()
         resetReconnectBackoff()
 
-        await attemptReconnect({
-          profile: normalizeProfileKey($activeGatewayProfile.get()),
-          activationEpoch: gatewayActivationEpoch()
-        }, true)
+        await attemptReconnect(
+          {
+            profile: normalizeProfileKey(recovery.profile),
+            activationEpoch: gatewayActivationEpoch()
+          },
+          true
+        )
 
         if (!gatewayOpen()) {
           throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
@@ -1403,10 +1415,13 @@ export function useGatewayBoot({
       gateway.close()
       clearReconnectTimer()
       resetReconnectBackoff()
-      await attemptReconnect({
-        profile: normalizeProfileKey($activeGatewayProfile.get()),
-        activationEpoch: gatewayActivationEpoch()
-      }, true)
+      await attemptReconnect(
+        {
+          profile: normalizeProfileKey($activeGatewayProfile.get()),
+          activationEpoch: gatewayActivationEpoch()
+        },
+        true
+      )
 
       if (!gatewayOpen()) {
         throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))

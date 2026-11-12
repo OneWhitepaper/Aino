@@ -30,13 +30,14 @@ interface ConfirmDialogProps {
   /** Close as soon as onConfirm resolves — for optimistic actions that finish in the background. */
   dismissOnConfirm?: boolean
   /** A third, non-destructive way out, shown between Cancel and Confirm (e.g.
-   *  "Remove from sidebar" beside "Delete worktree"). Closes on click. */
+   *  "Remove from sidebar" beside "Delete worktree"). Closes on success. */
   secondaryAction?: ConfirmSecondaryAction
 }
 
 interface ConfirmSecondaryAction {
   label: string
-  onClick: () => void
+  busyLabel?: string
+  onClick: () => unknown
 }
 
 interface ConfirmationLifecycle {
@@ -69,6 +70,7 @@ export function ConfirmDialog({
   const errorRef = useRef<HTMLDivElement>(null)
   const lifecycleRef = useRef<ConfirmationLifecycle | null>(null)
   const [status, setStatus] = useState<'done' | 'idle' | 'saving'>('idle')
+  const [runningSecondary, setRunningSecondary] = useState(false)
   const [error, setError] = useState<null | string>(null)
   const busy = status === 'saving' || status === 'done'
   const resolvedConfirmLabel = confirmLabel ?? t.common.confirm
@@ -100,6 +102,7 @@ export function ConfirmDialog({
     const lifecycle: ConfirmationLifecycle = { active: true, closeTimer: null, running: false }
     lifecycleRef.current = lifecycle
     setStatus('idle')
+    setRunningSecondary(false)
     setError(null)
 
     return () => {
@@ -111,7 +114,7 @@ export function ConfirmDialog({
     }
   }, [open])
 
-  async function run() {
+  async function run(secondary = false) {
     const lifecycle = lifecycleRef.current
 
     if (busy || !lifecycle?.active || lifecycle.running) {
@@ -120,17 +123,22 @@ export function ConfirmDialog({
 
     // The ref closes the same-event-loop gap before React paints disabled.
     lifecycle.running = true
+    setRunningSecondary(secondary)
     setError(null)
     setStatus('saving')
 
     try {
-      await onConfirm()
+      const result = secondary ? secondaryAction?.onClick() : onConfirm()
+
+      if (result) {
+        await result
+      }
 
       if (!lifecycle.active) {
         return
       }
 
-      if (dismissOnConfirm) {
+      if (secondary || dismissOnConfirm) {
         lifecycle.running = false
         onClose()
 
@@ -162,20 +170,13 @@ export function ConfirmDialog({
               {resolvedCancelLabel}
             </Button>
             {secondaryAction && (
-              <Button
-                disabled={busy}
-                onClick={() => {
-                  if (busy || lifecycleRef.current?.running) {
-                    return
-                  }
-
-                  secondaryAction.onClick()
-                  onClose()
-                }}
-                type="button"
-                variant="secondary"
-              >
-                {secondaryAction.label}
+              <Button disabled={busy} onClick={() => void run(true)} type="button" variant="secondary">
+                <ActionStatus
+                  busy={secondaryAction.busyLabel ?? resolvedBusyLabel}
+                  done={secondaryAction.label}
+                  idle={secondaryAction.label}
+                  state={runningSecondary ? status : 'idle'}
+                />
               </Button>
             )}
             <Button
@@ -189,7 +190,7 @@ export function ConfirmDialog({
                 busy={resolvedBusyLabel}
                 done={resolvedDoneLabel}
                 idle={resolvedConfirmLabel}
-                state={status}
+                state={runningSecondary ? 'idle' : status}
               />
             </Button>
           </DialogFooter>

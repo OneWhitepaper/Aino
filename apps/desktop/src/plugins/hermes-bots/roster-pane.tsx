@@ -1,6 +1,6 @@
 import './roster-pane.css'
 
-import { Button, Codicon, host, useI18n, useValue } from '@hermes/plugin-sdk'
+import { host, useI18n, useValue } from '@hermes/plugin-sdk'
 import { useEffect, useRef, useState } from 'react'
 
 import { BotRow } from './bot-row'
@@ -47,14 +47,19 @@ import { $showHiddenBots, isBotHidden } from './hidden-bots'
 import { useBots } from './i18n'
 import { $activityToasts } from './roster-actions'
 import { renderRosterContent } from './roster-pane-content'
-import { deriveRosterPresentation, deriveRosterRows, type RosterGroupRow, sortRosterBots } from './roster-pane-derivation'
+import {
+  deriveRosterPresentation,
+  deriveRosterRows,
+  type RosterGroupRow,
+  sortRosterBots
+} from './roster-pane-derivation'
 import { renderRosterDialogs } from './roster-pane-dialogs'
 import { RosterGroupRowView } from './roster-pane-groups'
 import { $lastSources, usePublishRosterSnapshot } from './roster-pane-lifecycle'
 import { rosterSectionRenderers } from './roster-pane-sections'
 import { renderRosterSearch, renderRosterToolbar } from './roster-pane-toolbar'
 import { botNeedsHandleLabel, rosterGatewayOptions } from './roster-sections'
-import { botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
+import { reconcileRosterWorkspaceOwner } from './roster-workspace-owner'
 import { activeBots, useTurnBusy } from './row-helpers'
 import type { BotMeta, GatewaySource, GroupMember, RosterActivityFilter, RosterKindFilter, RosterRow } from './types'
 import {
@@ -225,10 +230,9 @@ function useReconcileRosterOwner(
 
     if (selectionHydrated) {
       reconcileRosterSelection(roster, sourceSnapshot, allMeta)
-      const selected = selectedRosterBot(roster, $selectedRosterKey.get())
 
-      if ($botsPaneVisible.get() && !$groupChatWorkspace.get() && selected) {
-        setBotsWorkspaceOwner(botWorkspaceOwnerKey(selected), selected)
+      if ($botsPaneVisible.get() && !$groupChatWorkspace.get()) {
+        reconcileRosterWorkspaceOwner(roster)
       }
     }
   }, [data, error, selectionHydrated, roster, sourceSnapshot, allMeta])
@@ -456,7 +460,12 @@ export function BotsPane() {
   if (shouldRenderGroupChatInPane(groupChatName) && groupChatMembers.length) {
     return (
       <>
-        <GroupChatWorkspace group={groupChatName} members={groupChatMembers} origin={groupOpenOrigin(groupChatName)} route={groupOpenRoute(groupChatName)} />
+        <GroupChatWorkspace
+          group={groupChatName}
+          members={groupChatMembers}
+          origin={groupOpenOrigin(groupChatName)}
+          route={groupOpenRoute(groupChatName)}
+        />
         {dialogs}
       </>
     )
@@ -477,29 +486,30 @@ export function BotsPane() {
   // Move up / down reorders Desktop rooms; gateway rooms keep recency order.
   const desktopGroupRows = sortedGroupRows.filter(row => !row.gateway)
 
-  const renderGroupRow = ({ gateway, ...row }: RosterGroupRow) => gateway ? (
-    <CanonicalGroupRow
-      active={isCanonicalGroupSelected(gateway.binding)}
-      key={gateway.key}
-      onOpen={() => openGroupChat(bindGatewayGroupRoom(gateway), 'key')}
-      room={gateway}
-    />
-  ) : (
-    <RosterGroupRowView
-      active={groupChatName === row.name}
-      b={b}
-      group={row.name}
-      groupClarify={groupClarify}
-      groupNeedsYou={groupNeedsYou}
-      groupRooms={groupRooms}
-      key={`group:${row.name}`}
-      members={row.members}
-      onDisband={setDeletingGroup}
-      onNewSection={target => setSectionDialog({ group: target, mode: 'create' })}
-      onOpen={group => openGroupChat(group, 'name')}
-      sortedGroupRows={desktopGroupRows}
-    />
-  )
+  const renderGroupRow = ({ gateway, ...row }: RosterGroupRow) =>
+    gateway ? (
+      <CanonicalGroupRow
+        active={isCanonicalGroupSelected(gateway.binding)}
+        key={gateway.key}
+        onOpen={() => openGroupChat(bindGatewayGroupRoom(gateway), 'key')}
+        room={gateway}
+      />
+    ) : (
+      <RosterGroupRowView
+        active={groupChatName === row.name}
+        b={b}
+        group={row.name}
+        groupClarify={groupClarify}
+        groupNeedsYou={groupNeedsYou}
+        groupRooms={groupRooms}
+        key={`group:${row.name}`}
+        members={row.members}
+        onDisband={setDeletingGroup}
+        onNewSection={target => setSectionDialog({ group: target, mode: 'create' })}
+        onOpen={group => openGroupChat(group, 'name')}
+        sortedGroupRows={desktopGroupRows}
+      />
+    )
 
   const { renderUserSections, renderGatewaySection, renderGroupChatSection, renderHiddenGatewaySection } =
     rosterSectionRenderers({
@@ -519,13 +529,6 @@ export function BotsPane() {
 
   return (
     <div className="aino-bots-rail">
-      <div className="aino-roster-navigation">
-        <Button className="aino-roster-monitor" onClick={() => host.navigate('/agents')} variant="ghost">
-          <Codicon name="list-tree" />
-          {t.shell.statusbar.subtaskMonitor}
-          <Codicon name="chevron-right" />
-        </Button>
-      </div>
       {renderRosterSearch({
         b,
         activityToasts,

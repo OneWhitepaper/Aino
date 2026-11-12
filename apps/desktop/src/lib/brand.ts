@@ -2,6 +2,9 @@ import identity from '../../brand.json'
 
 export const PRODUCT_NAME = identity.productName
 export const AGENT_NAME = identity.agentName
+export const CREATOR_NAME = identity.creatorName
+export const COMPANY_NAME = identity.companyName
+export const LEGAL_COPYRIGHT = identity.legalCopyright
 export const APP_ID = identity.appId
 export const HOME_DIR_NAME = identity.homeDirName
 export const PRIMARY_PROTOCOL = identity.primaryProtocol

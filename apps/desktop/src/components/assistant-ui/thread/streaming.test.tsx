@@ -29,6 +29,13 @@ import { MESSAGE_PARTS_COMPONENTS } from './message-parts'
 
 import { Thread } from '.'
 
+vi.mock('@/components/model-picker', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ModelPickerDialog: ({ confirmation }: { confirmation?: { title: string } }) => (
+    <div aria-label={confirmation?.title} role="dialog" />
+  )
+}))
+
 const createdAt = new Date('2026-05-01T00:00:00.000Z')
 
 const resizeObservers = new Set<TestResizeObserver>()
@@ -591,19 +598,27 @@ describe('assistant-ui streaming renderer', () => {
     expect(screen.getByRole('alert').textContent).toContain('OpenRouter rejected the request (403).')
   })
 
-  it.each([
-    ['gateway_binding_failed', 'rebind'],
-    ['model_unavailable', 'picker']
-  ] as const)('renders a non-replay managed %s action', (code, action) => {
-    render(<MessageHarness message={assistantManagedErrorMessage(code)} />)
+  it.each(['gateway_binding_failed', 'model_unavailable'] as const)(
+    'opens an explicit current-chat model choice without replay for %s',
+    code => {
+      $activeSessionId.set('managed-recovery-runtime')
+      render(<MessageHarness message={assistantManagedErrorMessage(code)} />)
+      $modelPickerOpen.set(false)
 
-    expect(screen.getByRole('button', { name: 'Choose model' }).getAttribute('data-action')).toBe(action)
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-  })
+      fireEvent.click(screen.getByRole('button', { name: 'Choose model' }))
+
+      expect(screen.getByRole('dialog', { name: 'Choose an available model' })).toBeTruthy()
+      expect($modelPickerOpen.get()).toBe(false)
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    }
+  )
 
   it.each(['managed_billing_unavailable', 'managed_subscription_expired', 'managed_model_access_denied'])(
-    'offers account and available model selection without replay for %s', code => {
+    'offers account and available model selection without replay for %s',
+    code => {
       const previousLocale = getRuntimeI18nLocale()
+
+      $activeSessionId.set('managed-billing-runtime')
 
       const mounted = render(
         <MemoryRouter>
@@ -616,12 +631,13 @@ describe('assistant-ui streaming renderer', () => {
       try {
         expect(screen.getByRole('button', { name: '我的账户' }).getAttribute('data-action')).toBe('account')
         const picker = screen.getByRole('button', { name: '选择模型' })
-        expect(picker.getAttribute('data-action')).toBe('picker')
+        expect(picker.hasAttribute('disabled')).toBe(false)
         expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
         expect(screen.queryByRole('button', { name: '切换服务商' })).toBeNull()
         $modelPickerOpen.set(false)
         fireEvent.click(picker)
-        expect($modelPickerOpen.get()).toBe(true)
+        expect(screen.getByRole('dialog', { name: '选择可用模型' })).toBeTruthy()
+        expect($modelPickerOpen.get()).toBe(false)
       } finally {
         mounted.unmount()
         $modelPickerOpen.set(false)
@@ -655,10 +671,12 @@ describe('assistant-ui streaming renderer', () => {
     try {
       const actions = platformAccountActions(bridge)
       await actions.refresh()
+      $activeSessionId.set('managed-sign-in-runtime')
       render(<MessageHarness message={assistantManagedErrorMessage('RECENT_AUTH_REQUIRED')} />)
 
       const signIn = screen.getByRole('button', { name: 'Sign in again' })
-      expect(signIn.getAttribute('data-action')).toBe('sign-in')
+      expect(signIn.hasAttribute('disabled')).toBe(false)
+      expect(screen.getByRole('button', { name: 'Later' })).toBeTruthy()
       expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Choose model' })).toBeNull()
       expect(logout).not.toHaveBeenCalled()
@@ -669,9 +687,14 @@ describe('assistant-ui streaming renderer', () => {
       expect(logout).toHaveBeenCalledWith({ userId: 'user-a', mode: 'development', revision: 1 })
       await waitFor(() => {
         if (fails) {
-          expect($notifications.get()).toEqual(expect.arrayContaining([
-            expect.objectContaining({ kind: 'error', message: 'The account service is offline. Check your connection and retry.' })
-          ]))
+          expect($notifications.get()).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                kind: 'error',
+                message: 'The account service is offline. Check your connection and retry.'
+              })
+            ])
+          )
           expect(actions.state.get().authenticated).toBe(true)
         } else {
           expect(actions.state.get()).toMatchObject({ phase: 'signed_out', authenticated: false })

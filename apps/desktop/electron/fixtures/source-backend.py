@@ -29,6 +29,9 @@ def main() -> None:
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     for source in repository.glob("*.py"):
         shutil.copy2(source, root / source.name)
+    brand = root / "apps" / "desktop" / "brand.json"
+    brand.parent.mkdir(parents=True)
+    shutil.copy2(repository / "apps" / "desktop" / "brand.json", brand)
     sys.path.insert(0, str(root))
     uv = shutil.which("uv")
     assert uv, "real uv must be prepared on PATH"

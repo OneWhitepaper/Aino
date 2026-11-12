@@ -3,8 +3,10 @@ import { useReducedMotion } from 'motion/react'
 import { useMemo, useRef } from 'react'
 
 import { useTranscriptWindow } from '@/components/assistant-ui/thread/transcript-window'
+import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { AnimatedInt } from '@/components/ui/diff-count'
+import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { useStoreSelector } from '@/lib/use-session-slice'
@@ -40,12 +42,37 @@ function findSessionApprovalStack(sessionId: string | null): HTMLElement | null 
   return document.querySelector<HTMLElement>(`[data-approval-stack][data-session-id="${cssEscape(sessionId)}"]`)
 }
 
+interface JumpButtonContentProps {
+  count: number
+  countLabel: string
+  label: string
+  sessionId: string | null
+  visible: boolean
+  visibleApproval: boolean
+}
+
+function JumpButtonContent({ count, countLabel, label, sessionId, visible, visibleApproval }: JumpButtonContentProps) {
+  const reducedMotion = useReducedMotion()
+  const [beforeCount, afterCount] = countLabel ? countLabel.split(String(count)) : ['', '']
+
+  if (visibleApproval || count <= 0) {
+    return <span className={visibleApproval ? 'min-w-0 truncate' : 'sr-only'}>{label}</span>
+  }
+
+  return (
+    <span aria-hidden className="min-w-0 truncate tabular-nums">
+      {beforeCount}
+      {!visible || reducedMotion ? count : <AnimatedInt key={sessionId} value={count} />}
+      {afterCount}
+    </span>
+  )
+}
+
 /**
  * Floating "jump to bottom" control. Sits centered just above the composer,
- * clearing the out-of-flow status stack via the same measured-height CSS vars
- * the thread's bottom clearance uses (`--composer-measured-height`, which
- * covers the whole dock), so it never overlaps the queue / subagent
- * / background cards. Visible only while the user has scrolled meaningfully
+ * inside the remaining transcript space. The in-flow conversation dock already
+ * reduces that space; only overlay composers need measured-height clearance.
+ * Visible only while the user has scrolled meaningfully
  * away from the bottom, with an animated count of messages below the viewport.
  * Clicking re-arms sticky-bottom and pins the viewport.
  *
@@ -54,9 +81,8 @@ function findSessionApprovalStack(sessionId: string | null): HTMLElement | null 
  * approval once newer content lands below it), scroll directly to the
  * session's own approval stack.
  *
- * Enter/exit motion lives in styles.css under `.thread-jump-button` — a
- * directional scale (contract in from 1.1, contract out to 0.9) keyed off
- * `data-state`. `idle` (never-shown) stays silent so it can't flash on mount;
+ * Enter/exit motion lives in styles.css under `.thread-jump-button`.
+ * `idle` (never-shown) stays silent so it can't flash on mount;
  * `in`/`out` only swap once it has actually appeared.
  */
 export function ScrollToBottomButton({ sessionId }: { sessionId: string | null }) {
@@ -74,7 +100,6 @@ export function ScrollToBottomButton({ sessionId }: { sessionId: string | null }
   )
 
   const visible = isHistorical || scrollVisible
-  const reducedMotion = useReducedMotion()
   const request = useStore(useMemo(() => sessionApprovalRequest(sessionId), [sessionId]))
   // Scrolled away while an approval is pending → the inline Run/Reject bar is
   // below the fold. Relabel so the user knows the session needs them, not just
@@ -88,7 +113,6 @@ export function ScrollToBottomButton({ sessionId }: { sessionId: string | null }
 
   const state = visible ? 'in' : hasShownRef.current ? 'out' : 'idle'
   const countLabel = count > 0 ? t.sidebar.messageCount(count) : ''
-  const [beforeCount, afterCount] = countLabel ? countLabel.split(String(count)) : ['', '']
 
   const label = visibleApproval
     ? t.assistant.approval.jumpToApproval
@@ -97,46 +121,46 @@ export function ScrollToBottomButton({ sessionId }: { sessionId: string | null }
       : t.assistant.thread.scrollToBottom
 
   return (
-    <button
-      aria-hidden={!visible}
-      aria-label={label}
-      className={cn(
-        'thread-jump-button absolute left-1/2 z-20 flex h-8 items-center gap-1.5 rounded-full border bg-(--composer-fill) px-3 text-xs font-medium backdrop-blur-[0.75rem] [-webkit-backdrop-filter:blur(0.75rem)]',
-        visibleApproval
-          ? 'border-primary/40 text-primary hover:bg-primary/10'
-          : 'border-border/65 text-muted-foreground hover:text-foreground',
-        !visible && 'pointer-events-none'
-      )}
-      data-state={state}
-      onClick={() => {
-        triggerHaptic('selection')
+    <Tip label={label}>
+      <Button
+        aria-hidden={!visible}
+        aria-label={label}
+        className={cn(
+          'thread-jump-button absolute left-1/2 z-20 max-w-[calc(100%_-_1.5rem)] rounded-full text-[length:var(--aino-text-caption)]',
+          (visibleApproval || count > 0) && 'px-3',
+          visibleApproval && 'text-primary',
+          !visible && 'pointer-events-none'
+        )}
+        data-slot="thread-jump-button"
+        data-state={state}
+        onClick={() => {
+          triggerHaptic('selection')
 
-        const approvalStack = visibleApproval ? findSessionApprovalStack(request?.sessionId ?? null) : null
+          const approvalStack = visibleApproval ? findSessionApprovalStack(request?.sessionId ?? null) : null
 
-        if (approvalStack) {
-          approvalStack.scrollIntoView({ block: 'nearest' })
+          if (approvalStack) {
+            approvalStack.scrollIntoView({ block: 'nearest' })
 
-          return
-        }
+            return
+          }
 
-        requestScrollToBottom(scrollSessionId)
-      }}
-      style={{
-        bottom: 'calc(var(--composer-measured-height) + 1rem)'
-      }}
-      tabIndex={visible ? 0 : -1}
-      type="button"
-    >
-      <Codicon name="arrow-down" size="0.875rem" />
-      {visibleApproval || count <= 0 ? (
-        <span>{label}</span>
-      ) : (
-        <span aria-hidden className="whitespace-nowrap tabular-nums">
-          {beforeCount}
-          {!visible || reducedMotion ? count : <AnimatedInt key={sessionId} value={count} />}
-          {afterCount}
-        </span>
-      )}
-    </button>
+          requestScrollToBottom(scrollSessionId)
+        }}
+        size={visibleApproval || count > 0 ? 'sm' : 'icon-sm'}
+        tabIndex={visible ? 0 : -1}
+        type="button"
+        variant="floating"
+      >
+        <Codicon name="arrow-down" size="0.875rem" />
+        <JumpButtonContent
+          count={count}
+          countLabel={countLabel}
+          label={label}
+          sessionId={sessionId}
+          visible={visible}
+          visibleApproval={visibleApproval}
+        />
+      </Button>
+    </Tip>
   )
 }

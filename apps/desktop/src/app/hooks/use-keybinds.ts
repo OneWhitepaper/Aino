@@ -32,6 +32,7 @@ import { markKeybindHandled } from '@/lib/keybinds/handled-keys'
 import { registerBuiltinActionRunner } from '@/lib/keybinds/plugin-actions'
 import { stepReasoningEffort, writeSessionReasoningEffort } from '@/lib/reasoning-step'
 import { openWorktreeDialog } from '@/store/coding-status'
+import { openCollaborationCapsule } from '@/store/collaboration-capsule-view'
 import { $commandPaletteOpen, openCommandPalettePage, toggleCommandPalette } from '@/store/command-palette'
 import { recordAction, recordDislike } from '@/store/desktop-metrics'
 import {
@@ -108,7 +109,6 @@ import { handleWindowPaste } from '../chat/composer/paste-to-focus'
 import { openSession } from '../open-session'
 import {
   $workspaceIsPage,
-  AGENTS_ROUTE,
   ARTIFACTS_ROUTE,
   CAPABILITIES_ROUTE,
   CRON_ROUTE,
@@ -333,7 +333,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     'nav.messaging': () => navigateToWorkspacePage(navigate, MESSAGING_ROUTE),
     'nav.artifacts': () => navigateToWorkspacePage(navigate, ARTIFACTS_ROUTE),
     'nav.cron': () => navigate(CRON_ROUTE),
-    'nav.agents': () => navigate(AGENTS_ROUTE),
+    'nav.agents': openCollaborationCapsule,
 
     'session.new': () => {
       // Match the sidebar New Session button. A plain keyboard new chat should

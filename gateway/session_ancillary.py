@@ -14,7 +14,7 @@ from hermes_state_runtime import RuntimeStoreError
 
 
 _SUBAGENT_FIELDS = (
-    'subagent_id', 'parent_id', 'depth', 'goal', 'delegation_id', 'model',
+    'subagent_id', 'parent_id', 'depth', 'goal', 'display_name', 'delegation_id', 'model',
     'started_at', 'status', 'tool_count', 'last_tool', 'accepting_steer',
 )
 _TAIL_BYTES = 16384
@@ -22,10 +22,11 @@ _PROCESS_TAIL_CHARS = 32768  # main's dock tail view (cli_process_dock.process_t
 
 
 def handlers(connection):
+    from gateway.session_live_work import roster
     return {**{name: partial(read, connection, kind=kind) for name, kind in {
         'session.control.read': 'control', 'process.list': 'processes',
         'subagent.list': 'subagents', 'subagent.tail': 'tail',
-    }.items()}, 'approval.pending': partial(approvals, connection),
+    }.items()}, 'subagent.roster': partial(roster, connection), 'approval.pending': partial(approvals, connection),
         'approval.received': partial(approvals, connection, ack=True),
         'process.stop': partial(stop_processes, connection),
         'process.kill': partial(kill_process, connection), 'reload.mcp': partial(reload_mcp, connection),

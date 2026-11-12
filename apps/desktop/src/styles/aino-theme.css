@@ -7,6 +7,7 @@
   --aino-radius-menu: 0.75rem;
   --aino-radius-card: 0.875rem;
   --aino-radius-composer: 1.25rem;
+  --aino-tool-strip-height: 45px;
   --aino-text-caption: 0.75rem;
   --aino-text-label: 0.8125rem;
   --aino-text-ui: 0.8125rem;
@@ -15,6 +16,9 @@
   --aino-text-dialog-title: 1.125rem;
   --aino-text-page-title: 1.5rem;
   --aino-line-height: 1.6;
+  --aino-conversation-width: 52rem;
+  --aino-composer-width: var(--aino-conversation-width);
+  --aino-conversation-inset: clamp(1rem, 3%, 2rem);
   /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
   --conversation-text-base-size: var(--aino-text-body);
   --conversation-tool-base-size: var(--aino-text-ui);
@@ -44,7 +48,7 @@
   --aino-surface-bg: var(--ui-chat-surface-background);
   --aino-surface-rail: var(--ui-sidebar-surface-background);
   --aino-navigation-rail: var(--ui-sidebar-surface-background);
-  --aino-navigation-edge: var(--ui-stroke-tertiary);
+  --aino-navigation-edge: var(--ui-stroke-secondary);
   --aino-surface-stroke: var(--ui-stroke-tertiary);
   --aino-surface-hover: var(--ui-row-hover-background);
   --aino-surface-active: var(--ui-row-active-background);
@@ -101,6 +105,8 @@
   --aino-landing-accent: var(--ui-text-primary);
   --aino-landing-control: var(--ui-bg-quaternary);
   --aino-landing-composer-stroke: var(--ui-stroke-secondary);
+  --aino-composer-fill: color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-elevated));
+  --aino-composer-focus-stroke: color-mix(in srgb, var(--ui-text-primary) 35%, var(--ui-bg-elevated));
   --aino-landing-icon: var(--ui-text-secondary);
   --aino-landing-muted: var(--ui-text-tertiary);
   --aino-landing-model-stroke: var(--ui-stroke-secondary);

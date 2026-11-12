@@ -2,6 +2,7 @@
 Registration lives in `desktop_preview`. The renderer drops the matching tab — or
 the whole pane when no url is given — only for the window that asked."""
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.open_preview_tool import _normalize_target
 
@@ -11,5 +12,5 @@ def close_preview_tool(url: str = "") -> str:
     target = _normalize_target(url or "")
     return desktop_ui.emit_or_error(
         "preview.close", {"url": target}, "Failed to close the preview pane: ",
-        "The preview pane is only available in the Hermes desktop app.", {"success": True, "url": target},
+        f"The preview pane is only available in the {PRODUCT_NAME} desktop app.", {"success": True, "url": target},
     )

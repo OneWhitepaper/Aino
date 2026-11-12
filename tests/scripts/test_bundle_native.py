@@ -53,6 +53,8 @@ def test_bundle_stages_git_tree_and_runs_native_children_before_manifest(tmp_pat
     repo = tmp_path / "repo"
     repo.mkdir()
     source = Path(__file__).resolve().parents[2]
+    (repo / "apps/desktop").mkdir(parents=True)
+    shutil.copy2(source / "apps/desktop/brand.json", repo / "apps/desktop/brand.json")
     shutil.copytree(source / "pm", repo / "pm", ignore=shutil.ignore_patterns("__pycache__"))
     (repo / "hermes_cli").mkdir()
     for name in ("__init__.py", "runtime_state.py"):

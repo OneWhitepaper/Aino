@@ -89,7 +89,7 @@
   height: 45px;
   padding: 5px 5px 6px;
   align-items: center;
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  border-bottom: 1px solid var(--ui-stroke-secondary);
   --pane-tab-active-bg: var(--ui-bg-elevated);
   --pane-tab-strip-bg: transparent;
 }

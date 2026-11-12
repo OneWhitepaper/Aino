@@ -17,6 +17,7 @@ import { triggerHaptic } from '@/lib/haptics'
 import { $touchPointer } from '@/lib/touch-interaction'
 import { useStoreSelector, useStoresSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
+import { $botChatSessionIds } from '@/store/bot-chat-scope'
 import { sessionCompacting } from '@/store/compaction'
 import { draftRetry } from '@/store/composer-draft-retry'
 import { browseBackward, browseForward, deriveUserHistory, isBrowsingHistory } from '@/store/composer-input-history'
@@ -27,7 +28,7 @@ import { $chatOnboardingSolo } from '@/store/onboarding-intro'
 import { sessionBlockingPrompt } from '@/store/prompts'
 import { toggleReview } from '@/store/review'
 import { $gatewayState } from '@/store/session'
-import { $botChatSessionIds, $sessionStates, $sessionTiles, isBotChatSession } from '@/store/session-states'
+import { $sessionStates, $sessionTiles, isBotChatSession } from '@/store/session-states'
 import { useForcedTextDirection } from '@/store/text-direction'
 import { $threadScrolledUpBySession } from '@/store/thread-scroll'
 import { $autoSpeakReplies } from '@/store/voice-prefs'
@@ -81,10 +82,11 @@ import { useTaskContinuation } from './hooks/use-task-continuation'
 import { shouldConvertPasteToAttachment } from './large-paste'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
-import { PlatformHistoryNotice, usePlatformHistoryOwner } from './platform-history'
+import { usePlatformSessionAccess } from './platform-history'
 import { PreparedImageRecovery } from './prepared-image-recovery'
 import { $projectBindingSessions } from './project-selection'
 import { renderComposerQueueSlot, useComposerQueueScopeKey } from './queue-slot'
+import { ComposerRecoveryStatus } from './recovery-status'
 import { RestoredDraftNotice } from './restored-draft-notice'
 import {
   beginComposerComposition,
@@ -126,6 +128,23 @@ function controlRowGridClass(singleColumn: boolean, stacked: boolean): string {
     : 'grid-cols-[auto_1fr_auto] items-center gap-(--composer-control-gap) [grid-template-areas:"menu_input_controls"]'
 }
 
+/** Bind assistant-ui state without mounting its hidden autosizing textarea. */
+function ComposerStateInput() {
+  return (
+    <ComposerPrimitive.Input asChild submitMode="ctrlEnter" tabIndex={-1} unstable_focusOnScrollToBottom={false}>
+      <textarea
+        aria-hidden
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
+        className="sr-only"
+        spellCheck={false}
+        tabIndex={-1}
+      />
+    </ComposerPrimitive.Input>
+  )
+}
+
 export function ChatBar({
   busy,
   cwd,
@@ -155,8 +174,8 @@ export function ChatBar({
   onTranscribeAudio
 }: ChatBarProps) {
   const bindingProject = useStore($projectBindingSessions).has(sessionId ?? '')
-  const historyOwner = usePlatformHistoryOwner(sessionId)
-  const disabled = disabledProp || bindingProject || historyOwner !== null
+  const platformAccess = usePlatformSessionAccess(sessionId)
+  const disabled = disabledProp || bindingProject || platformAccess.kind !== 'allowed'
   const { hudMode, hudNativeDrag, hudGrabbing, onHudDragPointerDown } = useComposerHud()
   const touchPointer = useStore($touchPointer)
   const tapFocus = useMemo(() => (touchPointer ? touchTapFocusHandlers() : undefined), [touchPointer])
@@ -1246,17 +1265,7 @@ export function ChatBar({
 
         `asChild` swaps TextareaAutosize for a Radix Slot wrapping our
         plain <textarea>, which carries the binding but skips autosize. */}
-      <ComposerPrimitive.Input asChild submitMode="ctrlEnter" tabIndex={-1} unstable_focusOnScrollToBottom={false}>
-        <textarea
-          aria-hidden
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          className="sr-only"
-          spellCheck={false}
-          tabIndex={-1}
-        />
-      </ComposerPrimitive.Input>
+      <ComposerStateInput />
     </div>
   )
 
@@ -1312,6 +1321,7 @@ export function ChatBar({
               sessionKey={activeQueueSessionKey}
             />
             <OnboardingSkip sessionId={statusSessionId} />
+            <ComposerRecoveryStatus platformAccess={platformAccess} runtimeId={sessionId} />
           </div>
           {/* Session-scoped status stack (todos, subagents, background tasks,
               queue). An in-flow dock child: the dock is bottom-anchored, so it
@@ -1403,7 +1413,6 @@ export function ChatBar({
             }}
             ref={composerRef}
           >
-            {historyOwner !== null && <PlatformHistoryNotice ownerUserId={historyOwner} />}
             {isHelpHint && <HelpHint />}
             {trigger && !argStageEmpty && (
               <ComposerTriggerPopover
@@ -1445,7 +1454,8 @@ export function ChatBar({
                   // track past the surface — and every `w-full` child (the fade,
                   // the input/controls row) laid out against that phantom width
                   // and got clipped by overflow-hidden, send button first.
-                  'group/composer-surface relative z-4 isolate grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-[inherit]', composerSurfaceRing,
+                  'group/composer-surface relative z-4 isolate grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-[inherit]',
+                  composerSurfaceRing,
                   COMPOSER_DROP_FADE_CLASS,
                   dragActive && COMPOSER_DROP_ACTIVE_CLASS
                 )}
@@ -1551,9 +1561,15 @@ export function ChatBarFallback() {
         'group/composer absolute bottom-0 left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
         'bg-linear-to-b from-transparent to-background/55'
       )}
+      data-composer-fallback
       data-slot="composer-root"
     >
-      <div className={cn('composer-fallback-surface relative isolate h-(--composer-fallback-height) w-full rounded-[inherit]', composerSurfaceRing)}>
+      <div
+        className={cn(
+          'composer-fallback-surface relative isolate h-(--composer-fallback-height) w-full rounded-[inherit]',
+          composerSurfaceRing
+        )}
+      >
         <div aria-hidden className={composerInputBacking} />
       </div>
     </div>

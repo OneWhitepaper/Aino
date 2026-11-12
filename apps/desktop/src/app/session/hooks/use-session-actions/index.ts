@@ -15,10 +15,10 @@ import {
   deleteSession,
   fetchStoredTranscriptAcrossBackends,
   getAllSessionMessages,
-  getLatestSessionMessages,
-  setSessionArchived
+  getLatestSessionMessages
 } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { sessionRemovalCopy } from '@/i18n/session-removal'
 import {
   type ChatMessage,
   preserveLocalAssistantErrors,
@@ -30,22 +30,19 @@ import {
 } from '@/lib/chat-messages'
 import { markReasoningEffortPending } from '@/lib/chat-runtime'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
-import { purgeInFlightTurnJournals, recoverInFlightTurnJournal } from '@/lib/inflight-turn-journal'
+import { recoverInFlightTurnJournal } from '@/lib/inflight-turn-journal'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { latestSessionTodoSnapshot } from '@/lib/todos'
 import { setSessionYolo } from '@/lib/yolo-session'
 import { $clarifyRequests } from '@/store/clarify'
 import { announceGoneSessionDraft, announceNewSessionDraftKey, freshDraftScope } from '@/store/composer'
-import { clearQueuedPrompts } from '@/store/composer-queue'
-import { resetSessionBackground } from '@/store/composer-status'
 import { $connectionRequests } from '@/store/connection-request'
 import { pendingSessionReplay, requestGatewayForAgent } from '@/store/gateway'
 import { $gatewaySwitching } from '@/store/gateway-switch'
-import { clearSessionGoal } from '@/store/goals'
 import { $pinnedSessionIds } from '@/store/layout'
 import { migrateModelPresetScope, modelPresetScope } from '@/store/model-presets'
-import { clearNotifications, notify, notifyError } from '@/store/notifications'
-import { adoptDraftPreviewTabs, prunePreviewTabsForSession } from '@/store/preview'
+import { $notificationEpoch, clearNotifications, notify, notifyError } from '@/store/notifications'
+import { adoptDraftPreviewTabs } from '@/store/preview'
 import {
   $activeGatewayProfile,
   $gatewaySwapTarget,
@@ -90,7 +87,6 @@ import {
   setSessionStartedAt,
   setWorkspaceCwdOwner
 } from '@/store/session'
-import { clearSessionControl } from '@/store/session-control'
 import { isSessionOwnerResolutionError } from '@/store/session-owner-resolution'
 import {
   beginSessionMutation,
@@ -120,11 +116,9 @@ import {
   type TileDock
 } from '@/store/session-states'
 import { broadcastSessionsChanged } from '@/store/session-sync'
-import { forgetSessionUnread } from '@/store/session-unread'
 import { $archivedSessions } from '@/store/sidebar-archive'
-import { clearSessionSubagents } from '@/store/subagents'
-import { clearSessionTodos, restoreSessionTodosFromSnapshot } from '@/store/todos'
-import { dropTranscriptTail, dropTranscriptTailEverywhere, saveTranscriptTail } from '@/store/transcript-tail-cache'
+import { restoreSessionTodosFromSnapshot } from '@/store/todos'
+import { dropTranscriptTail, saveTranscriptTail } from '@/store/transcript-tail-cache'
 import { isWatchWindow } from '@/store/windows'
 import type { SessionCreateResponse, SessionMessagesResponse, SessionResumeResult, UsageStats } from '@/types/hermes'
 
@@ -145,7 +139,11 @@ import { type BranchMessage, selectBranchMessages, toBranchMessages } from './br
 import { type SessionCreateOverrides } from './create-overrides'
 import { desktopSessionCreateParams } from './create-params'
 import { markSessionCreatedThisRun, sessionCreatedThisRun } from './created-this-run'
-import { closeRuntimeBeforeSessionDeletion, sessionRemovalOwnerUnavailable } from './delete-session-runtime'
+import {
+  closeRuntimeBeforeSessionDeletion,
+  finishSessionDeletion,
+  sessionRemovalOwnerUnavailable
+} from './delete-session-runtime'
 import { captureDisplayHydration } from './display-hydration'
 import { resetFreshSessionSelection } from './fresh-session-selection'
 import { usePendingSessionCreate } from './pending-session-create'
@@ -183,6 +181,7 @@ import {
 import { applyRuntimeInfo, applyStoredSessionPreviewRuntimeInfo } from './runtime-info'
 import { backgroundRuntimeOptions, runtimeOwner } from './runtime-owner'
 import { runtimeOwnerProfile } from './runtime-owner'
+import { archiveStoredSession, restoreArchivedSession, type SessionArchiveOptions } from './session-archive'
 import { retainSessionCreateOwner, sessionCreateOwnerRequest } from './session-create-request'
 import { publishWarmSessionRuntime } from './session-usage'
 import { useStoredSessionRotation } from './stored-session-rotation'
@@ -192,7 +191,6 @@ import {
   withoutTranscriptProvenance
 } from './transcript-provenance'
 import type { BranchLoadedSessionOptions, FreshSessionDraftOptions, SessionActionsOptions } from './types'
-import { useCloudHistory } from './use-cloud-history'
 import {
   appendLiveSessionProjection,
   cachedSessionRow,
@@ -238,8 +236,7 @@ export function useSessionActions({
   syncSessionStateToView,
   updateSessionState
 }: SessionActionsOptions) {
-  useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef, selectedStoredSessionIdRef, updateSessionState, syncSessionStateToView })
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const copy = t.desktop
   const resumeRequestRef = useRef(0)
   const createIntentRef = useRef<string | null>(null)
@@ -2765,6 +2762,7 @@ export function useSessionActions({
   const removeSession = useCallback(
     async (storedSessionId: string, options?: { throwOnError?: boolean }) => {
       clearNotifications()
+      const removalEpoch = $notificationEpoch.get()
 
       // The row may live in the main list, the messaging/cron sidebar slices,
       // OR the archived view's own store (archived rows are excluded from
@@ -2782,11 +2780,13 @@ export function useSessionActions({
       const stampedProfile = removed?.profile?.trim()
       const profile = stampedProfile || (await resolveSessionProfile(storedSessionId))
 
+      if (removalEpoch !== $notificationEpoch.get()) {
+        return
+      }
+
       // Listed profile-less row + multiple profiles + unresolved owner:
       // never fall through to the primary backend (fake already_absent).
-      if (
-        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
-      ) {
+      if (sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)) {
         const error = new Error(copy.sessionOwnershipUnavailable)
 
         if (options?.throwOnError) {
@@ -2830,83 +2830,67 @@ export function useSessionActions({
       const removedPinId = removed ? sessionPinId(removed) : storedSessionId
       const removedIds = [storedSessionId, removed?.id, removed?._lineage_root_id]
 
-      dropListedSession(storedSessionId)
-      $archivedSessions.set(previousArchived.filter(session => !sessionMatchesStoredId(session, storedSessionId)))
       // Evict from the project tree's optimistic layer too (the backend snapshot
       // still lists it until its next refresh), so grouped + flat views drop the
       // row in lockstep. Pin the tombstone against the projects.tree prune while
       // the delete RPC is in flight, so a racing refresh can't flash it back.
-      tombstoneSessions(removedIds)
       beginSessionMutation(removedIds)
-      $pinnedSessionIds.set(previousPinned.filter(id => id !== storedSessionId && id !== removedPinId))
+      let evicted = false
 
-      // Tear down before awaiting so the route effect can't resume the
-      // doomed session via the stale /<sid> URL.
-      if (wasSelected) {
-        startFreshSessionDraft(true)
+      const evict = () => {
+        evicted = true
+        dropListedSession(storedSessionId)
+        $archivedSessions.set(previousArchived.filter(session => !sessionMatchesStoredId(session, storedSessionId)))
+        tombstoneSessions(removedIds)
+        $pinnedSessionIds.set(previousPinned.filter(id => id !== storedSessionId && id !== removedPinId))
+
+        if (wasSelected) {
+          startFreshSessionDraft(true)
+        }
+      }
+
+      // A confirmation mounted in the row/header must survive a failed write.
+      // The mutation guard already prevents a racing resume while it is open.
+      if (!options?.throwOnError) {
+        evict()
       }
 
       try {
         if (closingRuntimeId) {
-          await closeRuntimeBeforeSessionDeletion(closingRuntimeId, removedOwner, { requestGateway, updateSessionState })
+          await closeRuntimeBeforeSessionDeletion(closingRuntimeId, removedOwner, {
+            requestGateway,
+            updateSessionState
+          })
+        }
+
+        if (removalEpoch !== $notificationEpoch.get()) {
+          return
         }
 
         const result = await deleteSession(storedSessionId, removedOwner)
 
-        if (!result.ok) {
-          throw new Error(copy.deleteFailed)
+        if (removalEpoch !== $notificationEpoch.get()) {
+          return
         }
+        finishSessionDeletion({
+          storedSessionId,
+          removedIds,
+          closingRuntimeId,
+          profile,
+          result,
+          failureMessage: copy.deleteFailed,
+          runtimeIdByStoredSessionIdRef,
+          sessionStateByRuntimeIdRef
+        })
 
-        dropTranscriptTailEverywhere(storedSessionId)
-        // Only after the RPC lands — the optimistic eviction above can roll
-        // back, and a rolled-back row must keep its watermark/marker.
-        forgetSessionUnread(removedIds, profile)
-        clearQueuedPrompts(storedSessionId)
-        // The journaled in-flight tail holds this session's prompt and tool
-        // calls in localStorage; a deleted session must not leave that copy
-        // behind to age out on its own. Purge after the RPC lands (same
-        // rollback argument as the unread watermark above), passing every id
-        // the delete holds: the stored tip, the row id, the lineage root, and
-        // the closing runtime id — the journal keys on the stored id.
-        purgeInFlightTurnJournals([...removedIds, closingRuntimeId])
-
-        // Preview tabs are session-owned: drop them with the session (pinned
-        // tabs survive — they belong to the workspace, not the session).
-        for (const id of removedIds) {
-          if (id) {
-            prunePreviewTabsForSession(id)
-          }
-        }
-
-        if (closingRuntimeId) {
-          clearQueuedPrompts(closingRuntimeId)
-          clearSessionControl(closingRuntimeId)
-        }
-
-        // A tiled copy of this session must not outlive it: collapse the pane
-        // and evict its mirrored runtime state so nothing submits to (or renders)
-        // a deleted session.
-        const tiledRuntimeId = runtimeIdByStoredSessionIdRef.current.get(storedSessionId)
-        closeSessionTile(storedSessionId)
-
-        if (tiledRuntimeId) {
-          runtimeIdByStoredSessionIdRef.current.delete(storedSessionId)
-          sessionStateByRuntimeIdRef.current.delete(tiledRuntimeId)
-          dropSessionState(tiledRuntimeId)
-        }
-
-        // Live per-session stores (the same four the stop paths clear) key on
-        // the gateway event's session_id, i.e. the runtime id. When the deleted
-        // row is selected, closingRuntimeId is the foreground runtime, which can
-        // differ from the stored→runtime mapping (cached/tiled runtime), so
-        // clear the stored id and both runtime ids — once per distinct id.
-        for (const sid of new Set([storedSessionId, closingRuntimeId, tiledRuntimeId].filter(Boolean) as string[])) {
-          clearSessionSubagents(sid)
-          clearSessionTodos(sid)
-          clearSessionGoal(sid)
-          resetSessionBackground(sid)
+        if (!evicted) {
+          evict()
         }
       } catch (err) {
+        if (removalEpoch !== $notificationEpoch.get()) {
+          return
+        }
+
         if (listed?.session) {
           restoreListedSession(listed.session, listed.slice)
         }
@@ -2917,7 +2901,7 @@ export function useSessionActions({
         untombstoneSessions(removedIds)
         $pinnedSessionIds.set(previousPinned)
 
-        if (wasSelected) {
+        if (wasSelected && evicted) {
           setFreshDraftReady(false)
           setSelectedStoredSessionId(storedSessionId)
           selectedStoredSessionIdRef.current = storedSessionId
@@ -2962,69 +2946,22 @@ export function useSessionActions({
   )
 
   const archiveSession = useCallback(
-    async (storedSessionId: string) => {
-      clearNotifications()
-
-      const listed = findListedSession(storedSessionId)
-      const archived = listed?.session
-      const stampedProfile = archived?.profile?.trim()
-      const profile = stampedProfile || (await resolveSessionProfile(storedSessionId))
-
-      if (
-        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
-      ) {
-        notifyError(new Error(copy.sessionOwnershipUnavailable), copy.archiveFailed)
-
-        return
-      }
-
-      const wasSelected = selectedStoredSessionIdRef.current === storedSessionId
-      const previousPinned = $pinnedSessionIds.get()
-      // Pins are keyed on the durable lineage-root id; the stored id may be the
-      // live tip after compression. Drop both so the pin can't linger.
-      const archivedPinId = archived ? sessionPinId(archived) : storedSessionId
-      const archivedIds = [storedSessionId, archived?.id, archived?._lineage_root_id]
-
-      // Soft-hide: drop from every sidebar slice immediately, keep the data.
-      dropListedSession(storedSessionId)
-      tombstoneSessions(archivedIds)
-      beginSessionMutation(archivedIds)
-      $pinnedSessionIds.set(previousPinned.filter(id => id !== storedSessionId && id !== archivedPinId))
-
-      if (wasSelected) {
-        startFreshSessionDraft(true)
-      }
-
-      try {
-        await setSessionArchived(storedSessionId, true, profile)
-        // Archived rows never reach the sidebar, so their persisted unread can
-        // only rot. Dropped after the RPC so a failed archive keeps it.
-        forgetSessionUnread(archivedIds, profile)
-        // An archived session is hidden from the sidebar; its tile must go too.
-        const tiledRuntimeId = runtimeIdByStoredSessionIdRef.current.get(storedSessionId)
-        closeSessionTile(storedSessionId)
-
-        if (tiledRuntimeId) {
-          runtimeIdByStoredSessionIdRef.current.delete(storedSessionId)
-          sessionStateByRuntimeIdRef.current.delete(tiledRuntimeId)
-          dropSessionState(tiledRuntimeId)
-        }
-
-        notify({ durationMs: 2_000, kind: 'success', message: copy.archived })
-      } catch (err) {
-        if (archived) {
-          restoreListedSession(archived, listed?.slice)
-        }
-
-        untombstoneSessions(archivedIds)
-        $pinnedSessionIds.set(previousPinned)
-        notifyError(err, copy.archiveFailed)
-      } finally {
-        endSessionMutation(archivedIds)
-      }
-    },
+    (storedSessionId: string, options?: SessionArchiveOptions) =>
+      archiveStoredSession(
+        storedSessionId,
+        {
+          copy,
+          removalCopy: sessionRemovalCopy(locale),
+          runtimeIdByStoredSessionIdRef,
+          selectedStoredSessionIdRef,
+          sessionStateByRuntimeIdRef,
+          startFreshSessionDraft
+        },
+        options
+      ),
     [
       copy,
+      locale,
       runtimeIdByStoredSessionIdRef,
       selectedStoredSessionIdRef,
       sessionStateByRuntimeIdRef,
@@ -3032,41 +2969,8 @@ export function useSessionActions({
     ]
   )
 
-  // The Archived view reuses the sidebar row menu; its already-archived rows
-  // dispatch here through the same archive verb (#98813). Mirrors the Settings
-  // → Archived Chats restore (sessions-settings.tsx): flip the persisted flag
-  // back off, drop the archived-view row, and resurface the session in the
-  // sidebar without waiting for a full refresh.
   const unarchiveSession = useCallback(
-    async (storedSessionId: string) => {
-      clearNotifications()
-
-      const archived = $archivedSessions.get().find(session => sessionMatchesStoredId(session, storedSessionId))
-      const profile = archived?.profile?.trim() || undefined
-
-      try {
-        await setSessionArchived(storedSessionId, false, profile)
-
-        // Drop the archived-view row first so the view reflects the restore
-        // even when the session cannot be re-listed below (e.g. it belongs to
-        // a profile the current query does not cover).
-        $archivedSessions.set(
-          $archivedSessions.get().filter(session => !sessionMatchesStoredId(session, storedSessionId))
-        )
-
-        if (archived) {
-          // Lift any optimistic eviction so the grouped tree shows it again,
-          // and re-list through the slice router so a messaging/cron row lands
-          // back in its own list, not the sessions one.
-          untombstoneSessions([storedSessionId, archived._lineage_root_id])
-          restoreListedSession({ ...archived, archived: false })
-        }
-
-        notify({ durationMs: 2_000, kind: 'success', message: copy.restored })
-      } catch (err) {
-        notifyError(err, copy.unarchiveFailed)
-      }
-    },
+    (storedSessionId: string) => restoreArchivedSession(storedSessionId, copy),
     [copy]
   )
 

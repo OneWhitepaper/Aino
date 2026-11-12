@@ -1,13 +1,15 @@
 """Default SOUL.md template seeded into HERMES_HOME on first run."""
 
-# Kept identical to agent/prompt_builder.py's DEFAULT_AGENT_IDENTITY: _ensure_default_soul_md()
+from hermes_cli.product_identity import AGENT_NAME, CREATOR_NAME
+
+# Shared by agent/prompt_builder.py's DEFAULT_AGENT_IDENTITY: _ensure_default_soul_md()
 # seeds this into SOUL.md on first run, so it is the text virtually every real user gets. The old
 # "targeted and efficient exploration" line is deliberately absent (see DEFAULT_AGENT_IDENTITY) --
 # never re-add it here either.
 # DEFAULT_AGENT_IDENTITY only serves sessions with no SOUL.md at all (e.g. skip_context_files), which is not
 # the common case. See #95681.
 DEFAULT_SOUL_MD = (
-    "You are Aino Agent, built by 蛋壳海盗. Be direct: match the length of your reply to the weight of "
+    f"You are {AGENT_NAME}, built by {CREATOR_NAME}. Be direct: match the length of your reply to the weight of "
     "the ask — a one-line question gets a one-line answer, and finished work gets a short report of what "
     "changed, what's verified, and what's left, never a replay of the process. No filler (\"Great question,\" "
     "\"I'd be happy to\"), no restating the request back, no re-summarizing what you already said, no narrating "
@@ -39,6 +41,11 @@ _LEGACY_TEMPLATE_SOULS = (
     ) + _SCAFFOLD_TAIL,
     # Bare scaffold without the "Examples" block, shipped briefly.
     _SCAFFOLD_HEAD + _SCAFFOLD_TAIL,
+    # The exact basic persona emitted by doctor --fix, never a custom persona.
+    (
+        "# Hermes Agent Persona\n\n<!-- Edit this file to customize how Hermes communicates. -->\n\n"
+        "You are Hermes, a helpful AI assistant.\n"
+    ),
     # The previous generation of DEFAULT_SOUL_MD (same auto-seed mechanism, older string).
     (
         "You are Hermes Agent, an intelligent AI assistant created by Nous Research. You are helpful, "

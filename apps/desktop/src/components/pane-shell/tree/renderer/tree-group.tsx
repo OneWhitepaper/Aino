@@ -115,6 +115,32 @@ import { ToolPanelControls } from './tool-panel-controls'
 import { paneChrome } from './track-model'
 import { useZoneHeaderLayout } from './zone-header-layout'
 
+interface PanelTitlebarDragSpaceProps {
+  headerVisible: boolean
+  tabsInTitlebar: boolean
+  titlebarHeight: number
+}
+
+function PanelTitlebarDragSpace({ headerVisible, tabsInTitlebar, titlebarHeight }: PanelTitlebarDragSpaceProps) {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className={cn(
+          'self-start [-webkit-app-region:drag]',
+          headerVisible && tabsInTitlebar ? 'shrink-0' : 'min-w-0 flex-1'
+        )}
+        data-window-drag-handle=""
+        style={{
+          height: titlebarHeight,
+          width: headerVisible && tabsInTitlebar ? TITLEBAR_DRAG_HANDLE_WIDTH : undefined
+        }}
+      />
+      <div aria-hidden="true" className="shrink-0" style={{ width: 'var(--panel-titlebar-right, 0px)' }} />
+    </>
+  )
+}
+
 /** Right-click zone menu: the tab verbs (close this / others / to the right /
  *  all) plus the strip's own chrome toggles. Same items and icons as a session
  *  tab's menu, so every tab in a strip answers a right-click the same way —
@@ -896,7 +922,13 @@ export function TreeGroup({
 
       {/* Keep the header INSIDE its zone: titlebar drops use the same panel
           bounds, strip refs, focus ownership and split geometry as the body. */}
-      {groupTabHeaderVisible({ headerVisible, hideSessionTabStrip, panelTopEdge, verticalCollapse, singleSessionHeader }) && (
+      {groupTabHeaderVisible({
+        headerVisible,
+        hideSessionTabStrip,
+        panelTopEdge,
+        verticalCollapse,
+        singleSessionHeader
+      }) && (
         <div
           className="relative flex min-w-0 shrink-0 bg-(--ui-sidebar-surface-background)"
           data-panel-header=""
@@ -1131,21 +1163,11 @@ export function TreeGroup({
               drop below the controls the band above them is free — the handle
               stays flexible and the whole row moves the window. */}
           {panelTopEdge && (
-            <div
-              aria-hidden="true"
-              className={cn(
-                'self-start [-webkit-app-region:drag]',
-                headerVisible && tabsInTitlebar ? 'shrink-0' : 'min-w-0 flex-1'
-              )}
-              data-window-drag-handle=""
-              style={{
-                height: titlebarHeight,
-                width: headerVisible && tabsInTitlebar ? TITLEBAR_DRAG_HANDLE_WIDTH : undefined
-              }}
+            <PanelTitlebarDragSpace
+              headerVisible={headerVisible}
+              tabsInTitlebar={tabsInTitlebar}
+              titlebarHeight={titlebarHeight}
             />
-          )}
-          {panelTopEdge && (
-            <div aria-hidden="true" className="shrink-0" style={{ width: 'var(--panel-titlebar-right, 0px)' }} />
           )}
         </div>
       )}
@@ -1212,6 +1234,7 @@ export function TreeGroup({
                 return (
                   <PaneLayer
                     active={isActive}
+                    animated={toolPanel}
                     className={cn(
                       'absolute inset-0 overflow-auto',
                       !isActive && 'pointer-events-none invisible opacity-0'

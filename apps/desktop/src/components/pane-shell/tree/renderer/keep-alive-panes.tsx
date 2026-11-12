@@ -24,12 +24,15 @@ import { hiddenPaneProps, PaneGroupContext, PaneLifecycleContext, PaneVisibleCon
 import { $collapsedTreeSides, $treePaneEpochs, paneRootSide } from '../store'
 
 import { paneChrome } from './track-model'
+import { usePaneTrackPaint } from './use-pane-track-paint'
 
 interface Placement {
   anchor: string
   groupId: string
   headerVisible: boolean
   visible: boolean
+  track: HTMLElement | null
+  slot: HTMLElement | null
   overlay?: boolean
   onMouseLeave?: MouseEventHandler<HTMLDivElement>
 }
@@ -107,6 +110,7 @@ interface KeepAlivePaneHostProps {
 
 const KeepAlivePaneHost = memo(function KeepAlivePaneHost({ pane, placement, epoch }: KeepAlivePaneHostProps) {
   const ref = useRef<HTMLDivElement>(null)
+  usePaneTrackPaint(ref, placement, Boolean(paneChrome(pane).toolPanel))
 
   // Retain native guest coordinates while its placement is absent/minimized.
   // CSS follows the slot during resize; recording dimensions never re-renders
@@ -140,7 +144,6 @@ const KeepAlivePaneHost = memo(function KeepAlivePaneHost({ pane, placement, epo
   return (
     <div
       {...hiddenPaneProps(!placement.visible)}
-      aria-hidden={!placement.visible || undefined}
       // Local stacking contains guest chrome below tree sashes/edit/drop veils.
       className={cn(
         'absolute overflow-auto',
@@ -159,7 +162,7 @@ const KeepAlivePaneHost = memo(function KeepAlivePaneHost({ pane, placement, epo
           positionAnchor: placement.anchor,
           left: 'anchor(left)',
           top: 'anchor(top)',
-          width: placement.visible ? 'anchor-size(width)' : 'var(--pane-kept-width, 0px)',
+          width: placement.visible ? 'var(--pane-track-width, anchor-size(width))' : 'var(--pane-kept-width, 0px)',
           height: placement.visible ? 'anchor-size(height)' : 'var(--pane-kept-height, 0px)'
         } as CSSProperties
       }
@@ -179,7 +182,7 @@ const KeepAlivePaneHost = memo(function KeepAlivePaneHost({ pane, placement, epo
 
 export const useStablePaneHosts = () => useContext(PlacementContext) !== null
 
-interface KeepAlivePaneSlotProps extends Omit<Placement, 'anchor'> {
+interface KeepAlivePaneSlotProps extends Omit<Placement, 'anchor' | 'slot' | 'track'> {
   paneId: string
 }
 
@@ -199,13 +202,29 @@ export function KeepAlivePaneSlot({
   const shown = visible && (overlay || editing || side === null || !sides.has(side))
   const id = useId()
   const anchor = `--pane-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+  const ref = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(
-    () => place?.(paneId, { anchor, groupId, headerVisible, visible: shown, overlay, onMouseLeave }),
+    () =>
+      place?.(paneId, {
+        anchor,
+        groupId,
+        headerVisible,
+        visible: shown,
+        track: ref.current?.closest<HTMLElement>('[data-tree-track]') ?? null,
+        slot: ref.current,
+        overlay,
+        onMouseLeave
+      }),
     [place, paneId, anchor, groupId, headerVisible, shown, overlay, onMouseLeave]
   )
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0" style={{ anchorName: anchor } as CSSProperties} />
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0"
+      ref={ref}
+      style={{ anchorName: anchor } as CSSProperties}
+    />
   )
 }

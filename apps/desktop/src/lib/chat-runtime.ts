@@ -514,6 +514,7 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
         ...(message.turnMetrics ? { turnMetrics: message.turnMetrics } : {}),
         // Structured failure layer for the error card (see lib/error-surface).
         ...(message.errorSurface ? { errorSurface: message.errorSurface } : {}),
+        ...(message.errorResolved ? { errorResolved: message.errorResolved } : {}),
         ...reactionMeta
       }
     }

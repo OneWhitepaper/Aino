@@ -29,17 +29,22 @@ import { I18nProvider } from '@/i18n'
 
 import { $editingBot } from './bot-state'
 import type * as DataModule from './data'
+import type * as GroupChatViewModule from './group-chat-view'
 import { groupComposerDraftSnapshot, updateGroupComposerDraft } from './group-panes'
 import type * as RoutingModule from './routing'
 import type { RosterRow } from './types'
 
 const mocks = vi.hoisted(() => ({
   botChatOwnsWorkspace: vi.fn(() => false),
+  openGroupChat: vi.fn(),
   paneVisibility: vi.fn(),
   selectedRosterBot: vi.fn(() => null as RosterRow | null),
   sessionOwnsWorkspace: vi.fn(() => false),
   setWorkspaceScope: vi.fn(),
-  undismissPane: vi.fn()
+  undismissPane: vi.fn(),
+  workspaceMode: 'sessions',
+  workspaceOwnerKey: null as string | null,
+  workspaceIsPage: false
 }))
 
 vi.mock('@hermes/plugin-sdk', async importOriginal => {
@@ -49,6 +54,12 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
     ...original,
     host: {
       ...original.host,
+      state: {
+        ...original.host.state,
+        workspaceMode: { get: () => mocks.workspaceMode },
+        workspaceOwnerKey: { get: () => mocks.workspaceOwnerKey },
+        workspaceIsPage: { get: () => mocks.workspaceIsPage }
+      },
       onEvent: undefined,
       paneVisibility: mocks.paneVisibility,
       setWorkspaceScope: mocks.setWorkspaceScope,
@@ -69,6 +80,10 @@ vi.mock('./canonical-chat', () => ({
   prepareBotSource: vi.fn(async () => undefined)
 }))
 vi.mock('./chat-empty', () => ({ BotChatEmpty: () => null }))
+vi.mock('./group-chat-view', async importOriginal => ({
+  ...(await importOriginal<typeof GroupChatViewModule>()),
+  openGroupChat: mocks.openGroupChat
+}))
 vi.mock('./hygiene', () => ({ annotateOrphanedGroupChatMembers: () => ({ changed: false, rooms: {} }) }))
 vi.mock('./cron', () => ({ bindProfileSync: () => () => undefined, RoutinesPane: () => null }))
 vi.mock('./roster-pane', () => ({
@@ -174,6 +189,9 @@ beforeEach(() => {
   mocks.botChatOwnsWorkspace.mockReturnValue(false)
   mocks.sessionOwnsWorkspace.mockReturnValue(false)
   mocks.selectedRosterBot.mockReturnValue(null)
+  mocks.workspaceMode = 'sessions'
+  mocks.workspaceOwnerKey = null
+  mocks.workspaceIsPage = false
 })
 
 afterEach(() => {
@@ -269,7 +287,7 @@ describe('the Bots pane dock', () => {
     harness.dispose()
   })
 
-  it('keeps the Agent Hub tab consistent with its product name across locales', () => {
+  it('keeps the Bot tab consistent with its product name across locales', () => {
     paneStores()
 
     const harness = recordingContext()
@@ -299,14 +317,14 @@ describe('localized registration labels', () => {
     const harness = recordingContext(
       key =>
         ({
-          'roster.title': 'Agent Hub',
+          'roster.title': 'Bot',
           'bot.newCommand': '新建机器人…'
         })[key] ?? key
     )
 
     plugin.register(harness.ctx)
 
-    expect(harness.find('pane')?.title).toBe('Agent Hub')
+    expect(harness.find('pane')?.title).toBe('Bot')
     expect(harness.find('new-agent')?.data?.label).toBe('新建机器人…')
 
     harness.dispose()
@@ -318,7 +336,7 @@ describe('localized registration labels', () => {
 
     plugin.register(harness.ctx)
 
-    expect(harness.find('pane')?.title).toBe('Agent Hub')
+    expect(harness.find('pane')?.title).toBe('Bot')
     expect(harness.find('new-agent')?.data?.label).toBe('New Bot…')
 
     harness.dispose()
@@ -478,7 +496,47 @@ describe('the Scheduled jobs pane', () => {
   })
 })
 
-describe('entering Agent Hub', () => {
+describe('entering Bot', () => {
+  it.each([
+    { page: true, visible: false, reopens: true },
+    { page: false, visible: false, reopens: true },
+    { page: false, visible: true, reopens: false }
+  ])(
+    'fronts a selected group only when it is not already the visible source: %o',
+    async ({ page, visible, reopens }) => {
+      const store = paneStores()
+      const harness = recordingContext()
+      const { $groupChatWorkspace } = await import('./group-chat')
+      const { recordGroupOpenOrigin } = await import('./group-panes')
+      const route = { connectionId: 'source', profile: 'authority' }
+
+      recordGroupOpenOrigin('source-room', 'name', {
+        route,
+        paneId: 'plugin-workspace:source-room',
+        ownerKey: 'group:source-room'
+      })
+      $groupChatWorkspace.set('source-room')
+      mocks.workspaceMode = 'bots'
+      mocks.workspaceOwnerKey = 'group:source-room'
+      mocks.workspaceIsPage = page
+      store('plugin-workspace:source-room').set(visible)
+      plugin.register(harness.ctx)
+      store('hermes-bots:pane').set(true)
+      await settle()
+
+      try {
+        expect(mocks.openGroupChat).toHaveBeenCalledTimes(reopens ? 1 : 0)
+
+        if (reopens) {
+          expect(mocks.openGroupChat).toHaveBeenCalledWith('source-room', 'name', route)
+        }
+      } finally {
+        harness.dispose()
+        $groupChatWorkspace.set(null)
+      }
+    }
+  )
+
   it.each([false, true])(
     'opens the selected canonical chat after roster hydration (cancelled: %s)',
     async cancelled => {
@@ -526,32 +584,29 @@ describe('entering Agent Hub', () => {
 })
 
 describe('returning to Sessions', () => {
-  it.each(['sessions-first', 'bots-first'])(
-    'drops a cold bot open only on selecting Sessions (%s)',
-    async order => {
-      const store = paneStores()
-      const harness = recordingContext()
-      const { $pendingBotOpen } = await import('./shared')
+  it.each(['sessions-first', 'bots-first'])('drops a cold bot open only on selecting Sessions (%s)', async order => {
+    const store = paneStores()
+    const harness = recordingContext()
+    const { $pendingBotOpen } = await import('./shared')
 
-      plugin.register(harness.ctx)
-      await settle()
-      store(`hermes-bots:pane`).set(true)
-      $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
+    plugin.register(harness.ctx)
+    await settle()
+    store(`hermes-bots:pane`).set(true)
+    $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
 
-      if (order === 'sessions-first') {
-        store('sessions').set(true)
-        store('hermes-bots:pane').set(false)
-      } else {
-        store('hermes-bots:pane').set(false)
-        store('sessions').set(true)
-      }
-
-      expect($pendingBotOpen.get()).toBeNull()
-      expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
-
-      harness.dispose()
+    if (order === 'sessions-first') {
+      store('sessions').set(true)
+      store('hermes-bots:pane').set(false)
+    } else {
+      store('hermes-bots:pane').set(false)
+      store('sessions').set(true)
     }
-  )
+
+    expect($pendingBotOpen.get()).toBeNull()
+    expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
+
+    harness.dispose()
+  })
 
   it.each(['bot', 'group'])('keeps the current %s workspace when its navigation sidebar is hidden', async kind => {
     const store = paneStores()

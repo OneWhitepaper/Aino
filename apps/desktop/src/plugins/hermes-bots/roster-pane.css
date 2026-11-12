@@ -1,4 +1,4 @@
-/* Agent Hub's navigation stays on the host's resizable rail. Only its contents
+/* Bot navigation stays on the host's resizable rail. Only its contents
    own this spacing; the native title row and account footer stay host-owned. */
 .aino-bots-rail {
   display: flex;
@@ -9,18 +9,6 @@
   color: var(--ui-text-primary);
   font-size: var(--aino-text-ui);
   container: aino-bots-rail / inline-size;
-}
-.aino-roster-navigation {
-  padding: 4px 12px 12px;
-}
-.aino-roster-monitor {
-  display: flex;
-  width: 100%;
-  justify-content: flex-start;
-  gap: 10px;
-}
-.aino-roster-monitor > :last-child {
-  margin-inline-start: auto;
 }
 .aino-roster-search {
   display: flex;
@@ -46,8 +34,12 @@
   display: grid;
   gap: 3px;
 }
+.aino-roster-categories {
+  display: grid;
+  min-width: 0;
+  gap: 22px;
+}
 .aino-roster-groups {
-  margin-block-end: 22px;
   min-width: 0;
 }
 .aino-roster-section-heading {
@@ -61,6 +53,10 @@
   font-size: var(--aino-text-caption);
   font-weight: 500;
 }
+.aino-roster-section-heading h2 {
+  margin: 0;
+  font: inherit;
+}
 .aino-roster-section-actions {
   display: flex;
   align-items: center;
@@ -73,7 +69,7 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
-.aino-bots-rail .aino-group-roster-row,
+.aino-group-roster-row,
 .aino-roster-bot-row {
   display: flex;
   align-items: center;
@@ -81,20 +77,26 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: 60px;
+  min-height: 64px;
   gap: 10px;
   padding: 10px 8px;
   overflow: hidden;
   text-align: start;
+  cursor: pointer;
   border-radius: var(--aino-radius-row);
   transition: background-color 100ms;
 }
-.aino-bots-rail .aino-group-roster-row:hover,
+.aino-group-roster-row:focus-visible,
+.aino-roster-bot-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.aino-group-roster-row:hover,
 .aino-roster-bot-row:hover {
   background: var(--chrome-action-hover);
   transition: none;
 }
-.aino-bots-rail .aino-group-roster-row[aria-current='true'],
+.aino-group-roster-row[aria-current='true'],
 .aino-roster-bot-row[aria-current='true'] {
   background: var(--ui-row-active-background);
 }
@@ -118,7 +120,7 @@
   width: 100%;
   height: 100%;
 }
-.aino-bots-rail .aino-group-roster-icon {
+.aino-group-roster-icon {
   display: grid;
   place-items: center;
   width: 32px;
@@ -136,7 +138,7 @@
   flex-direction: column;
   gap: 3px;
 }
-.aino-bots-rail .aino-group-roster-name,
+.aino-group-roster-name,
 .aino-roster-bot-label {
   display: block;
   min-width: 0;
@@ -179,12 +181,30 @@
   border-radius: 50%;
   background: var(--ui-sidebar-surface-background);
 }
-.aino-roster-bot-title {
+.aino-roster-row-title {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+}
+.aino-roster-row-title > .aino-group-roster-name {
+  flex: 1;
+}
+.aino-roster-row-age {
+  flex-shrink: 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.5;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aino-roster-row-state {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--aino-text-caption);
 }
 .aino-roster-bot-name {
   display: flex;
@@ -210,7 +230,7 @@
   .aino-roster-scroll {
     padding-inline: 6px;
   }
-  .aino-roster-bot-title > :last-child:not(:first-child) {
+  .aino-roster-row-age {
     max-width: 4ch;
     overflow: hidden;
   }

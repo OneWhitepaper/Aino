@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { useI18n } from '@/i18n'
+import { sessionOwnerIsKnown } from '@/store/session-owner-resolution'
+import { requestForSessionProfile, type SessionOwnerScope } from '@/store/session-request-router'
 import { knownOwnerForSession, requestForOwnedSession } from '@/store/session-states'
 
 import { rejectUnownedSubagentRequest } from './use-subagent-snapshot'
@@ -12,19 +14,32 @@ interface Tail {
   truncated: boolean
 }
 
-export function SubagentTranscript({ sessionId, subagentId }: { sessionId: string; subagentId: string }) {
+interface SubagentTranscriptProps {
+  sessionId: string
+  subagentId: string
+  /** A panel keeps the source selected by its opener. */
+  owner?: SessionOwnerScope
+}
+
+export function SubagentTranscript(props: SubagentTranscriptProps) {
+  const { sessionId, subagentId, owner: suppliedOwner } = props
+  const explicitOwner = Object.hasOwn(props, 'owner')
   const { t } = useI18n()
   const paneVisible = usePaneVisible()
-  const [tail, setTail] = useState<Tail | null>(null)
+  const ownerIdentity = JSON.stringify(explicitOwner ? suppliedOwner : knownOwnerForSession(sessionId))
+  const identity = JSON.stringify([sessionId, subagentId, ownerIdentity])
+  const [snapshot, setSnapshot] = useState<{ identity: string; tail: Tail } | null>(null)
+  const tail = snapshot?.identity === identity ? snapshot.tail : null
+  const unresolved = explicitOwner && !sessionOwnerIsKnown(suppliedOwner)
   useEffect(() => {
-    if (!paneVisible) {
+    if (!paneVisible || unresolved) {
       // Keep-alive tiles stay mounted; only poll while this pane is the visible tab (reveal re-runs the effect).
       return
     }
 
     let cancelled = false
     let pending = false
-    const owner = JSON.stringify(knownOwnerForSession(sessionId))
+    const owner = suppliedOwner && typeof suppliedOwner === 'object' ? { ...suppliedOwner } : suppliedOwner
 
     const refresh = async () => {
       if (pending || document.visibilityState === 'hidden') {
@@ -34,21 +49,25 @@ export function SubagentTranscript({ sessionId, subagentId }: { sessionId: strin
       pending = true
 
       try {
-        const result = await requestForOwnedSession<Tail>(sessionId, rejectUnownedSubagentRequest, 'subagent.tail', {
-          session_id: sessionId,
-          subagent_id: subagentId
-        })
+        const params = { session_id: sessionId, subagent_id: subagentId }
 
-        if (!cancelled && owner === JSON.stringify(knownOwnerForSession(sessionId))) {
-          setTail({
-            available: result.available,
-            text: typeof result.text === 'string' ? result.text.slice(-16384) : '',
-            truncated: result.truncated
+        const result = explicitOwner
+          ? await requestForSessionProfile<Tail>(owner, rejectUnownedSubagentRequest, 'subagent.tail', params)
+          : await requestForOwnedSession<Tail>(sessionId, rejectUnownedSubagentRequest, 'subagent.tail', params)
+
+        if (!cancelled && (explicitOwner || ownerIdentity === JSON.stringify(knownOwnerForSession(sessionId)))) {
+          setSnapshot({
+            identity,
+            tail: {
+              available: result.available,
+              text: typeof result.text === 'string' ? result.text.slice(-16384) : '',
+              truncated: result.truncated
+            }
           })
         }
       } catch {
         if (!cancelled) {
-          setTail({ available: false, text: '', truncated: false })
+          setSnapshot({ identity, tail: { available: false, text: '', truncated: false } })
         }
       } finally {
         pending = false
@@ -62,7 +81,7 @@ export function SubagentTranscript({ sessionId, subagentId }: { sessionId: strin
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [sessionId, subagentId, paneVisible])
+  }, [explicitOwner, identity, ownerIdentity, paneVisible, sessionId, subagentId, suppliedOwner, unresolved])
 
   return (
     <section className="mt-2 text-xs" data-slot="subagent-transcript">
@@ -73,7 +92,9 @@ export function SubagentTranscript({ sessionId, subagentId }: { sessionId: strin
           {tail.text}
         </pre>
       ) : (
-        <p className="text-(--ui-text-tertiary)">{tail ? t.agents.transcriptUnavailable : t.agents.waitingActivity}</p>
+        <p className="text-(--ui-text-tertiary)">
+          {tail || unresolved ? t.agents.transcriptUnavailable : t.agents.waitingActivity}
+        </p>
       )}
     </section>
   )

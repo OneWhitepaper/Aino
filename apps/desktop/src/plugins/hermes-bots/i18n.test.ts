@@ -106,11 +106,11 @@ describe('BOTS_LOCALES', () => {
     }
   })
 
-  it('keeps the Agent Hub brand label stable across locales', () => {
+  it('keeps the Bot brand label stable across locales', () => {
     for (const locale of [en, ja, zh, zhHant]) {
       const byPath = Object.fromEntries(leafEntries(locale))
 
-      expect(byPath['roster.title']).toBe('Agent Hub')
+      expect(byPath['roster.title']).toBe('Bot')
     }
   })
 
@@ -138,9 +138,9 @@ describe('BOTS_LOCALES', () => {
     expect(zhByPath['bot.defaultDeleteBlocked']).toBe('默认工作区不能删除。')
     expect(zhByPath['bot.remoteDeleteUnsupported']).toBe('当前桌面端暂不支持删除来源限定的工作区。')
     expect(zhByPath['bot.storedSessionOpenUnsupported']).toBe('当前桌面版本无法打开已保存的会话。')
-    expect((zhByPath['bot.registryCheckFailed'] as (name: string, detail: string) => string)('研究员', '网关超时')).toBe(
-      '无法检查 研究员 的机器人聊天注册表（网关超时） — 不会启动新聊天'
-    )
+    expect(
+      (zhByPath['bot.registryCheckFailed'] as (name: string, detail: string) => string)('研究员', '网关超时')
+    ).toBe('无法检查 研究员 的机器人聊天注册表（网关超时） — 不会启动新聊天')
   })
 
   it('localizes the roster disband confirmation description for Chinese users', () => {

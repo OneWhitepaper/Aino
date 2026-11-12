@@ -1,3 +1,5 @@
+import { LEGAL_COPYRIGHT } from '@/lib/brand'
+
 import type { BundledLocale } from './types'
 
 export interface AboutPageCopy {
@@ -22,7 +24,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'Technical details',
     copySuccess: 'Installation info copied',
     remoteAttention: 'The remote runtime needs attention',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   zh: {
     website: '官方网站',
@@ -33,7 +35,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: '更多技术信息',
     copySuccess: '安装信息已复制',
     remoteAttention: '远程运行服务需要处理',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   'zh-hant': {
     website: '官方網站',
@@ -44,7 +46,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: '更多技術資訊',
     copySuccess: '已複製安裝資訊',
     remoteAttention: '遠端執行服務需要處理',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   ja: {
     website: '公式サイト',
@@ -55,7 +57,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: '技術情報の詳細',
     copySuccess: 'インストール情報をコピーしました',
     remoteAttention: 'リモートランタイムの確認が必要です',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   ar: {
     website: 'الموقع الرسمي',
@@ -66,7 +68,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'التفاصيل التقنية',
     copySuccess: 'تم نسخ معلومات التثبيت',
     remoteAttention: 'تحتاج بيئة التشغيل البعيدة إلى المراجعة',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   ru: {
     website: 'Официальный сайт',
@@ -77,7 +79,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'Технические подробности',
     copySuccess: 'Сведения об установке скопированы',
     remoteAttention: 'Удалённая среда выполнения требует внимания',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   fr: {
     website: 'Site officiel',
@@ -88,7 +90,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'Détails techniques',
     copySuccess: 'Informations d’installation copiées',
     remoteAttention: 'L’environnement distant nécessite votre attention',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   de: {
     website: 'Offizielle Website',
@@ -99,7 +101,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'Technische Details',
     copySuccess: 'Installationsinformationen kopiert',
     remoteAttention: 'Die Remote-Laufzeit erfordert Aufmerksamkeit',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   },
   es: {
     website: 'Sitio web oficial',
@@ -110,7 +112,7 @@ const aboutCopy: Record<BundledLocale, AboutPageCopy> = {
     technicalDetails: 'Detalles técnicos',
     copySuccess: 'Información de instalación copiada',
     remoteAttention: 'El entorno remoto requiere atención',
-    copyright: 'Copyright © 2026 Ablankpaper'
+    copyright: LEGAL_COPYRIGHT
   }
 }
 

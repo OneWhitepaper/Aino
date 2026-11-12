@@ -1,3 +1,5 @@
+import '@/components/chat/session-recovery.css'
+
 import { useActionBarReload } from '@assistant-ui/core/react'
 import {
   ActionBarPrimitive,
@@ -13,12 +15,7 @@ import { useStore } from '@nanostores/react'
 import { type FC, type ReactNode, useCallback, useContext, useEffect, useId, useMemo, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
-import {
-  type ComposerTarget,
-  requestComposerInsert,
-  requestComposerSubmit,
-  requestModelMenuToggle
-} from '@/app/chat/composer/focus'
+import { type ComposerTarget, requestComposerInsert, requestComposerSubmit } from '@/app/chat/composer/focus'
 import { useComposerScope } from '@/app/chat/composer/scope'
 import { useSessionView } from '@/app/chat/session-view'
 import { SETTINGS_ROUTE } from '@/app/routes'
@@ -46,6 +43,8 @@ import { AGENT_MESSAGE_RE } from '@/components/assistant-ui/thread/user-message'
 import { isApprovalActivity, isCurrentTurnMessage } from '@/components/assistant-ui/tool/approval-activity'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
+import { SessionModelRecovery } from '@/components/chat/session-model-recovery'
+import { isSessionSignInFailure, SessionSignInRecovery } from '@/components/chat/session-sign-in-recovery'
 import { ActionsMenu, renderActionItem } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -85,7 +84,6 @@ import { markAssistantIdSpoken } from '@/lib/spoken-reply'
 import { $touchPointer } from '@/lib/touch-interaction'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
-import { useStoresSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { playSpeechText, stopVoicePlayback } from '@/lib/voice-playback'
 import { $billingBlock, requestBillingSettings, runBillingRecovery } from '@/store/billing-block'
@@ -97,25 +95,14 @@ import { createPlatformSignInRecovery, platformRecoveryActionForCode } from '@/s
 import { $activeGatewayProfile, normalizeProfileKey, requestFreshSession } from '@/store/profile'
 import { sessionApprovalRequest } from '@/store/prompts'
 import { requestSendDiagnostics } from '@/store/send-diagnostics'
-import {
-  $activeSessionId,
-  $connection,
-  $currentModel,
-  $selectedStoredSessionId,
-  setModelPickerOpen
-} from '@/store/session'
-import {
-  $botChatSessionIds,
-  $sessionStates,
-  $sessionTiles,
-  isBotChatSession,
-  sessionTileDelegate,
-  storedSessionIdForRuntimeId
-} from '@/store/session-states'
+import { $connection } from '@/store/session'
+import { sessionTileDelegate } from '@/store/session-states'
 import { notifyThreadEditOpen } from '@/store/thread-scroll'
 import { $voicePlayback } from '@/store/voice-playback'
 
+import { AssistantIdentity } from './assistant-identity'
 import { ReplyMetrics } from './reply-metrics'
+import { ResolvedModelError } from './resolved-model-error'
 
 // Stable empty identity for the settled-parts selector — a fresh [] per render
 // would re-derive the changed-files card on every message re-render.
@@ -355,7 +342,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
-          <AssistantBrandMark />
+          <AssistantIdentity />
           <div
             className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
             data-slot="aui_assistant-message-content"
@@ -395,29 +382,6 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
         </>
       )}
     </MessagePrimitive.Root>
-  )
-}
-
-/** The existing bot-session resolver keeps another agent's reply unbranded. */
-const AssistantBrandMark: FC = () => {
-  const runtimeId = useStore(useSessionView().$runtimeId)
-
-  const ordinarySession = useStoresSelector(
-    [$botChatSessionIds, $sessionStates, $sessionTiles, $activeSessionId, $selectedStoredSessionId],
-    () => Boolean(runtimeId && storedSessionIdForRuntimeId(runtimeId) && !isBotChatSession(runtimeId))
-  )
-
-  if (!ordinarySession) {
-    return null
-  }
-
-  return (
-    <img
-      alt=""
-      aria-hidden="true"
-      data-slot="aui_assistant-brand"
-      src={`${import.meta.env.BASE_URL}apple-touch-icon.png`}
-    />
   )
 }
 
@@ -689,32 +653,6 @@ const AccountRecoveryAction: FC<{ label: string }> = ({ label }) => {
       onClick={() => navigate(`${SETTINGS_ROUTE}?tab=account`)}
       type="button"
     >
-      {label}
-    </button>
-  )
-}
-
-// "Switch provider" for a provider/endpoint/auth/billing failure: opens the
-// composer pill's LIVE model menu, whose picks go through `model.switch` on
-// this session (use-model-menu-controller.ts) — the same menu the
-// `composer.modelPicker` hotkey toggles. Settings → Models only changes the
-// default for NEW sessions, so it is the fallback for when no chat surface is
-// on screen (requestModelMenuToggle returns false), not the first stop.
-// Targeting follows requestModelMenuToggle: the pane under the pointer, else
-// the active composer — a click on this card puts the pointer in its own pane.
-const SwitchProviderAction: FC<{ className: string; label: string }> = ({ className, label }) => {
-  const navigate = useNavigate()
-
-  const switchProvider = useCallback(() => {
-    triggerHaptic('selection')
-
-    if (!requestModelMenuToggle()) {
-      navigate(`${SETTINGS_ROUTE}?tab=config:model`)
-    }
-  }, [navigate])
-
-  return (
-    <button className={className} onClick={switchProvider} type="button">
       {label}
     </button>
   )
@@ -1002,35 +940,11 @@ function PlatformRecoveryActions({ recovery }: { recovery: ReturnType<typeof pla
         </button>
       )}
       {(recovery === 'picker' || recovery === 'rebind' || recovery === 'account-models') && (
-        <button
-          className="aui-error-action"
-          data-action={recovery === 'account-models' ? 'picker' : recovery}
-          onClick={() => setModelPickerOpen(true)}
-          type="button"
-        >
-          {t.desktop.chooseModel}
-        </button>
+        <SessionModelRecovery className="aui-error-action" label={t.desktop.chooseModel} />
       )}
     </>
   )
 }
-
-// One error card (Error System Overhaul): title, body, a collapsed dark details
-// block that owns the diagnostics (copy / logs / send), then exactly ONE primary
-// button plus at most one text link. Which actions appear comes from one table
-// (lib/error-surface.ts errorCardActions).
-// "square-alert" from the Figma error-card frame (node 426:944), drawn from its six
-// rects so it inherits the severity colour.
-const SquareAlertIcon: FC<{ className?: string }> = ({ className }) => (
-  <svg aria-hidden className={className} fill="currentColor" height="20" viewBox="0 0 20 20" width="20">
-    <rect height="1.667" width="13.333" x="3.333" y="1.667" />
-    <rect height="1.667" width="13.333" x="3.333" y="16.667" />
-    <rect height="13.333" width="1.667" x="16.667" y="3.333" />
-    <rect height="13.333" width="1.667" x="1.667" y="3.333" />
-    <rect height="6.667" width="1.667" x="9.167" y="5" />
-    <rect height="1.667" width="1.667" x="9.167" y="13.333" />
-  </svg>
-)
 
 // One error card (Error System Overhaul, Figma "Error handling" frame): icon + title +
 // body, then one row with the single action on the left and the details toggle on the
@@ -1078,6 +992,11 @@ const ErrorCard: FC<{ onDismiss?: () => void }> = ({ onDismiss }) => {
   const copy = t.assistant.thread
   const surface = useErrorSurface()
   const errorText = useErrorText()
+
+  const resolved = useAuiState(
+    s => s.message.metadata.custom?.errorResolved as 'model_changed' | 'reply_received' | undefined
+  )
+
   const [detailsOpen, setDetailsOpen] = useState(false)
   const detailsId = useId()
   const { body, title } = errorCardText(copy, surface)
@@ -1085,10 +1004,40 @@ const ErrorCard: FC<{ onDismiss?: () => void }> = ({ onDismiss }) => {
   // A plan limit is not a fault: no diagnostics to bury the actions that fix it.
   const diagnostics = errorCardShowsDiagnostics(surface)
 
+  if (resolved) {
+    return <ResolvedModelError body={body} errorText={errorText} reason={resolved} title={title} />
+  }
+
+  if (surface && isSessionSignInFailure(surface.code)) {
+    return (
+      <SessionSignInRecovery>
+        {diagnostics && (
+          <>
+            <Button
+              aria-controls={detailsId}
+              aria-expanded={detailsOpen}
+              onClick={() => setDetailsOpen(open => !open)}
+              size="micro"
+              variant="text"
+            >
+              {detailsOpen ? copy.errorHideDetails : copy.errorDetails}
+            </Button>
+            <ErrorDetailsBlock errorText={errorText} hidden={!detailsOpen} id={detailsId} surface={surface} />
+          </>
+        )}
+      </SessionSignInRecovery>
+    )
+  }
+
   return (
-    <ErrorPrimitive.Root className="aui-error-card" data-severity={severity} data-slot="aui_error-card" role="alert">
+    <ErrorPrimitive.Root
+      className="aui-error-card aino-inline-recovery"
+      data-severity={severity}
+      data-slot="aui_error-card"
+      role="alert"
+    >
       <div className="aui-error-card-head">
-        <SquareAlertIcon className="aui-error-card-icon" />
+        <Codicon className="aui-error-card-icon" name="error" />
         <div className="aui-error-card-text">
           <div className="aui-error-card-title">{title}</div>
           <div className="aui-error-card-body">{body}</div>
@@ -1129,7 +1078,7 @@ const ErrorDetailsBlock: FC<{ errorText: string; hidden: boolean; id: string; su
 }) => {
   const { t } = useI18n()
   const copy = t.assistant.thread
-  const model = useStore($currentModel)
+  const model = useStore(useSessionView().$model)
   const connection = useStore($connection)
   const ownerProfile = useOwnerProfile()
   const remoteConnection = connection?.mode === 'remote'
@@ -1311,11 +1260,12 @@ const ERROR_ACTION_RENDERERS: Record<ErrorActionId, (ctx: ErrorActionContext) =>
   },
   sign_in_free_tier: ({ className, copy }) => textButton(className, openFreeTierSignIn, copy.errorSignInFreeTier),
   switch_provider: ({ className, copy, inRouter }) =>
-    inRouter ? <SwitchProviderAction className={className} label={copy.errorSwitchProvider} /> : null,
+    inRouter ? <SessionModelRecovery className={className} label={copy.errorSwitchProvider} /> : null,
   open_model_settings: ({ className, copy, inRouter }) =>
-    inRouter ? <SwitchProviderAction className={className} label={copy.errorOpenModelSettings} /> : null,
-  choose_model: ({ className, copy, link }) =>
-    textButton(className, () => setModelPickerOpen(true), link ? copy.errorChooseModelLink : copy.errorChooseModel),
+    inRouter ? <SessionModelRecovery className={className} label={copy.errorOpenModelSettings} /> : null,
+  choose_model: ({ className, copy, link }) => (
+    <SessionModelRecovery className={className} label={link ? copy.errorChooseModelLink : copy.errorChooseModel} />
+  ),
   compress: ({ className, copy }) => (
     <CompressConversationAction className={className} label={copy.errorCompressConversation} />
   ),

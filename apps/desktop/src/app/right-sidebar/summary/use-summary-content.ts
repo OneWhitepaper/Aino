@@ -6,6 +6,7 @@ import { useSessionSlice, useStoreSelector } from '@/lib/use-session-slice'
 import { $artifactRegistry } from '@/store/artifacts'
 import { $previewStatusBySession } from '@/store/preview-status'
 import { assertSessionOwnerResolved } from '@/store/session-owner-resolution'
+import { profileScopeForSessionOwner } from '@/store/session-request-router'
 import { $sessionStates } from '@/store/session-states'
 
 import {
@@ -23,8 +24,12 @@ export function useSummaryContent(session: ReturnType<typeof useSummarySession>)
   const previews = useSessionSlice($previewStatusBySession, runtimeId)
   const unsentDraft = useStoreSelector($sessionStates, states => Boolean(runtimeId && states[runtimeId]?.isUnsentDraft))
   const hasHistory = Boolean(storedId) && !unsentDraft
+  // A desktop route can serve a differently named backend profile. Its owner
+  // already captures that mapping; the visible workspace alias does not.
+  const ownerScope = profileScopeForSessionOwner(owner)
+  const readScope = typeof ownerScope === 'string' ? { ...scope, profile: ownerScope } : (ownerScope ?? scope)
 
-  const queryKey = ['summary-content', scope.connectionId, scope.profile, storedId, Boolean(owner), busy] as const
+  const queryKey = ['summary-content', readScope.connectionId, readScope.profile, storedId, Boolean(owner), busy] as const
 
   const query = useQuery({
     enabled: hasHistory,
@@ -36,7 +41,7 @@ export function useSummaryContent(session: ReturnType<typeof useSummarySession>)
     queryFn: async () => {
       assertSessionOwnerResolved(owner, { method: 'session.messages', sessionId: storedId })
 
-      return summaryHistoryContent(storedId!, (await getAllSessionMessages(storedId!, scope)).messages)
+      return summaryHistoryContent(storedId!, (await getAllSessionMessages(storedId!, readScope)).messages)
     },
     refetchOnWindowFocus: false,
     retry: false,

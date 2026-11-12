@@ -1,5 +1,9 @@
 # Aino product-brand completion
 
+This page records the earlier UI branding checkpoint. The later runtime prompt and offline-help
+work is documented in [runtime identity and help](aino-runtime-brand-identity.md); its scoped
+prompt refresh behavior supersedes the prompt exclusion recorded below.
+
 Date: 2026-10-23. Branch: `codex/aino-brand-completion`. Base: `3d375c1c767df53618cbd5eebde9673b85310af1`.
 
 Follow-up, 2026-10-24: [Aino private diagnostics](aino-private-diagnostics.md) replaces the desktop upload recipient with Aino. The scope and verification below describe the earlier branding-only commit; the private ingestion service is a subsequent change and is not yet deployed.

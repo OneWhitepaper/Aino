@@ -4400,7 +4400,7 @@
     },
     {
       "name": "subagent.roster",
-      "summary": "Per-conversation counts of live delegated children and running background processes, limited to conversations stored in the named profile (launch profile when omitted). Needs no attached session.",
+      "summary": "Per-conversation counts and read-only child snapshots, plus running background processes, limited to conversations stored in the named profile (launch profile when omitted). Needs no attached session.",
       "params": [
         {
           "name": "params",
@@ -24058,6 +24058,44 @@
         "title": "LiveSessionStatus",
         "type": "string"
       },
+      "LiveWorkRoomSource": {
+        "additionalProperties": false,
+        "description": "Native group's authority route; never inferred from a hidden producer's title.",
+        "properties": {
+          "kind": {
+            "const": "bot_room",
+            "title": "Kind",
+            "type": "string"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "room_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Room Name"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "room_id",
+          "profile"
+        ],
+        "title": "LiveWorkRoomSource",
+        "type": "object"
+      },
       "LlmOneshotParams": {
         "additionalProperties": false,
         "description": "Needs a ``template`` or ``instructions`` / ``input``; a live ``session_id`` lends its model.",
@@ -27232,6 +27270,17 @@
             ],
             "default": null,
             "title": "Managed Credential Version"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StorageNoticeMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -45635,6 +45684,72 @@
         "title": "SteerStatus",
         "type": "string"
       },
+      "StorageNoticeMetrics": {
+        "additionalProperties": false,
+        "description": "Measured storage values; a failed history estimate stays unknown, never zero.",
+        "properties": {
+          "free_bytes": {
+            "title": "Free Bytes",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "db_bytes": {
+            "title": "Db Bytes",
+            "type": "integer"
+          },
+          "estimate_ok": {
+            "title": "Estimate Ok",
+            "type": "boolean"
+          },
+          "prunable_sessions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prunable Sessions"
+          },
+          "total_sessions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Sessions"
+          },
+          "reclaim_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reclaim Bytes"
+          }
+        },
+        "required": [
+          "free_bytes",
+          "total_bytes",
+          "db_bytes",
+          "estimate_ok"
+        ],
+        "title": "StorageNoticeMetrics",
+        "type": "object"
+      },
       "StreamDeltaPayload": {
         "additionalProperties": false,
         "description": "``prompt_turn._invoke_agent._stream`` (message.delta: ``text`` + optional ``rendered``),\n``agent_callbacks._agent_cbs`` (reasoning.delta / thinking.delta), ``tool_progress._progress_reasoning``\n(reasoning.available). ``verbose`` rides only when the session's verbose reasoning mode is on.",
@@ -45678,6 +45793,18 @@
         "additionalProperties": false,
         "description": "``tool_progress._progress_subagent`` \u2014 every ``subagent.*`` frame; identity fields are optional\nbecause older emitters omit them and the TUI spawn tree falls back to flat rendering.",
         "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Display Name"
+          },
           "goal": {
             "title": "Goal",
             "type": "string"
@@ -46075,6 +46202,24 @@
             "default": 0,
             "title": "Background",
             "type": "integer"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/SubagentSnapshot"
+            },
+            "title": "Workers",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveWorkRoomSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -46128,6 +46273,18 @@
             ],
             "default": null,
             "title": "Depth"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Display Name"
           },
           "goal": {
             "anyOf": [
@@ -46223,6 +46380,18 @@
             ],
             "default": null,
             "title": "Accepting Steer"
+          },
+          "child_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Child Session Id"
           }
         },
         "required": [

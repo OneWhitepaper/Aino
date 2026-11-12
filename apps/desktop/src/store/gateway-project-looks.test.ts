@@ -52,7 +52,14 @@ function openSocket(list: () => Promise<unknown>) {
     }
   }
 
-  routeState.mockReturnValue({ gateway: socket as never, key: 'studio', open: true })
+  routeState.mockReturnValue({
+    gateway: socket as never,
+    socket: socket as never,
+    key: 'studio',
+    open: true,
+    primary: false,
+    state: 'open'
+  })
 
   return socket
 }

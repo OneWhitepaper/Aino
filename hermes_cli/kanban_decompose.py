@@ -17,6 +17,8 @@ up with ``assignee=None``.
 
 from __future__ import annotations
 
+from hermes_cli.product_identity import AGENT_NAME
+
 import logging
 import re
 from dataclasses import dataclass
@@ -34,7 +36,7 @@ from hermes_cli.kanban_specify import _profile_author as _specify_author
 logger = logging.getLogger(__name__)
 
 
-_SYSTEM_PROMPT = """You are the Kanban decomposer for the Hermes Agent board.
+_SYSTEM_PROMPT = f"""You are the Kanban decomposer for the {AGENT_NAME} board.
 
 A user dropped a rough idea into the Triage column. Your job is to break it
 into a small graph of concrete child tasks and route each one to the best-
@@ -47,19 +49,19 @@ You will be given:
 
 Output a single JSON object with this exact shape:
 
-  {
+  {{
     "fanout": true,
     "rationale": "<one sentence on why this decomposition>",
     "tasks": [
-      {
+      {{
         "title": "<concrete task title, imperative voice, <= 80 chars>",
         "body":  "<detailed spec for the worker on this child task>",
         "assignee": "<profile name from the roster, or null for default>",
         "parents": [<int>, ...]
-      },
+      }},
       ...
     ]
-  }
+  }}
 
 Rules:
   - "parents" is a list of INDICES (0-based) into this same "tasks" list,
@@ -78,13 +80,13 @@ Rules:
 When the task is genuinely a single unit of work (no useful decomposition),
 return:
 
-  {
+  {{
     "fanout": false,
     "rationale": "<one sentence>",
     "title": "<tightened title>",
     "body":  "<concrete spec for a single worker>",
     "assignee": "<profile name from the roster, or null for default>"
-  }
+  }}
 
 In that case the task stays as one work item, just with a tightened spec and
 a concrete assignee. If no profile fits, use null and the system will route to

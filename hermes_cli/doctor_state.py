@@ -11,6 +11,7 @@ from hermes_cli.doctor_report import (
     warn_on_error,
 )
 from hermes_cli.sizefmt import format_bytes as _human_bytes
+from hermes_cli.product_identity import PRODUCT_NAME
 from hermes_state_holders import read_only_db_uri
 
 
@@ -200,22 +201,7 @@ def _check_directory_structure(should_fix: bool, f: Finding) -> None:
         ensure_dir(f, should_fix, hermes_home / subdir_name, f"{_DHH}/{subdir_name}/ exists",
                    f"Created {_DHH}/{subdir_name}/", f"{_DHH}/{subdir_name}/ not found")
     _check_scratch_dir(hermes_home, _DHH)
-    # SOUL.md persona file
-    soul_path = hermes_home / "SOUL.md"
-    if soul_path.exists():
-        lines = soul_path.read_text(encoding="utf-8-sig").strip().splitlines()
-        if any(l.strip() and not l.strip().startswith(("<!--", "-->", "#")) for l in lines):
-            check_ok(f"{_DHH}/SOUL.md exists (persona configured)")
-        else:  # template comments only (no real content)
-            check_info(f"{_DHH}/SOUL.md exists but is empty — edit it to customize personality")
-    else:
-        check_warn(f"{_DHH}/SOUL.md not found", "(create it to give Hermes a custom personality)")
-        if should_fix:
-            soul_path.parent.mkdir(parents=True, exist_ok=True)
-            soul_path.write_text("# Hermes Agent Persona\n\n<!-- Edit this file to customize how Hermes communicates. -->\n\n"
-                                 "You are Hermes, a helpful AI assistant.\n", encoding="utf-8")
-            check_ok(f"Created {_DHH}/SOUL.md with basic template")
-            f.fixed += 1
+    _check_soul_file(hermes_home, _DHH, should_fix, f)
     # Only enabled built-in stores: users can disable either legacy file target, and stale migration files
     # must not read as active memory usage.
     memories_dir = hermes_home / "memories"
@@ -229,6 +215,26 @@ def _check_directory_structure(should_fix: bool, f: Finding) -> None:
             check_ok(f"{fname} exists ({len((memories_dir / fname).read_text(encoding='utf-8-sig').strip())} chars)")
         else:
             check_info(f"{fname} not created yet (will be created when the agent first writes a memory)")
+
+
+def _check_soul_file(home: Path, display_home: str, should_fix: bool, finding: Finding) -> None:
+    """Use first-run seeding for missing or untouched legacy personas; keep custom content."""
+    from hermes_cli.config import _ensure_default_soul_md
+    from hermes_cli.default_soul import is_legacy_template_soul
+
+    soul_path = home / "SOUL.md"
+    content = soul_path.read_text(encoding="utf-8-sig") if soul_path.exists() else None
+    if should_fix and (content is None or is_legacy_template_soul(content)):
+        home.mkdir(parents=True, exist_ok=True)
+        _ensure_default_soul_md(home)
+        check_ok(f"Updated {display_home}/SOUL.md with the default persona")
+        finding.fixed += 1
+    elif content is None:
+        check_warn(f"{display_home}/SOUL.md not found", "(create it to customize the assistant's personality)")
+    elif any(line.strip() and not line.strip().startswith(("<!--", "-->", "#")) for line in content.splitlines()):
+        check_ok(f"{display_home}/SOUL.md exists (persona configured)")
+    else:
+        check_info(f"{display_home}/SOUL.md exists but is empty — edit it to customize personality")
 
 
 # Cache-root entries at least this big that no pruner covers get a doctor warning.
@@ -274,7 +280,7 @@ def _check_scratch_dir(hermes_home: Path, _DHH: str) -> None:
         )
     tmpdir = os.environ.get("TMPDIR", "")
     if tmpdir and tmpdir != os.environ.get(SCRATCH_DIR_MARKER_ENV, ""):
-        check_info(f"TMPDIR={tmpdir} is set by you or the OS, so Hermes leaves it alone")
+        check_info(f"TMPDIR={tmpdir} is set by you or the OS, so {PRODUCT_NAME} leaves it alone")
 
 
 def _session_count(state_db_path: Path):

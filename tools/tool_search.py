@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from hermes_cli.config_defaults import DEFAULT_CONFIG
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools.registry import tool_error
 from toolsets import CLIENT_SURFACE_TOOLSETS, TOOLSET_SESSION_PLATFORMS
 from tools.tool_search_catalog import (
@@ -560,7 +561,7 @@ def out_of_scope_reason(name: str) -> Optional[str]:
     try:
         if _registry_toolset(name) in _DIRECT_SURFACE_TOOLSETS:
             return (f"'{name}' needs a desktop-app session with a GUI surface (preview/terminal panes). "
-                    "This session has none: use it only from the Hermes desktop app, not via tool_search.")
+                    f"This session has none: use it only from the {PRODUCT_NAME} desktop app, not via tool_search.")
     except Exception:
         pass
     return None

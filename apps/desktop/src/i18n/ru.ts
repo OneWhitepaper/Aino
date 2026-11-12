@@ -5,7 +5,6 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
-import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
@@ -329,17 +328,17 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 const ruBaseOverrides = {
   notificationCenter: notificationCenterCopy['ru'],
   platformModels: {
-    permanent: "Без срока действия",
-    reauthorize: "Повторно авторизовать устройство",
-    reauthorizeDescription: "Замените авторизацию моделей на этом устройстве. Если сеанс управления истёк, войдите снова.",
-    deviceRevoked: "Доступ этого устройства к моделям отозван. Повторно авторизуйте его в настройках моделей.",
+    permanent: 'Без срока действия',
+    reauthorize: 'Повторно авторизовать устройство',
+    reauthorizeDescription:
+      'Замените авторизацию моделей на этом устройстве. Если сеанс управления истёк, войдите снова.',
+    deviceRevoked: 'Доступ этого устройства к моделям отозван. Повторно авторизуйте его в настройках моделей.'
   },
   platformDevices: { expired: 'Срок истёк' },
   appearancePage: appearancePage.ru,
   home: homeGuidance.ru,
   toolPanel: toolPanel['ru'],
   workspacePage: workspacePage.ru,
-  cloudSync: cloudSync['ru'],
   accountPage: accountPage['ru'],
   platformRecharge: {
     description:
@@ -2070,7 +2069,8 @@ const ruBaseOverrides = {
     relayLink: {
       title: 'Team Gateway',
       badge: 'Токен бота не нужен',
-      intro: (platform: string) => `${platform} связывается с этим агентом через общий бот Hermes. Привяжите свой аккаунт ${platform} и напишите боту, чтобы говорить с агентом.`,
+      intro: (platform: string) =>
+        `${platform} связывается с этим агентом через общий бот Hermes. Привяжите свой аккаунт ${platform} и напишите боту, чтобы говорить с агентом.`,
       link: (platform: string) => `Привязать ${platform}`,
       linkAnother: (platform: string) => `Привязать ещё один аккаунт ${platform}`,
       linkedAccounts: 'Привязанные аккаунты',
@@ -2088,10 +2088,12 @@ const ruBaseOverrides = {
       refused: (platform: string) => `${platform} отклонил привязку. Получите новый код и попробуйте снова.`,
       qrAlt: (platform: string) => `QR-код общего бота ${platform}`,
       managed: 'Под управлением Team Gateway',
-      managedNote: (platform: string) => `На этом экземпляре сообщения идут через Team Gateway, поэтому шлюз отключает прямое подключение ${platform} при каждом запуске. Чтобы использовать его вместе с ретранслятором, задайте GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true в окружении шлюза (прямое подключение не даёт экземпляру масштабироваться до нуля и может доставлять сообщения дважды).`,
+      managedNote: (platform: string) =>
+        `На этом экземпляре сообщения идут через Team Gateway, поэтому шлюз отключает прямое подключение ${platform} при каждом запуске. Чтобы использовать его вместе с ретранслятором, задайте GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true в окружении шлюза (прямое подключение не даёт экземпляру масштабироваться до нуля и может доставлять сообщения дважды).`,
       managedIntro: 'Аккаунты этого агента привязываются в Nous Portal.',
       openPortal: 'Привязать аккаунты в Nous Portal',
-      noNewAccount: (platform: string) => `Код больше не активен, и новый аккаунт не появился. Если вашего аккаунта ${platform} нет в списке, получите новый код и попробуйте снова.`
+      noNewAccount: (platform: string) =>
+        `Код больше не активен, и новый аккаунт не появился. Если вашего аккаунта ${platform} нет в списке, получите новый код и попробуйте снова.`
     },
     telegramQr: {
       title: 'Выберите способ подключения Telegram-бота',
@@ -2308,9 +2310,9 @@ const ruBaseOverrides = {
     manageProfiles: 'Управлять профилями…',
     connectGateway: 'Управлять шлюзами…',
     fleet: {
-      switchDeviceTitle: "Переключиться на это устройство?",
-      switchDeviceDesc: "Откроется новая сессия на этом компьютере. Текущий разговор останется на другом шлюзе.",
-      switchDeviceConfirm: "Переключиться",
+      switchDeviceTitle: 'Переключиться на это устройство?',
+      switchDeviceDesc: 'Откроется новая сессия на этом компьютере. Текущий разговор останется на другом шлюзе.',
+      switchDeviceConfirm: 'Переключиться',
       localDevice: 'Это устройство (локальный бэкенд — установит Hermes, если его нет, иначе откроет новую сессию)',
       installDeviceTitle: 'Установить Hermes на это устройство?',
       installDeviceDesc:
@@ -3621,15 +3623,15 @@ const ruBaseOverrides = {
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "Терминал отключён. Нажмите Enter для подключения к той же оболочке.",
-    terminalExpired: "Срок терминала истёк или он завершён. Нажмите Enter для новой оболочки.",
-    terminalSuperseded: "Терминал подключён в другом окне. Нажмите Enter, чтобы вернуть его сюда.",
-    terminalDenied: "Доступ к терминалу запрещён. Проверьте вход и профиль, затем нажмите Enter.",
-    terminalCapacity: "Достигнут лимит терминалов. Закройте другой терминал и нажмите Enter.",
-    terminalSignedOut: "Вход завершён. Войдите снова в этом браузере и нажмите Enter.",
-    terminalReconnecting: "Терминал отключён. Подключение к той же оболочке…",
-    terminalStartRetry: (error: string) => "Не удалось запустить терминал: " + error + ". Нажмите Enter для повтора.",
-    terminalCloseFailed: "Не удалось закрыть терминал",
+    terminalReconnectSame: 'Терминал отключён. Нажмите Enter для подключения к той же оболочке.',
+    terminalExpired: 'Срок терминала истёк или он завершён. Нажмите Enter для новой оболочки.',
+    terminalSuperseded: 'Терминал подключён в другом окне. Нажмите Enter, чтобы вернуть его сюда.',
+    terminalDenied: 'Доступ к терминалу запрещён. Проверьте вход и профиль, затем нажмите Enter.',
+    terminalCapacity: 'Достигнут лимит терминалов. Закройте другой терминал и нажмите Enter.',
+    terminalSignedOut: 'Вход завершён. Войдите снова в этом браузере и нажмите Enter.',
+    terminalReconnecting: 'Терминал отключён. Подключение к той же оболочке…',
+    terminalStartRetry: (error: string) => 'Не удалось запустить терминал: ' + error + '. Нажмите Enter для повтора.',
+    terminalCloseFailed: 'Не удалось закрыть терминал',
     terminalDropUnquotable: (shell, paths) => `Эти имена нельзя безопасно ввести в ${shell}: ${paths}`,
     terminalReadOnly: 'Вывод только для чтения',
     terminalReadOnlyHelp:
@@ -4116,17 +4118,20 @@ const ruBaseOverrides = {
     secretPlaceholder: 'значение секрета'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "Локальная среда недоступна",
-    localRuntimeUnavailableDesktop: "Настройте среду: Настройки → Провайдеры → Локальные модели.",
-    localRuntimeUnavailableWebapp: "Настройте локальные модели в Aino Desktop или выберите размещённую модель в этом браузере.",
-    openLocalModels: "Открыть локальные модели",
-    serviceAuthorizationTitle: "Авторизация сервисов",
-    serviceAuthorizationDescription: "Войдите с учётной записью внешнего сервиса. Эта авторизация не связана с учётной записью Aino.",
+    localRuntimeUnavailableTitle: 'Локальная среда недоступна',
+    localRuntimeUnavailableDesktop: 'Настройте среду: Настройки → Провайдеры → Локальные модели.',
+    localRuntimeUnavailableWebapp:
+      'Настройте локальные модели в Aino Desktop или выберите размещённую модель в этом браузере.',
+    openLocalModels: 'Открыть локальные модели',
+    serviceAuthorizationTitle: 'Авторизация сервисов',
+    serviceAuthorizationDescription:
+      'Войдите с учётной записью внешнего сервиса. Эта авторизация не связана с учётной записью Aino.',
     audioReadFailed: 'Не удалось прочитать записанное аудио',
     sessionUnavailable: 'Сеанс недоступен',
     createSessionFailed: 'Не удалось создать новый сеанс',
     promptFailed: 'Промпт не удался',
-    providerCredentialRequired: 'Чтобы продолжить, проверьте модель и её учётные данные в разделе «Настройки → Модели».',
+    providerCredentialRequired:
+      'Чтобы продолжить, проверьте модель и её учётные данные в разделе «Настройки → Модели».',
     emptySlashCommand: 'пустая слэш-команда',
     desktopCommands: 'Команды desktop',
     skillCommandsAvailable: count =>

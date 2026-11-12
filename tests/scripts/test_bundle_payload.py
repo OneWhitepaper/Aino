@@ -16,6 +16,26 @@ from scripts.build.launchers import posix_launcher
 from scripts.bundles.desktop import release_version
 
 
+def test_snapshot_retains_runtime_brand_from_selected_revision_without_frontend_sources(tmp_path):
+    repo = tmp_path / "source"
+    app = repo / "apps/desktop"
+    app.mkdir(parents=True)
+    (repo / "runtime.txt").write_text("runtime asset", encoding="utf-8")
+    brand = app / "brand.json"
+    brand.write_text('{"productName":"Selected Aino"}', encoding="utf-8")
+    (app / "frontend.ts").write_text("export {}", encoding="utf-8")
+    for args in (["init"], ["add", "."],
+                 ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "fixture"]):
+        subprocess.run(["git", *args], cwd=repo, capture_output=True, check=True)
+    brand.write_text('{"productName":"Uncommitted Other Product"}', encoding="utf-8")
+    payload = tmp_path / "payload"
+    snapshot(repo, "HEAD", payload, exclude=("apps",), retain=("apps/desktop/brand.json",))
+    assert json.loads((payload / "apps/desktop/brand.json").read_text(encoding="utf-8")) == {
+        "productName": "Selected Aino",
+    }
+    assert not (payload / "apps/desktop/frontend.ts").exists()
+
+
 def test_release_version_comes_from_the_release_identity_not_the_checkout(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nversion="0.0.0"\n', encoding="utf-8")
     assert release_version(tmp_path, "v1.2.3") == "1.2.3"

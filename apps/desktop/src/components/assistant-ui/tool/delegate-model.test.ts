@@ -64,6 +64,36 @@ describe('delegateRowsFromCall', () => {
     expect(rows[0]).toMatchObject({ activity: ['found it'], durationSeconds: 12, model: 'anthropic/claude-opus-5' })
   })
 
+  it('retains a friendly name and child session receipt without replacing the original task', () => {
+    const goal = 'Audit dependencies. Include the full license inventory and every source link.'
+
+    const [row] = delegateRowsFromCall(
+      { tasks: [{ goal }] },
+      {
+        results: [
+          {
+            status: 'ok',
+            display_name: 'Dependency audit',
+            subagent_id: 'worker-history',
+            child_session_id: 'child-history'
+          }
+        ]
+      },
+      'call'
+    )
+
+    expect(row).toMatchObject({
+      displayName: 'Dependency audit',
+      goal,
+      sessionId: 'child-history',
+      subagentId: 'worker-history'
+    })
+    expect(delegateRowsFromCall({ tasks: [{ goal, display_name: 'Dependency audit' }] }, undefined)[0]).toMatchObject({
+      displayName: 'Dependency audit',
+      goal
+    })
+  })
+
   // #73728 / #85492: the delegate tool settles rows with 'ok', 'error' or
   // 'timeout' — anything that is not a success must render as failed instead
   // of hiding behind a green 'completed' check.
@@ -126,6 +156,7 @@ describe('mergeDelegateRows', () => {
       rows,
       [
         subagent({
+          displayName: 'Cursor research',
           goal: 'Research Cursor',
           model: 'anthropic/claude-opus-5',
           sessionId: 'child-1',
@@ -139,6 +170,8 @@ describe('mergeDelegateRows', () => {
     )
 
     expect(merged[0]).toMatchObject({
+      displayName: 'Cursor research',
+      subagentId: 'sub-1',
       activity: ['Read File("a.ts")', 'comparing'],
       model: 'anthropic/claude-opus-5',
       sessionId: 'child-1',

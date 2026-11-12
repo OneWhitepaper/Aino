@@ -101,7 +101,3 @@
 [data-slot='composer-status-stack'] .status-control-row:not([data-status-icon]) {
   background: none;
 }
-
-[data-slot='composer-status-stack'] .status-subagent-detail {
-  padding-left: calc(0.5rem + var(--status-nest) * 2 + var(--status-action-width) + var(--status-icon-width) + var(--status-gap) * 2);
-}

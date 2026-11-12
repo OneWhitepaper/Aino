@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 
 import { interceptsTypedVoiceStop } from '@/lib/voice-stop-word'
-import { platformHistoryOwner } from '@/store/platform-session-access'
+import { platformSessionAccess } from '@/store/platform-session-access'
 
 import { runComposerMiddleware } from '../contrib'
 import type { ChatBarProps } from '../types'
@@ -23,7 +23,9 @@ export function useMiddlewareSubmit(onSubmitProp: ChatBarProps['onSubmit'], sess
   // exact pass-through, so surfaces without contributions are byte-identical.
   const onSubmit = useCallback<ChatBarProps['onSubmit']>(
     async (value, options) => {
-      if (platformHistoryOwner(sessionId) !== null) {return false}
+      if (platformSessionAccess(sessionId).kind !== 'allowed') {
+        return false
+      }
       // Bare stop phrase typed while the voice conversation is live: end the
       // conversation (mic off, pill dismissed) instead of sending "stop" to
       // the agent. Spoken transcripts are already stop-checked inside
@@ -41,7 +43,7 @@ export function useMiddlewareSubmit(onSubmitProp: ChatBarProps['onSubmit'], sess
 
       const draft = await runComposerMiddleware({ text: value, attachments: options?.attachments })
 
-      if (!draft || platformHistoryOwner(sessionId) !== null) {
+      if (!draft || platformSessionAccess(sessionId).kind !== 'allowed') {
         return false
       }
 

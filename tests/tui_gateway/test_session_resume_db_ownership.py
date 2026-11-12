@@ -86,7 +86,6 @@ def profile_dbs(monkeypatch, tmp_path):
     ``params['profile']`` selects the profile scope; omitting it resolves to
     the launch profile (``_profile_home`` -> None) and the shared handle.
     """
-    monkeypatch.setattr('tui_gateway.session_cloud_sync.refresh_cloud_history', lambda *a, **k: False)
     opened: list[_RecordingDB] = []
     profile_home = tmp_path / "work"
     profile_home.mkdir()

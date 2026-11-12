@@ -20,11 +20,10 @@ const RELEASE_EVENT = 'hermes:release-typing-focus'
  * intent, stealing the row the user typed toward. Nothing about that came from
  * the user.
  *
- * So the pointer stays inert until it actually MOVES (or scrolls, which is also
- * a hand on the mouse). One real movement hands hover back for the rest of the
- * overlay's life. Spread the result as `pointer-events-none` on the list — the
- * blunt instrument is the right one here, because it suppresses the synthetic
- * enter events at the source rather than racing them.
+ * So hover selection stays quiet until the pointer actually MOVES (or scrolls,
+ * which is also a hand on the mouse). One real movement hands hover back for
+ * the rest of the overlay's life. Gate hover events with this result rather
+ * than disabling hit testing; explicit clicks must still work.
  *
  * Mount-scoped: overlays mount when they open, so "quiet until moved" needs no
  * knowledge of whether a hotkey or a click opened it.

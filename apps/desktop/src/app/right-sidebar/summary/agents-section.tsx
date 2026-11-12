@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useMemo } from 'react'
 
+import { openSubagentPanel } from '@/app/agents/subagent-panel'
+import { panelRowRunning, panelRowStatus, subagentPanelRows } from '@/app/agents/subagent-panel-rows'
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
-import { Tip } from '@/components/ui/tooltip'
+import { SubagentAvatar } from '@/components/ui/subagent-avatar'
 import { useI18n } from '@/i18n'
+import { subagentDisplayName } from '@/lib/subagent-identity'
 import { useSessionSlice } from '@/lib/use-session-slice'
 import { $subagentsBySession } from '@/store/subagents'
-import { openSessionInNewWindow } from '@/store/windows'
 
 import { summaryAgentCounts, type SummaryDelegation, summaryDelegations } from './session-activity'
 import { SummarySection } from './summary-section'
@@ -15,12 +15,13 @@ import type { SummarySession } from './use-summary-session'
 
 export function AgentsSection({ history, session }: { history: SummaryDelegation[]; session: SummarySession }) {
   const { t } = useI18n()
-  const navigate = useNavigate()
-  const [expanded, setExpanded] = useState(false)
   const live = useSessionSlice($subagentsBySession, session.runtimeId)
   const groups = useMemo(() => summaryDelegations(history, live), [history, live])
   const counts = summaryAgentCounts(groups)
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const rows = subagentPanelRows(groups)
+  const runningRows = rows.filter(panelRowRunning)
+  const source = { parentRuntimeId: session.runtimeId, storedSessionId: session.storedId, owner: session.owner }
 
   if (!total) {
     return null
@@ -36,74 +37,52 @@ export function AgentsSection({ history, session }: { history: SummaryDelegation
   return (
     <SummarySection title={t.summary.agents.title}>
       <Button
-        aria-expanded={expanded}
-        className="w-full justify-start"
-        onClick={() => setExpanded(value => !value)}
+        aria-label={`${t.summary.agents.viewAll} · ${labels.join(' · ')}`}
+        className="w-full min-w-0 justify-start px-0"
+        data-slot="summary-agents-overview"
+        onClick={() => openSubagentPanel(source)}
         size="sm"
         type="button"
         variant="ghost"
       >
-        <Codicon name="organization" />
-        <span className="min-w-0 flex-1 whitespace-normal text-left">{labels.join(' · ')}</span>
-        <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
+        <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
+          {rows.slice(-4).map(item => (
+            <SubagentAvatar
+              className="size-4 shrink-0"
+              key={item.key}
+              parentSessionId={session.storedId || session.runtimeId}
+              task={item.row}
+            />
+          ))}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left">{labels.join(' · ')}</span>
       </Button>
-      {expanded && (
-        <div className="mt-2 grid gap-2">
-          {groups.flatMap(group =>
-            group.rows.map(row => {
-              const finished = Boolean(group.completion)
-
-              const status = finished
-                ? group.completion!.failed
-                  ? t.summary.agents.finished
-                  : t.summary.agents.completed(1)
-                : t.summary.agents.status[row.status]
-
-              const open = row.sessionId
-                ? () => void openSessionInNewWindow(row.sessionId!, { watch: true })
-                : undefined
-
-              return (
-                <div className="grid min-w-0 gap-0.5" key={group.id + ':' + row.id}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    {open ? (
-                      <Tip label={row.goal}>
-                        <Button
-                          className="min-w-0 flex-1 justify-start"
-                          onClick={open}
-                          size="inline"
-                          type="button"
-                          variant="text"
-                        >
-                          <span className="truncate">{row.goal}</span>
-                        </Button>
-                      </Tip>
-                    ) : (
-                      <span className="min-w-0 flex-1 break-words">{row.goal}</span>
-                    )}
-                    <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                      {status}
-                    </span>
-                  </div>
-                  {row.activity.at(-1) && (
-                    <p className="line-clamp-2 break-words text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                      {row.activity.at(-1)}
-                    </p>
-                  )}
-                </div>
-              )
-            })
-          )}
-          <Button
-            className="mt-1 justify-start"
-            onClick={() => void navigate('/agents')}
-            size="inline"
-            type="button"
-            variant="text"
-          >
-            {t.summary.agents.viewAll}
-          </Button>
-        </div>
+      {runningRows.slice(0, 5).map(item => (
+        <Button
+          className="w-full min-w-0 justify-start px-0"
+          key={item.key}
+          onClick={() => openSubagentPanel({ ...source, toolCallId: item.callId, row: item.row })}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <SubagentAvatar
+            className="size-4 shrink-0"
+            parentSessionId={session.storedId || session.runtimeId}
+            task={item.row}
+          />
+          <span className="min-w-0 flex-1 truncate text-left">
+            {subagentDisplayName(item.row, t.assistant.tool.delegatedTask)}
+          </span>
+          <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-secondary)">
+            {panelRowStatus(item, t.summary.agents)}
+          </span>
+        </Button>
+      ))}
+      {runningRows.length > 0 && (
+        <Button className="mt-2" onClick={() => openSubagentPanel(source)} size="inline" type="button" variant="text">
+          {t.summary.agents.viewAll}
+        </Button>
       )}
     </SummarySection>
   )

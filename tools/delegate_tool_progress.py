@@ -322,7 +322,7 @@ class _ChildProgressRelay:
             kw["toolsets"] = list(self.toolsets)
         # child_session_id / delegation_id are filled into the shared ref once
         # the child exists, so every relayed event lets UIs open its session.
-        for src, dst in (("session_id", "child_session_id"), ("delegation_id", "delegation_id")):
+        for src, dst in (("session_id", "child_session_id"), ("delegation_id", "delegation_id"), ("display_name", "display_name")):
             if self.session_ref.get(src):
                 kw[dst] = str(self.session_ref[src])
         kw["tool_count"] = self.tool_count

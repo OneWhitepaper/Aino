@@ -24,7 +24,7 @@ from tools.skills_tool_setup import (
 from tools.skills_tool_plugin import (
     MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, _INJECTION_PATTERNS, _fail, _json,
     _mark_background_review_read, _preprocess_skill, _read_skill_text, _safe_frontmatter,
-    _serve_plugin_skill, _serve_skill_file, _truncate_description)
+    _serve_local_skill_file, _serve_plugin_skill, _truncate_description)
 from tools.skills_tool_dedup import dedup_skill_view, reset_skill_view_dedup
 from tools.skill_provenance import is_background_review
 
@@ -651,9 +651,7 @@ def skill_view(
                 e["path"] == skill_md and e["load_name"] == rel for e in _skill_catalog(skip_disabled=True, include_hidden=True))):
             return _fail(f"Skill '{resolved_name}' is disabled. Enable it with `hermes skills` or inspect the files directly on disk.")
         if file_path and skill_dir:
-            return _serve_skill_file(
-                skill_dir, file_path, name, list_available=True, mark_read=True,
-                hint="Use a relative path within the skill directory")
+            return _serve_local_skill_file(skill_dir, file_path, name, resolved_name=resolved_name)
         # tags/related_skills: metadata.hermes.* (agentskills.io) first, then top-level.
         metadata = frontmatter.get("metadata")
         hermes_meta = (metadata.get("hermes", {}) or {}) if isinstance(metadata, dict) else {}
@@ -742,7 +740,7 @@ SKILL_VIEW_SCHEMA = {
             },
             "file_path": {
                 "type": "string",
-                "description": "OPTIONAL: Path to a linked file within the skill (e.g., 'references/api.md', 'templates/config.yaml', 'scripts/validate.py'). Omit to get the main SKILL.md content.",
+                "description": "OPTIONAL: Linked file path (e.g., 'references/api.md', 'templates/config.yaml', 'scripts/validate.py'); the built-in help also supports 'aino-docs/README.md'. Omit to get the main SKILL.md content.",
             },
         },
         "required": ["name"],

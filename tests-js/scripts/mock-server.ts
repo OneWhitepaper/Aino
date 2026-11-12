@@ -45,6 +45,9 @@ export interface MockServerOptions {
   /** Choose distinct replies from the latest input without replaying history. */
   replyForPrompt?: (prompt: string) => string
 
+  /** Observe the actual provider-bound request for protocol and prompt-cache journeys. */
+  onRequest?: (request: Record<string, unknown>) => void
+
   /** Optional provider usage for UI journeys that inspect measured reply diagnostics. */
   streamUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
 
@@ -767,6 +770,8 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
           } catch {
             // malformed JSON — treat as non-streaming with defaults
           }
+
+          options.onRequest?.(parsed)
 
           const lastUserMessage = [...(parsed.messages ?? [])]
             .reverse()

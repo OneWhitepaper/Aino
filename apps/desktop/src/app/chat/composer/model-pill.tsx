@@ -101,6 +101,16 @@ function ModelPillContent({
   )
 }
 
+function isModelChoiceReady(
+  kind: 'primary' | 'tile',
+  runtimeId: null | string,
+  loading: boolean | undefined,
+  model: string,
+  provider: string
+): boolean {
+  return kind === 'tile' && Boolean(runtimeId) && loading === false && !model.trim() && !provider.trim()
+}
+
 /**
  * Composer model selector — the relocated status-bar pill. Reuses the live
  * `model.options` dropdown (`modelMenuContent`) verbatim; falls back to the
@@ -139,8 +149,11 @@ export function ModelPill({
   const reasoningEffort = useStore(view.$reasoningEffort)
   const modelSource = useStore($currentModelSource)
   const modelDefaultUnavailableState = useStore($modelDefaultUnavailable)
-  const modelDefaultUnavailable = view.kind === 'primary' && modelDefaultUnavailableState
   const runtimeId = useStore(view.$runtimeId)
+
+  const readyForModelSelection = isModelChoiceReady(view.kind, runtimeId, model.loading, currentModel, currentProvider)
+
+  const modelDefaultUnavailable = (view.kind === 'primary' && modelDefaultUnavailableState) || readyForModelSelection
   const restoreSelection = useRef<(() => void) | null>(null)
   const [menuState, setMenuState] = useState({ open: false, instance: 0 })
   const menuAlignment = useModelMenuAlignment()
@@ -230,9 +243,8 @@ export function ModelPill({
   const pinnedOverride =
     view.kind === 'primary' && !runtimeId && modelSource === 'manual' && Boolean(currentModel.trim())
 
-  // The model resolves a beat after the gateway/session comes up. Rather than
-  // flash a literal "No model", show a quiet loader (inherits the pill text
-  // color at half opacity) until a model lands.
+  // A pending catalog keeps the quiet loader. Once a runtime's first read
+  // settles without a model, the same selector becomes an explicit choice.
   //
   // A `composer.modelPill` provider may override the LABEL (compact reasoning
   // label, custom naming) — the pill keeps its chrome, pin dot, and menu; only
@@ -244,7 +256,7 @@ export function ModelPill({
       compact={compact}
       hasModel={Boolean(currentModel.trim())}
       modelLabel={platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier })}
-      noModelLabel={copy.noModel}
+      noModelLabel={readyForModelSelection ? t.desktop.chooseModel : copy.noModel}
       pinned={pinnedOverride}
       pinnedLabel={copy.modelPinned}
       unavailable={modelDefaultUnavailable}

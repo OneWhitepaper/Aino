@@ -9,10 +9,11 @@ import { modelOptionsQueryKey, modelProviderMatches } from '@/lib/model-options'
 import { managedModelSwitchBlocked } from '@/lib/model-switch-policy'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { platformModelStatePatch, type PlatformSessionModel } from '@/lib/platform-session-model'
+import { captureSessionModelErrorRecovery } from '@/lib/session-model-error-recovery'
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { dismissNotification, type NotificationInput, notify, notifyError, readableError } from '@/store/notifications'
 import { platformModelCatalog, PlatformSelectionError, requirePlatformSelection } from '@/store/platform-models'
-import { platformHistoryOwner } from '@/store/platform-session-access'
+import { canRecoverUnboundPlatformSession, platformSessionAccess } from '@/store/platform-session-access'
 import { $activeGatewayProfile } from '@/store/profile'
 import {
   $activeSessionId,
@@ -33,7 +34,7 @@ import {
   setCurrentReasoningEffort,
   setCurrentReasoningEffortWire
 } from '@/store/session'
-import { $sessionStates, sessionTileDelegate } from '@/store/session-states'
+import { $sessionStates, knownOwnerForSession, sessionTileDelegate } from '@/store/session-states'
 import type { SessionRuntimeInfo } from '@/types/hermes'
 
 interface SwitchAttempt {
@@ -92,6 +93,9 @@ function showSwitchRecovery(
 }
 
 interface SwitchOptions {
+  /** Recovery applies only to its captured chat and awaits any required guard. */
+  sessionOnly?: boolean
+  recoverUnbound?: boolean
   selection: ModelSelection
   queryClient: QueryClient
   profile: string
@@ -116,7 +120,15 @@ function previousModelSelection(
   }
 }
 
-function captureModelSwitch({ selection, queryClient, profile, connectionId, cache, copy }: SwitchOptions) {
+function captureModelSwitch({
+  selection,
+  queryClient,
+  profile,
+  connectionId,
+  cache,
+  copy,
+  recoverUnbound
+}: SwitchOptions) {
   const primaryId = $activeSessionId.get()
   const sessionId = 'sessionId' in selection ? (selection.sessionId ?? null) : primaryId
   const primary = !sessionId || sessionId === primaryId
@@ -155,7 +167,9 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
     )
   }
 
-  if (platformHistoryOwner(sessionId) !== null) {
+  const access = platformSessionAccess(sessionId)
+
+  if (access.kind !== 'allowed' && !(recoverUnbound && access.kind === 'unbound' && selection.provider === 'aino')) {
     notifyError(new PlatformSelectionError('platform_account_changed'), copy.failed)
 
     return null
@@ -256,7 +270,74 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
 
 /** One acceptance boundary for both pickers. Only a pre-acceptance failure rolls
  * back; once staged, session.info wins and recovery never submits a prompt. */
+async function verifyUnboundRecovery(options: SwitchOptions): Promise<boolean> {
+  if (options.recoverUnbound) {
+    const sessionId = 'sessionId' in options.selection ? options.selection.sessionId : $activeSessionId.get()
+    const owner = sessionId ? knownOwnerForSession(sessionId) : undefined
+
+    if (
+      !owner ||
+      typeof owner !== 'object' ||
+      owner.connectionId !== options.connectionId ||
+      owner.profile !== options.profile
+    ) {
+      return false
+    }
+
+    if (
+      !sessionId ||
+      options.selection.provider !== 'aino' ||
+      !(await canRecoverUnboundPlatformSession(sessionId, owner))
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function recoveredOwnerIsReady(
+  platformModel: PlatformSessionModel | null | undefined,
+  targetPlatform: PlatformSessionModel | null
+): boolean {
+  return Boolean(
+    platformModel?.status === 'ready' &&
+    platformModel.ownerUserId &&
+    platformModel.platformOrigin &&
+    platformModel.ownerUserId === targetPlatform?.ownerUserId &&
+    platformModel.platformOrigin === targetPlatform?.platformOrigin
+  )
+}
+
+function reconciledPlatformModel(
+  model: PlatformSessionModel | null | undefined,
+  target: PlatformSessionModel | null,
+  previous: ReturnType<typeof previousModelSelection>
+): PlatformSessionModel | null {
+  if (
+    target &&
+    model?.status === 'ready' &&
+    (model.ownerUserId !== target.ownerUserId ||
+      (target.platformOrigin && model.platformOrigin !== target.platformOrigin))
+  ) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
+  // Staging a first managed pick has no backend owner until binding succeeds.
+  return model
+    ? {
+        ...model,
+        ownerUserId: model.ownerUserId || target?.ownerUserId || previous.owner,
+        platformOrigin: model.platformOrigin || target?.platformOrigin || previous.platformModel?.platformOrigin
+      }
+    : null
+}
+
 export async function switchSessionModel(options: SwitchOptions): Promise<boolean> {
+  if (!(await verifyUnboundRecovery(options))) {
+    return false
+  }
+
   const { selection, queryClient, profile, connectionId, request, copy } = options
   const captured = captureModelSwitch(options)
 
@@ -289,6 +370,8 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
         }
       : null
 
+  const resolveModelErrors = captureSessionModelErrorRecovery(sessionId, current, canPaintPrimary, tileExists)
+
   const targetSupportsReasoning =
     selection.provider !== 'aino' ||
     Boolean(
@@ -297,7 +380,12 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
         .models.find(model => model.id === selection.model)?.capabilities.reasoning
     )
 
-  const paintTarget = () => paint(selection.model, selection.provider, targetPlatform)
+  const paintTarget = () => {
+    if (!options.recoverUnbound) {
+      paint(selection.model, selection.provider, targetPlatform)
+    }
+  }
+
   let accepted = false
   let configRequested = false
   let nativeCompleted = false
@@ -364,30 +452,15 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
     const patch = platformModelStatePatch(info)
     selectedProvider = providers?.find(row => modelProviderMatches(row, selection.provider)) ?? selectedProvider
 
+    if (options.recoverUnbound && !recoveredOwnerIsReady(patch.platformModel, targetPlatform)) {
+      return false
+    }
+
     if (!info?.provider || !(patch.model || info.model)) {
       throw new Error(copy.recovery)
     }
 
-    // Staging a first managed pick has no backend owner until binding succeeds.
-    const platformModel = patch.platformModel
-      ? {
-          ...patch.platformModel,
-          ownerUserId: patch.platformModel.ownerUserId || targetPlatform?.ownerUserId || previous.owner,
-          platformOrigin:
-            patch.platformModel.platformOrigin ||
-            targetPlatform?.platformOrigin ||
-            previous.platformModel?.platformOrigin
-        }
-      : null
-
-    if (
-      targetPlatform &&
-      patch.platformModel?.status === 'ready' &&
-      (patch.platformModel.ownerUserId !== targetPlatform.ownerUserId ||
-        (targetPlatform.platformOrigin && patch.platformModel.platformOrigin !== targetPlatform.platformOrigin))
-    ) {
-      throw new PlatformSelectionError('platform_account_changed')
-    }
+    const platformModel = reconciledPlatformModel(patch.platformModel, targetPlatform, previous)
 
     paint(patch.model || info.model!, info.provider, platformModel)
 
@@ -437,6 +510,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
     }
 
     attempt.clearRecovery?.()
+    resolveModelErrors()
   }
 
   const recover = async (error: unknown): Promise<boolean> => {
@@ -445,6 +519,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
     try {
       if ((await reconcile()) && (targetPlatform || nativeCompleted)) {
         attempt.clearRecovery?.()
+        resolveModelErrors()
 
         return true
       }
@@ -474,6 +549,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
             // binding. Read before authorizing, even while that turn is busy.
             if ((await reconcile()) && (targetPlatform || nativeCompleted)) {
               attempt.clearRecovery?.()
+              resolveModelErrors()
             } else {
               await authorize()
             }
@@ -490,7 +566,9 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
   }
 
   const scope =
-    primary && selection.provider.toLowerCase() !== 'moa' && previous.provider !== 'aino' ? '' : ' --session'
+    !options.sessionOnly && primary && selection.provider.toLowerCase() !== 'moa' && previous.provider !== 'aino'
+      ? ''
+      : ' --session'
 
   const requestSwitch = async (confirmed = false) => {
     if (!current() || (managed && busy())) {
@@ -529,6 +607,8 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
               throw error
             }
           }
+        } else {
+          resolveModelErrors()
         }
       }
 
@@ -549,6 +629,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
 
             if (ready && (targetPlatform || nativeCompleted)) {
               attempt.clearRecovery?.()
+              resolveModelErrors()
 
               return {}
             }
@@ -585,7 +666,8 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
 
     if (result?.confirm_required) {
       rollback()
-      void surfaceModelSwitchConfirm({
+
+      const confirmed = surfaceModelSwitchConfirm({
         model: selection.model,
         confirmMessage: result.confirm_message,
         failureMessage: copy.failed,
@@ -606,7 +688,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
         requestConfirmed: () => requestSwitch(true)
       })
 
-      return false
+      return options.sessionOnly ? await confirmed : false
     }
 
     finish(result)

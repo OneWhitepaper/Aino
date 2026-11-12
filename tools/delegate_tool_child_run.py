@@ -89,9 +89,18 @@ def _route_report(child: Any) -> Optional[dict[str, Any]]:
             "service_tier": service_tier_word(_tier_in_effect(child)),
             **({"fallback_activated": True} if getattr(child, "_fallback_activated", False) is True else {})}
 
+def _child_result_identity(child: Any) -> dict[str, str]:
+    """Keep presentation identity in completion receipts as well as the live event feed."""
+    return {field: value for attribute, field in (
+        ("_subagent_id", "subagent_id"), ("session_id", "child_session_id"),
+        ("_delegate_display_name", "display_name"),
+    ) if (value := _str_or_none(getattr(child, attribute, None)))}
+
+
 def _fabricated_entry(idx: int, status: str, error: str, child: Any, duration: float = 0) -> dict[str, Any]:
     """Result entry for a child that raised, never finished, or was abandoned."""
     entry = {
+        **_child_result_identity(child),
         "task_index": idx, "status": status, "summary": None, "error": error, "api_calls": 0,
         "duration_seconds": duration, "_child_role": getattr(child, "_delegate_role", None),
     }
@@ -425,6 +434,7 @@ def _register_child(
         "parent_id": _str_or_none(getattr(child, "_parent_subagent_id", None)),
         "depth": max(0, _raw_depth - 1) if isinstance(_raw_depth, int) else 0,
         "goal": goal,
+        "display_name": _str_or_none(getattr(child, "_delegate_display_name", None)),
         "delegation_id": _str_or_none(getattr(child, "_delegation_id", None)),
         "model": _str_or_none(getattr(child, "model", None)),
         "started_at": time.time(), "status": "running", "tool_count": 0, "agent": child,
@@ -660,6 +670,7 @@ def _build_result_entry(
     _cost_status = getattr(child, "session_cost_status", None)
     # Result entry contract: see the _run_single_child docstring.
     entry: dict[str, Any] = {
+        **_child_result_identity(child),
         "task_index": task_index,
         "status": status,
         "summary": summary,

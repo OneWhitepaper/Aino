@@ -17,6 +17,11 @@ export const zh: BotsMessages = {
     gatewayDefault: '网关默认值',
     modelNameExample: '例如：模型名称',
     modelSwitchFailed: '模型切换失败',
+    draftResetTitle: '重置草稿配置？',
+    draftResetDescription:
+      '更改模板或共享选项会移除当前草稿及已配置的技能、工具和 MCP 连接。已填写的名称、描述和待应用模型会保留。',
+    draftResetAction: '重置草稿',
+    draftResetStale: '创建时的工作区已发生变化，请重新打开窗口后再重置草稿。',
     newDescription: '拥有独立记忆、技能和聊天的具名队友，可以与你的其他智能体互发消息。',
     name: '名称',
     title: '显示名称',
@@ -73,7 +78,7 @@ export const zh: BotsMessages = {
   },
   roster: {
     modeDescription: '机器人、群聊与协作',
-    title: 'Agent Hub',
+    title: 'Bot',
     search: '搜索机器人和群聊',
     searchPlaceholder: '搜索机器人和群聊…',
     newBotOrGroup: '新建机器人或群聊',

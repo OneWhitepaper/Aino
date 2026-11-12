@@ -20,7 +20,6 @@ import { CheckCircle2, LogIn, Pencil, Users } from '@/lib/icons'
 
 import { useAccountActions } from '../account/account-context'
 
-import { CloudSyncStatusView } from './cloud-sync-status'
 import { PlatformWallet } from './platform-billing/wallet-view'
 import { SectionHeading, SettingsContent, SettingsGroup } from './primitives'
 
@@ -46,7 +45,6 @@ export function AccountSettings() {
           </div>
         )}
         <AccountProfile key={`profile:${state.account?.id}`} />
-        <CloudSyncStatusView />
         <PlatformWallet />
         <AccountFooter key={`footer:${state.account?.id}`} />
       </div>

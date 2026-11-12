@@ -40,6 +40,7 @@ import { stableArray } from '@/lib/stable-array'
 import { readJson, writeJson } from '@/lib/storage'
 import type { SessionInfo } from '@/types/hermes'
 
+import { $botChatScopes, $botChatSessionIds, inheritBotChatScope, rememberBotChatScope } from './bot-chat-scope'
 import { dropStatusDrawersForProfile, migrateStatusDrawersForProfile } from './composer-status-drawer'
 import { registryConnectionKind } from './connection-registry-state'
 import { recordDislike } from './desktop-metrics'
@@ -680,6 +681,8 @@ function handleTransition(previous: ClientSessionState | null, next: ClientSessi
   // runtime id, so a fast A -> B switch while A is still busy does not get
   // pulled back to A's new tip (#86106).
   if (previous?.storedSessionId && next.storedSessionId && previous.storedSessionId !== next.storedSessionId) {
+    inheritBotChatScope(previous.storedSessionId, next.storedSessionId)
+
     if (runtimeId === $activeSessionId.get() && isSessionInForeground(previous.storedSessionId)) {
       setActiveSessionStoredIdRotation({
         nextStoredSessionId: next.storedSessionId,
@@ -1936,51 +1939,6 @@ export function storedSessionIdForRuntimeId(sessionId: string): null | string {
   return sessionId === $activeSessionId.get() && selected ? selected : null
 }
 
-const BOT_CHAT_SCOPE_KEY = 'hermes.desktop.botChatSessions.v1'
-
-/** Stored ids last opened as a bot's chat. A tile carries `workspaceMode`, but
- *  a bot chat normally lands in MAIN — `in-place` mints no tile when there is
- *  none to front — and main has no tile to carry the scope on. Kept here so a
- *  surface can still tell a companion chat from a working session, persisted
- *  so that survives a relaunch the way tile scope does. */
-export const $botChatSessionIds = atom<ReadonlySet<string>>(
-  new Set((readJson<unknown>(BOT_CHAT_SCOPE_KEY) as unknown[] | null)?.filter(id => typeof id === 'string') ?? [])
-)
-
-/** The bot-mode scope each stored id was last opened under, for the main tab
- *  (which has no tile to carry one). Window-local: the caption falls back to
- *  the stored title until the chat is opened again. */
-export const $botChatScopes = atom<Readonly<Record<string, SessionTileWorkspaceScope>>>({})
-
-function rememberBotChatScope(storedSessionId: string, scope: SessionTileWorkspaceScope): void {
-  const isBotChat = scope.workspaceMode === 'bots'
-  const current = $botChatSessionIds.get()
-  const { [storedSessionId]: previous, ...rest } = $botChatScopes.get()
-
-  const changed = isBotChat
-    ? previous?.workspaceOwnerKey !== scope.workspaceOwnerKey || previous?.workspaceTabTitle !== scope.workspaceTabTitle
-    : Boolean(previous)
-
-  if (changed) {
-    $botChatScopes.set(isBotChat ? { ...rest, [storedSessionId]: scope } : rest)
-  }
-
-  if (current.has(storedSessionId) === isBotChat) {
-    return
-  }
-
-  const next = new Set(current)
-
-  if (isBotChat) {
-    next.add(storedSessionId)
-  } else {
-    next.delete(storedSessionId)
-  }
-
-  $botChatSessionIds.set(next)
-  writeJson(BOT_CHAT_SCOPE_KEY, next.size ? [...next] : null)
-}
-
 /** True while this live session is a bot's chat rather than a working session.
  *  Surfaces read it to drop coding chrome that means nothing in a companion
  *  conversation — the composer's branch/worktree rail. */
@@ -2174,7 +2132,7 @@ export function unbindTileRuntime(runtimeId: string) {
 
 export interface SessionTileDelegate {
   /** Archive a stored session (the sidebar's archive, incl. tile cleanup). */
-  archiveSession(storedSessionId: string): Promise<void>
+  archiveSession(storedSessionId: string, options?: { throwOnError?: boolean }): Promise<void>
   /** Branch a stored session into a new chat (the sidebar's branch). */
   branchSession(storedSessionId: string): Promise<void>
   /** Branch a tile's live transcript through the clicked message. */

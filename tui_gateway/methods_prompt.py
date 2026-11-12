@@ -663,10 +663,6 @@ def _persist_session_row_for_submit(rid, session, text=None, display_kind=None):
     resumable transcript); the error reply is the only user-visible signal (desktop maps it to a toast)."""
     from hermes_state_user_copy import describe_storage_failure
     try:
-        from .session_cloud_sync import refresh_cloud_history
-        with _session_db(session) as db:
-            refresh_cloud_history(session, db, _submit_row_target_key(session),
-                                  canonicalize_replay_history, before_turn=True)
         if _ensure_session_db_row(session) is False:
             failure = describe_storage_failure(_db_error)
             error = _err(

@@ -12,13 +12,19 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
-const { $botChatSessionIds, $sessionStates, $sessionTiles, isBotChatSession, setSessionTileWorkspaceScope } =
+import { createClientSessionState } from '@/lib/chat-runtime'
+
+import { $botChatScopes, $botChatSessionIds } from './bot-chat-scope'
+
+const { $sessionStates, $sessionTiles, isBotChatSession, publishSessionState, setSessionTileWorkspaceScope } =
   await import('./session-states')
 
 const botScope = { workspaceMode: 'bots' as const, workspaceOwnerKey: 'bot:alpha' }
 
 beforeEach(() => {
   $botChatSessionIds.set(new Set())
+  $botChatScopes.set({})
+  $sessionStates.set({})
   // isBotChatSession takes a LIVE session id and files the answer under the
   // stored one, so a binding has to exist for the lookup to resolve at all.
   $sessionTiles.set([{ runtimeId: 'runtime-1', storedSessionId: 'stored-1' } as never])
@@ -69,5 +75,47 @@ describe('the bot-chat set moves independently of session state', () => {
     $sessionTiles.set([{ runtimeId: 'runtime-1', storedSessionId: 'stored-1' } as never])
 
     expect(isBotChatSession('runtime-1')).toBe(true)
+  })
+
+  it('preserves both exact owners when a background compression tip already has a Bot scope', () => {
+    $sessionTiles.set([])
+
+    const source = {
+      workspaceMode: 'bots' as const,
+      workspaceOwnerKey: 'bot:source-a::default',
+      workspaceTabTitle: 'Research',
+      ownerRoute: { connectionId: 'source-a', profile: 'default', targetProfile: 'backend-a' }
+    }
+
+    const existing = {
+      workspaceMode: 'bots' as const,
+      workspaceOwnerKey: 'bot:source-b::default',
+      workspaceTabTitle: 'Writer',
+      ownerRoute: { connectionId: 'source-b', profile: 'default', targetProfile: 'backend-b' }
+    }
+
+    setSessionTileWorkspaceScope('background-before', source)
+    setSessionTileWorkspaceScope('background-after', existing)
+    publishSessionState('background-runtime', createClientSessionState('background-before'))
+    publishSessionState('background-runtime', createClientSessionState('background-after'))
+
+    expect($botChatScopes.get()['background-before']).toEqual(source)
+    expect($botChatScopes.get()['background-after']).toEqual(existing)
+    expect(isBotChatSession('background-runtime')).toBe(true)
+    expect($botChatSessionIds.get()).toEqual(new Set(['background-before', 'background-after']))
+  })
+
+  it('carries a legacy Bot marker without inventing its owner, and leaves ordinary rotations ordinary', () => {
+    $sessionTiles.set([])
+    $botChatSessionIds.set(new Set(['legacy-before']))
+    publishSessionState('legacy-runtime', createClientSessionState('legacy-before'))
+    publishSessionState('legacy-runtime', createClientSessionState('legacy-after'))
+    publishSessionState('ordinary-runtime', createClientSessionState('ordinary-before'))
+    publishSessionState('ordinary-runtime', createClientSessionState('ordinary-after'))
+
+    expect(isBotChatSession('legacy-runtime')).toBe(true)
+    expect($botChatSessionIds.get()).toEqual(new Set(['legacy-before', 'legacy-after']))
+    expect($botChatScopes.get()).toEqual({})
+    expect(isBotChatSession('ordinary-runtime')).toBe(false)
   })
 })

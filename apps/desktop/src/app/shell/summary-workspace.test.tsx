@@ -66,7 +66,9 @@ describe('summary workspace', () => {
 
       expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
       await act(async () => $summaryOpen.set(false))
-      expect(container.querySelector('[data-slot="summary-rail"]')).toBeNull()
+      expect(rail.getAttribute('aria-hidden')).toBe('true')
+      expect(rail.hasAttribute('inert')).toBe(true)
+      await waitFor(() => expect(container.querySelector('[data-slot="summary-rail"]')).toBeNull())
       expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
     }
   )
@@ -200,6 +202,56 @@ describe('summary workspace', () => {
     expect(ownerDocument.getElementById(toggle.getAttribute('aria-controls')!)).toBe(panel)
     expect(screen.queryByRole('heading', { name: 'First session' })).toBeNull()
     expect(screen.getByRole('heading', { name: 'Second session' })).toBeTruthy()
+  })
+
+  it('reverses a closing summary without duplicating it or replacing its draft', async () => {
+    const view = render(<Workspace />)
+    const draft = screen.getByRole('textbox', { name: 'Draft' })
+    act(() => $summaryOpen.set(true))
+    const rail = view.container.querySelector('[data-slot="summary-rail"]')!
+    act(() => $summaryOpen.set(false))
+    expect(rail.hasAttribute('inert')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Inspect output' })).toBeNull()
+    act(() => $summaryOpen.set(true))
+    expect(view.container.querySelectorAll('[data-slot="summary-rail"]')).toHaveLength(1)
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).toBe(rail)
+    expect(rail.hasAttribute('inert')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Inspect output' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
+  })
+
+  it('removes a closing summary immediately when its owning chat is hidden', () => {
+    const content = (visible: boolean) => (
+      <PaneVisibleContext value={visible}>
+        <Workspace />
+      </PaneVisibleContext>
+    )
+
+    const view = render(content(true))
+    act(() => $summaryOpen.set(true))
+    act(() => $summaryOpen.set(false))
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).not.toBeNull()
+    view.rerender(content(false))
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).toBeNull()
+  })
+
+  it('closes immediately when reduced motion is requested', () => {
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      matches: media === '(prefers-reduced-motion: reduce)',
+      media,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }))
+
+    try {
+      const view = render(<Workspace />)
+      act(() => $summaryOpen.set(true))
+      expect(view.container.querySelector('[data-slot="summary-rail"]')).not.toBeNull()
+      act(() => $summaryOpen.set(false))
+      expect(view.container.querySelector('[data-slot="summary-rail"]')).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
 

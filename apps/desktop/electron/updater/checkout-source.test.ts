@@ -283,6 +283,11 @@ it('carries each install channel from Python publication checks into the source 
     const address: AddressInfo = server.address() as AddressInfo
     // Redirect only network transport. Selection, config, tag validation and Git are real.
     fs.cpSync(path.join(repository, 'hermes_cli'), path.join(root, 'hermes_cli'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'apps', 'desktop'), { recursive: true })
+    fs.copyFileSync(
+      path.join(repository, 'apps', 'desktop', 'brand.json'),
+      path.join(root, 'apps', 'desktop', 'brand.json')
+    )
     fs.writeFileSync(
       path.join(root, 'transport.py'),
       `import sys, os

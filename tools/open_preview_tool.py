@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.registry import tool_error
 
@@ -85,5 +86,5 @@ def open_preview_tool(url: str, label: str = "") -> str:
         "preview.open",
         {"url": target, "label": label},
         "Failed to open the preview pane: ",
-        "The preview pane is only available in the Hermes desktop app.",
+        f"The preview pane is only available in the {PRODUCT_NAME} desktop app.",
         {"success": True, "url": target, "label": label})

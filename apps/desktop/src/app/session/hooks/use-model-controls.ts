@@ -19,7 +19,7 @@ import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/
 import { notify, notifyError } from '@/store/notifications'
 import { reconcilePlatformDraftAccount } from '@/store/platform-draft-model'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
-import { platformHistoryOwner } from '@/store/platform-session-access'
+import { platformSessionAccess } from '@/store/platform-session-access'
 import { $activeGatewayProfile } from '@/store/profile'
 import {
   $activeSessionId,
@@ -91,7 +91,7 @@ function modelSwitchPath(
   primary: boolean,
   nextProvider: string
 ): 'blocked' | 'managed' | 'byok' {
-  if (platformHistoryOwner(sessionId) !== null) {
+  if (platformSessionAccess(sessionId).kind !== 'allowed') {
     return 'blocked'
   }
 
@@ -210,7 +210,8 @@ export function useModelControls({
       let selectionGeneration: number | null = null
 
       const selectionIsCurrent = () =>
-        profileRefreshEpochRef.current === profileRefreshEpoch && isCurrentDraftScope(scopeKey) &&
+        profileRefreshEpochRef.current === profileRefreshEpoch &&
+        isCurrentDraftScope(scopeKey) &&
         getComposerSelectionGeneration() === selectionGeneration
 
       try {

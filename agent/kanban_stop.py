@@ -8,6 +8,8 @@ instead of exiting.
 
 from __future__ import annotations
 
+from hermes_cli.product_identity import PRODUCT_NAME
+
 import os
 from typing import Any, Iterable, Optional
 
@@ -81,7 +83,7 @@ def build_kanban_stop_nudge(
     # The transcript is the status source: this text is only reached when the session made no
     # handoff call, so it never tells a worker to close a card it already sent to review.
     return (
-        "[System: You are a Hermes kanban worker. A plain-text reply is NOT a "
+        f"[System: You are a {PRODUCT_NAME} kanban worker. A plain-text reply is NOT a "
         "terminal state for the board.\n\n"
         f"Task `{tid}` has not been handed off: this session made no terminal board "
         "call (`kanban_complete` / `kanban_request_review` / `kanban_block`). Ending now "

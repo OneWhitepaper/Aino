@@ -2,6 +2,8 @@ import { type ElectronApplication, expect, installErrorBannerGuard, type Page } 
 
 export interface NativeBindingObservation {
   sessionId: string
+  modelId?: string
+  profile?: string
   revision: number
   completed: boolean
   ok?: boolean
@@ -39,7 +41,8 @@ bindingObserverIpc.handle = function(channel, listener) {
   }
   if (channel !== 'aino:platform-models:bind') return bindingObserverHandle.call(this, channel, listener);
   return bindingObserverHandle.call(this, channel, function(event, input) {
-    const entry = { sessionId: input.session_id, revision: input.expected_account_revision, completed: false };
+    const entry = { sessionId: input.session_id, modelId: input.model_id, profile: input.profile,
+      revision: input.expected_account_revision, completed: false };
     globalThis.__AINO_E2E_NATIVE_BINDINGS__.push(entry);
     const result = listener(event, input);
     Promise.resolve(result).then(value => Object.assign(entry, { completed: true, ok: value.ok, code: value.error?.code ?? null,
@@ -52,11 +55,19 @@ bindingObserverIpc.handle = function(channel, listener) {
 }
 
 export async function nativeBindingObservations(app: ElectronApplication): Promise<NativeBindingObservation[]> {
-  return app.evaluate(() => (globalThis as unknown as { __AINO_E2E_NATIVE_BINDINGS__: NativeBindingObservation[] }).__AINO_E2E_NATIVE_BINDINGS__)
+  return app.evaluate(
+    () =>
+      (globalThis as unknown as { __AINO_E2E_NATIVE_BINDINGS__: NativeBindingObservation[] })
+        .__AINO_E2E_NATIVE_BINDINGS__
+  )
 }
 
 export async function nativeAccountObservations(app: ElectronApplication): Promise<NativeAccountObservation[]> {
-  return app.evaluate(() => (globalThis as unknown as { __AINO_E2E_NATIVE_ACCOUNTS__: NativeAccountObservation[] }).__AINO_E2E_NATIVE_ACCOUNTS__)
+  return app.evaluate(
+    () =>
+      (globalThis as unknown as { __AINO_E2E_NATIVE_ACCOUNTS__: NativeAccountObservation[] })
+        .__AINO_E2E_NATIVE_ACCOUNTS__
+  )
 }
 
 /** Account transitions replace every renderer; callers retain the mutable launch. */
@@ -70,7 +81,9 @@ export async function replaceAccountWindow(
 
   const transition = operation(previous).catch(error => {
     // The native authority may destroy its caller before sending the IPC reply.
-    if (!previous.isClosed()) { throw error }
+    if (!previous.isClosed()) {
+      throw error
+    }
   })
 
   const [replacement] = await Promise.all([nextWindow, transition])

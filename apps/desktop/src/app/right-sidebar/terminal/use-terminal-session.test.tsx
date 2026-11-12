@@ -9,6 +9,7 @@ import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { $desktopBoot } from '@/store/boot'
 import { $connectionsRegistry } from '@/store/connections'
 import { $connection } from '@/store/session'
+import { $toolSession } from '@/store/tool-session'
 import { clearWebappSession, seedWebappSession } from '@/test/webapp-session'
 
 import { $terminalInjection, runInTerminal } from '../store'
@@ -575,6 +576,37 @@ function nativeTerminalApi(start: ReturnType<typeof vi.fn>) {
 
   return attach
 }
+
+it('a hostless restored tab retries only after its original source returns', async () => {
+  const originalConnection = $connection.get()
+  const id = createTerminal('/work')
+  $terminals.set(
+    $terminals.get().map(tab => (tab.id === id ? { ...tab, sourceKey: $toolSession.get().sourceKey } : tab))
+  )
+  $connection.set({ connectionId: 'other-host', mode: 'remote', remoteKind: 'ssh' } as never)
+  const start = vi.fn(async () => ({ connectionId: 'local', id: 'pty-restored', shell: 'zsh' }))
+  nativeTerminalApi(start)
+
+  try {
+    render(<Harness id={id} />)
+    await waitFor(() => expect(emulator.output).toContain('connection changed'))
+    expect(start).not.toHaveBeenCalled()
+
+    act(() => emulator.input('\r'))
+    expect(start).not.toHaveBeenCalled()
+    expect($terminals.get().find(tab => tab.id === id)?.connectionId).toBeUndefined()
+
+    act(() => {
+      $connection.set(originalConnection)
+      emulator.input('\r')
+    })
+    await waitFor(() => expect(screen.getByText('open')).toBeTruthy())
+    expect(start).toHaveBeenCalledTimes(1)
+    expect($terminals.get().find(tab => tab.id === id)?.connectionId).toBe('local')
+  } finally {
+    act(() => $connection.set(originalConnection))
+  }
+})
 
 // The PR's contract: a tab's recorded gateway wins over whatever Sessions has picked since.
 it('native Desktop: a recorded SSH tab starts on its gateway while Sessions shows This device', async () => {

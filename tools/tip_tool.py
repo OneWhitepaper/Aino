@@ -5,6 +5,7 @@ reply. Lives in ``desktop_ui`` and withdraws itself when the user turns tips off
 
 import json
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.registry import registry, tool_error
 
@@ -29,7 +30,7 @@ def tip_tool(text: str, selector: str, title: str = "", side: str = "") -> str:
     except Exception as exc:
         return tool_error(f"Failed to show the tip: {exc}")
     if not ok:
-        return tool_error("tip is only available in the Hermes desktop app.")
+        return tool_error(f"tip is only available in the {PRODUCT_NAME} desktop app.")
     return json.dumps({"success": True, "selector": selector}, ensure_ascii=False)
 
 

@@ -1,10 +1,10 @@
 # Aino brand and compatibility boundary
 
-Aino is an independent, publicly developed product built on the Hermes Agent runtime. This document defines product identity without changing the runtime's compatibility interfaces or removing upstream attribution.
+Aino is a desktop AI product built on the Hermes Agent runtime. This document defines product identity without changing the runtime's compatibility interfaces or removing upstream attribution.
 
 ## Aino-owned entry points
 
-`apps/desktop/brand.json` is the existing authority for the desktop's product name, application identity and public website/download/guide routes. Renderer and Electron identity modules consume it. Repository-specific links derive from its Aino repository URL.
+`apps/desktop/brand.json` is the authority for the product name, creator/company information, application identity and public website/download/guide routes. Renderer, Electron and `hermes_cli.product_identity` consume it. Python builds carry a generated resource copy rather than maintaining a second configuration. Repository-specific links derive from its Aino repository URL.
 
 | Entry point | Destination or identity |
 | --- | --- |
@@ -19,6 +19,21 @@ Aino is an independent, publicly developed product built on the Hermes Agent run
 | Detailed runtime references | Actual documentation files in the Aino repository |
 
 The renderer's existing translation overlay changes product labels while retaining compatibility code spans. Native product copy uses the existing identity exports. Neither layer rewrites user conversations, custom names, raw error evidence or system prompts.
+
+Prompt producers now also use the shared identity directly: default SOUL, desktop/HUD hints,
+voice, auxiliary agents and tool descriptions identify the product as Aino. Only exact known
+automatic SOUL templates migrate; custom personas remain unchanged. Stored conversation prompts
+remain frozen until the existing explicit, scoped `hermes sessions refresh-prompts --session ID`
+request takes effect on the next turn. No history is rewritten and no mid-turn hot swap occurs.
+
+The versioned [Aino help](aino/README.md) is the product documentation. Source-free Python builds
+carry it at `hermes_cli/data/aino-docs`; the shared identity module resolves its installed location.
+The compatible `hermes-agent` skill loads that guide first. Upstream references remain available
+for real runtime commands and extension interfaces, with their authorship and licensing intact.
+
+`MEDIA:`, `::preview`, theme variables and widget message bridges are unchanged. Hosted rooms
+and delegated children retain their `bot_room`/`subagent` surface policies; branding does not
+grant them a desktop renderer capability they did not have.
 
 Root landing pages describe Aino's actual desktop installation and support flow. They do not present the upstream Hermes installation scripts as an Aino download. Source-build and remote-install guidance continues to use the real `hermes` command; a remote installer hint explicitly selects the Aino source repository using the installer's existing override.
 

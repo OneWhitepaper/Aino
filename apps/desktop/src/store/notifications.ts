@@ -13,6 +13,15 @@ export type NotificationKind = 'error' | 'warning' | 'info' | 'success'
 export interface NotificationAction {
   label: string
   onClick: () => unknown
+  /** Acknowledged deferrals remain readable in history instead of being dismissed. */
+  deferForMs?: number
+  /** Continuous status is retired by its event owner after recovery is observed. */
+  retainOnSuccess?: boolean
+}
+
+export interface NotificationFact {
+  label: string
+  value: string
 }
 
 export type NotificationPlacement = 'default' | 'bottom-right'
@@ -35,6 +44,12 @@ export interface AppNotification {
   secondaryAction?: NotificationAction
   onDismiss?: () => void
   createdAt: number
+  source?: string
+  facts?: readonly NotificationFact[]
+  /** Short feedback is also shown at the bell, so actions such as Undo are discoverable. */
+  transient?: boolean
+  /** A completed snooze is history, not an outstanding task. New arrivals replace it. */
+  deferredUntil?: number
   /** A different account/source may reuse a code-defined ID, never its reading context. */
   epoch?: number
   instance?: number
@@ -63,6 +78,8 @@ export interface NotificationInput {
   durationMs?: number
   placement?: NotificationPlacement
   persistent?: boolean
+  source?: string
+  facts?: readonly NotificationFact[]
 }
 
 let notificationCounter = 0
@@ -78,6 +95,31 @@ const actionRuns = new Map<string, { slot: 'action' | 'secondaryAction' }>()
 
 export const $notifications = atom<AppNotification[]>([])
 export const $notificationEpoch = atom(0)
+
+export type NotificationUpdate = Partial<
+  Pick<
+    AppNotification,
+    'title' | 'message' | 'detail' | 'facts' | 'action' | 'secondaryAction' | 'kind' | 'meta' | 'source'
+  >
+>
+
+/** Refresh a status in place without making a new arrival, sound or expiry cycle. */
+export function updateNotification(id: string, patch: NotificationUpdate): boolean {
+  const current = $notifications.get().find(item => item.id === id)
+
+  if (!current) {
+    return false
+  }
+
+  if (Object.entries(patch).every(([key, value]) => current[key as keyof NotificationUpdate] === value)) {
+    return true
+  }
+
+  const updated = { ...current, ...patch }
+  $notifications.set($notifications.get().map(item => (item === current ? updated : item)))
+
+  return true
+}
 
 function stopTimer(id: string) {
   window.clearTimeout(timers.get(id)?.handle)
@@ -130,7 +172,7 @@ export async function runNotificationAction(id: string, slot: 'action' | 'second
   const notification = $notifications.get().find(item => item.id === id)
   const action = notification?.[slot]
 
-  if (!notification || !action || actionRuns.has(id)) {
+  if (!notification || !action || actionRuns.has(id) || (notification.deferredUntil && action.deferForMs)) {
     return
   }
 
@@ -143,9 +185,7 @@ export async function runNotificationAction(id: string, slot: 'action' | 'second
   try {
     await action.onClick()
 
-    if ($notifications.get().includes(pending)) {
-      dismissNotification(id)
-    }
+    completeNotificationAction(pending, action)
   } catch (error) {
     if (actionRuns.get(id) !== run) {
       return
@@ -176,6 +216,49 @@ export async function runNotificationAction(id: string, slot: 'action' | 'second
   }
 }
 
+function completeNotificationAction(notification: AppNotification, action: NotificationAction) {
+  const current = $notifications
+    .get()
+    .find(
+      item =>
+        item.id === notification.id && item.epoch === notification.epoch && item.instance === notification.instance
+    )
+
+  const delay = action.deferForMs
+
+  if (action.retainOnSuccess) {
+    return
+  }
+
+  if (!delay) {
+    if (current === notification) {
+      dismissNotification(notification.id)
+    }
+
+    return
+  }
+
+  if (!current) {
+    return
+  }
+
+  stopTimer(notification.id)
+  $notifications.set(
+    $notifications.get().map(item =>
+      item === current
+        ? {
+            ...item,
+            pendingAction: undefined,
+            actionError: undefined,
+            actionErrorDetail: undefined,
+            transient: false,
+            deferredUntil: Date.now() + delay
+          }
+        : item
+    )
+  )
+}
+
 function defaultDuration(kind: NotificationKind) {
   if (kind === 'error' || kind === 'warning') {
     return 0
@@ -185,7 +268,7 @@ function defaultDuration(kind: NotificationKind) {
 }
 
 // Preserve caller placement metadata for compatibility. NotificationStack
-// presents every entry in the same in-flow summary and reading panel; these
+// presents every entry through the titlebar card (or auxiliary reading panel);
 // legacy values no longer select separate corner portals.
 function defaultPlacement(kind: NotificationKind, action?: NotificationAction): NotificationPlacement {
   if (kind === 'error' || kind === 'warning' || action) {
@@ -458,14 +541,16 @@ function duplicateNotification(input: NotificationInput, kind: AppNotification['
               item.title === input.title &&
               item.message === input.message &&
               item.detail === input.detail &&
-              item.meta === input.meta
+              item.meta === input.meta &&
+              item.source === input.source &&
+              JSON.stringify(item.facts) === JSON.stringify(input.facts)
           )
       : undefined
-
 }
 
 function showNotification(input: NotificationInput, errorCategory: ErrorToastCategory | null): string {
   const kind = input.kind ?? 'info'
+  const duration = input.durationMs ?? (input.action || input.secondaryAction ? 0 : defaultDuration(kind))
 
   if (errorCategory) {
     recordFriction('error_toast', errorCategory)
@@ -487,6 +572,9 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
     message: input.message,
     detail: input.detail,
     sourceKey: input.sourceKey,
+    source: input.source,
+    facts: input.facts,
+    transient: duration > 0,
     action: input.action,
     secondaryAction: input.secondaryAction,
     onDismiss: input.onDismiss,
@@ -508,8 +596,6 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
   if (kind === 'success' || kind === 'error' || kind === 'warning') {
     triggerHaptic(kind)
   }
-
-  const duration = input.durationMs ?? (input.action || input.secondaryAction ? 0 : defaultDuration(kind))
 
   if (duration > 0) {
     const timer = { remaining: duration, startedAt: Date.now(), readers }

@@ -98,6 +98,7 @@ async function signIn(launched: Launch, api: API) {
   await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill(api.info.phone)
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
   const code = await api.control<{ code: string }>('code')
 
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill(code.code)

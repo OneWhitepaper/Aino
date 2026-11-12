@@ -13,14 +13,12 @@ import tabSessionsIcon from '@/assets/aino-home/tab-sessions.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
-import { NotificationStack } from '@/components/notifications'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
 import { WindowTitlebarContext } from '@/components/pane-shell/tree/renderer/header-placement'
 import {
   $layoutTree,
-  $paneVisible,
   activateTreePane,
   bindPaneVisibility,
   declareDefaultTree,
@@ -55,6 +53,7 @@ import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Uploa
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
+import { $botChatScopes } from '@/store/bot-chat-scope'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { watchDeadSessionPrune } from '@/store/dead-session-prune'
 import { $interfaceMode, modeLayout, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
@@ -83,11 +82,12 @@ import {
   sessionMatchesStoredId
 } from '@/store/session'
 import { watchSessionPins } from '@/store/session-pin-sync'
-import { $botChatScopes } from '@/store/session-states'
 import { watchUnreadWriteGuard } from '@/store/session-unread-remote'
 import { $toolWorkspaceCwd } from '@/store/tool-session'
 import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows'
 
+import { SUBAGENT_PANEL_ID } from '../agents/subagent-panel'
+import { SubagentPanel } from '../agents/subagent-panel-view'
 import { BrowserPopoutShell } from '../chat/browser-popout-shell'
 import type { SessionDragPayload } from '../chat/composer/inline-refs'
 import { PreviewCloseConfirm } from '../chat/preview-close-confirm'
@@ -143,22 +143,9 @@ import { WorkspacePageHeaderHostContext } from './workspace-page-header'
 // the contribution (new title) and a fresh closure would remount the chat.
 // The host context marks this subtree as the one whose zone paints
 // WORKSPACE_PAGE_HEADER_AREA; route tiles and the HUD render outside it.
-const $workspaceVisible = $paneVisible('workspace')
-
-function WorkspaceNotificationFrame() {
-  const visible = useStore($workspaceVisible)
-  const location = useLocation()
-
-  return (
-    <NotificationStack active={visible && appViewForPath(location.pathname) !== 'settings'}>
-      <WiredPane part="chatRoutes" />
-    </NotificationStack>
-  )
-}
-
 const renderWorkspacePane = () => (
   <WorkspacePageHeaderHostContext.Provider value={true}>
-    <WorkspaceNotificationFrame />
+    <WiredPane part="chatRoutes" />
   </WorkspacePageHeaderHostContext.Provider>
 )
 
@@ -200,6 +187,21 @@ const workspaceTabDrag = (event: ReactPointerEvent<HTMLElement>, onTap: () => vo
 
 registry.registerMany([
   {
+    id: SUBAGENT_PANEL_ID,
+    area: 'panes',
+    title: translateNow('summary.agents.title'),
+    data: {
+      placement: 'right',
+      toolPanel: true,
+      dock: { pane: 'files', pos: 'center' },
+      minWidth: '20rem',
+      tabLead: () => <Codicon name="organization" size="0.875rem" />,
+      tabTitle: () => <LocalizedTabTitle select={t => t.summary.agents.title} />,
+      tabTitleText: () => translateNow('summary.agents.title')
+    },
+    render: () => <SubagentPanel />
+  },
+  {
     id: 'sidebar-account',
     area: 'navigation.footer',
     render: () => <SidebarIdentityFooter />
@@ -225,6 +227,7 @@ registry.registerMany([
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.sessions} />,
       tabTitleText: () => translateNow('sidebar.sessions'),
       sidebarDescription: () => translateNow('zones.sidebarSessionsDescription'),
+      sidebarMode: 'sessions',
       width: `${SIDEBAR_DEFAULT_WIDTH}px`,
       minWidth: `${SIDEBAR_MIN_WIDTH}px`,
       maxWidth: `${SIDEBAR_MAX_WIDTH}px`
@@ -326,9 +329,8 @@ registry.registerMany([
 // ---------------------------------------------------------------------------
 
 registry.registerMany([
-  // Titlebar center stays empty on purpose: session title lives in tabs +
-  // sidebar; place/cwd lives in the sidebar project tree. Center is drag
-  // chrome (plugins can still contribute to titleBar.center if needed).
+  // Session titles stay on the left; the center hosts live collaboration
+  // without adding another header row or entering the file-panel tab strip.
   // Layout edit mode registers through the SAME declarative surfaces plugins
   // use: a rebindable keybind (collision-checked in the panel) + a ⌘K row
   // whose hotkey hint tracks the live binding.
@@ -718,6 +720,7 @@ const syncLogsPane = (open: boolean) => {
 // toggle stays truthful either way.
 markCollapsePane('logs')
 registerPaneCloser('logs', () => $logsOpen.set(false))
+registerPaneCloser(SUBAGENT_PANEL_ID, () => dismissTreePane(SUBAGENT_PANEL_ID))
 registerPaneOpener('logs', () => $logsOpen.set(true))
 syncLogsPane($logsOpen.get())
 $logsOpen.listen(syncLogsPane)
@@ -844,9 +847,10 @@ registerPaneCloser('files', () => {
 interface TitlebarSlotProps {
   area: 'titleBar.center' | 'titleBar.left' | 'titleBar.right'
   className: string
+  style?: CSSProperties
 }
 
-function TitlebarSlot({ area, className }: TitlebarSlotProps) {
+function TitlebarSlot({ area, className, style }: TitlebarSlotProps) {
   const items = useContributions(area)
 
   if (items.length === 0) {
@@ -854,7 +858,7 @@ function TitlebarSlot({ area, className }: TitlebarSlotProps) {
   }
 
   return (
-    <div className={className} data-titlebar-slot={area}>
+    <div className={className} data-titlebar-slot={area} style={style}>
       <Slot area={area} />
     </div>
   )
@@ -862,7 +866,6 @@ function TitlebarSlot({ area, className }: TitlebarSlotProps) {
 
 export function ContribController() {
   const sidebarOpen = useStore($sidebarOpen)
-  const workspaceVisible = useStore($workspaceVisible)
   const location = useLocation()
   const view = appViewForPath(location.pathname)
   const settingsPage = view === 'settings'
@@ -943,35 +946,43 @@ export function ContribController() {
                   'max(calc(var(--workspace-right, 0px) + 0.5rem), calc(var(--titlebar-tools-right, 0.75rem) + var(--titlebar-tools-width, 8.5rem) + 0.75rem))'
               }}
             >
-              <TitlebarSlot area="titleBar.left" className="flex h-full min-w-0 items-center gap-2" />
-              <TitlebarSlot area="titleBar.center" className="flex h-full min-w-0 w-full items-center gap-2" />
-              <TitlebarSlot area="titleBar.right" className="flex h-full min-w-0 items-center justify-end gap-2" />
+              <TitlebarSlot
+                area="titleBar.left"
+                className="absolute inset-y-0 left-0 flex min-w-0 max-w-full items-center gap-2"
+              />
+              <TitlebarSlot
+                area="titleBar.right"
+                className="absolute inset-y-0 right-0 flex min-w-0 max-w-full items-center justify-end gap-2"
+              />
             </div>
+            <TitlebarSlot
+              area="titleBar.center"
+              className="pointer-events-none absolute inset-y-0 z-10 flex min-w-0 items-center justify-center gap-2 [&>*]:pointer-events-auto [&>*]:min-w-0 [&>*]:max-w-full [&>*]:[-webkit-app-region:no-drag]"
+              style={{ left: 'var(--workspace-left, 0px)', right: 'var(--workspace-right, 0px)' }}
+            />
           </div>
 
-          <NotificationStack active={settingsPage || !workspaceVisible}>
-            {/* Keep the tiling tree mounted while Settings owns the foreground.
+          {/* Keep the tiling tree mounted while Settings owns the foreground.
               Visibility preserves terminal/session lifecycles and restores the
               user's layout instantly when they return to chat. */}
-            <div
-              className={
-                settingsPage
-                  ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
-                  : 'relative flex min-h-0 min-w-0 flex-1'
-              }
-              inert={settingsPage}
-            >
-              <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
-                <LayoutTreeRoot />
-              </WindowTitlebarContext.Provider>
-            </div>
+          <div
+            className={
+              settingsPage
+                ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
+                : 'relative flex min-h-0 min-w-0 flex-1'
+            }
+            inert={settingsPage}
+          >
+            <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
+              <LayoutTreeRoot />
+            </WindowTitlebarContext.Provider>
+          </div>
 
-            {settingsPage && (
-              <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                <WiredPane part="settings" />
-              </div>
-            )}
-          </NotificationStack>
+          {settingsPage && (
+            <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+              <WiredPane part="settings" />
+            </div>
+          )}
 
           {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
           {!settingsPage && <SessionTileCloseConfirm />}

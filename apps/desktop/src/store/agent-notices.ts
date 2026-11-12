@@ -1,6 +1,9 @@
 import { translateNow } from '@/i18n'
+import { notificationPresentationCopy } from '@/i18n/notification-presentation'
+import { getRuntimeI18nLocale } from '@/i18n/runtime'
 import type { NativeNotificationInput } from '@/store/native-notifications'
 import {
+  $notifications,
   dismissNotification,
   type NotificationInput,
   type NotificationKind,
@@ -38,6 +41,15 @@ export interface AgentNoticePayload {
   id?: string
   /** Full text behind a short `text` (the low-disk auto-prune question): the toast's expandable body. */
   detail?: string
+  metrics?: {
+    free_bytes: number
+    total_bytes: number
+    db_bytes: number
+    prunable_sessions: number | null
+    total_sessions: number | null
+    reclaim_bytes: number | null
+    estimate_ok: boolean
+  }
 }
 
 export interface AgentNoticeOwner {
@@ -48,6 +60,51 @@ export interface AgentNoticeOwner {
 
 function scopedNoticeId(key: string, owner?: AgentNoticeOwner) {
   return owner ? `agent-notice:${JSON.stringify([owner.connectionId, owner.profile, key])}` : key
+}
+
+function noticePresentation(payload: AgentNoticePayload | undefined, owner?: AgentNoticeOwner) {
+  const locale = getRuntimeI18nLocale()
+  const copy = notificationPresentationCopy(locale)
+
+  const source = [
+    payload?.key === 'sessions.auto_prune' ? copy.storage : copy.runtime,
+    owner?.profile !== 'default' ? owner?.profile : undefined
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const metrics = payload?.key === 'sessions.auto_prune' ? payload.metrics : undefined
+
+  if (!metrics) {
+    return { source }
+  }
+
+  const bytes = (value: number | null) => formatNoticeBytes(value, locale, copy.unknown)
+
+  const count = (value: number | null) =>
+    value !== null && Number.isFinite(value) && value >= 0 ? new Intl.NumberFormat(locale).format(value) : copy.unknown
+
+  return {
+    source,
+    facts: [
+      { label: copy.free, value: bytes(metrics.free_bytes) },
+      { label: copy.total, value: bytes(metrics.total_bytes) },
+      { label: copy.history, value: bytes(metrics.db_bytes) },
+      { label: copy.prunable, value: count(metrics.estimate_ok ? metrics.prunable_sessions : null) },
+      { label: copy.estimate, value: bytes(metrics.estimate_ok ? metrics.reclaim_bytes : null) }
+    ]
+  }
+}
+
+function formatNoticeBytes(value: number | null, locale: string, unavailable: string) {
+  if (value === null || !Number.isFinite(value) || value < 0) {
+    return unavailable
+  }
+
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+  const unit = Math.min(units.length - 1, Math.floor(Math.log(Math.max(value, 1)) / Math.log(1024)))
+
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value / 1024 ** unit)} ${units[unit]}`
 }
 
 /** `credits.window_limit` (agent/credits_tracker.py CREDITS_WINDOW_LIMIT_KEY). */
@@ -202,6 +259,7 @@ export function noticeToToast(
   const detail = payload?.detail?.trim() || undefined
   const lowDisk = payload?.key === 'sessions.auto_prune'
   const key = payload?.key || payload?.id
+  const presentation = noticePresentation(payload, owner)
 
   return {
     // Icon + text tint by usage band (muted → orange → red); undefined keeps
@@ -212,6 +270,7 @@ export function noticeToToast(
     durationMs: isTtl ? ttl : 0,
     id: key ? scopedNoticeId(key, owner) : undefined,
     sourceKey: payload?.key,
+    ...presentation,
     kind: LEVEL_TO_TOAST_KIND[payload?.level ?? 'info'] ?? 'info',
     title: lowDisk ? translateNow('notificationCenter.diskTitle') : undefined,
     message: lowDisk ? translateNow('notificationCenter.diskBody') : primary,
@@ -220,6 +279,7 @@ export function noticeToToast(
       ? {
           action: {
             ...RECOVERY_ACTIONS.openMaintenance(),
+            retainOnSuccess: true,
             onClick: async () => {
               if (owner) {
                 const { activeGatewayRoute } = await import('@/store/gateway')
@@ -239,6 +299,7 @@ export function noticeToToast(
       ? {
           secondaryAction: {
             label: translateNow('notificationCenter.snooze'),
+            deferForMs: 7 * 24 * 60 * 60 * 1_000,
             onClick: async () => {
               const { requestGatewayForAgent } = await import('@/store/gateway')
 
@@ -297,7 +358,16 @@ export function showAgentNotice(payload: AgentNoticePayload | undefined, owner?:
  */
 export function clearAgentNotice(key: string | undefined, owner?: AgentNoticeOwner): void {
   if (key) {
-    dismissNotification(scopedNoticeId(key, owner))
+    const id = scopedNoticeId(key, owner)
+    const notice = $notifications.get().find(item => item.id === id)
+
+    // The existing slash mirror clears the warning before returning the snooze receipt.
+    // Keep its reading record until the action's real acknowledgement settles.
+    if (notice?.deferredUntil || (notice?.pendingAction && notice[notice.pendingAction]?.deferForMs)) {
+      return
+    }
+
+    dismissNotification(id)
   }
 }
 

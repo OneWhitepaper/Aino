@@ -140,8 +140,6 @@ class TestPendingTitleValueError:
         )
 
         monkeypatch.setattr(server, "_get_db", lambda: mock_db)
-        # This title-error unit test has no durable cloud import state.
-        monkeypatch.setattr("tui_gateway.session_cloud_sync.refresh_cloud_history", lambda *a, **kw: False)
         monkeypatch.setattr(server, "_emit", lambda *a, **kw: None)
         monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
         monkeypatch.setattr(server, "render_message", lambda raw, cols: None)

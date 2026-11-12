@@ -1,5 +1,7 @@
 import { translateNow } from '@/i18n'
 
+import type { GatewayReconnectTarget } from './gateway-targeted-reconnect'
+
 export type GatewayReconnectSource = 'manual' | 'restart-followthrough'
 
 export interface GatewayReconnectOptions {
@@ -12,12 +14,15 @@ export interface GatewayReconnectOptions {
    * so the handler probes first instead of force-closing a healthy socket.
    */
   source?: GatewayReconnectSource
+  /** Explicit recovery for one chat's source; never follows foreground changes. */
+  target?: GatewayReconnectTarget
 }
 
 type GatewayReconnectHandler = (options?: GatewayReconnectOptions) => Promise<void> | void
 
 let activeHandler: GatewayReconnectHandler | null = null
 let inFlight: Promise<void> | null = null
+let inFlightTarget: GatewayReconnectTarget | undefined
 
 export function registerGatewayReconnect(handler: GatewayReconnectHandler): () => void {
   activeHandler = handler
@@ -31,7 +36,9 @@ export function registerGatewayReconnect(handler: GatewayReconnectHandler): () =
 
 export function reconnectGateway(options?: GatewayReconnectOptions): Promise<void> {
   if (inFlight) {
-    return inFlight
+    return options?.target === inFlightTarget
+      ? inFlight
+      : Promise.reject(new Error(translateNow('desktop.gatewayReconnectUnavailable')))
   }
 
   const handler = activeHandler
@@ -40,10 +47,12 @@ export function reconnectGateway(options?: GatewayReconnectOptions): Promise<voi
     return Promise.reject(new Error(translateNow('desktop.gatewayReconnectUnavailable')))
   }
 
+  inFlightTarget = options?.target
   inFlight = Promise.resolve()
     .then(() => handler(options))
     .finally(() => {
       inFlight = null
+      inFlightTarget = undefined
     })
 
   return inFlight

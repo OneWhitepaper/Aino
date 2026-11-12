@@ -43,6 +43,7 @@ import { translateNow, useI18n } from '@/i18n'
 import type { ChatMessage } from '@/lib/chat-messages'
 import { newSessionTitle, sessionTitle } from '@/lib/chat-runtime'
 import { transcribeAudioClientDirect } from '@/lib/voice-client-direct'
+import { $botChatScopes } from '@/store/bot-chat-scope'
 import { createComposerAttachmentScope, draftTitleFor, takeSessionDraft } from '@/store/composer'
 import { $gatewaySwitching } from '@/store/gateway-switch'
 import { $pinnedSessionIds, pinSession, unpinSession } from '@/store/layout'
@@ -63,7 +64,6 @@ import {
 import { isSessionRemovalPending } from '@/store/session-removal'
 import { requestForSessionProfile } from '@/store/session-request-router'
 import {
-  $botChatScopes,
   $sessionStates,
   $sessionTileDelegateRevision,
   $sessionTiles,
@@ -893,7 +893,7 @@ function useSessionTabActions({ onClose, onHideTabBar, storedSessionId, tabPaneI
     onArchive: () => void sessionTileDelegate()?.archiveSession(storedSessionId),
     onBranch: () => void sessionTileDelegate()?.branchSession(storedSessionId),
     onClose,
-    onDelete: () => void sessionTileDelegate()?.deleteSession(storedSessionId),
+    onDelete: () => sessionTileDelegate()?.deleteSession(storedSessionId),
     onHideTabBar,
     onPin: () => (pinned ? unpinSession(pinId) : pinSession(pinId)),
     pinned,

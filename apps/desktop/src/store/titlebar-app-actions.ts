@@ -37,6 +37,7 @@ export const TITLEBAR_FIXED_TOOLS = {
   'right-sidebar': { tier: 'advanced' },
   summary: { tier: 'advanced' },
   terminal: { tier: 'advanced' },
+  notifications: {},
   sidebar: {}
 } satisfies Record<string, Tiered>
 
@@ -44,7 +45,7 @@ export type TitlebarFixedToolId = keyof typeof TITLEBAR_FIXED_TOOLS
 
 /** App actions follow `side`; the sidebar and flip toggles stay left. */
 const APP_ACTION_IDS: readonly TitlebarFixedToolId[] = ['layout', 'hud', 'haptics']
-const RIGHT_FIXED_IDS: readonly TitlebarFixedToolId[] = ['summary', 'terminal', 'right-sidebar']
+const RIGHT_FIXED_IDS: readonly TitlebarFixedToolId[] = ['notifications', 'summary', 'terminal', 'right-sidebar']
 
 /** Button counts for the two titlebar clusters, for the mode that is rendering them. */
 export function titlebarAppActionsClusterCounts(

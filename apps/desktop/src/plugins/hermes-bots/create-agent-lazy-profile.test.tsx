@@ -14,7 +14,7 @@
 
 import type * as HermesSdk from '@hermes/plugin-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   openRosterBot: vi.fn(async () => true),
   request: vi.fn(),
   requestProfile: vi.fn(async () => ({})),
+  modelConfirm: vi.fn(async (_options: { requestConfirmed: () => Promise<unknown> }) => false),
   saveBotMeta: vi.fn(),
   skillsView: [] as CapabilitiesViewProps[]
 }))
@@ -80,6 +81,8 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
     usePluginI18n: () => translateBots
   }
 
+  mocked.surfaceModelSwitchConfirm = mocks.modelConfirm
+
   Object.defineProperty(mocked, 'CapabilitiesView', {
     configurable: true,
     enumerable: true,
@@ -104,6 +107,17 @@ const roster: RosterRow[] = [{ connectionId: 'local', name: 'default' }]
 
 /** A catalog entry that needs an API key — the only row that renders setup. */
 const catalog = { auth: null, installed: false, name: 'linear', requires: ['LINEAR_API_KEY'] }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+
+  return { promise, resolve, reject }
+}
 
 function withQueryClient(children: ReactNode) {
   return (
@@ -158,6 +172,8 @@ beforeEach(() => {
   mocks.skillsView.length = 0
   mocks.connections.mockResolvedValue([])
   mocks.requestProfile.mockResolvedValue({})
+  mocks.deleteBot.mockResolvedValue(undefined)
+  mocks.modelConfirm.mockResolvedValue(false)
   mocks.request.mockImplementation(async (method: string) => {
     switch (method) {
       case 'mcp.catalog':
@@ -172,6 +188,355 @@ beforeEach(() => {
       default:
         return {}
     }
+  })
+})
+
+describe('final model choice after configuring a draft', () => {
+  const pickModel = (provider = 'custom:relay', model = 'final-model') => {
+    fireEvent.change(screen.getByPlaceholderText('omnirouter / 9router / nous …'), { target: { value: provider } })
+    fireEvent.change(screen.getByPlaceholderText('antigravity/gemini-3.6-flash-high'), { target: { value: model } })
+  }
+
+  async function materialize() {
+    fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+    await waitFor(() => expect(createCalls()).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: 'General' }))
+    await screen.findByPlaceholderText('omnirouter / 9router / nous …')
+  }
+
+  it('saves a model picked after MCP/capability setup before checking readiness or starting the intro', async () => {
+    await renderDialog(true)
+    await materialize()
+    pickModel()
+    mocks.request.mockImplementation(async (method: string) =>
+      method === 'profiles.configure' ? { applied: { model: true } } : { ok: true }
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalledOnce())
+    const methods = mocks.request.mock.calls.map(([method]) => method)
+    expect(mocks.request).toHaveBeenCalledWith('profiles.configure', {
+      name: 'inbox-triage',
+      model: 'final-model',
+      provider: 'custom:relay'
+    })
+    expect(methods.indexOf('profiles.configure')).toBeLessThan(methods.indexOf('setup.runtime_check'))
+    expect(createCalls()).toHaveLength(1)
+    expect(createCalls()[0][1]).not.toHaveProperty('model')
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+  })
+
+  it('keeps the inherited configuration when an early explicit pick is cleared before final creation', async () => {
+    await renderDialog(true)
+    await screen.findByPlaceholderText('omnirouter / 9router / nous …')
+    pickModel()
+    await materialize()
+    pickModel('', '')
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalledOnce())
+    expect(createCalls()[0][1]).not.toHaveProperty('model')
+    expect(createCalls()[0][1]).not.toHaveProperty('provider')
+    expect(mocks.request.mock.calls.some(([method, params]) => method === 'profiles.configure' && params.model)).toBe(
+      false
+    )
+  })
+
+  it('awaits model confirmation, keeps the draft on decline, and retries without creating a duplicate', async () => {
+    await renderDialog(true)
+    await materialize()
+    pickModel()
+    mocks.request.mockImplementation(async (method: string, params) =>
+      method === 'profiles.configure'
+        ? params.confirm_expensive_model
+          ? { applied: { model: true } }
+          : { confirm_required: true, confirm_message: 'Confirm model cost' }
+        : { ok: true }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await waitFor(() => expect(mocks.modelConfirm).toHaveBeenCalledOnce())
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect(mocks.request.mock.calls.some(([method]) => method === 'setup.runtime_check')).toBe(false)
+    mocks.modelConfirm.mockImplementationOnce(async options => {
+      await options.requestConfirmed()
+
+      return true
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalledOnce())
+    expect(createCalls()).toHaveLength(1)
+  })
+
+  it('retains the draft and does not start inference when the final model write fails', async () => {
+    await renderDialog(true)
+    await materialize()
+    pickModel()
+    mocks.request.mockResolvedValue({ applied: { model: false } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+
+    await screen.findByText('Model switch failed')
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect(mocks.request.mock.calls.some(([method]) => method === 'setup.runtime_check')).toBe(false)
+    expect(createCalls()).toHaveLength(1)
+  })
+
+  it.each([
+    ['custom:relay', ''],
+    ['', 'final-model']
+  ])('rejects a partial choice (%s, %s) instead of silently using inheritance', async (provider, model) => {
+    await renderDialog(true)
+    await materialize()
+    pickModel(provider, model)
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await screen.findByText('Model switch failed')
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect(mocks.request.mock.calls.some(([method]) => method === 'profiles.configure')).toBe(false)
+  })
+
+  it('locks staged fields while saving and retires a successful creation after the source changes', async () => {
+    await renderDialog(true)
+    await materialize()
+    pickModel()
+    const saved = deferred<{ applied: { model: boolean } }>()
+    mocks.request.mockImplementation(async (method: string) => (method === 'profiles.configure' ? saved.promise : {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('profiles.configure', expect.anything()))
+    expect(
+      (screen.getByPlaceholderText('omnirouter / 9router / nous …').closest('fieldset') as HTMLFieldSetElement).disabled
+    ).toBe(true)
+    mocks.activeSource.connectionId = 'another-source'
+    saved.resolve({ applied: { model: true } })
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ kind: 'success' })))
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect(mocks.request.mock.calls.some(([method]) => method === 'setup.runtime_check')).toBe(false)
+    expect((screen.getByPlaceholderText('inbox-triage') as HTMLInputElement).value).toBe('')
+  })
+
+  it('applies the final model after renaming a materialized draft without treating its own reset as stale', async () => {
+    await renderDialog(true)
+    await materialize()
+    pickModel()
+    fireEvent.change(screen.getByPlaceholderText('inbox-triage'), { target: { value: 'renamed-bot' } })
+    mocks.request.mockImplementation(async (method: string) =>
+      method === 'profiles.configure' ? { applied: { model: true } } : { ok: true }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() =>
+      expect(mocks.openRosterBot).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'renamed-bot' }),
+        expect.anything()
+      )
+    )
+    expect(mocks.deleteBot).toHaveBeenCalledWith({ name: 'inbox-triage' })
+    expect(createCalls().map(([, params]) => params.name)).toEqual(['inbox-triage', 'renamed-bot'])
+    expect(mocks.request).toHaveBeenCalledWith('profiles.configure', {
+      name: 'renamed-bot',
+      model: 'final-model',
+      provider: 'custom:relay'
+    })
+  })
+
+  it.each(['success', 'failure'])(
+    'does not let an old %s completion close or unlock a newly opened creation',
+    async outcome => {
+      const oldView = await renderDialog(true)
+      await materialize()
+      pickModel()
+      const oldSave = deferred<{ applied: { model: boolean } }>()
+      mocks.request.mockImplementation(async (method: string) =>
+        method === 'profiles.configure' ? oldSave.promise : {}
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+      await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('profiles.configure', expect.anything()))
+      oldView.unmount()
+
+      await renderDialog(true)
+      await screen.findByPlaceholderText('omnirouter / 9router / nous …')
+      pickModel('custom:new-relay', 'new-model')
+      const newSave = deferred<{ applied: { model: boolean } }>()
+      mocks.request.mockImplementation(async (method: string) =>
+        method === 'profiles.configure' ? newSave.promise : {}
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+      await waitFor(() =>
+        expect(mocks.request).toHaveBeenCalledWith(
+          'profiles.configure',
+          expect.objectContaining({ model: 'new-model' })
+        )
+      )
+      await act(async () => {
+        if (outcome === 'success') {
+          oldSave.resolve({ applied: { model: true } })
+        } else {
+          oldSave.reject(new Error('Old model failed'))
+        }
+      })
+
+      expect(
+        (screen.getByPlaceholderText('omnirouter / 9router / nous …').closest('fieldset') as HTMLFieldSetElement)
+          .disabled
+      ).toBe(true)
+      expect((screen.getByPlaceholderText('inbox-triage') as HTMLInputElement).value).toBe('inbox-triage')
+      expect(mocks.openRosterBot).not.toHaveBeenCalled()
+      expect(mocks.notify).not.toHaveBeenCalled()
+      expect(screen.queryByText('Old model failed')).toBeNull()
+      newSave.resolve({ applied: { model: true } })
+      await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalledOnce())
+    }
+  )
+
+  it('does not let an old readiness response finish a newer creation dialog', async () => {
+    const oldView = await renderDialog(true)
+    const oldReadiness = deferred<{ ok: boolean }>()
+    mocks.request.mockImplementation(async (method: string) =>
+      method === 'setup.runtime_check' ? oldReadiness.promise : {}
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('setup.runtime_check', expect.anything()))
+    oldView.unmount()
+
+    await renderDialog(true)
+    await screen.findByPlaceholderText('omnirouter / 9router / nous …')
+    pickModel()
+    const newSave = deferred<{ applied: { model: boolean } }>()
+    mocks.request.mockImplementation(async (method: string) => (method === 'profiles.configure' ? newSave.promise : {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Create Bot' }))
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('profiles.configure', expect.anything()))
+    await act(async () => oldReadiness.resolve({ ok: true }))
+
+    expect(mocks.notify).not.toHaveBeenCalled()
+    expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect((screen.getByPlaceholderText('inbox-triage') as HTMLInputElement).value).toBe('inbox-triage')
+    expect(
+      (screen.getByPlaceholderText('omnirouter / 9router / nous …').closest('fieldset') as HTMLFieldSetElement).disabled
+    ).toBe(true)
+    newSave.resolve({ applied: { model: true } })
+    await waitFor(() => expect(mocks.openRosterBot).toHaveBeenCalledOnce())
+  })
+})
+
+describe('changing a materialized draft base', () => {
+  async function openDraft() {
+    await renderDialog(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+    await waitFor(() => expect(createCalls()).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: 'General' }))
+  }
+
+  async function chooseFresh() {
+    fireEvent.click(controlUnder('Clone from profile'))
+    fireEvent.click(await screen.findByRole('option', { name: /Fresh profile/ }))
+
+    return screen.findByRole('dialog', { name: 'Reset draft configuration?' })
+  }
+
+  it('leaves the inherited source and configured draft untouched when reset is cancelled', async () => {
+    await openDraft()
+    const confirmation = await chooseFresh()
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+  })
+
+  it('awaits draft deletion before applying a new source; a failed deletion retains the original draft', async () => {
+    await openDraft()
+    const deletion = deferred<undefined>()
+    mocks.deleteBot.mockReturnValueOnce(deletion.promise)
+    const confirmation = await chooseFresh()
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+    await waitFor(() => expect(mocks.deleteBot).toHaveBeenCalledOnce())
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+    deletion.reject(new Error('Draft is still in use'))
+    await within(confirmation).findByText('Draft is still in use')
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+    await waitFor(() => expect(controlUnder('Clone from profile').textContent).toMatch(/Fresh profile/))
+    expect(mocks.deleteBot).toHaveBeenCalledTimes(2)
+  })
+
+  it('waits for an in-flight draft to materialize before deleting it and applying a changed template', async () => {
+    await renderDialog(true)
+    const creating = deferred<unknown>()
+    mocks.request.mockImplementation(async (method: string) => (method === 'profiles.create' ? creating.promise : {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+    await waitFor(() => expect(createCalls()).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: 'General' }))
+    const confirmation = await chooseFresh()
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+    creating.resolve({ ok: true, name: 'inbox-triage' })
+    await waitFor(() => expect(controlUnder('Clone from profile').textContent).toMatch(/Fresh profile/))
+    expect(mocks.deleteBot).toHaveBeenCalledOnce()
+    expect(createCalls()).toHaveLength(1)
+  })
+
+  it('does not delete or change a captured draft after its source is replaced', async () => {
+    await openDraft()
+    const confirmation = await chooseFresh()
+    mocks.activeSource.connectionId = 'another-source'
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+    await within(confirmation).findByText(
+      'The creation workspace changed. Reopen the dialog before resetting this draft.'
+    )
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+  })
+
+  it('never reassigns an existing local draft to a source selected before requesting reset', async () => {
+    await openDraft()
+    const botRows = new Set(['::inbox-triage', 'another-source::inbox-triage'])
+    mocks.deleteBot.mockImplementation(async () => {
+      botRows.delete(`${mocks.activeSource.connectionId}::inbox-triage`)
+    })
+    mocks.activeSource.connectionId = 'another-source'
+    const confirmation = await chooseFresh()
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+
+    await within(confirmation).findByText(
+      'The creation workspace changed. Reopen the dialog before resetting this draft.'
+    )
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+    expect(botRows).toEqual(new Set(['::inbox-triage', 'another-source::inbox-triage']))
+    expect(controlUnder('Clone from profile').textContent).toBe('default')
+  })
+
+  it('keeps a remote draft when its deletion command resolves with a failed receipt', async () => {
+    mocks.connections.mockResolvedValue([
+      { id: 'local', label: 'This Mac' },
+      { id: 'studio', label: 'Studio' }
+    ])
+    await renderDialog(true)
+    await screen.findByText('Create on')
+    fireEvent.click(controlUnder('Create on'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Studio' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+    await waitFor(() => expect(mocks.skillsView.at(-1)).toMatchObject({ fixedProfile: 'inbox-triage' }))
+    fireEvent.click(screen.getByRole('button', { name: 'General' }))
+    const share = screen.getByRole('checkbox', { name: 'Share keys & accounts with the default profile on Studio' })
+    fireEvent.click(share)
+    const confirmation = await screen.findByRole('dialog', { name: 'Reset draft configuration?' })
+    mocks.requestProfile.mockResolvedValueOnce({ code: 1, output: 'Remote draft was not deleted' })
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Reset draft' }))
+    await within(confirmation).findByText('Remote draft was not deleted')
+    expect(share.getAttribute('aria-checked')).toBe('true')
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['Share keys & accounts with the main profile', true],
+    ['Create empty (skip bundled skills)', false]
+  ] as const)('requires confirmation for %s after materialization', async (label, checked) => {
+    await openDraft()
+    const checkbox = screen.getByRole('checkbox', { name: label })
+    fireEvent.click(checkbox)
+    const confirmation = await screen.findByRole('dialog', { name: 'Reset draft configuration?' })
+    expect(checkbox.getAttribute('aria-checked')).toBe(String(checked))
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
+    expect(mocks.deleteBot).not.toHaveBeenCalled()
+    expect(checkbox.getAttribute('aria-checked')).toBe(String(checked))
   })
 })
 
@@ -756,6 +1121,7 @@ describe('creation navigation ownership', () => {
     expect(mocks.request).not.toHaveBeenCalledWith('setup.runtime_check', expect.anything())
     expect(mocks.request).not.toHaveBeenCalledWith('profiles.configure', expect.anything())
     expect(mocks.openRosterBot).not.toHaveBeenCalled()
+    expect((screen.getByPlaceholderText('inbox-triage') as HTMLInputElement).value).toBe('')
   })
 
   it('opens the created bot through the same source-owned roster transaction as a row click', async () => {

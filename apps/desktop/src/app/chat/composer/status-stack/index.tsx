@@ -1,11 +1,9 @@
 import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router'
 
 import { blurComposerInput } from '@/app/chat/composer/focus'
 import { useComposerSurfaceId } from '@/app/chat/composer/scope'
 import { useSessionView } from '@/app/chat/session-view'
-import { AGENTS_ROUTE } from '@/app/routes'
 import type { SubmitTextOptions } from '@/app/session/hooks/use-prompt-actions/utils'
 import { BillingBanner } from '@/components/billing-banner'
 import { composerDockCard } from '@/components/chat/composer-dock'
@@ -13,10 +11,8 @@ import { StatusSection } from '@/components/chat/status-section'
 import { FreeTierNoticeStrip, useFreeTierNoticeOwner } from '@/components/free-tier/notice-strip'
 import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { SharedMetricsConsentStrip } from '@/components/shared-metrics/consent-strip'
-import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
-import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { type Translations, useI18n } from '@/i18n'
 import { todoTree } from '@/lib/todos'
 import { useSessionSlice, useStoreSelector } from '@/lib/use-session-slice'
@@ -24,7 +20,6 @@ import { cn } from '@/lib/utils'
 import { $billingBlock } from '@/store/billing-block'
 import {
   $statusItemsBySession,
-  type ComposerStatusItem,
   dismissBackgroundProcess,
   groupStatusItems,
   refreshBackgroundProcesses,
@@ -38,13 +33,11 @@ import { $sessionControlBySession, refreshSessionControl } from '@/store/session
 import { $sharedMetricsConsent, sharedMetricsOfferPending } from '@/store/shared-metrics'
 import { $threadScrolledUpBySession } from '@/store/thread-scroll'
 import { $retainedTodosBySession } from '@/store/todos'
-import { openSessionInNewWindow } from '@/store/windows'
 
 import { PreviewStatusRow } from './preview-row'
 import { SessionControlSections } from './session-control'
 import { useSessionValue } from './session-control-utils'
 import { StatusItemRow } from './status-row'
-import { SubagentSection } from './subagent-section'
 import { useSubagentSnapshot } from './use-subagent-snapshot'
 
 // Slow safety-net poll for silent exits (processes without notify_on_complete
@@ -111,13 +104,12 @@ interface ComposerStatusStackProps {
  */
 export function ComposerStatusStack({ onSubmit, queue, sessionId }: ComposerStatusStackProps) {
   const { t } = useI18n()
-  const navigate = useNavigate()
   const storedSessionId = useStore(useSessionView().$storedId)
   const interfaceMode = useStore($interfaceMode)
   const shown = useMemo(() => shownInMode(interfaceMode), [interfaceMode])
-  // Hydrate always (delegate cards and session dots read the same store after
-  // a reload); keep POLLING only while the subagent group is on the shelf.
-  useSubagentSnapshot(sessionId, shown(GROUP_TIER.subagent))
+  // Delegate cards still hydrate on reload; live collaboration belongs to the
+  // single titlebar capsule, so the composer never adds a second monitor.
+  useSubagentSnapshot(sessionId, false)
   // Subscribe to THIS session's slice only. Both maps churn on other
   // sessions' activity (subagent ticks, background polls, preview updates in
   // any tile); a whole-map `useStore` re-rendered every mounted stack — one
@@ -158,7 +150,13 @@ export function ComposerStatusStack({ onSubmit, queue, sessionId }: ComposerStat
   const hasRunningBackground = allGroups.some(g => g.type === 'background' && g.items.some(i => i.state === 'running'))
 
   const groups = useMemo(
-    () => allGroups.filter(group => shown(GROUP_TIER[group.type]) && (group.type !== 'goal' || !isStructuredSupported)),
+    () =>
+      allGroups.filter(
+        group =>
+          group.type !== 'subagent' &&
+          shown(GROUP_TIER[group.type]) &&
+          (group.type !== 'goal' || !isStructuredSupported)
+      ),
     [allGroups, isStructuredSupported, shown]
   )
 
@@ -201,13 +199,6 @@ export function ComposerStatusStack({ onSubmit, queue, sessionId }: ComposerStat
 
     return () => clearInterval(timer)
   }, [hasRunningBackground, sessionId, paneVisible])
-
-  const openAgents = () => navigate(AGENTS_ROUTE)
-
-  const openSubagent = (item: ComposerStatusItem) =>
-    item.sessionId
-      ? void openSessionInNewWindow(item.sessionId, { watch: true, parentSessionId: storedSessionId ?? sessionId })
-      : openAgents()
 
   const previewRows =
     visiblePreviews.length > 0 && sessionId
@@ -256,31 +247,10 @@ export function ComposerStatusStack({ onSubmit, queue, sessionId }: ComposerStat
   }
 
   for (const group of groups) {
-    if (group.type === 'subagent' && sessionId) {
-      sections.push({ key: group.type, node: <SubagentSection key={sessionId} sessionId={sessionId} /> })
-
-      continue
-    }
-
     sections.push({
       key: group.type,
       node: (
         <StatusSection
-          accessory={
-            group.type === 'subagent' ? (
-              <Tip label={<TipKeybindLabel actionId="nav.agents" text={t.statusStack.agents} />}>
-                <Button
-                  className="text-muted-foreground/75 hover:text-foreground/90"
-                  onClick={openAgents}
-                  size="micro"
-                  type="button"
-                  variant="text"
-                >
-                  {t.statusStack.agents}
-                </Button>
-              </Tip>
-            ) : undefined
-          }
           collapsedIndicator={
             hasRunningTodo(group) ? (
               <GlyphSpinner
@@ -299,7 +269,6 @@ export function ComposerStatusStack({ onSubmit, queue, sessionId }: ComposerStat
               item={item}
               key={item.id}
               onDismiss={sessionId ? id => dismissBackgroundProcess(sessionId, id) : undefined}
-              onOpen={() => openSubagent(item)}
               onStop={sessionId ? id => void stopBackgroundProcess(sessionId, id) : undefined}
             />
           ))}

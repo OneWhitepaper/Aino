@@ -8,6 +8,7 @@ definition is already in the profile — writing it after the pin never ran (#10
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import hermes_yaml as yaml
@@ -152,7 +153,7 @@ def test_inherit_launch_model_preserves_explicit_profile_selection(
 @pytest.fixture
 def clone_source_and_launch(tmp_path, monkeypatch):
     """The user clones default while another workspace uses a third-party model."""
-    home = tmp_path / ".hermes"
+    home = tmp_path / "account-home"
     launch = home / "profiles" / "launch"
     launch.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -269,3 +270,55 @@ def test_create_without_clone_keeps_launch_model_inheritance(clone_source_and_la
     assert created["model"]["provider"] == "custom:launch-gateway"
     assert created["model"]["default"] == "launch-model"
     assert "launch-gateway" in created["providers"]
+
+
+@pytest.mark.parametrize("source_has_key", [False, True])
+@pytest.mark.parametrize("share_auth", [False, True])
+def test_clone_uses_selected_source_credentials_instead_of_rpc_host(
+    clone_source_and_launch, source_has_key, share_auth,
+):
+    from dotenv import dotenv_values
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+
+    home = clone_source_and_launch
+    launch = home / "profiles" / "launch"
+    source_config = read_user_config_raw(home / "config.yaml")
+    source_config["model"] = {"provider": "deepseek", "default": "source-chat"}
+    atomic_config_write(home / "config.yaml", source_config)
+    source_env = "DEEPSEEK_API_KEY=fake-source-key\n" if source_has_key else "# Shared provider auth.\n"
+    (home / ".env").write_text(source_env, encoding="utf-8")
+    (launch / ".env").write_text("DEEPSEEK_API_KEY=fake-host-key\n", encoding="utf-8")
+
+    def auth_store(owner):
+        return {
+            "version": 1,
+            "credential_pool": {"deepseek": [{
+                "id": f"{owner}-key", "auth_type": "api_key", "source": "manual:api_key",
+                "access_token": f"fake-{owner}-pool-key", "label": f"{owner} credential",
+            }]},
+        }
+
+    (home / "auth.json").write_text(json.dumps(auth_store("source")), encoding="utf-8")
+    (launch / "auth.json").write_text(json.dumps(auth_store("host")), encoding="utf-8")
+    with srv._session_profile_runtime_scope({"profile_home": str(home)}, hydrate_secrets=False):
+        source_runtime = resolve_runtime_provider(target_model="source-chat")
+    source_auth = (home / "auth.json").read_bytes()
+
+    result, created = _create_profile_model({"clone_from": "default", "share_auth": share_auth})
+
+    child = Path(result["path"])
+    assert created["model"] == source_config["model"]
+    assert dotenv_values(child / ".env") == dotenv_values(home / ".env")
+    assert result["mirrored"]["env"] is False
+    if share_auth:
+        assert result["mirrored"]["auth"] == "shared"
+        assert not (child / "auth.json").exists()
+    else:
+        assert result["mirrored"]["auth"] is True
+        assert json.loads((child / "auth.json").read_text()) == json.loads(source_auth)
+    with srv._session_profile_runtime_scope({"profile_home": str(child)}, hydrate_secrets=False):
+        inherited_runtime = resolve_runtime_provider(target_model="source-chat")
+    assert inherited_runtime["provider"] == source_runtime["provider"]
+    assert inherited_runtime["api_key"] == source_runtime["api_key"]
+    assert (home / "auth.json").read_bytes() == source_auth
+    assert (home / ".env").read_text() == source_env

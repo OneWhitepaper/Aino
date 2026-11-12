@@ -197,7 +197,15 @@ function ChatHeader({
         {showProfileTag && <ProfileTag className="pointer-events-auto mr-1.5" profile={activeStoredSession?.profile} />}
         <SessionActionsMenu
           align="start"
-          onDelete={selectedSessionId ? onDeleteSelectedSession : undefined}
+          onDelete={
+            selectedSessionId
+              ? () => {
+                  const delegate = sessionTileDelegate()
+
+                  return delegate ? delegate.deleteSession(selectedSessionId) : onDeleteSelectedSession()
+                }
+              : undefined
+          }
           onPin={selectedSessionId ? onToggleSelectedPin : undefined}
           pinned={selectedIsPinned}
           profile={activeStoredSession?.profile}

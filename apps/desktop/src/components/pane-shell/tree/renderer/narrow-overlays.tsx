@@ -33,11 +33,12 @@ import { $narrowOverlayPaneIds } from '../../narrow-overlay-state'
 import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
 import { $workspaceMode, $workspaceOwnerKey } from '../../workspace-scope'
 import { allPaneIds, findGroup, findGroupOfPane, type GroupNode, type LayoutNode } from '../model'
-import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane} from '../store'
+import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane } from '../store'
 import { clearTabSelection } from '../tab-selection'
 import { isToolPanelGroup } from '../tool-panel-policy'
 import { workspaceShownPaneIds } from '../workspace-presentation'
 
+import { revealSidebarModeWorkspace } from './group-tab-actions'
 import { KeepAlivePaneSlot, useStablePaneHosts } from './keep-alive-panes'
 import { type NarrowRevealState as RevealState, useNarrowRevealControls } from './narrow-reveal-controls'
 import { SidebarModeHeader } from './sidebar-mode-header'
@@ -45,6 +46,7 @@ import { sidebarModePanes } from './sidebar-mode-presentation'
 import { useActiveTabVisible } from './tab-strip-scroll'
 import { ToolPanelControls } from './tool-panel-controls'
 import { fixedTrackSize, narrowToolPaneIds, paneChrome, type TrackContext } from './track-model'
+import { usePaneRevealMotion } from './use-pane-reveal-motion'
 
 /** The width a revealed narrow overlay sizes itself to: the SAME resolution
  *  the pane's zone uses while docked — declared max() refined by the live
@@ -205,6 +207,7 @@ export function NarrowOverlays() {
   // Mirror the collapsed zone's tabs and keep explicit activations in view.
   const { group: revealedGroup, panes: zonePanes } = collapsedZonePanes(revealed, tree, collapsibles)
   const toolPanel = Boolean(revealedGroup && isToolPanelGroup(revealedGroup, id => panes.find(pane => pane.id === id)))
+  usePaneRevealMotion(overlayRef, Boolean(revealed), toolPanel, revealed?.id)
   const modePanes = sidebarModePanes(revealedGroup?.panes ?? [], zonePanes, !editMode)
   const compactSidebar = modePanes.length > 0
   useActiveTabVisible(tabsRef, revealed?.id ?? '', {
@@ -384,7 +387,12 @@ function NarrowOverlayTabs({
   setReveal
 }: NarrowOverlayTabsProps) {
   const { locale, t } = useI18n()
-  const tabKeyboardProps = usePaneTabKeyboard(zonePanes.map(pane => pane.id), revealed.id, tabsRef)
+
+  const tabKeyboardProps = usePaneTabKeyboard(
+    zonePanes.map(pane => pane.id),
+    revealed.id,
+    tabsRef
+  )
 
   return (
     <>
@@ -411,6 +419,7 @@ function NarrowOverlayTabs({
           }}
           onSelect={paneId => {
             clearTabSelection()
+            revealSidebarModeWorkspace(modePanes.find(pane => pane.id === paneId))
 
             if (revealedGroup) {
               activateTreePane(revealedGroup.id, paneId)
@@ -452,7 +461,12 @@ function NarrowOverlayTabs({
                 data-narrow-overlay-tab={pane.id}
                 key={pane.id}
                 onActivate={() => {
-                  if (revealedGroup) {activateTreePane(revealedGroup.id, pane.id)}
+                  revealSidebarModeWorkspace(pane)
+
+                  if (revealedGroup) {
+                    activateTreePane(revealedGroup.id, pane.id)
+                  }
+
                   setReveal(current => ({ id: pane.id, pinned: current?.pinned ?? false }))
                 }}
                 onClose={
@@ -463,6 +477,7 @@ function NarrowOverlayTabs({
                 onPointerDown={event => {
                   if (event.button === 0) {
                     event.preventDefault()
+                    revealSidebarModeWorkspace(pane)
 
                     if (revealedGroup) {
                       activateTreePane(revealedGroup.id, pane.id)

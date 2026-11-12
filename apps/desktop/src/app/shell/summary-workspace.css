@@ -22,7 +22,17 @@
 [data-slot='summary-card'] {
   border-radius: var(--aino-radius-card);
   border-color: var(--ui-stroke-tertiary);
-  box-shadow: var(--shadow-nous);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Crop the rail during dock/undock instead of squeezing the card's text on
+   every frame. The right edge remains the stable spatial reference. */
+[data-slot='summary-rail'][data-layout='docked'] [data-slot='summary-card'] {
+  flex: 0 0 296px;
+}
+
+[data-slot='summary-rail'][data-state='closing'] {
+  pointer-events: none;
 }
 
 [data-slot='summary-pane'] {

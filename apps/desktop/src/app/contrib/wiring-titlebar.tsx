@@ -1,14 +1,15 @@
 import { useStore } from '@nanostores/react'
 import { type CSSProperties, type ReactNode, useEffect } from 'react'
+import { useLocation } from 'react-router'
 
+import { Contribute } from '@/contrib/react/contribute'
 import { $interfaceMode, shownInMode } from '@/store/interface-mode'
 import { $connection } from '@/store/session'
-import {
-  $titlebarAppActionsSide,
-  titlebarAppActionsClusterCounts
-} from '@/store/titlebar-app-actions'
-import { isBrowserWindow, isHudWindow } from '@/store/windows'
+import { $titlebarAppActionsSide, titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
+import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows'
 
+import { CollaborationCapsule } from '../agents/collaboration-capsule'
+import { appViewForPath } from '../routes'
 import { useWindowControlsOverlayWidth } from '../shell/hooks/use-window-controls-overlay-width'
 import {
   TITLEBAR_CHROME_CHANGED_EVENT,
@@ -47,6 +48,7 @@ interface WiringTitlebarProps {
 
 /** Live native/browser titlebar chrome around the wired workspace. */
 export function WiringTitlebar({ children }: WiringTitlebarProps) {
+  const location = useLocation()
   // The REAL titlebar tool clusters (sidebar/flip toggles, haptics, keybinds,
   // settings gear) — fixed chrome positioned via the same CSS vars AppShell
   // sets, computed here from the live connection. Page-registered tools
@@ -55,10 +57,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const rightTitlebarTools = useTitlebarToolContributions('right')
   const connection = useStore($connection)
 
-  const controlsPos = titlebarControlsPosition(
-    connection?.windowButtonPosition,
-    Boolean(connection?.isFullscreen)
-  )
+  const controlsPos = titlebarControlsPosition(connection?.windowButtonPosition, Boolean(connection?.isFullscreen))
 
   const controlsVars = useTitlebarControlsVars(controlsPos)
   // Windows/WSLg reserve native min/max/close on the right (AppShell parity:
@@ -76,8 +75,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
 
   // WSLg: Electron's native overlay drifts its hit-region under RAIL, so the
   // renderer paints its own min/max/close (main decides via customWindowControls).
-  const customWindowControls =
-    connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
+  const customWindowControls = connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
 
   const appActionsSide = useStore($titlebarAppActionsSide)
   const interfaceMode = useStore($interfaceMode)
@@ -88,9 +86,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const systemToolsWidth = titlebarToolsWidthCss(clusters.right)
 
   const titlebarToolsWidth =
-    paneToolCount > 0
-      ? `calc(${systemToolsWidth} + ${titlebarToolsWidthCss(paneToolCount)})`
-      : systemToolsWidth
+    paneToolCount > 0 ? `calc(${systemToolsWidth} + ${titlebarToolsWidthCss(paneToolCount)})` : systemToolsWidth
 
   const leftToolsWidth = titlebarToolsWidthCss(clusters.left)
 
@@ -118,6 +114,11 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
         surface as orphaned buttons. */}
       {!isHudWindow() && !isBrowserWindow() && (
         <TitlebarControls leftTools={leftTitlebarTools} tools={rightTitlebarTools} />
+      )}
+      {!isAuxiliaryWindow() && (
+        <Contribute area="titleBar.center" id="collaboration:capsule">
+          <CollaborationCapsule autoVisible={appViewForPath(location.pathname) === 'chat'} />
+        </Contribute>
       )}
       {!isHudWindow() && customWindowControls && (
         <WslgWindowControls

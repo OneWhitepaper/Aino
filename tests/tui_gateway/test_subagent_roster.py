@@ -2,6 +2,7 @@
 
 import json
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -34,7 +35,35 @@ def test_roster_reports_live_children_without_an_attached_session(roster):
     active["c2"] = {"subagent_id": "c2", "depth": 0, "owner_agent_session_id": "parent-a", "status": "running"}
     active["g1"] = {"subagent_id": "g1", "depth": 1, "owner_agent_session_id": "child-x", "status": "running"}
 
-    assert call() == {"parent-a": {"session_id": "parent-a", "subagents": 2, "background": 0}}
+    result = call()["parent-a"]
+    assert result["subagents"] == 2
+    assert {worker["subagent_id"] for worker in result["workers"]} == {"c1", "c2"}
+
+
+def test_roster_groups_nested_workers_without_exposing_live_control_authority(roster):
+    """The capsule can name real off-screen work, including nested children, but a read never
+    hands out the captured transport, owner record or agent object that grants stop/steer."""
+    active, call = roster
+    active["c1"] = {
+        "subagent_id": "c1", "depth": 0, "goal": "Inspect source", "status": "running",
+        "owner_agent_session_id": "parent-a", "owner_session_id": "private-runtime",
+        "owner_transport": object(), "owner_session_record": {"secret": True},
+        "agent": SimpleNamespace(session_id="child-session"),
+    }
+    active["g1"] = {
+        "subagent_id": "g1", "depth": 1, "parent_id": "c1", "goal": "Check imports",
+        "owner_agent_session_id": "child-session", "status": "running", "last_tool": "read_file",
+    }
+    result = call()["parent-a"]
+    assert result["subagents"] == 1
+    workers = {worker["subagent_id"]: worker for worker in result["workers"]}
+    assert workers["c1"]["child_session_id"] == "child-session"
+    assert workers["g1"]["goal"] == "Check imports"
+    assert workers["g1"]["last_tool"] == "read_file"
+    for worker in workers.values():
+        assert not {"agent", "owner_transport", "owner_session_record", "owner_session_id"} & worker.keys()
+    active.clear()
+    assert call() == {}
 
 
 def test_roster_omits_conversations_stored_in_another_profile(roster):

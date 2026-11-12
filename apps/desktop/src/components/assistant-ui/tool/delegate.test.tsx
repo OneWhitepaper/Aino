@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { openSubagentPanel } from '@/app/agents/subagent-panel'
 import { PRIMARY_SESSION_VIEW, SessionViewProvider } from '@/app/chat/session-view'
 import { $subagentsBySession, pruneFinishedSessionSubagents, upsertSubagent } from '@/store/subagents'
 import type * as WindowStore from '@/store/windows'
@@ -9,6 +10,7 @@ import { openSessionInNewWindow } from '@/store/windows'
 
 import { DelegateTool } from './delegate'
 
+vi.mock('@/app/agents/subagent-panel', () => ({ openSubagentPanel: vi.fn(), syncSubagentPanelRows: vi.fn() }))
 vi.mock('@/store/windows', async importOriginal => ({
   ...(await importOriginal<typeof WindowStore>()),
   openSessionInNewWindow: vi.fn()
@@ -20,25 +22,27 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('keeps child activity collapsed until requested and preserves access through live completion', () => {
-  const view = { ...PRIMARY_SESSION_VIEW, $runtimeId: atom<string | null>('owner') }
+it('opens the exact named child in the tool panel and retains its terminal receipt across parent turns', () => {
+  const view = {
+    ...PRIMARY_SESSION_VIEW,
+    $runtimeId: atom<string | null>('owner'),
+    $storedId: atom<string | null>('stored-owner')
+  }
+
+  const args = { tasks: [{ goal: 'Review sources. Preserve the original instructions and report all findings.' }] }
 
   const { container, rerender } = render(
     <SessionViewProvider value={view}>
-      <DelegateTool args={{ tasks: [{ goal: 'Review sources' }] }} toolCallId="delegate-1" />
+      <DelegateTool args={args} toolCallId="delegate-1" />
     </SessionViewProvider>
   )
-
-  const trigger = screen.getByRole('button', { name: /Review sources.*Running/ })
-  expect(trigger.getAttribute('aria-expanded')).toBe('false')
-  expect(container.querySelector('[data-slot="delegate-detail"]')).toBeNull()
-  fireEvent.click(trigger)
 
   act(() => {
     upsertSubagent('owner', {
       subagent_id: 'worker-1',
       child_session_id: 'child-1',
-      goal: 'Review sources',
+      display_name: 'Source review',
+      goal: args.tasks[0]!.goal,
       status: 'running',
       model: 'gpt-5'
     })
@@ -49,90 +53,113 @@ it('keeps child activity collapsed until requested and preserves access through 
       'subagent.progress'
     )
   })
-
   rerender(
     <SessionViewProvider value={view}>
-      <DelegateTool
-        args={{ tasks: [{ goal: 'Review sources' }] }}
-        result={{ status: 'dispatched', subagent_ids: ['worker-1'] }}
-        toolCallId="delegate-1"
-      />
+      <DelegateTool args={args} result={{ status: 'dispatched', subagent_ids: ['worker-1'] }} toolCallId="delegate-1" />
     </SessionViewProvider>
   )
 
-  // Native identity arriving after dispatch must not close a disclosure the user opened.
-  expect(screen.getByRole('button', { name: /Review sources.*Running/ }).getAttribute('aria-expanded')).toBe('true')
-  expect(screen.getByText('Found the source entry point.')).toBeTruthy()
-  expect(screen.getByRole('textbox', { name: 'Instructions for this subagent' })).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Open in new window' }))
-  expect(openSessionInNewWindow).toHaveBeenCalledWith('child-1', { parentSessionId: 'owner', watch: true })
+  const portrait = container.querySelector('[data-slot="subagent-avatar"]')?.getAttribute('src')
+  expect(portrait).toMatch(/^data:image\/svg\+xml,/)
+  expect(screen.queryByText(args.tasks[0]!.goal)).toBeNull()
+  const trigger = screen.getByRole('button', { name: /Source review.*Running/ })
+  expect(trigger.hasAttribute('aria-expanded')).toBe(false)
+  fireEvent.click(trigger)
+  expect(openSubagentPanel).toHaveBeenLastCalledWith({
+    parentRuntimeId: 'owner',
+    storedSessionId: 'stored-owner',
+    owner: undefined,
+    toolCallId: 'delegate-1',
+    taskId: 'worker-1',
+    row: expect.objectContaining({
+      goal: args.tasks[0]!.goal,
+      sessionId: 'child-1',
+      activity: ['Found the source entry point.']
+    })
+  })
+  expect(container.querySelector('[data-slot="delegate-detail"]')).toBeNull()
+  expect(screen.queryByRole('textbox')).toBeNull()
+  expect(openSessionInNewWindow).not.toHaveBeenCalled()
 
-  const summary = `Verified the source. ${'Preserved detail. '.repeat(30)}Final evidence is available.`
   act(() =>
     upsertSubagent(
       'owner',
-      {
-        subagent_id: 'worker-1',
-        status: 'completed',
-        summary,
-        duration_seconds: 12
-      },
+      { subagent_id: 'worker-1', status: 'completed', summary: 'Verified.', duration_seconds: 12 },
       false,
       'subagent.complete'
     )
   )
-  expect(screen.getByRole('button', { name: /Review sources.*Completed/ })).toBeTruthy()
-  expect(container.querySelector('[data-slot="delegate-detail"]')?.textContent).toContain(summary)
-  expect(screen.queryByRole('textbox')).toBeNull()
-  expect(screen.getByRole('button', { name: 'Open in new window' })).toBeTruthy()
-  // A completion notification starts another parent turn and prunes the live roster.
-  // The transcript must retain the terminal facts already received for this exact child.
   act(() => pruneFinishedSessionSubagents('owner'))
   expect($subagentsBySession.get().owner).toEqual([])
-  expect(screen.getByRole('button', { name: /Review sources.*Completed/ })).toBeTruthy()
-  expect(container.querySelector('[data-slot="delegate-detail"]')?.textContent).toContain(summary)
-  act(() => upsertSubagent('owner', { subagent_id: 'worker-2', goal: 'Review sources', status: 'running' }))
-  expect(screen.getByRole('button', { name: /Review sources.*Completed/ })).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: /Review sources.*Completed/ }))
-  expect(container.querySelector('[data-slot="delegate-detail"]')).toBeNull()
+  expect(container.querySelector('[data-slot="subagent-avatar"]')?.getAttribute('src')).toBe(portrait)
+  fireEvent.click(screen.getByRole('button', { name: /Source review.*Completed/ }))
+  expect(openSubagentPanel).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      taskId: 'worker-1',
+      row: expect.objectContaining({ status: 'completed', activity: ['Found the source entry point.', 'Verified.'] })
+    })
+  )
 })
 
-it('does not claim historical dispatch is complete and reveals persisted results or failures on demand', () => {
-  const args = { tasks: [{ goal: 'Audit dependencies' }] }
+it('opens historical dispatched, completed and failed details without claiming they are running', () => {
+  const view = {
+    ...PRIMARY_SESSION_VIEW,
+    $runtimeId: atom<string | null>(null),
+    $storedId: atom<string | null>('historical-parent')
+  }
 
-  const { container, rerender } = render(
-    <DelegateTool
-      args={args}
-      result={{ status: 'dispatched', goals: ['Audit dependencies'] }}
-      toolCallId="delegate-2"
-    />
+  const args = { tasks: [{ goal: 'Audit dependencies. Preserve licenses and include complete package details.' }] }
+
+  const { rerender } = render(
+    <SessionViewProvider value={view}>
+      <DelegateTool
+        args={args}
+        result={{ status: 'dispatched', goals: [args.tasks[0]!.goal] }}
+        toolCallId="delegate-2"
+      />
+    </SessionViewProvider>
   )
 
-  const trigger = screen.getByRole('button', { name: /Audit dependencies.*Dispatched/ })
-  expect(trigger.getAttribute('aria-expanded')).toBe('false')
   expect(screen.queryByText('Completed')).toBeNull()
   expect(screen.queryByText('Running')).toBeNull()
-  fireEvent.click(trigger)
-  expect(screen.queryByRole('textbox')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Audit dependencies.*Dispatched/ }))
+  expect(openSubagentPanel).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      parentRuntimeId: null,
+      storedSessionId: 'historical-parent',
+      taskId: 'delegate-2:0',
+      row: expect.objectContaining({ goal: args.tasks[0]!.goal, status: 'dispatched' })
+    })
+  )
   rerender(
-    <DelegateTool
-      args={args}
-      result={{ results: [{ status: 'ok', summary: 'Confirmed two licenses.' }] }}
-      toolCallId="delegate-2"
-    />
+    <SessionViewProvider value={view}>
+      <DelegateTool
+        args={args}
+        result={{ results: [{ status: 'ok', summary: 'Confirmed two licenses.', session_id: 'saved-child' }] }}
+        toolCallId="delegate-2"
+      />
+    </SessionViewProvider>
   )
-  expect(screen.getByRole('button', { name: /Audit dependencies.*Completed/ }).getAttribute('aria-expanded')).toBe(
-    'true'
+  fireEvent.click(screen.getByRole('button', { name: /Audit dependencies.*Completed/ }))
+  expect(openSubagentPanel).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      row: expect.objectContaining({ activity: ['Confirmed two licenses.'], sessionId: 'saved-child' })
+    })
   )
-  expect(screen.getByText('Confirmed two licenses.')).toBeTruthy()
   rerender(
-    <DelegateTool
-      args={args}
-      result={{ results: [{ status: 'error', error: 'Registry unavailable.' }] }}
-      toolCallId="delegate-2"
-    />
+    <SessionViewProvider value={view}>
+      <DelegateTool
+        args={args}
+        result={{ results: [{ status: 'error', error: 'Registry unavailable.' }] }}
+        toolCallId="delegate-2"
+      />
+    </SessionViewProvider>
   )
-  expect(screen.getByRole('button', { name: /Audit dependencies.*Failed/ })).toBeTruthy()
-  expect(container.querySelector('[data-slot="delegate-detail"]')?.textContent).toContain('Registry unavailable.')
+  fireEvent.click(screen.getByRole('button', { name: /Audit dependencies.*Failed/ }))
+  expect(openSubagentPanel).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      row: expect.objectContaining({ activity: ['Registry unavailable.'] })
+    })
+  )
+  expect(openSessionInNewWindow).not.toHaveBeenCalled()
 })

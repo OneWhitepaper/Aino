@@ -16,10 +16,6 @@
 .account-profile-card {
   padding: 1.3125rem 1.375rem 0;
 }
-.account-settings-page > .account-cloud-sync-card {
-  margin-block-start: 1.5rem;
-  padding: 1rem 1.125rem;
-}
 .account-profile-header {
   display: flex;
   align-items: center;

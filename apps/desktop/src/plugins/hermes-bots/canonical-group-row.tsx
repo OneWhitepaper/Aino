@@ -1,5 +1,4 @@
 import {
-  Button,
   Codicon,
   ConfirmDialog,
   ContextMenu,
@@ -9,6 +8,7 @@ import {
   ContextMenuTrigger,
   GlyphSpinner,
   haptic,
+  RowButton,
   useI18n,
   useValue
 } from '@hermes/plugin-sdk'
@@ -48,13 +48,12 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <Button
+          <RowButton
             aria-current={active || undefined}
             aria-description={memberCount}
             aria-label={room.name}
             className="aino-group-roster-row"
             onClick={open}
-            variant="ghost"
           >
             {room.members.length ? (
               <span aria-hidden="true" className="aino-roster-group-avatar">
@@ -68,10 +67,10 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
               </span>
             )}
             <span className="aino-roster-group-copy">
-              <span className="aino-group-roster-name">{room.name}</span>
-              <span className="aino-roster-group-preview">{memberCount}</span>
+              <span className="aino-roster-row-title">
+                <span className="aino-group-roster-name">{room.name}</span>
                 {state ? (
-                  <span className="inline-flex shrink-0 items-center self-center text-[0.6875rem]" data-room-state={state}>
+                  <span className="aino-roster-row-state" data-room-state={state}>
                     {state === 'working' ? (
                       <span aria-hidden="true" className="text-(--ui-accent)">
                         <GlyphSpinner />
@@ -83,18 +82,21 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
                       />
                     )}
                     <span className="sr-only">
-                      {state === 'working' ? labels.rowWorking : state === 'failed' ? labels.rowFailed : labels.rowNeedsYou}
+                      {state === 'working'
+                        ? labels.rowWorking
+                        : state === 'failed'
+                          ? labels.rowFailed
+                          : labels.rowNeedsYou}
                     </span>
                   </span>
                 ) : null}
                 {room.updatedAt ? (
-                  <span className="shrink-0 text-[0.6875rem] text-(--ui-text-quaternary)">
-                    {rowAge(room.updatedAt, t.sidebar.row)}
-                  </span>
+                  <span className="aino-roster-row-age">{rowAge(room.updatedAt, t.sidebar.row)}</span>
                 ) : null}
-
+              </span>
+              <span className="aino-roster-group-preview">{memberCount}</span>
             </span>
-          </Button>
+          </RowButton>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onSelect={onOpen}>{labels.openGroup}</ContextMenuItem>

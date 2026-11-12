@@ -7,8 +7,15 @@ async function loadTerminalStore() {
   const $currentCwd = atom('/workspace')
 
   vi.doMock('@/store/tool-session', () => ({
-    $toolSession: computed($currentCwd, cwd => ({ cwd })),
+    $toolSession: computed($currentCwd, cwd => ({
+      cwd,
+      owner: undefined,
+      scope: { connectionId: 'local', profile: 'default' },
+      sourceKey: 'local',
+      storedId: null
+    })),
     $toolWorkspaceCwd: $currentCwd,
+    toolSessionHasCurrentConnection: () => true,
     toolSessionHasCurrentSource: () => true
   }))
 

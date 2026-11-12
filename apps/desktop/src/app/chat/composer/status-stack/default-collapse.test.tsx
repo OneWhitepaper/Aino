@@ -65,7 +65,7 @@ it('offers a collapsed read-only checklist from an idle session, without a runni
   expect(screen.queryByLabelText('Running')).toBeNull()
 })
 
-it('auto-expands only todos and keeps other groups closed as activity arrives', () => {
+it('keeps delegation in the titlebar capsule while preserving the other composer groups', () => {
   $todosBySession.set({ owner: [{ id: 'todo', content: 'Visible todo', status: 'in_progress' }] })
   $goalsBySession.set({ owner: { status: 'active', title: 'Hidden legacy goal', updatedAt: 1 } })
   $backgroundStatusBySession.set({
@@ -85,12 +85,12 @@ it('auto-expands only todos and keeps other groups closed as activity arrives', 
   expect(screen.queryByText('Worker task')).toBeNull()
   expect(screen.queryByText('Queued request')).toBeNull()
 
-  const header = screen.getByRole('button', { name: /1 Subagent/ })
-  fireEvent.click(header)
-  expect(screen.getByText('Worker task')).toBeTruthy()
-  expect(screen.getByText('Progress arrived')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /1 Subagent/ })).toBeNull()
+  expect(screen.queryByText('Progress arrived')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Background/i }))
+  expect(screen.getByText('Background process')).toBeTruthy()
   view.rerender(stack(false))
-  expect(screen.getByText('Worker task')).toBeTruthy()
+  expect(screen.getByText('Background process')).toBeTruthy()
 })
 
 it('starts structured goals collapsed and preserves manual queue expansion when parked', () => {

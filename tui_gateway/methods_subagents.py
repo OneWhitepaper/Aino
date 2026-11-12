@@ -10,7 +10,7 @@ _registry = HandlerRegistry()
 method = _registry.method
 
 _SUBAGENT_SNAPSHOT_FIELDS = (
-    "subagent_id", "parent_id", "depth", "goal", "delegation_id", "model",
+    "subagent_id", "parent_id", "depth", "goal", "display_name", "delegation_id", "model",
     "started_at", "status", "tool_count", "last_tool", "accepting_steer",
 )
 _SUBAGENT_TAIL_BYTES = 16384
@@ -64,7 +64,7 @@ def _(rid, params):
 
 
 def _live_work_owners():
-    """``(kind, owner candidates)`` for every live top-level child and running background process in this
+    """``(kind, owner candidates, snapshot)`` for every live child and running background process in this
     process. A child names its durable conversation (``owner_agent_session_id``, the spine completion delivery
     routes by). A process names the conversation that spawned it (``parent_session_id``, from
     ``HERMES_SESSION_ID``) and its routing ``session_key``, which on the gateway path is a route
@@ -73,13 +73,23 @@ def _live_work_owners():
     from tools.process_registry import process_registry
 
     with _active_subagents_lock:
-        owners = [("subagents", (str(r.get("owner_agent_session_id") or ""), ""))
-                  for r in _active_subagents.values() if not r.get("depth")]
+        records = {key: dict(record) for key, record in _active_subagents.items()}
+    owners = []
+    for record in records.values():
+        root, seen = record, set()
+        while root.get("parent_id") in records and root.get("parent_id") not in seen:
+            seen.add(root["parent_id"])
+            root = records[root["parent_id"]]
+        snapshot = {key: record.get(key) for key in _SUBAGENT_SNAPSHOT_FIELDS}
+        child_session_id = getattr(record.get("agent"), "session_id", None)
+        if isinstance(child_session_id, str) and child_session_id:
+            snapshot["child_session_id"] = child_session_id
+        owners.append(("subagents", (str(root.get("owner_agent_session_id") or ""), ""), snapshot))
     for entry in process_registry.list_sessions():
         proc = process_registry.get(entry.get("session_id"))
         if proc is not None and not getattr(proc, "exited", True):
             owners.append(("background", (str(getattr(proc, "parent_session_id", "") or ""),
-                                          str(getattr(proc, "session_key", "") or ""))))
+                                          str(getattr(proc, "session_key", "") or "")), None))
     return owners
 
 
@@ -118,24 +128,44 @@ def _(rid, params):
     for a row that is not open or for any row right after a renderer reload; this read needs neither. One
     process hosts several profiles, so only conversations stored in the requested profile's state.db are
     returned — a caller never learns another profile's session ids."""
-    owners = _live_work_owners()
-    if not owners:
-        return _ok(rid, {"sessions": []})
     scope = params if isinstance(params, dict) else {}
     if not str(scope.get("profile") or "").strip():
         # A legacy-fallback socket ticketed to a non-launch profile answers for that profile only.
         from tui_gateway.ws_legacy_fallback import connection_profile_home
         if home := connection_profile_home():
             scope = {"profile": Path(home).name}
-    counts = {}
     namespaces = _route_namespaces(_profile_home(scope.get("profile")))
     with _profile_db(scope) as db:
         if db is None:
             return _ok(rid, {"sessions": []})
-        for kind, owner_ids in owners:
-            if sid := _stored_owner(db, owner_ids, namespaces):
-                counts.setdefault(sid, {"subagents": 0, "background": 0})[kind] += 1
-    return _ok(rid, {"sessions": [{"session_id": sid, **c} for sid, c in counts.items()]})
+        return _ok(rid, live_work_roster(db, namespaces))
+
+
+def live_work_roster(db, namespaces, *, room_sources=None):
+    """Shared read projection; a hidden room producer is never a navigable conversation.
+
+    The native owner may supply exact, current member-session bindings. Without one, omit only
+    the internal ``bot_room`` row rather than fabricating a normal chat from its private id.
+    """
+    counts = {}
+    for kind, owner_ids, snapshot in _live_work_owners():
+        sid = _stored_owner(db, owner_ids, namespaces)
+        if not sid:
+            continue
+        stored = db.get_session(sid)
+        if stored is None:
+            continue
+        source = (room_sources or {}).get(sid)
+        if stored.get("source") == "bot_room" and source is None:
+            continue
+        row = counts.setdefault(sid, {"subagents": 0, "background": 0})
+        if source is not None:
+            row["source"] = source
+        if snapshot is None or not snapshot.get("depth"):
+            row[kind] += 1
+        if snapshot is not None:
+            row.setdefault("workers", []).append(snapshot)
+    return {"sessions": [{"session_id": sid, **row} for sid, row in counts.items()]}
 
 
 def _failed_delegations(session_id, owner):

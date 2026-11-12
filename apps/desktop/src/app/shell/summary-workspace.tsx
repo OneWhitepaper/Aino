@@ -1,7 +1,7 @@
 import './summary-workspace.css'
 
 import { useStore } from '@nanostores/react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import type { ReactNode } from 'react'
 
 import type { ComposerTarget } from '@/app/chat/composer/focus'
@@ -25,32 +25,36 @@ interface SummaryWorkspaceProps {
 interface SummaryRailProps {
   compact: boolean
   reducedMotion: boolean
-  covered: boolean
 }
 
-function SummaryRail({ compact, reducedMotion, covered }: SummaryRailProps) {
+function SummaryRail({ compact, reducedMotion }: SummaryRailProps) {
+  const present = useIsPresent()
   const expanded = { height: compact ? 'auto' : '100%', width: SUMMARY_RAIL_WIDTH }
-  const collapsed = { ...expanded, width: 0 }
-  const transition = { duration: reducedMotion ? 0 : 0.2, ease: 'easeOut' as const }
+  const collapsed = { ...expanded, width: compact ? SUMMARY_RAIL_WIDTH : 0 }
+  const transition = { duration: reducedMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] as const }
+  const exitTransition = { ...transition, duration: reducedMotion ? 0 : 0.16 }
 
   return (
     <motion.div
       animate={expanded}
-      aria-hidden={covered || undefined}
-      className={cn('flex min-h-0 min-w-0 shrink-0 items-start overflow-hidden', compact && 'pointer-events-none z-20')}
+      aria-hidden={!present || undefined}
+      className={cn(
+        'flex min-h-0 min-w-0 shrink-0 items-start justify-end overflow-hidden',
+        compact && 'pointer-events-none z-20'
+      )}
       data-layout={compact ? 'overlay' : 'docked'}
       data-slot="summary-rail"
-      data-state="open"
+      data-state={present ? 'open' : 'closing'}
+      exit={{ ...collapsed, transition: exitTransition }}
       id="session-summary"
-      inert={covered}
-      initial={collapsed}
+      inert={!present}
+      initial={reducedMotion ? false : collapsed}
       style={{
         position: compact ? 'absolute' : undefined,
         top: compact ? 0 : undefined,
         right: compact ? 0 : undefined,
         bottom: compact ? 'max(0px, anchor(--summary-composer top, 0px))' : undefined,
-        maxWidth: '100%',
-        display: covered ? 'none' : undefined
+        maxWidth: '100%'
       }}
       transition={transition}
     >
@@ -61,7 +65,8 @@ function SummaryRail({ compact, reducedMotion, covered }: SummaryRailProps) {
           'pointer-events-auto m-3 max-h-[calc(100%_-_1.5rem)] min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain'
         )}
         data-slot="summary-card"
-        initial={{ opacity: 0, x: 16, y: 0 }}
+        exit={{ opacity: 0, x: reducedMotion ? 0 : 8, transition: exitTransition }}
+        initial={reducedMotion ? false : { opacity: 0, x: 12, y: 0 }}
         transition={transition}
       >
         <WiredPane part="summary" />
@@ -85,7 +90,22 @@ export function SummaryWorkspace({ children, target = 'main' }: SummaryWorkspace
       <div className="relative flex min-h-0 min-w-0 flex-1" data-slot="summary-workspace-main">
         {children}
       </div>
-      {open && ownsSummary && <SummaryRail compact={compact} covered={workspacePage} reducedMotion={reducedMotion} />}
+      {ownsSummary && (
+        <div
+          aria-hidden={workspacePage || undefined}
+          className="contents"
+          inert={workspacePage}
+          style={{ display: workspacePage ? 'none' : undefined }}
+        >
+          {reducedMotion ? (
+            open && <SummaryRail compact={compact} reducedMotion />
+          ) : (
+            <AnimatePresence initial={false}>
+              {open && <SummaryRail compact={compact} key="summary" reducedMotion={false} />}
+            </AnimatePresence>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -12,7 +12,7 @@ import type * as React from 'react'
 import type { MenuKit } from '@/components/ui/actions-menu'
 import type { Contribution } from '@/contrib/types'
 
-import type { WorkspacePaneScope } from '../../workspace-scope'
+import type { WorkspaceMode, WorkspacePaneScope } from '../../workspace-scope'
 import type { GroupNode, LayoutNode } from '../model'
 import { allPaneIds } from '../model'
 import { isToolPanelGroup } from '../tool-panel-policy'
@@ -67,6 +67,8 @@ interface PaneChrome extends PaneSizing {
    *  The pane owns its localized description; selection still activates the
    *  existing pane and never creates a separate navigation mode. */
   sidebarDescription?: () => string
+  /** Explicit conversation-source navigation reveals this existing rail. */
+  sidebarMode?: WorkspaceMode
   /** Leaves the grid on narrow viewports; revealed as an edge overlay. */
   collapsible?: boolean
   /** Arrive minimized — a rail tab rather than an open zone. For a pane that

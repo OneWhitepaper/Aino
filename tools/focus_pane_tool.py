@@ -5,6 +5,7 @@ The renderer runs each pane's own reveal path and only acts on the active window
 a background turn never moves the user's focus. URLs/files go through `desktop_preview`.
 """
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.registry import registry, tool_error
 
@@ -18,7 +19,7 @@ def focus_pane_tool(pane: str) -> str:
         return tool_error(f"pane must be one of: {', '.join(PANES)}.")
     return desktop_ui.emit_or_error(
         "pane.reveal", {"pane": name}, f"Failed to focus the {name} pane: ",
-        "Pane focus is only available in the Hermes desktop app.", {"success": True, "pane": name})
+        f"Pane focus is only available in the {PRODUCT_NAME} desktop app.", {"success": True, "pane": name})
 
 
 registry.register(

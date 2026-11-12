@@ -1,4 +1,5 @@
 .notification-workspace {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -8,16 +9,11 @@
   min-height: 0;
   overflow: clip;
 }
-/* The approved summary has its own footprint below the page header. */
-.notification-bar {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  min-width: 0;
-  padding: 0 20px;
-  background: var(--ui-chat-surface-background);
-  font-size: var(--aino-text-ui);
+.notification-workspace-overlay {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 12px;
+  z-index: 50;
 }
 .notification-summary {
   display: grid;
@@ -32,7 +28,7 @@
   background: var(--ui-bg-elevated);
   box-shadow: var(--aino-shadow-notice);
 }
-/* Dialogs own attention; retain the summary's footprint and queued state. */
+/* Dialogs own attention; retain queued feedback without covering their content. */
 body:has([data-slot='dialog-content'][data-state='open']) .notification-summary {
   visibility: hidden;
   pointer-events: none;
@@ -93,43 +89,12 @@ body:has([data-slot='dialog-content'][data-state='open']) .notification-summary 
   margin: -3px -4px 0 0;
   color: var(--ui-text-tertiary);
 }
-.notification-trigger {
-  flex-shrink: 0;
-  margin-block: 4px 8px;
-  font-size: var(--aino-text-ui);
-}
-.notification-count {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding-inline: 5px;
-  border-radius: 50%;
-  background: var(--dt-primary);
-  color: var(--dt-primary-foreground);
-  font-size: var(--aino-text-caption);
-  font-variant-numeric: tabular-nums;
-}
-.notification-workspace-row {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  position: relative;
-}
 .notification-workspace-content {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-}
-.notification-content-hidden {
-  position: absolute;
-  inset: 0;
-  visibility: hidden;
-  pointer-events: none;
 }
 .notification-panel {
   display: flex;
@@ -144,6 +109,93 @@ body:has([data-slot='dialog-content'][data-state='open']) .notification-summary 
   color: var(--ui-text-primary);
   font-size: var(--aino-text-body);
   line-height: 1.65;
+}
+.notification-popover {
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 16px));
+  max-height: min(40rem, var(--radix-popover-content-available-height, calc(100dvh - 4rem)));
+  overflow: hidden;
+}
+.notification-popover .notification-panel {
+  flex: 1;
+  width: 100%;
+  max-height: inherit;
+  border-inline-start: 0;
+  background: transparent;
+}
+.notification-toolbar-host {
+  position: relative;
+  display: flex;
+}
+.notification-feedback {
+  position: absolute;
+  z-index: 50;
+  inset-block-start: calc(100% + 10px);
+  inset-inline-end: 0;
+  width: min(380px, calc(100vw - 1rem));
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-ui);
+  text-align: start;
+}
+.notification-feedback .notification-summary {
+  width: 100%;
+  margin: 0;
+}
+.notification-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-block: 4px 16px;
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.notification-metadata time {
+  font-variant-numeric: tabular-nums;
+}
+.notification-deferred {
+  flex-basis: 100%;
+  color: var(--ui-text-secondary);
+}
+.notification-facts {
+  display: grid;
+  margin: 24px 0;
+}
+.notification-facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding-block: 11px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  font-size: var(--aino-text-ui);
+}
+.notification-facts dt {
+  color: var(--ui-text-secondary);
+}
+.notification-facts dd {
+  margin: 0;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.notification-list-row + .notification-list-row {
+  margin-block-start: 12px;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+.notification-list-context {
+  margin-inline: 34px 8px;
+}
+.notification-list-context .notification-metadata {
+  margin-block: 0 8px;
+}
+.notification-list-context .notification-actions button {
+  min-height: 24px;
+  padding: 2px 0;
+  font-size: var(--aino-text-caption);
 }
 .notification-panel-header {
   display: flex;
@@ -316,15 +368,9 @@ body:has([data-slot='dialog-content'][data-state='open']) .notification-summary 
   }
 }
 @media (max-width: 42rem) {
-  .notification-bar {
-    padding-inline: 12px;
-  }
   .notification-summary {
     width: 100%;
     padding: 14px;
-  }
-  .notification-trigger span:not(.notification-count) {
-    display: none;
   }
   .notification-panel-body {
     padding: 18px;

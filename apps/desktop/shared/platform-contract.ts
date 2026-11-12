@@ -264,12 +264,23 @@ export interface PlatformBillingBridge {
   listUsage(input: PlatformUsageQuery & { expected_user_id: string }): Promise<PlatformUsagePage>
 }
 
+export interface PlatformDeviceInfo {
+  installation_name: string
+  os: 'macos' | 'windows' | 'linux'
+  client_type: 'desktop' | 'desktop_dev' | 'browser'
+  client_version: string
+}
+
 export interface PlatformDevice {
   device_id: string
   last_used_at: string
   expires_at: string | null
   revoked: boolean
   status?: 'active' | 'expired' | 'revoked'
+  device_info?: PlatformDeviceInfo
+  credential_type?: 'device' | 'lease'
+  /** Native installation comparison; never accepted from the API. */
+  is_current?: boolean
 }
 
 export interface PlatformDeviceOwner {

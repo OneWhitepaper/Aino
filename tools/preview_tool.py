@@ -7,6 +7,7 @@ agent-level callback dispatch (agent_runtime_helpers -> agent.read_preview_callb
 Lives in the ``desktop_ui`` toolset — desktop-app sessions only.
 """
 
+from hermes_cli.product_identity import PRODUCT_NAME
 from tools import desktop_ui
 from tools.open_preview_tool import _normalize_target, open_preview_tool
 from tools.registry import registry, tool_error
@@ -18,7 +19,7 @@ def preview_close(url: str = "") -> str:
         "preview.close",
         {"url": target},
         "Failed to close the preview: ",
-        "The preview pane is only available in the Hermes desktop app.",
+        f"The preview pane is only available in the {PRODUCT_NAME} desktop app.",
         {"success": True, "closed": target or "all"},
     )
 

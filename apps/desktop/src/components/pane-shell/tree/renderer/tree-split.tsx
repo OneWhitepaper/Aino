@@ -29,10 +29,13 @@ import {
   persistTree,
   presetSplitWeights,
   setTreeGroupMinimized,
-  setTreeSplitWeights} from '../store'
+  setTreeSplitWeights
+} from '../store'
+import { isToolPanelGroup } from '../tool-panel-policy'
 import { $maximizedToolGroup, containsMaximizedToolGroup } from '../tool-panel-view'
 import { workspaceShownPaneIds } from '../workspace-presentation'
 
+import { ToolTrackMotion } from './tool-track-motion'
 import {
   allFixedAbsorberIndex,
   COLLAPSED_ZONE_PX,
@@ -64,6 +67,16 @@ function groupIdOf(node: LayoutNode): null | string {
   const ids = new Set(node.children.map(groupIdOf))
 
   return ids.size === 1 ? [...ids][0] : null
+}
+
+function toolTrackAnimationEnabled(
+  child: LayoutNode,
+  paneFor: TrackContext['paneFor'],
+  narrowCollapsed: boolean,
+  workspacePage: boolean,
+  editMode: boolean
+): boolean {
+  return !narrowCollapsed && !workspacePage && !editMode && child.type === 'group' && isToolPanelGroup(child, paneFor)
 }
 
 /**
@@ -117,8 +130,8 @@ export function TreeSplit({
   // re-render — not every split in the tree.
   const overrides = useSubtreeOverrides(useMemo(() => allPaneIds(node), [node]))
   const editMode = useStore($layoutEditMode)
-  useStore($workspaceMode)
-  useStore($workspaceOwnerKey)
+  const workspaceMode = useStore($workspaceMode)
+  const workspaceOwner = useStore($workspaceOwnerKey)
   const revealsHidden = useStore($layoutEditRevealsHidden)
   const collapsedSides = useStore($collapsedTreeSides)
   const maximizedToolGroup = useStore($maximizedToolGroup)
@@ -742,13 +755,15 @@ export function TreeSplit({
     absorberIndex < 0 &&
     growable.every(i => allPaneIds(tracks[i].child).every(id => paneChrome(paneFor(id)).placement === endPlacement))
 
-  // Weights are RATIOS, but CSS flex-grow is absolute: a run whose grows sum
-  // below 1 fills only that fraction of the leftover (normalize's flatten
-  // scales weights into the parent slot — a dock-split nested into an
-  // existing column can leave grow 0.5, i.e. dead space). Renormalize the
-  // flex run so its grows always sum to 1.
-  const flexTotal = growable.reduce((sum, i) => sum + (tracks[i].track === null ? node.weights[i] : 0), 0)
-  const grow = (i: number) => node.weights[i] / (flexTotal || 1)
+  // CSS grows below 1 fill only that fraction of the leftover. During a tool
+  // transition its track is temporarily fixed, so EVERY remaining flex track
+  // must fill the run alone. Scale ratios by the smallest positive weight;
+  // retain the existing shrink ratios alongside fixed-basis neighbours.
+  const flexWeights = growable.filter(i => tracks[i].track === null).map(i => node.weights[i])
+  const flexTotal = flexWeights.reduce((sum, weight) => sum + weight, 0)
+  const flexUnit = Math.min(...flexWeights.filter(weight => weight > 0))
+  const grow = (i: number) => node.weights[i] / (Number.isFinite(flexUnit) ? flexUnit : 1)
+  const shrink = (i: number) => node.weights[i] / (flexTotal || 1)
 
   // The seam partner for a visible child: the nearest VISIBLE previous
   // sibling. Collapsed zones (a hidden pane parked mid-row) are skipped, so
@@ -797,10 +812,14 @@ export function TreeSplit({
             (partner >= 0 && allPaneIds(node.children[partner]).some(isCollapsePane)))
 
         return (
-          <div
-            className="relative flex min-h-0 min-w-0"
-            data-tree-track={child.id}
+          <ToolTrackMotion
+            collapsed={collapsed}
+            enabled={toolTrackAnimationEnabled(child, paneFor, narrowCollapsed, workspacePage, editMode)}
+            horizontal={horizontal}
+            id={child.id}
             key={child.id}
+            minimized={minimized}
+            scope={JSON.stringify([workspaceMode, workspaceOwner, narrow, workspacePage, editMode, revealsHidden])}
             style={
               collapsed
                 ? { display: 'none', order: i }
@@ -814,7 +833,7 @@ export function TreeSplit({
                       // everything else splits the leftover by weight. In an
                       // all-fixed run an UNCAPPED last track grows into the
                       // leftover; capped sidebars stay at their declared size.
-                      flex: track ? `${absorbs ? 1 : 0} 1 ${track}` : `${grow(i)} ${grow(i)} 0px`,
+                      flex: track ? `${absorbs ? 1 : 0} 1 ${track}` : `${grow(i)} ${shrink(i)} 0px`,
                       // Width floors still matter in a vertical chat/terminal
                       // stack, including when the summary measures room to dock.
                       // Other clamps apply along the split's axis; the absorber
@@ -857,7 +876,7 @@ export function TreeSplit({
                 topEdge={topEdge && (horizontal || i === visibleOrder[0])}
               />
             )}
-          </div>
+          </ToolTrackMotion>
         )
       })}
     </div>
@@ -895,8 +914,6 @@ function Sash({
         horizontal ? 'inset-y-0 left-0 w-[8px]' : toolZone ? 'inset-x-0 top-9 h-[8px]' : 'inset-x-0 top-0 h-[8px]',
         disabled ? 'pointer-events-none' : horizontal ? 'cursor-col-resize' : 'cursor-row-resize'
       )}
-      // Lets shell-level CSS start the resting hairline below the unified top
-      // band (vertical seams only) without touching the grab geometry.
       data-navigation-boundary={navigationBoundary}
       data-sash-axis={horizontal ? 'x' : 'y'}
       data-sash-overlap="trailing"
@@ -905,14 +922,13 @@ function Sash({
       onPointerDown={disabled ? undefined : onPointerDown}
       role="separator"
     >
-      {/* Persistent hairline: same token as PaneShell's divider sash
-          (--ui-stroke-secondary) so every seam — vertical or horizontal —
-          reads identically. Sits at 0.1 so seams recede into the surface,
-          and comes up to full on hover alongside the thicker grab band. */}
+      {/* One theme border per seam, on a whole pixel. Opacity and half-pixel
+          transforms would make it lighter than the adjoining header borders.
+          The wider hover/drag band remains independent of this resting line. */}
       <span
         className={cn(
-          'absolute bg-(--ui-stroke-secondary) opacity-10 transition-opacity duration-100 group-hover:opacity-100',
-          horizontal ? 'inset-y-0 left-[1px] w-px -translate-x-1/2' : 'inset-x-0 top-[1px] h-px -translate-y-1/2'
+          'absolute bg-(--ui-stroke-secondary)',
+          horizontal ? 'inset-y-0 left-0 w-px' : 'inset-x-0 top-0 h-px'
         )}
       />
       {!disabled && (

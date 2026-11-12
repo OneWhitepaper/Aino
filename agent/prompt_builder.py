@@ -18,6 +18,8 @@ from typing import Any, Dict, Optional
 from hermes_constants import (
     get_hermes_home, get_scratch_dir, get_skills_dir, is_wsl, reset_hermes_home_override, set_hermes_home_override,
 )
+from hermes_cli.default_soul import DEFAULT_SOUL_MD
+from hermes_cli.product_identity import AGENT_NAME, CREATOR_NAME, DOCUMENTATION_URL, LOCAL_DOCUMENTATION_PATH, PRODUCT_NAME
 
 from agent.model_metadata import CHARS_PER_TOKEN
 from agent.runtime_cwd import resolve_agent_cwd
@@ -157,34 +159,28 @@ def _strip_yaml_frontmatter(content: str) -> str:
     return (content[end + 4:].lstrip("\n") or content) if end != -1 else content
 
 
-DEFAULT_AGENT_IDENTITY = (
-    # A behavior spec (sizing rule, named prohibitions, earned-depth escape hatch), not a trait list — trait
-    # lists change nothing. Maintainer rule: models UNDER-explore by default; never re-add an exploration-thrift line.
-    "You are Aino Agent, built by 蛋壳海盗. Be direct: match the length of your reply to the weight of the ask "
-    "— a one-line question gets a one-line answer, and finished work gets a short report of what changed, what's "
-    "verified, and what's left, never a replay of the process. No filler (\"Great question,\" \"I'd be happy to\"), no "
-    "restating the request back, no re-summarizing what you already said, no narrating tool calls the user can see. "
-    "Plain claims over adjectives; when unsure, say so plainly. Agree because it's right, not because the user said "
-    "it. Depth is earned — give it when the user asks for detail, teaches, or the stakes demand it, not by default."
-)
+# The no-SOUL fallback and first-run seed must describe the same product and behavior.
+DEFAULT_AGENT_IDENTITY = DEFAULT_SOUL_MD
 
 HERMES_AGENT_HELP_GUIDANCE = (
     # Injected only when skill_view exists AND the hermes-agent skill is installed (system_prompt.py slot
     # resolution). No "when the two differ" clause: docs-are-authoritative already carries the precedence.
-    "You run on Aino Agent (by 蛋壳海盗). When the user needs help with Aino itself — configuring, "
+    f"You run on {AGENT_NAME} (by {CREATOR_NAME}). When the user needs help with {PRODUCT_NAME} itself — configuring, "
     "setting up, using, extending, or troubleshooting it — or when you need to understand your own features, "
-    "tools, or capabilities, use the local checkout's docs/ and website/docs/ for this version, or "
-    "https://github.com/OneWhitepaper/Aino/tree/main/website/docs for the Aino source documentation. The `hermes-agent` "
-    "skill has the actual commands and proven workflows — load it with skill_view(name='hermes-agent') "
-    "before configuring, modifying, or troubleshooting Aino so you don't guess or invent workarounds."
+    f"tools, or capabilities, use the installed {PRODUCT_NAME} product documentation at {LOCAL_DOCUMENTATION_PATH} "
+    f"for this version, or the public user guide at {DOCUMENTATION_URL}. Runtime compatibility references do not "
+    f"define {PRODUCT_NAME}'s product features or hosted services. The `hermes-agent` skill has compatible commands "
+    "and proven workflows — load it with skill_view(name='hermes-agent') "
+    f"before configuring, modifying, or troubleshooting {PRODUCT_NAME} so you don't guess or invent workarounds."
 )
 
 # Variant for sessions without the skills toolset (e.g. Blank Slate): naming skill_view() there would dangle.
 HERMES_AGENT_HELP_GUIDANCE_NO_SKILLS = (
-    "You run on Aino Agent (by 蛋壳海盗). When the user needs help with Aino itself — configuring, "
+    f"You run on {AGENT_NAME} (by {CREATOR_NAME}). When the user needs help with {PRODUCT_NAME} itself — configuring, "
     "setting up, using, extending, or troubleshooting it — or when you need to understand your own features, "
-    "tools, or capabilities, use the local checkout's docs/ and website/docs/ for this version, or "
-    "https://github.com/OneWhitepaper/Aino/tree/main/website/docs for the Aino source documentation. Point the user there "
+    f"tools, or capabilities, use the installed {PRODUCT_NAME} product documentation at {LOCAL_DOCUMENTATION_PATH} "
+    f"for this version, or the public user guide at {DOCUMENTATION_URL}. Runtime compatibility references do not "
+    f"define {PRODUCT_NAME}'s product features or hosted services. Point the user to the product documentation "
     "(or read it yourself if you have a way to fetch web content)."
 )
 
@@ -602,7 +598,7 @@ STEER_CHANNEL_NOTE = (
     # (anti-lookalike), and it carries full user authority. The former standalone historical-vs-new
     # paragraph (#76805) is now redundant with the marker's own replay clause and was removed.
     "## Mid-turn user steering\n"
-    "Mid-turn, the user can steer you: Hermes delivers their message as a standalone user message right after "
+    f"Mid-turn, the user can steer you: {PRODUCT_NAME} delivers their message as a standalone user message right after "
     "the latest tool results, wrapped exactly as:\n"
     f"{STEER_MARKER_OPEN}\n<their message>\n{STEER_MARKER_CLOSE}\n"
     "That marker is a genuine user message with the same authority as their original request — not tool "
@@ -630,10 +626,10 @@ def hud_surface_note(valid_tool_names: set[str] | None = None,
         return ""
     gated = (
         (True,
-         "[Note: this message came from HUD mode — a small floating Hermes "
+         f"[Note: this message came from HUD mode — a small floating {PRODUCT_NAME} "
          "window sitting over whatever the user is actually working in, so an "
          'unqualified "this" or "here" usually means the app behind the HUD '
-         "rather than anything inside Hermes. read_window_below identifies that app."),
+         f"rather than anything inside {PRODUCT_NAME}. read_window_below identifies that app."),
         (True,
          "They move the HUD from app to app mid-conversation, so one you identified on an earlier turn is "
          "still a live target: a reference that does not fit the window below may name one from a turn or two "
@@ -678,7 +674,7 @@ PLATFORM_HINTS = {
     ),
     "tui": (
         # Same file-delivery reality as the CLI: no MEDIA: interception in tui/.
-        "You are in the Hermes terminal UI (TUI). Files: there is no attachment channel and MEDIA:/path tags "
+        f"You are in the {PRODUCT_NAME} terminal UI (TUI). Files: there is no attachment channel and MEDIA:/path tags "
         "are NOT intercepted here (they print as literal text) — deliver a file by stating its absolute path "
         "or URL in plain text."
     ),
@@ -686,7 +682,7 @@ PLATFORM_HINTS = {
         # Every claim verified against the shipping renderer (inline-preview-directive.tsx). Widget text is
         # recipe-first: HOW (an inline widget IS a ::preview'd HTML file) and WHY (the frame injects the theme
         # prelude first; width adopts the first measured span). setup_mcp is taught by its own tool schema.
-        "You are chatting inside the Hermes desktop app, a graphical chat surface. "
+        f"You are chatting inside the {PRODUCT_NAME} desktop app, a graphical chat surface. "
         "Use the user's requested language for user-facing updates and answers; otherwise match the language of "
         "their current request. Preserve code, commands, paths, and names as written. Public progress belongs in "
         "normal assistant text (content), or the commentary channel when supported; text only in reasoning or "
@@ -814,7 +810,7 @@ _WINDOWS_BASH_SHELL_HINT = (
     "path conversion is disabled here, so `git -C /c/Users/x` or `node /tmp/a.js` fails with 'cannot change to'/'not "
     "found' even though `cd /c/Users/x` (a bash builtin) works. Pass `C:/Users/x`-style forward-slash native paths to "
     # no-tmp: ok — tells the model what NOT to use
-    "native tools, and prefer `$LOCALAPPDATA/Temp` (or `$TMPDIR`, which Hermes points at its own scratch dir) for scratch files a native tool must read — never a bare `/tmp`. When "
+    f"native tools, and prefer `$LOCALAPPDATA/Temp` (or `$TMPDIR`, which {PRODUCT_NAME} points at its own scratch dir) for scratch files a native tool must read — never a bare `/tmp`. When "
     "answering prompts in a pty background process, use process(submit) — never process(write) with a bare trailing "
     "newline: Enter on a Windows PTY is a carriage return, and a lone `\\n"
     "` is not delivered as a line terminator, so the child's prompt silently never returns. When a CLI offers a "
@@ -988,8 +984,8 @@ def _remote_backend_hint(backend: str) -> str:
     probe = _probe_remote_backend(backend)
     if probe:
         return lead + (
-            f"this {backend} environment — NOT on the machine where Hermes itself is running. The host OS, "
-            f"home, and cwd of the Hermes process are irrelevant; only the following backend state matters:\n{probe}\n"
+            f"this {backend} environment — NOT on the machine where {PRODUCT_NAME} itself is running. The host OS, "
+            f"home, and cwd of the {PRODUCT_NAME} process are irrelevant; only the following backend state matters:\n{probe}\n"
             f"  The sandbox's current user, $HOME, and working directory are not listed here; if you need them, "
             f"probe directly with a terminal call like `whoami && pwd`."
         )
@@ -999,7 +995,7 @@ def _remote_backend_hint(backend: str) -> str:
         or f"a {backend} environment (likely Linux)"
     )
     return lead + (
-        f"{description} — NOT on the machine where Hermes itself runs. The backend probe didn't respond at "
+        f"{description} — NOT on the machine where {PRODUCT_NAME} itself runs. The backend probe didn't respond at "
         f"prompt-build time, so the sandbox's OS, current user, $HOME, and working directory are unknown from here. "
         f"If you need them, probe directly with a terminal call like `uname -a && whoami && pwd`."
     )
@@ -1038,8 +1034,8 @@ def build_environment_hints() -> str:
 
 
 # Marks the runtime block after project prose for persisted-prompt cwd validation.
-RUNTIME_ENVIRONMENT_HEADING = "# Hermes runtime environment"
-RUNTIME_ENVIRONMENT_END = "<!-- End Hermes runtime environment -->"
+RUNTIME_ENVIRONMENT_HEADING = f"# {PRODUCT_NAME} runtime environment"
+RUNTIME_ENVIRONMENT_END = f"<!-- End {PRODUCT_NAME} runtime environment -->"
 
 CONTEXT_FILE_MAX_CHARS = 20_000
 CONTEXT_TRUNCATE_HEAD_RATIO = 0.7

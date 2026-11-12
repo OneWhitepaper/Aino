@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, NamedTuple, Optional
 
 from hermes_cli.config import get_hermes_home
+from hermes_cli.product_identity import PRODUCT_NAME
 
 from tools.process_registry_notifications import (
     format_process_notification, heartbeat_output_tail, is_child_process_notification, should_surface_notification)
@@ -2329,9 +2330,8 @@ class ProcessRegistry(ProcessTerminationMixin, ProcessCheckpointMixin, ProcessOu
         kill the process — output keeps buffering and the tab can be reopened from the
         status stack. Errors when no UI close sink is wired."""
         if self.on_close is None:
-            return {"status": "error", "error": "close_terminal is only available in the Hermes desktop app."}
-        # The session may already be finished (or pruned) — the tab can still
-        # linger and be closed, so a missing session is not an error here.
+            return {"status": "error", "error": f"close_terminal is only available in the {PRODUCT_NAME} desktop app."}
+        # Finished or pruned processes can still have tabs to close.
         try:
             self.on_close(self.get(session_id), session_id)
         except Exception as e:

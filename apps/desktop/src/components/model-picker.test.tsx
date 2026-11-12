@@ -125,6 +125,64 @@ it('awaits selection, rejects duplicates, and leaves the dialog open on failure'
   await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
 })
 
+it('stages a recovery choice until Apply and discards it on Cancel without selecting', async () => {
+  const onSelect = vi.fn().mockResolvedValue(true)
+  const onOpenChange = vi.fn()
+  renderPicker({
+    onSelect,
+    onOpenChange,
+    confirmation: {
+      title: 'Choose an available model',
+      description: 'Only this chat changes.',
+      applyLabel: 'Apply to this chat'
+    }
+  })
+  fireEvent.click(await screen.findByRole('option', { name: /Hermes-4.5/ }))
+  expect(onSelect).not.toHaveBeenCalled()
+  expect(onOpenChange).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(onOpenChange).toHaveBeenCalledWith(false)
+  expect(onSelect).not.toHaveBeenCalled()
+})
+
+it('applies one staged recovery model and retains the selection when its owner rejects it', async () => {
+  const onSelect = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+  const onOpenChange = vi.fn()
+  renderPicker({
+    onSelect,
+    onOpenChange,
+    confirmation: {
+      title: 'Choose an available model',
+      description: 'Only this chat changes.',
+      applyLabel: 'Apply to this chat'
+    }
+  })
+  const apply = screen.getByRole('button', { name: 'Apply to this chat' })
+  expect(apply.hasAttribute('disabled')).toBe(true)
+  fireEvent.click(await screen.findByRole('option', { name: /Hermes-4.5/ }))
+  expect(onSelect).not.toHaveBeenCalled()
+  fireEvent.click(apply)
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ provider: 'nous', model: 'Hermes-4.5' }))
+  expect(onOpenChange).not.toHaveBeenCalled()
+  await waitFor(() => expect(apply.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(apply)
+  await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+})
+
+it('offers only listed configured models during recovery instead of adding an unverified slug', async () => {
+  renderPicker({
+    confirmation: {
+      title: 'Choose an available model',
+      description: 'Only this chat changes.',
+      applyLabel: 'Apply to this chat'
+    }
+  })
+  await screen.findByRole('option', { name: /Hermes-4.5/ })
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'not-a-configured-model' } })
+  expect(screen.queryByRole('option', { name: /not-a-configured-model/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /Add custom model/ })).toBeNull()
+})
+
 it('explains and blocks switches from managed to custom while the owning chat is busy', async () => {
   const onSelect = vi.fn()
   renderPicker({ currentProvider: 'aino', currentModel: 'catalog-a', busy: true, onSelect })

@@ -75,6 +75,80 @@ describe('ConfirmDialog secondary action', () => {
 })
 
 describe('ConfirmDialog pending work and recovery', () => {
+  it('locks both decisions while the secondary action runs and retains its failure for retry', async () => {
+    let reject!: (error: Error) => void
+
+    const onSecondary = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, fail) => {
+            reject = fail
+          })
+      )
+      .mockResolvedValueOnce(undefined)
+
+    const onClose = vi.fn()
+    const onConfirm = vi.fn()
+    render(
+      <ConfirmDialog
+        confirmLabel="Delete"
+        destructive
+        onClose={onClose}
+        onConfirm={onConfirm}
+        open
+        secondaryAction={{ label: 'Remove from sidebar', onClick: onSecondary }}
+        title="Delete session?"
+      />
+    )
+
+    const secondary = screen.getByRole('button', { name: 'Remove from sidebar' })
+    act(() => {
+      secondary.click()
+      secondary.click()
+      screen.getByRole('button', { name: 'Delete' }).click()
+    })
+    expect(onSecondary).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await act(async () => reject(new Error('Archive refused')))
+    expect(screen.getByRole('alert').textContent).toContain('Archive refused')
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from sidebar' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not close a replacement decision when the previous secondary action settles', async () => {
+    let resolve!: () => void
+    const onClose = vi.fn()
+
+    const view = (open: boolean) => (
+      <ConfirmDialog
+        onClose={onClose}
+        onConfirm={vi.fn()}
+        open={open}
+        secondaryAction={{
+          label: 'Remove from sidebar',
+          onClick: () =>
+            new Promise<void>(done => {
+              resolve = done
+            })
+        }}
+        title="Delete session?"
+      />
+    )
+
+    const { rerender } = render(view(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from sidebar' }))
+    rerender(view(false))
+    rerender(view(true))
+    await act(async () => resolve())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Confirm' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it.each([false, true])(
     'locks every dismiss and repeated submit while pending (dismissOnConfirm: %s)',
     async dismissOnConfirm => {

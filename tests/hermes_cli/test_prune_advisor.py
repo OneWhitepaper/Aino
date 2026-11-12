@@ -31,6 +31,21 @@ def _disk(monkeypatch, free_gb, total_gb=100):
     monkeypatch.setattr(shutil, "disk_usage", lambda _p: _Usage(total_gb * gib, (total_gb - free_gb) * gib, free_gb * gib))
 
 
+def test_notice_carries_measured_capacity_and_marks_unavailable_estimates_unknown():
+    disk = prune_advisor.DiskSnapshot(db_bytes=4096, free_bytes=1024, total_bytes=8192)
+    advice = prune_advisor.Advice(disk, 90, 2, 7, 2048)
+    metrics = prune_advisor.notice_payload(advice)["metrics"]
+    assert metrics == {"db_bytes": 4096, "free_bytes": 1024, "total_bytes": 8192,
+                       "prunable_sessions": 2, "total_sessions": 7,
+                       "reclaim_bytes": 2048, "estimate_ok": True}
+    unavailable = prune_advisor.Advice(disk, 90, 0, 0, 0, estimate_ok=False)
+    metrics = prune_advisor.notice_payload(unavailable)["metrics"]
+    assert metrics["free_bytes"] == disk.free_bytes
+    assert metrics["prunable_sessions"] is None
+    assert metrics["total_sessions"] is None
+    assert metrics["reclaim_bytes"] is None
+
+
 def test_asks_only_when_low_and_undecided_and_either_answer_ends_it(home, monkeypatch):
     _disk(monkeypatch, free_gb=50)
     assert prune_advisor.should_ask(home) is None  # plenty of space: silent

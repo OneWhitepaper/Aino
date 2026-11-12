@@ -1,11 +1,17 @@
 import type { ModelOptionsResult } from '@hermes/shared'
 
 import { createGatewaySession } from '@/app/session/hooks/use-session-actions/session-create-request'
+import { getGlobalModelInfo } from '@/hermes'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
-import type { PlatformSessionModel } from '@/lib/platform-session-model'
+import {
+  type CanonicalModelRow,
+  type PlatformSessionModel,
+  unselectedCanonicalModelRow
+} from '@/lib/platform-session-model'
+import { $botChatSessionIds } from '@/store/bot-chat-scope'
 import { type PlatformModelOwner, samePlatformAccount } from '@/store/platform-model-owner'
 import { platformModelCatalog, PlatformSelectionError, requirePlatformSelection } from '@/store/platform-models'
-import type { SessionOwnerScope } from '@/store/session-request-router'
+import { profileScopeForSessionOwner, type SessionOwnerScope } from '@/store/session-request-router'
 import { $sessionStates, publishSessionState, sessionTileDelegate } from '@/store/session-states'
 import type { SessionCreateResponse } from '@/types/hermes'
 
@@ -15,6 +21,7 @@ import type { PlatformAccountSnapshot, PlatformModelPurpose } from '../../shared
 import { platformAccountActions } from './platform'
 import type { ConversationModelRow } from './platform-conversation-models'
 import { bindPlatformModel } from './platform-models'
+import { getSession } from './sessions'
 
 type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
 
@@ -40,8 +47,13 @@ export async function capturePlatformDraftAuthority(
   const account = catalog.account.get()
 
   if (
-    !owner || !hasPlatformModelIdentity(account) || account.account.id !== owner.user_id ||
-    !platformOwner || !platformOrigin || platformOwner !== owner.user_id || platformOrigin !== owner.platform_origin
+    !owner ||
+    !hasPlatformModelIdentity(account) ||
+    account.account.id !== owner.user_id ||
+    !platformOwner ||
+    !platformOrigin ||
+    platformOwner !== owner.user_id ||
+    platformOrigin !== owner.platform_origin
   ) {
     throw new PlatformSelectionError('platform_account_changed')
   }
@@ -187,16 +199,25 @@ export async function clearPlatformSession(owner: SessionOwnerScope, sessionId: 
 
 async function conversationSelection(sessionId: string, request: Request): Promise<ConversationModelRow | null> {
   try {
-    return (await request<{ selection: ConversationModelRow | null }>('model.session', { session_id: sessionId, action: 'selection' })).selection
+    return (
+      await request<{ selection: ConversationModelRow | null }>('model.session', {
+        session_id: sessionId,
+        action: 'selection'
+      })
+    ).selection
   } catch (error) {
-    if (isMissingRpcMethod(error)) { return null }
+    if (isMissingRpcMethod(error)) {
+      return null
+    }
 
     throw error
   }
 }
 
 function validateConfiguredConversationModel(selected: ConversationModelRow, options: ModelOptionsResult) {
-  if (selected.model_source !== 'provider') { return }
+  if (selected.model_source !== 'provider') {
+    return
+  }
 
   const configured = options.providers.find(row => row.slug === selected.provider && row.authenticated === true)
 
@@ -211,25 +232,44 @@ function conversationModelMatches(selected: ConversationModelRow, info: ModelOpt
     : info?.provider === selected.provider && info?.model === selected.model_id
 }
 
-function publishConversationModel(sessionId: string, selected: ConversationModelRow, managed: PlatformSessionModel | null) {
-  const update = (state: ReturnType<typeof $sessionStates.get>[string]) => ({ ...state, model: selected.model_id,
-    provider: selected.model_source === 'aino' ? 'aino' : selected.provider || '', platformModel: managed })
+function publishConversationModel(
+  sessionId: string,
+  selected: ConversationModelRow,
+  managed: PlatformSessionModel | null
+) {
+  const update = (state: ReturnType<typeof $sessionStates.get>[string]) => ({
+    ...state,
+    model: selected.model_id,
+    provider: selected.model_source === 'aino' ? 'aino' : selected.provider || '',
+    platformModel: managed
+  })
 
   const delegate = sessionTileDelegate()
 
-  if (delegate) { delegate.updateSession(sessionId, update) }
-  else if ($sessionStates.get()[sessionId]) { publishSessionState(sessionId, update($sessionStates.get()[sessionId])) }
+  if (delegate) {
+    delegate.updateSession(sessionId, update)
+  } else if ($sessionStates.get()[sessionId]) {
+    publishSessionState(sessionId, update($sessionStates.get()[sessionId]))
+  }
 }
 
 /** A terminal-requested pick is desired conversation metadata. Apply it only
  * before the next idle submission, through the same canonical mutation and
  * native credential binding used by the model picker. */
-async function prepareConversationSelection(owner: SessionOwnerScope, sessionId: string, request: Request): Promise<boolean> {
-  if (window.hermesDesktop?.accountAdapter !== 'platform') { return false }
+async function prepareConversationSelection(
+  owner: SessionOwnerScope,
+  sessionId: string,
+  request: Request
+): Promise<boolean> {
+  if (window.hermesDesktop?.accountAdapter !== 'platform') {
+    return false
+  }
 
   const selected = await conversationSelection(sessionId, request)
 
-  if (!selected) { return false }
+  if (!selected) {
+    return false
+  }
 
   const catalog = platformModelCatalog()
   const account = catalog.account.get()
@@ -250,7 +290,11 @@ async function prepareConversationSelection(owner: SessionOwnerScope, sessionId:
     requirePlatformSelection(account, catalog.state.get().models, selected.model_id, selected.owner.user_id)
   }
 
-  const options = await request<ModelOptionsResult>('model.options', { session_id: sessionId, explicit_only: true, include_session_info: true })
+  const options = await request<ModelOptionsResult>('model.options', {
+    session_id: sessionId,
+    explicit_only: true,
+    include_session_info: true
+  })
   assertAccount()
 
   validateConfiguredConversationModel(selected, options)
@@ -258,7 +302,10 @@ async function prepareConversationSelection(owner: SessionOwnerScope, sessionId:
   if (!conversationModelMatches(selected, options.session_info)) {
     const result = await request<{ deferred?: boolean; confirm_required?: boolean; status?: string }>('session.model', {
       session_id: sessionId,
-      payload: { model: selected.model_id, ...(selected.model_source === 'aino' ? { model_source: 'aino' } : { provider: selected.provider }) }
+      payload: {
+        model: selected.model_id,
+        ...(selected.model_source === 'aino' ? { model_source: 'aino' } : { provider: selected.provider })
+      }
     })
 
     assertAccount()
@@ -268,19 +315,78 @@ async function prepareConversationSelection(owner: SessionOwnerScope, sessionId:
     }
   }
 
-  const managed: PlatformSessionModel | null = selected.model_source === 'aino' ? {
-    modelId: selected.model_id, ownerUserId: selected.owner!.user_id,
-    platformOrigin: selected.owner!.platform_origin, status: 'ready'
-  } : null
+  const managed: PlatformSessionModel | null =
+    selected.model_source === 'aino'
+      ? {
+          modelId: selected.model_id,
+          ownerUserId: selected.owner!.user_id,
+          platformOrigin: selected.owner!.platform_origin,
+          status: 'ready'
+        }
+      : null
 
-  if (managed) { await bindSelectedPlatformSession(owner, sessionId, managed, request, true, account ?? undefined) }
-  else { await clearPlatformSession(owner, sessionId) }
+  if (managed) {
+    await bindSelectedPlatformSession(owner, sessionId, managed, request, true, account ?? undefined)
+  } else {
+    await clearPlatformSession(owner, sessionId)
+  }
 
   assertAccount()
 
   publishConversationModel(sessionId, selected, managed)
 
   return true
+}
+
+async function requireConfiguredSessionModel(
+  owner: SessionOwnerScope,
+  state: ReturnType<typeof $sessionStates.get>[string] | undefined
+): Promise<void> {
+  const catalog = platformModelCatalog()
+
+  if (
+    !state ||
+    state.provider === 'aino' ||
+    state.platformModel ||
+    window.hermesDesktop?.accountAdapter !== 'platform' ||
+    !hasPlatformModelIdentity(catalog.account.get())
+  ) {
+    return
+  }
+
+  if (!state.model && !state.provider) {
+    throw new PlatformSelectionError('model_unavailable')
+  }
+
+  if (!state.storedSessionId || !$botChatSessionIds.get().has(state.storedSessionId)) {
+    return
+  }
+  const account = catalog.account.get()
+  const scope = profileScopeForSessionOwner(owner)
+
+  if (!scope) {
+    throw new PlatformSelectionError('unsupported_gateway')
+  }
+  const profile = typeof scope === 'string' ? scope : scope.profile || 'default'
+  const connectionId = typeof scope === 'object' ? (scope.connectionId ?? undefined) : undefined
+  const row = (await getSession(state.storedSessionId, scope)) as CanonicalModelRow
+
+  if (!samePlatformAccount(account, catalog.account.get())) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
+  if (!unselectedCanonicalModelRow(row, state.storedSessionId, { connectionId, profile })) {
+    return
+  }
+  const configured = await getGlobalModelInfo(scope)
+
+  if (!samePlatformAccount(account, catalog.account.get())) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
+  if (!configured.model && !configured.provider) {
+    throw new PlatformSelectionError('model_unavailable')
+  }
 }
 
 export async function preparePlatformSessionRequest(
@@ -295,6 +401,10 @@ export async function preparePlatformSessionRequest(
 
   const prepared = await prepareConversationSelection(owner, params.session_id, request)
   const state = $sessionStates.get()[params.session_id]
+
+  if (!prepared) {
+    await requireConfiguredSessionModel(owner, state)
+  }
 
   if (!prepared && state?.provider === 'aino') {
     if (!state.platformModel) {
