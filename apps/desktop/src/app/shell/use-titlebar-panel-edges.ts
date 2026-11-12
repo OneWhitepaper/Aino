@@ -5,12 +5,7 @@ import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { $narrowOverlayPaneIds } from '@/components/pane-shell/narrow-overlay-state'
 import { $narrowViewport } from '@/components/pane-shell/tree/store'
 import { hostHas } from '@/lib/host-capabilities'
-import {
-  $leftSideOpen,
-  $rightSideOpen,
-  CHAT_SIDEBAR_PANE_ID,
-  FILE_BROWSER_PANE_ID
-} from '@/store/layout'
+import { $leftSideOpen, $rightSideOpen, CHAT_SIDEBAR_PANE_ID, FILE_BROWSER_PANE_ID } from '@/store/layout'
 import { REVIEW_PANE_ID } from '@/store/review'
 
 /** Native edges follow docked columns; narrow browser edges follow the visible overlay. */

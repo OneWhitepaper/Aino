@@ -31,22 +31,36 @@ const SAFE_PLATFORM_BINDING_CODES = new Set([
 
 const SAFE_PLATFORM_BINDING_DIAGNOSTIC_CODES = new Set([
   ...SAFE_PLATFORM_BINDING_CODES,
-  'authentication_refreshed_retry_required', 'auth_attempt_superseded', 'binding_ticket_required',
+  'authentication_refreshed_retry_required',
+  'auth_attempt_superseded',
+  'binding_ticket_required',
   'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED',
-  'invalid_params', 'invalid_response', 'managed_binding_forbidden', 'network_timeout',
-  'network_unavailable', 'not_found', 'permission_denied', 'storage_unavailable', 'unsupported_gateway'
+  'invalid_params',
+  'invalid_response',
+  'managed_binding_forbidden',
+  'network_timeout',
+  'network_unavailable',
+  'not_found',
+  'permission_denied',
+  'storage_unavailable',
+  'unsupported_gateway'
 ])
 
 function bindingDiagnosticCode(error: unknown): string {
-  const record = error && typeof error === 'object' ? error as { code?: unknown; data?: unknown; message?: unknown } : {}
-  const data = record.data && typeof record.data === 'object' ? record.data as Record<string, unknown> : {}
-  const nested = data.error && typeof data.error === 'object' ? data.error as Record<string, unknown> : {}
+  const record =
+    error && typeof error === 'object' ? (error as { code?: unknown; data?: unknown; message?: unknown }) : {}
+  const data = record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : {}
+  const nested = data.error && typeof data.error === 'object' ? (data.error as Record<string, unknown>) : {}
   const candidates = [record.code, data.reason, data.code, nested.reason, nested.code, record.message]
   const code = candidates.find(value => typeof value === 'string' && SAFE_PLATFORM_BINDING_DIAGNOSTIC_CODES.has(value))
 
-  if (typeof code === 'string') { return code }
+  if (typeof code === 'string') {
+    return code
+  }
 
-  if (typeof record.code === 'string' && /^http_[45]\d\d$/.test(record.code)) { return record.code }
+  if (typeof record.code === 'string' && /^http_[45]\d\d$/.test(record.code)) {
+    return record.code
+  }
 
   return typeof record.code === 'number' && Number.isSafeInteger(record.code) ? `rpc_${record.code}` : 'unknown'
 }
@@ -55,7 +69,11 @@ function logBindingFailure(stage: string, error: unknown) {
   window.hermesDesktop?.logLine?.(`[platform-model-binding] stage=${stage} code=${bindingDiagnosticCode(error)}`)
 }
 
-export function reportPlatformCredentialRejection(code: string | undefined, ownerUserId?: string, credentialVersion?: number) {
+export function reportPlatformCredentialRejection(
+  code: string | undefined,
+  ownerUserId?: string,
+  credentialVersion?: number
+) {
   if (
     !code ||
     !['managed_credential_revoked', 'managed_credential_rejected', 'DESKTOP_DEVICE_KEY_REVOKED'].includes(code)
@@ -65,8 +83,16 @@ export function reportPlatformCredentialRejection(code: string | undefined, owne
 
   const account = platformModelCatalog().account.get()
 
-  if (account?.account && account.model_identity_ready && ownerUserId === account.account.id && credentialVersion !== undefined && credentialVersion === account.model_identity_version) {
-    void window.hermesDesktop?.platformModels?.credentialRejected?.(account.revision, credentialVersion).catch(() => undefined)
+  if (
+    account?.account &&
+    account.model_identity_ready &&
+    ownerUserId === account.account.id &&
+    credentialVersion !== undefined &&
+    credentialVersion === account.model_identity_version
+  ) {
+    void window.hermesDesktop?.platformModels
+      ?.credentialRejected?.(account.revision, credentialVersion)
+      .catch(() => undefined)
   }
 }
 
@@ -92,14 +118,21 @@ function bindingFailure(error: unknown): BindPlatformModelResult {
   return { ok: false, error: { code: safeBindingCode(error) ?? 'gateway_binding_failed' } }
 }
 
-async function tryNativeBinding(bridge: NonNullable<Window['hermesDesktop']>['platformModels'], input: BindPlatformModelInput): Promise<BindPlatformModelResult | null> {
-  if (!bridge.nativeDeviceKeys) { return null }
+async function tryNativeBinding(
+  bridge: NonNullable<Window['hermesDesktop']>['platformModels'],
+  input: BindPlatformModelInput
+): Promise<BindPlatformModelResult | null> {
+  if (!bridge.nativeDeviceKeys) {
+    return null
+  }
 
   try {
     const result = await bridge.bind({ ...input, session_ticket: '' })
 
     return result.ok || result.error.code !== 'binding_ticket_required' ? result : null
-  } catch (error) { return bindingFailure(error) }
+  } catch (error) {
+    return bindingFailure(error)
+  }
 }
 
 /** Only the chat's owning socket can delegate a live session to Electron main. */
@@ -136,7 +169,9 @@ export async function bindPlatformModel(
 
   const reused = await tryNativeBinding(desktop.platformModels, input)
 
-  if (reused) { return reused }
+  if (reused) {
+    return reused
+  }
 
   const requestOwner =
     request ??

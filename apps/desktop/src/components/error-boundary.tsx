@@ -86,11 +86,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     this.props.onError?.(error, info)
 
-    const assistantUiLookupRace = this.props.label === 'root' && (isTransientAssistantUiLookupError(error) || isTransientRendererCompositionError(error))
+    const assistantUiLookupRace =
+      this.props.label === 'root' &&
+      (isTransientAssistantUiLookupError(error) || isTransientRendererCompositionError(error))
     const portalTeardownRace = isTransientPortalUnmountError(error)
 
     if ((assistantUiLookupRace || portalTeardownRace) && this.takeAutoRecoveryAttempt()) {
-      const race = portalTeardownRace ? 'portal teardown' : isTransientRendererCompositionError(error) ? 'renderer composition' : 'assistant-ui lookup'
+      const race = portalTeardownRace
+        ? 'portal teardown'
+        : isTransientRendererCompositionError(error)
+          ? 'renderer composition'
+          : 'assistant-ui lookup'
       console.warn(`${tag} auto-recovering from ${race} render race`, error.message)
       this.autoRecoveryPending = true
       this.scheduleAutoRecovery()
@@ -194,9 +200,7 @@ function RootErrorFallback({ error, reset }: ErrorBoundaryFallbackProps) {
             className="grid min-w-0 shrink-0 grid-cols-2 gap-2 border-t border-(--ui-stroke-tertiary) p-5 [&>button]:min-w-0 [&>button]:whitespace-normal [&>button]:[overflow-wrap:anywhere]"
             data-slot="crash-recovery-footer"
           >
-            <Button onClick={reset}>
-              {t.common.retry}
-            </Button>
+            <Button onClick={reset}>{t.common.retry}</Button>
             <Button onClick={() => window.location.reload()} variant="secondary">
               {t.errors.reloadWindow}
             </Button>

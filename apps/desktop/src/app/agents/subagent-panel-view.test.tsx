@@ -116,36 +116,62 @@ it('keeps a selected native child live before its persisted tool receipt has loa
   expect(screen.getByText('Review complete')).toBeTruthy()
 })
 
-it.each(['conversation', 'workspace'])('keeps the capsule member source through Back and clears it after %s navigation', change => {
-  const inspection = { runtimeId: 'member-runtime', storedId: 'member-history', owner: { connectionId: 'remote', profile: 'member' } }
-  state.history = [{ id: 'member-call', rows: [{ id: 'capsule-child', subagentId: 'capsule-child',
-    displayName: 'Member review', goal: 'Inspect member work', status: 'failed', activity: [] }] }]
-  $subagentPanelSelection.set({
-    sourceKey: subagentPanelSourceKey(state.session),
-    inspection,
-    taskId: 'capsule-child',
-    row: { id: 'capsule-child', goal: 'Inspect member work', status: 'failed', activity: [], sessionId: 'child-history' }
-  })
-  const { rerender } = render(<SubagentPanel />)
-  expect(screen.getAllByText('Inspect member work').length).toBeGreaterThan(0)
-  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
-  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
-  fireEvent.click(screen.getByRole('button', { name: /Member review/ }))
-  expect($subagentPanelSelection.get()?.inspection).toEqual(inspection)
-  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
-
-  if (change === 'conversation') {
-    state.session = { ...state.session, storedId: 'different-parent' }
-  } else {
-    act(() => {
-      $workspaceMode.set('bots')
-      $workspaceOwnerKey.set('another-room')
+it.each(['conversation', 'workspace'])(
+  'keeps the capsule member source through Back and clears it after %s navigation',
+  change => {
+    const inspection = {
+      runtimeId: 'member-runtime',
+      storedId: 'member-history',
+      owner: { connectionId: 'remote', profile: 'member' }
+    }
+    state.history = [
+      {
+        id: 'member-call',
+        rows: [
+          {
+            id: 'capsule-child',
+            subagentId: 'capsule-child',
+            displayName: 'Member review',
+            goal: 'Inspect member work',
+            status: 'failed',
+            activity: []
+          }
+        ]
+      }
+    ]
+    $subagentPanelSelection.set({
+      sourceKey: subagentPanelSourceKey(state.session),
+      inspection,
+      taskId: 'capsule-child',
+      row: {
+        id: 'capsule-child',
+        goal: 'Inspect member work',
+        status: 'failed',
+        activity: [],
+        sessionId: 'child-history'
+      }
     })
-  }
+    const { rerender } = render(<SubagentPanel />)
+    expect(screen.getAllByText('Inspect member work').length).toBeGreaterThan(0)
+    expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
+    fireEvent.click(screen.getByRole('button', { name: /Member review/ }))
+    expect($subagentPanelSelection.get()?.inspection).toEqual(inspection)
+    expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(inspection))
 
-  rerender(<SubagentPanel />)
-  expect(screen.queryByText('Inspect member work')).toBeNull()
-  expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(state.session))
-  state.session = { ...state.session, storedId: 'stored-parent' }
-})
+    if (change === 'conversation') {
+      state.session = { ...state.session, storedId: 'different-parent' }
+    } else {
+      act(() => {
+        $workspaceMode.set('bots')
+        $workspaceOwnerKey.set('another-room')
+      })
+    }
+
+    rerender(<SubagentPanel />)
+    expect(screen.queryByText('Inspect member work')).toBeNull()
+    expect(useSummaryContent).toHaveBeenLastCalledWith(expect.objectContaining(state.session))
+    state.session = { ...state.session, storedId: 'stored-parent' }
+  }
+)

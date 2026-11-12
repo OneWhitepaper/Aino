@@ -29,7 +29,14 @@ export function useSummaryContent(session: ReturnType<typeof useSummarySession>)
   const ownerScope = profileScopeForSessionOwner(owner)
   const readScope = typeof ownerScope === 'string' ? { ...scope, profile: ownerScope } : (ownerScope ?? scope)
 
-  const queryKey = ['summary-content', readScope.connectionId, readScope.profile, storedId, Boolean(owner), busy] as const
+  const queryKey = [
+    'summary-content',
+    readScope.connectionId,
+    readScope.profile,
+    storedId,
+    Boolean(owner),
+    busy
+  ] as const
 
   const query = useQuery({
     enabled: hasHistory,

@@ -168,9 +168,7 @@ describe('GatewaySettings', () => {
       remoteToken: undefined
     })
     expect(saveButton.disabled).toBe(true)
-    await act(async (): Promise<void> =>
-      pendingProbe.resolve({ reachable: true, authMode: 'oauth', providers: [] })
-    )
+    await act(async (): Promise<void> => pendingProbe.resolve({ reachable: true, authMode: 'oauth', providers: [] }))
     await act(async (): Promise<void> => pendingSave.resolve(saved))
     expect(saveButton.disabled).toBe(false)
     expect(screen.getByRole('button', { name: /Sign in with/ })).toBeTruthy()
@@ -277,9 +275,7 @@ describe('GatewaySettings', () => {
       remoteUrl: 'https://a.example'
     })
 
-    const probeConnectionConfig = vi
-      .fn()
-      .mockResolvedValue({ reachable: true, authMode: 'token', providers: [] })
+    const probeConnectionConfig = vi.fn().mockResolvedValue({ reachable: true, authMode: 'token', providers: [] })
 
     const pendingTest = deferred<{ ok: boolean; baseUrl: string }>()
     const testConnectionConfig = vi.fn().mockReturnValue(pendingTest.promise)
@@ -441,9 +437,7 @@ describe('GatewaySettings', () => {
           ])
         )
       )
-      expect(
-        $notifications.get().some((n: { message?: string }) => n.message === 'SSH connection failed.')
-      ).toBe(false)
+      expect($notifications.get().some((n: { message?: string }) => n.message === 'SSH connection failed.')).toBe(false)
     } finally {
       $notifications.set([])
     }

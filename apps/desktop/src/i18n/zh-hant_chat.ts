@@ -431,12 +431,12 @@ export const zhHantChat = {
   },
 
   desktop: {
-    localRuntimeUnavailableTitle: "本機執行環境無法使用",
-    localRuntimeUnavailableDesktop: "請在設定 → 模型服務 → 本機模型中完成執行環境設定。",
-    localRuntimeUnavailableWebapp: "請在 Aino 桌面版設定本機模型，或在此瀏覽器選擇託管模型。",
-    openLocalModels: "開啟本機模型",
-    serviceAuthorizationTitle: "服務授權",
-    serviceAuthorizationDescription: "使用第三方服務自己的帳戶登入。此授權獨立於你的 Aino 帳戶。",
+    localRuntimeUnavailableTitle: '本機執行環境無法使用',
+    localRuntimeUnavailableDesktop: '請在設定 → 模型服務 → 本機模型中完成執行環境設定。',
+    localRuntimeUnavailableWebapp: '請在 Aino 桌面版設定本機模型，或在此瀏覽器選擇託管模型。',
+    openLocalModels: '開啟本機模型',
+    serviceAuthorizationTitle: '服務授權',
+    serviceAuthorizationDescription: '使用第三方服務自己的帳戶登入。此授權獨立於你的 Aino 帳戶。',
     audioReadFailed: '無法讀取錄製的音訊',
     sessionUnavailable: '工作階段不可用',
     createSessionFailed: '無法建立新工作階段',

@@ -327,9 +327,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const ruBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Открываем групповой чат…",
-    lookupFailed: "Не удалось найти эту группу на шлюзе. Попробуйте ещё раз.",
-    missing: "Этот групповой чат больше не существует."
+    opening: 'Открываем групповой чат…',
+    lookupFailed: 'Не удалось найти эту группу на шлюзе. Попробуйте ещё раз.',
+    missing: 'Этот групповой чат больше не существует.'
   },
   notificationCenter: notificationCenterCopy['ru'],
   platformModels: {
@@ -1479,8 +1479,9 @@ const ruBaseOverrides = {
         reimportSignins: 'Импортировать входы заново',
         signinsImportedTitle: 'Входы во встроенном браузере',
         signinsImported: count => `Встроенный браузер вошёл с cookie из профиля браузера: ${count}.`,
-        signinsRemote: 'Этот бэкенд работает на другом компьютере, поэтому его профиль браузера не импортируется во встроенный браузер.',
-        signinsFailed: 'Не удалось импортировать входы во встроенный браузер',
+        signinsRemote:
+          'Этот бэкенд работает на другом компьютере, поэтому его профиль браузера не импортируется во встроенный браузер.',
+        signinsFailed: 'Не удалось импортировать входы во встроенный браузер'
       },
       loadingConfig: 'Загрузка конфигурации',
       savedTitle: 'Учётные данные сохранены',

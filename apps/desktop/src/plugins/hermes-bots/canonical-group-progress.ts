@@ -2,7 +2,10 @@ import type { CanonicalGroupEvent } from './canonical-group-history'
 import type { CanonicalGroupBinding } from './canonical-groups'
 
 /** A reply is a committed member message; room task totals span all history. */
-export function canonicalCompletedReplies(events: CanonicalGroupEvent[], binding: CanonicalGroupBinding): number | undefined {
+export function canonicalCompletedReplies(
+  events: CanonicalGroupEvent[],
+  binding: CanonicalGroupBinding
+): number | undefined {
   const unique = new Map<string, CanonicalGroupEvent>()
 
   for (const event of events) {
@@ -41,31 +44,46 @@ function replySource(ordered: CanonicalGroupEvent[]): CanonicalGroupEvent | unde
 
   // The live status does not name its thread, so overlapping unfinished
   // threads cannot truthfully share one "current message" counter.
-  if (pending.size > 1) {return undefined}
+  if (pending.size > 1) {
+    return undefined
+  }
 
-  if (latest && (!latest.event_id || !latest.payload.thread_id)) {return undefined}
+  if (latest && (!latest.event_id || !latest.payload.thread_id)) {
+    return undefined
+  }
   const source = pending.size ? [...pending.values()][0] : latest
 
-  if (!source?.event_id || !source.payload.thread_id) {return undefined}
+  if (!source?.event_id || !source.payload.thread_id) {
+    return undefined
+  }
 
   return source
 }
 
 function completedRepliesForSource(ordered: CanonicalGroupEvent[], source: CanonicalGroupEvent): number {
-  const related = ordered.filter(event =>
-    event.seq > source.seq &&
-    event.payload.discussion_event_id === source.event_id &&
-    event.payload.thread_id === source.payload.thread_id
+  const related = ordered.filter(
+    event =>
+      event.seq > source.seq &&
+      event.payload.discussion_event_id === source.event_id &&
+      event.payload.thread_id === source.payload.thread_id
   )
 
-  const messages = new Map(related.filter(event => event.kind === 'message.member' && event.event_id).map(event => [event.event_id, event]))
+  const messages = new Map(
+    related.filter(event => event.kind === 'message.member' && event.event_id).map(event => [event.event_id, event])
+  )
   const replies = new Set<string>()
 
   for (const event of related) {
-    if (event.kind !== 'turn.settled' || event.payload.passed !== false) {continue}
+    if (event.kind !== 'turn.settled' || event.payload.passed !== false) {
+      continue
+    }
     const message = messages.get(event.payload.message_event_id)
 
-    if (message && event.payload.member_id && (message.payload.member_id || message.actor?.id) === event.payload.member_id) {
+    if (
+      message &&
+      event.payload.member_id &&
+      (message.payload.member_id || message.actor?.id) === event.payload.member_id
+    ) {
       replies.add(event.payload.task_id || message.event_id!)
     }
   }

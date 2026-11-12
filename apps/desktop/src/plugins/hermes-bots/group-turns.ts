@@ -964,7 +964,10 @@ async function stageGroupTurnAttachments(member: GroupMember, runtime: string, i
       }
     } catch (error) {
       failed.push(label)
-      host.notifyError?.(error, `Could not attach ${label} for ${displayName(member, botRosterMeta(member, $botMeta.get()))}`)
+      host.notifyError?.(
+        error,
+        `Could not attach ${label} for ${displayName(member, botRosterMeta(member, $botMeta.get()))}`
+      )
     }
   }
 

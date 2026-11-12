@@ -29,10 +29,7 @@ async function fakeGuest(code: string): Promise<unknown> {
   ran.push(code)
   const page = { document: { title: 'Inbox (3)' }, window: { location: { origin: pageOrigin } } }
 
-  const result = new Function('window', 'document', `return eval(${JSON.stringify(code)})`)(
-    page.window,
-    page.document
-  )
+  const result = new Function('window', 'document', `return eval(${JSON.stringify(code)})`)(page.window, page.document)
 
   if (code === 'window.location.origin' && afterProbe) {
     afterProbe()
@@ -241,9 +238,7 @@ describe('ctx.preview.executeJavaScript', () => {
 
     await expect(ctx.preview.executeJavaScript("'use strict'\n.toUpperCase()")).resolves.toBe('USE STRICT')
     await expect(
-      ctx.preview.executeJavaScript(
-        "'use strict'\n// strict body\n;(function () { return this === undefined })()"
-      )
+      ctx.preview.executeJavaScript("'use strict'\n// strict body\n;(function () { return this === undefined })()")
     ).resolves.toBe(true)
   })
 

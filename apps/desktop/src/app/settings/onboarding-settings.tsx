@@ -24,7 +24,12 @@ export function OnboardingSettings() {
     const open = $onboardingChatOpener.get()
 
     const started =
-      open !== null && (await startOnboarding(requestGateway, open, { intro: firstRunIntro(), rerun: true, owner: captureFirstRunOwner() }))
+      open !== null &&
+      (await startOnboarding(requestGateway, open, {
+        intro: firstRunIntro(),
+        rerun: true,
+        owner: captureFirstRunOwner()
+      }))
 
     setStarting(false)
 

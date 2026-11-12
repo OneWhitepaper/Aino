@@ -71,11 +71,13 @@ export function CanonicalGroupHeader({
   const labels = useCanonicalGroupLabels()
   const { nameFor } = useCanonicalMembers(binding)
   const members = room?.members ?? []
+
   const badges: Record<string, string> = {
     missing: labels.peerNotJoinedBadge,
     unavailable: labels.peerOfflineBadge,
     needs_reauthorization: labels.peerRejoinBadge
   }
+
   const peerBadges = new Map(
     peerMemberStates(members, driver?.peer_routes).map(({ member, status }) => [member.member_id, badges[status]])
   )
@@ -202,11 +204,13 @@ export function CanonicalGroupInfo({
   const [ending, setEnding] = useState(false)
   const [section, setSection] = useState('members')
   const members = room?.members ?? []
+
   const badges: Record<string, string> = {
     missing: labels.peerNotJoinedBadge,
     unavailable: labels.peerOfflineBadge,
     needs_reauthorization: labels.peerRejoinBadge
   }
+
   const peerBadges = new Map(
     peerMemberStates(members, driver?.peer_routes).map(({ member, status }) => [member.member_id, badges[status]])
   )

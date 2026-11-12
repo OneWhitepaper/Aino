@@ -84,21 +84,25 @@ it('opens a capsule child against its captured source without replacing the fore
 
   const row = { id: 'child', subagentId: 'child', goal: 'Review sources', activity: [], status: 'failed' as const }
 
-  expect(panel.openSubagentPanel({
-    parentRuntimeId: null,
-    anchorSourceKey: panel.subagentPanelSourceKey(state.session),
-    inspection,
-    taskId: 'child',
-    row
-  })).toBe(true)
+  expect(
+    panel.openSubagentPanel({
+      parentRuntimeId: null,
+      anchorSourceKey: panel.subagentPanelSourceKey(state.session),
+      inspection,
+      taskId: 'child',
+      row
+    })
+  ).toBe(true)
   expect(panel.$subagentPanelSelection.get()).toMatchObject({ inspection, taskId: 'child', row })
   expect(model.findGroup(tree.$layoutTree.get()!, 'chat')).toBe(main)
   expect(state.session.runtimeId).toBe('runtime-a')
-  expect(panel.openSubagentPanel({
-    parentRuntimeId: null,
-    anchorSourceKey: 'previous-account',
-    inspection,
-    taskId: 'child',
-    row
-  })).toBe(false)
+  expect(
+    panel.openSubagentPanel({
+      parentRuntimeId: null,
+      anchorSourceKey: 'previous-account',
+      inspection,
+      taskId: 'child',
+      row
+    })
+  ).toBe(false)
 })

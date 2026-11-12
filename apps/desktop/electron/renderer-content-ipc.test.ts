@@ -50,11 +50,13 @@ function setup() {
   scratch.push(root)
   const ipc = new NativeIpc()
   let account = 1
+
   const fence = createAccountWorkspaceIpc(
     ipc,
     id => id === account,
     () => true
   )
+
   const window = {} as BrowserWindow
   const points = new Map([[1, { x: 17, y: 29 }]])
 

@@ -107,11 +107,17 @@ describe('platform account IPC', () => {
       ;(f.event.senderFrame as any).url = 'http://127.0.0.1:5174/'
       const expected = { userId: f.snapshot.account.id, revision: f.snapshot.revision, mode: f.snapshot.mode }
 
-      if (change === 'account') { f.snapshot.account.id = 'another-account' }
+      if (change === 'account') {
+        f.snapshot.account.id = 'another-account'
+      }
 
-      if (change === 'revision') { f.snapshot.revision++ }
+      if (change === 'revision') {
+        f.snapshot.revision++
+      }
 
-      if (change === 'mode') { f.snapshot.mode = 'production' }
+      if (change === 'mode') {
+        f.snapshot.mode = 'production'
+      }
       // The renderer has not received the new native snapshot yet.
       await expect(f.invoke('logout', expected)).rejects.toMatchObject({ code: 'platform_account_changed' })
       expect(f.auth.logout).not.toHaveBeenCalled()

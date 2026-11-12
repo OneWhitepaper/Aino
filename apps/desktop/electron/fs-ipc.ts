@@ -44,7 +44,7 @@ export function registerFsIpc({
   directoryExists,
   resolveGitBinary
 }: FsIpcDeps) {
-  const home = () => typeof homeSource === 'function' ? homeSource() : homeSource
+  const home = () => (typeof homeSource === 'function' ? homeSource() : homeSource)
 
   ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => readDirForIpc(dirPath))
 

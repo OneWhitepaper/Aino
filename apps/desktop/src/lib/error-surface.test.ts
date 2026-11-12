@@ -28,16 +28,7 @@ describe('parseErrorSurface', () => {
   })
 
   it('accepts every documented layer', () => {
-    for (const layer of [
-      'provider',
-      'endpoint',
-      'streaming',
-      'auth',
-      'billing',
-      'gateway',
-      'runtime',
-      'disk'
-    ]) {
+    for (const layer of ['provider', 'endpoint', 'streaming', 'auth', 'billing', 'gateway', 'runtime', 'disk']) {
       expect(parseErrorSurface({ layer, code: 'x', retryable: false })?.layer).toBe(layer)
     }
   })
@@ -59,9 +50,7 @@ describe('parseErrorSurface', () => {
   })
 
   it('honors retryable=false', () => {
-    expect(parseErrorSurface({ layer: 'auth', code: 'auth_permanent', retryable: false })?.retryable).toBe(
-      false
-    )
+    expect(parseErrorSurface({ layer: 'auth', code: 'auth_permanent', retryable: false })?.retryable).toBe(false)
   })
 
   it('carries the failing session identity when present', () => {
@@ -160,9 +149,7 @@ describe('error copy never names a hidden Retry', () => {
       const { primary, secondary } = errorCardActions(surface)
       const { body } = errorCardText(thread, surface)
 
-      const offersRetry = [primary, secondary].some(
-        action => action === 'retry' || action === 'retry_at_reset'
-      )
+      const offersRetry = [primary, secondary].some(action => action === 'retry' || action === 'retry_at_reset')
 
       if (!offersRetry) {
         expect(body).not.toMatch(RETRY_WORDS)
@@ -209,9 +196,7 @@ describe('free-tier refusals', () => {
   })!
 
   it('carries the backend sentence and offers the free sign-in, never an OAuth re-login', () => {
-    expect(surface.message).toBe(
-      'Using Hermes without signing in is switched off right now. To sign in: /login.'
-    )
+    expect(surface.message).toBe('Using Hermes without signing in is switched off right now. To sign in: /login.')
     expect(errorCardActions(surface)).toEqual({ primary: 'sign_in_free_tier' })
   })
 
@@ -234,9 +219,7 @@ describe('cron session read-only (#141348)', () => {
   it('renders its own copy and offers a new chat instead of Retry', () => {
     const surface = parseErrorSurface({ layer: 'gateway', code: 'cron_session_read_only', retryable: false })
 
-    expect(errorCardText(en.assistant.thread, surface)).toEqual(
-      en.assistant.thread.errorCodes.cron_session_read_only
-    )
+    expect(errorCardText(en.assistant.thread, surface)).toEqual(en.assistant.thread.errorCodes.cron_session_read_only)
     expect(errorCardActions(surface)).toEqual({ primary: 'start_new_session' })
   })
 })
@@ -269,10 +252,7 @@ describe('managed local model server down', () => {
 
   it('says Retry only while the server is starting, in every locale', () => {
     const card = (retryable: boolean, thread = en.assistant.thread) =>
-      errorCardText(
-        thread,
-        parseErrorSurface({ layer: 'endpoint', code: 'local_runtime_unavailable', retryable })
-      )
+      errorCardText(thread, parseErrorSurface({ layer: 'endpoint', code: 'local_runtime_unavailable', retryable }))
 
     expect(card(true).body).toMatch(/retry/i)
     expect(card(false).body).not.toMatch(/retry/i)
@@ -287,9 +267,7 @@ describe('managed local model server down', () => {
 
 describe('usage-window refusal', () => {
   it('keeps diagnostics for failures while a plan limit offers its recovery actions', () => {
-    expect(errorCardShowsDiagnostics(parseErrorSurface({ code: 'usage_window', layer: 'billing' }))).toBe(
-      false
-    )
+    expect(errorCardShowsDiagnostics(parseErrorSurface({ code: 'usage_window', layer: 'billing' }))).toBe(false)
     expect(errorCardShowsDiagnostics(parseErrorSurface({ code: 'billing', layer: 'billing' }))).toBe(true)
   })
 
@@ -325,9 +303,7 @@ describe('usage-window refusal', () => {
     expect(surface.resetsAt).toBe(1_800_000_000)
 
     // Every other billing failure keeps today's card.
-    const plain = errorRecoveryPlan(
-      parseErrorSurface({ code: 'billing', layer: 'billing', retryable: false })
-    )
+    const plain = errorRecoveryPlan(parseErrorSurface({ code: 'billing', layer: 'billing', retryable: false }))
 
     expect(plain.diagnostics).toBe(true)
   })
@@ -387,9 +363,7 @@ describe('usage-window refusal', () => {
 
   it('falls back to its own table body when an older backend sent no sentence', () => {
     const bare = parseErrorSurface({ code: 'usage_window', layer: 'billing', retryable: false })!
-    expect(errorCardText(en.assistant.thread, bare).body).toBe(
-      en.assistant.thread.errorCodes.usage_window.body
-    )
+    expect(errorCardText(en.assistant.thread, bare).body).toBe(en.assistant.thread.errorCodes.usage_window.body)
   })
 })
 
@@ -419,12 +393,9 @@ describe('limit reset (#98852)', () => {
 
     expect(scheduledRetryDelayMs(now / 1000 - 60, now)).toBeNull()
     expect(scheduledRetryDelayMs(undefined, now)).toBeNull()
+    expect(parseErrorSurface({ layer: 'provider', code: 'rate_limit', retryable: true })?.resetsAt).toBeUndefined()
     expect(
-      parseErrorSurface({ layer: 'provider', code: 'rate_limit', retryable: true })?.resetsAt
-    ).toBeUndefined()
-    expect(
-      parseErrorSurface({ layer: 'provider', code: 'rate_limit', retryable: true, resets_at: 'soon' })
-        ?.resetsAt
+      parseErrorSurface({ layer: 'provider', code: 'rate_limit', retryable: true, resets_at: 'soon' })?.resetsAt
     ).toBeUndefined()
   })
 })
@@ -510,9 +481,7 @@ describe('error card actions: one main action, at most one second option', () =>
     expect(
       at({ code: 'provider_policy_blocked', layer: 'provider', provider: 'OpenRouter', retryable: false })
     ).toEqual({ primary: 'open_provider_settings', secondary: 'choose_model' })
-    expect(
-      at({ code: 'provider_policy_blocked', layer: 'provider', provider: 'acme', retryable: false })
-    ).toEqual({
+    expect(at({ code: 'provider_policy_blocked', layer: 'provider', provider: 'acme', retryable: false })).toEqual({
       primary: 'choose_model'
     })
   })
@@ -522,17 +491,27 @@ describe('error card actions: one main action, at most one second option', () =>
 
     expect(severity({ code: 'rate_limit', layer: 'provider', retryable: true })).toBe('degraded')
     expect(severity({ code: 'truncated', layer: 'provider', retryable: true })).toBe('degraded')
-    expect(severity({ code: 'free_tier_model_not_free', layer: 'provider', retryable: false })).toBe(
-      'degraded'
-    )
+    expect(severity({ code: 'free_tier_model_not_free', layer: 'provider', retryable: false })).toBe('degraded')
     expect(severity({ auth_kind: 'api_key', code: 'auth', layer: 'auth', retryable: false })).toBe('blocking')
     expect(severity({ code: 'agent_init_failed', layer: 'runtime', retryable: true })).toBe('blocking')
-    expect(severity({ code: 'SESSION_OWNER_UNCONFIRMED', layer: 'gateway', retryable: false })).toBe(
-      'blocking'
-    )
+    expect(severity({ code: 'SESSION_OWNER_UNCONFIRMED', layer: 'gateway', retryable: false })).toBe('blocking')
   })
 })
 it('retains only a positive managed credential version from the failed request', () => {
-  expect(parseErrorSurface({ layer: 'auth', code: 'managed_credential_rejected', retryable: false, managed_credential_version: 2 })?.managedCredentialVersion).toBe(2)
-  expect(parseErrorSurface({ layer: 'auth', code: 'managed_credential_rejected', retryable: false, managed_credential_version: -1 })?.managedCredentialVersion).toBeUndefined()
+  expect(
+    parseErrorSurface({
+      layer: 'auth',
+      code: 'managed_credential_rejected',
+      retryable: false,
+      managed_credential_version: 2
+    })?.managedCredentialVersion
+  ).toBe(2)
+  expect(
+    parseErrorSurface({
+      layer: 'auth',
+      code: 'managed_credential_rejected',
+      retryable: false,
+      managed_credential_version: -1
+    })?.managedCredentialVersion
+  ).toBeUndefined()
 })

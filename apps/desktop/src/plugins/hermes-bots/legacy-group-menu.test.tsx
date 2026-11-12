@@ -29,6 +29,7 @@ it('opens every retained management action from one named entrance without runni
       ctrlKey: false,
       pointerType: 'mouse'
     })
+
   open()
   expect(screen.getAllByRole('menuitem')).toHaveLength(3)
   expect(onSettings).not.toHaveBeenCalled()

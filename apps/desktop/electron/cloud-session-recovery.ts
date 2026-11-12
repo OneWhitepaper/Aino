@@ -73,7 +73,9 @@ export function createCloudSessionRecovery(deps: CloudRecoveryDeps) {
             return restored
           })
           .finally(() => {
-            if (inflight.get(baseUrl) === recovery) { inflight.delete(baseUrl) }
+            if (inflight.get(baseUrl) === recovery) {
+              inflight.delete(baseUrl)
+            }
           })
         inflight.set(baseUrl, recovery)
       }

@@ -64,7 +64,7 @@ export const enPreviewWeb: Translations['preview']['web'] = {
   vaultFillFailed: 'Could not fill the login',
   vaultLoadFailed: 'Could not load saved logins',
   vaultPageNotReady: 'The page is still loading. Try again when it has finished.',
-      restartNoActiveSession: 'No active session is available for a background restart.',
+  restartNoActiveSession: 'No active session is available for a background restart.',
 
-      restartMissingTaskId: 'The background restart did not return a task ID.'
+  restartMissingTaskId: 'The background restart did not return a task ID.'
 }

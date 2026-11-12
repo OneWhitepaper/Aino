@@ -8,17 +8,26 @@ import { $userThemes } from './user-themes'
 
 let theme: ReturnType<typeof useTheme>
 
-function Probe() { theme = useTheme();
+function Probe() {
+  theme = useTheme()
 
- return null }
+  return null
+}
 
 afterEach(cleanup)
 
 it('keeps the neutral palette and stored assets when an older accent card submits a color', () => {
-  render(<ThemeProvider><Probe /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <Probe />
+    </ThemeProvider>
+  )
   const colors = theme.theme.colors
   const assets = $userThemes.get()
-  act(() => { setAccentOverride('#8a2be2'); persistAccent('#8a2be2') })
+  act(() => {
+    setAccentOverride('#8a2be2')
+    persistAccent('#8a2be2')
+  })
   expect(theme.themeName).toBe('mono')
   expect(theme.theme.colors).toEqual(colors)
   expect($userThemes.get()).toBe(assets)

@@ -111,7 +111,8 @@ export const enMessaging = {
   relayLink: {
     title: 'Team Gateway',
     badge: 'No bot token needed',
-    intro: (platform: string) => `${platform} reaches this agent through the shared Hermes bot. Link your ${platform} account to it and message the bot to talk to your agent.`,
+    intro: (platform: string) =>
+      `${platform} reaches this agent through the shared Hermes bot. Link your ${platform} account to it and message the bot to talk to your agent.`,
     link: (platform: string) => `Link ${platform}`,
     linkAnother: (platform: string) => `Link another ${platform} account`,
     linkedAccounts: 'Linked accounts',
@@ -129,10 +130,12 @@ export const enMessaging = {
     refused: (platform: string) => `${platform} refused the link. Get a new code and try again.`,
     qrAlt: (platform: string) => `QR code for the shared ${platform} bot`,
     managed: 'Managed by Team Gateway',
-    managedNote: (platform: string) => `Team Gateway carries messaging on this deployment, so the gateway turns the direct ${platform} connection off at every start. To run it alongside the relay, set GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true in the gateway's environment (a direct connection keeps the instance from scaling to zero and can deliver messages twice).`,
+    managedNote: (platform: string) =>
+      `Team Gateway carries messaging on this deployment, so the gateway turns the direct ${platform} connection off at every start. To run it alongside the relay, set GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true in the gateway's environment (a direct connection keeps the instance from scaling to zero and can deliver messages twice).`,
     managedIntro: "This agent's accounts are linked from Nous Portal.",
     openPortal: 'Link accounts in Nous Portal',
-    noNewAccount: (platform: string) => `The code is no longer active and no new account appeared. If your ${platform} account isn't listed, get a new code and try again.`
+    noNewAccount: (platform: string) =>
+      `The code is no longer active and no new account appeared. If your ${platform} account isn't listed, get a new code and try again.`
   },
   telegramQr: {
     title: 'Choose how to connect your Telegram bot',

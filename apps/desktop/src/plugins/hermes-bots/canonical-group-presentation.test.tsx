@@ -275,6 +275,7 @@ it.each([null, false, '', '1792152000', Number.NaN, Number.POSITIVE_INFINITY, 1e
       created_at: createdAt,
       payload: { text: 'Still readable' }
     } as unknown as CanonicalGroupEvent
+
     const { container } = render(<CanonicalGroupHistory binding={binding} events={[event]} />)
 
     expect(screen.getByText('Still readable')).toBeTruthy()
@@ -383,6 +384,7 @@ it('finds message text, historical author names and attachments without dropping
 
 it('renders frozen mentions as readable names while preserving code, links, unknown addresses and copied source', async () => {
   const member = { member_id: 'helper', profile: 'helper', handle: 'u6d4b-u8bd5', display_name: '测试助手' }
+
   const text =
     '@u6d4b-u8bd5 请检查 @everyone\n\n`@u6d4b-u8bd5`\n\n```text\n@u6d4b-u8bd5\n```\n\n[原链接 @u6d4b-u8bd5](https://example.com/@u6d4b-u8bd5)\n\n@u6d4b-u8bd5-extra ops@u6d4b-u8bd5.test'
 

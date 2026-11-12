@@ -6,17 +6,19 @@ export const enGatewayHost: GatewayHostTranslations = {
   unavailableDesc: 'Connection settings can only be changed from the Hermes Desktop app on the computer running it.',
   webappHostTitle: 'Hermes host',
   webappHostDesc:
-    'The Webapp always runs on the Hermes host that serves it. The saved connections below are this machine\'s list, shared with the Hermes Desktop app; other gateways are reached through this host.',
+    "The Webapp always runs on the Hermes host that serves it. The saved connections below are this machine's list, shared with the Hermes Desktop app; other gateways are reached through this host.",
   webappOauthPaste: {
     title: 'Finish signing in',
-    description: 'If the sign-in tab ended on an address that would not load (this browser is not on the gateway\'s machine), paste that address here.',
+    description:
+      "If the sign-in tab ended on an address that would not load (this browser is not on the gateway's machine), paste that address here.",
     placeholder: 'http://127.0.0.1:…/webapp/gateway-connections/oauth/callback?…',
     finish: 'Finish',
     failed: 'Could not finish signing in'
   },
   webAccess: {
     title: 'Web access',
-    intro: 'Open Hermes on this computer from your phone or another computer, signed in with your Nous account. Whoever signs in can run commands on this computer.',
+    intro:
+      'Open Hermes on this computer from your phone or another computer, signed in with your Nous account. Whoever signs in can run commands on this computer.',
     failed: "Couldn't change web access",
     running: 'Running',
     stopped: 'Stopped',
@@ -25,7 +27,7 @@ export const enGatewayHost: GatewayHostTranslations = {
     restartNeeded: 'Restart needed',
     unavailable: 'Unavailable',
     notRunningDetail: 'Start it to open Hermes from another device.',
-    needsNous: "Sign in to your Nous account under Providers → Service authorization first.",
+    needsNous: 'Sign in to your Nous account under Providers → Service authorization first.',
     runningLan: 'Open this address on a device on the same network.',
     runningPublic: 'Served through your URL.',
     runningLocal: 'Only this computer can open it. Stop it, then start it again to open it from other devices.',
@@ -52,6 +54,7 @@ export const enGatewayHost: GatewayHostTranslations = {
     lanUnencrypted: 'The connection is not encrypted: others on this network could read what you send and receive.',
     noLan: 'This computer has no network address other devices can reach.',
     modePublic: 'My own URL',
-    modePublicDetail: port => `An HTTPS address you already run, such as Tailscale Serve or a tunnel, forwarding to http://127.0.0.1:${port}.`
+    modePublicDetail: port =>
+      `An HTTPS address you already run, such as Tailscale Serve or a tunnel, forwarding to http://127.0.0.1:${port}.`
   }
 }

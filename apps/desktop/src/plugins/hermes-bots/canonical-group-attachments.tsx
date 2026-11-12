@@ -250,7 +250,9 @@ export function CanonicalGroupAttachments({
       {error && (
         <Alert variant="destructive">
           <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
-          <AlertDescription>{labels.uploadFailed}: {error}</AlertDescription>
+          <AlertDescription>
+            {labels.uploadFailed}: {error}
+          </AlertDescription>
         </Alert>
       )}
     </div>

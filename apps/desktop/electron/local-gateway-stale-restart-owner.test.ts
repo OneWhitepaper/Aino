@@ -6,11 +6,24 @@ import { createStaleGatewayRestarter } from './local-gateway'
 // same stale code are two processes; the second must be restarted too, not attached as-is.
 test('a second owner on the same stale code is restarted, while a served sibling shares its multiplexer restart', async () => {
   const restarted: string[] = []
-  const restart = createStaleGatewayRestarter(async owner => { restarted.push(owner) }, () => undefined)
+  const restart = createStaleGatewayRestarter(
+    async owner => {
+      restarted.push(owner)
+    },
+    () => undefined
+  )
   const stale = { gateway: 'old', client: 'new' }
 
-  const owner = (profile_id: string, control_home: null | string = null) =>
-    ({ profile_id, control_home, instance_id: 'i', authority_epoch: 1, runtime_protocol: 1, api_origin: 'http://127.0.0.1:1', capabilities: [], supervisor: 'none' })
+  const owner = (profile_id: string, control_home: null | string = null) => ({
+    profile_id,
+    control_home,
+    instance_id: 'i',
+    authority_epoch: 1,
+    runtime_protocol: 1,
+    api_origin: 'http://127.0.0.1:1',
+    capabilities: [],
+    supervisor: 'none'
+  })
 
   expect(await restart(owner('/h'), stale)).not.toBeNull()
   expect(await restart(owner('/h/profiles/work'), stale)).not.toBeNull()
@@ -21,12 +34,22 @@ test('a second owner on the same stale code is restarted, while a served sibling
 
 test('switching accounts recovers each account home even when both use the default profile', async () => {
   const restarted: string[] = []
-  const restart = createStaleGatewayRestarter(async owner => { restarted.push(owner) }, () => undefined)
+  const restart = createStaleGatewayRestarter(
+    async owner => {
+      restarted.push(owner)
+    },
+    () => undefined
+  )
   const stale = { gateway: 'old', client: 'new' }
 
   const owner = (home: string) => ({
-    profile_id: home, instance_id: home, authority_epoch: 1, runtime_protocol: 1,
-    api_origin: 'http://127.0.0.1:1', capabilities: [], supervisor: 'none'
+    profile_id: home,
+    instance_id: home,
+    authority_epoch: 1,
+    runtime_protocol: 1,
+    api_origin: 'http://127.0.0.1:1',
+    capabilities: [],
+    supervisor: 'none'
   })
 
   const accountA = owner('/app/account-workspaces/account-a/home')
@@ -46,12 +69,21 @@ test('switching accounts recovers each account home even when both use the defau
 
 test('a pending restart is shared only by profiles belonging to the same owner home', async () => {
   const finish: Array<() => void> = []
-  const restart = createStaleGatewayRestarter(() => new Promise(resolve => finish.push(resolve)), () => undefined)
+  const restart = createStaleGatewayRestarter(
+    () => new Promise(resolve => finish.push(resolve)),
+    () => undefined
+  )
   const stale = { gateway: 'old', client: 'new' }
 
   const owner = (profile_id: string, control_home?: string) => ({
-    profile_id, control_home, instance_id: profile_id, authority_epoch: 1, runtime_protocol: 1,
-    api_origin: 'http://127.0.0.1:1', capabilities: [], supervisor: 'none'
+    profile_id,
+    control_home,
+    instance_id: profile_id,
+    authority_epoch: 1,
+    runtime_protocol: 1,
+    api_origin: 'http://127.0.0.1:1',
+    capabilities: [],
+    supervisor: 'none'
   })
 
   const first = await restart(owner('/account-a/home'), stale)

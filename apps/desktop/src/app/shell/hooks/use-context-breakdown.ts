@@ -6,11 +6,7 @@ interface ContextBreakdownOptions {
   busy: boolean
   enabled: boolean
   identityKey?: string
-  requestGateway: <T = unknown>(
-    method: string,
-    params?: Record<string, unknown>,
-    timeoutMs?: number
-  ) => Promise<T>
+  requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   refreshKey?: string
   sessionId: null | string
   suspended?: boolean
@@ -323,17 +319,7 @@ export function useContextBreakdown({
         clearTimeout(timer)
       }
     }
-  }, [
-    busy,
-    enabled,
-    generation,
-    identityKey,
-    requestGateway,
-    requestVersion,
-    refreshKey,
-    sessionId,
-    suspended
-  ])
+  }, [busy, enabled, generation, identityKey, requestGateway, requestVersion, refreshKey, sessionId, suspended])
 
   return {
     breakdown:

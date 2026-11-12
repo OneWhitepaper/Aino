@@ -46,7 +46,9 @@ describe('titlebarControlsPosition', () => {
 
   it('does not move macOS tools when the native traffic-light position arrives', () => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
-    expect(titlebarControlsPosition(undefined)).toEqual(titlebarControlsPosition({ x: TITLEBAR_FALLBACK_WINDOW_BUTTON_X, y: 10 }))
+    expect(titlebarControlsPosition(undefined)).toEqual(
+      titlebarControlsPosition({ x: TITLEBAR_FALLBACK_WINDOW_BUTTON_X, y: 10 })
+    )
   })
 
   it.each(['Win32', 'Linux x86_64'])('preserves the previous startup spacing on %s', platform => {

@@ -61,7 +61,9 @@ export function openSubagentPanel(intent: SubagentPanelIntent): boolean {
 
   if (
     !matches ||
-    (!intent.inspection && intent.owner !== undefined && collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(session.owner))
+    (!intent.inspection &&
+      intent.owner !== undefined &&
+      collaborationOwnerKey(intent.owner) !== collaborationOwnerKey(session.owner))
   ) {
     return false
   }
