@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { SubagentControls } from '@/app/chat/composer/status-stack/subagent-controls'
 import { CompactMarkdown } from '@/components/chat/compact-markdown'
+import { $workspaceMode, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { SubagentAvatar } from '@/components/ui/subagent-avatar'
@@ -15,6 +16,7 @@ import { useSessionSlice } from '@/lib/use-session-slice'
 import { collaborationOwnerKey } from '@/store/collaboration-capsule-model'
 import { knownOwnerForSession } from '@/store/session-states'
 import { $subagentsBySession } from '@/store/subagents'
+import { resolveToolSessionScope } from '@/store/tool-session'
 
 import { summaryDelegations } from '../right-sidebar/summary/session-activity'
 import { useSummaryContent } from '../right-sidebar/summary/use-summary-content'
@@ -85,16 +87,28 @@ function SubagentDetail({ item, session }: { item: SubagentPanelRow; session: Su
   )
 }
 
-/** One tool tab follows the same foreground conversation as Files and Review. */
+/** One tool tab follows the foreground, or an explicitly inspected capsule source. */
 export function SubagentPanel() {
   const { t } = useI18n()
-  const session = useSummarySession()
-  const sourceKey = subagentPanelSourceKey(session)
+  const foreground = useSummarySession()
+  useStore($workspaceMode)
+  useStore($workspaceOwnerKey)
+  const sourceKey = subagentPanelSourceKey(foreground)
   const selection = useStore($subagentPanelSelection)
+  const anchored = selection?.sourceKey === sourceKey ? selection : null
+  const inspection = anchored?.inspection
+
+  const session = inspection ? {
+    ...foreground,
+    ...inspection,
+    cwd: '',
+    scope: resolveToolSessionScope(inspection.owner)
+  } : foreground
+
   const content = useSummaryContent(session)
   const live = useSessionSlice($subagentsBySession, session.runtimeId)
   const rows = subagentPanelRows(summaryDelegations(content.delegations, live))
-  const selected = selection?.sourceKey === sourceKey && selection.taskId ? selection : null
+  const selected = anchored?.taskId ? anchored : null
 
   const item = selected
     ? (selectedPanelRow(rows, selected) ??
@@ -129,7 +143,9 @@ export function SubagentPanel() {
           <header className="subagent-panel-header">
             <Button
               aria-label={t.common.back}
-              onClick={() => $subagentPanelSelection.set(null)}
+              onClick={() => $subagentPanelSelection.set(inspection && anchored
+                ? { ...anchored, taskId: undefined, row: undefined, toolCallId: undefined }
+                : null)}
               size="icon-sm"
               variant="ghost"
             >
@@ -166,6 +182,7 @@ export function SubagentPanel() {
                     onClick={() =>
                       $subagentPanelSelection.set({
                         sourceKey,
+                        ...(inspection ? { inspection } : {}),
                         taskId: item.row.id,
                         toolCallId: item.callId,
                         row: item.row

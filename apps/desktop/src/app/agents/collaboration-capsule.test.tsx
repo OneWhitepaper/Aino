@@ -14,6 +14,7 @@ import { $collaborationCapsuleOpen, openCollaborationCapsule } from '@/store/col
 import { stubResizeObserver } from '@/test/jsdom'
 
 import { CollaborationCapsule } from './collaboration-capsule'
+import { openCollaborationGroup, openCollaborationTask, prepareCollaborationRetry } from './collaboration-navigation'
 
 vi.mock('@/store/collaboration-capsule', async () => {
   const { atom } = await import('nanostores')
@@ -26,6 +27,7 @@ vi.mock('@/store/collaboration-capsule', async () => {
 })
 vi.mock('./collaboration-navigation', () => ({
   openCollaborationGroup: vi.fn().mockReturnValue(true),
+  openCollaborationTask: vi.fn().mockResolvedValue(true),
   prepareCollaborationRetry: vi.fn().mockResolvedValue(true)
 }))
 
@@ -80,6 +82,7 @@ beforeEach(() => {
   groups.set([])
   $collaborationCapsuleOpen.set(false)
   vi.clearAllMocks()
+  vi.mocked(openCollaborationTask).mockReset().mockResolvedValue(true)
 })
 afterEach(() => {
   cleanup()
@@ -228,14 +231,69 @@ it('lets a focused composer dismiss its own mention list before the collaboratio
   )
   draft.setAttribute('aria-expanded', 'true')
   draft.setAttribute('aria-controls', 'member-suggestions')
+
   const handleEscape = vi.fn((event: KeyboardEvent) => {
     event.preventDefault()
     event.stopPropagation()
   })
+
   draft.addEventListener('keydown', handleEscape)
   draft.focus()
   fireEvent.keyDown(draft, { key: 'Escape' })
   expect(handleEscape).toHaveBeenCalledOnce()
   expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
   expect(window.document.activeElement).toBe(draft)
+})
+
+it('opens the delegated conversation once and closes the capsule only after navigation succeeds', async () => {
+  let finish!: (opened: boolean) => void
+  vi.mocked(openCollaborationTask).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  mount()
+  const delegated = task()
+  publish(delegated)
+  fireEvent.click(screen.getByRole('button', { name: /1 assistants collaborating/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Research assistant/ }))
+  const viewConversation = screen.getByRole('button', { name: 'View conversation' })
+
+  await act(async () => fireEvent.click(viewConversation))
+  expect(openCollaborationTask).toHaveBeenCalledWith(delegated)
+  expect(openCollaborationGroup).not.toHaveBeenCalled()
+  expect((viewConversation as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
+  fireEvent.click(viewConversation)
+  expect(openCollaborationTask).toHaveBeenCalledOnce()
+
+  await act(async () => finish(true))
+  expect($collaborationCapsuleOpen.get()).toBe(false)
+  expect(screen.queryByRole('region', { name: 'Collaboration' })).toBeNull()
+})
+
+it.each(['unavailable', 'rejected'] as const)('keeps the capsule and recovery message when child navigation is %s', async outcome => {
+  if (outcome === 'rejected') {
+    vi.mocked(openCollaborationTask).mockRejectedValueOnce(new Error('Connection closed'))
+  } else {
+    vi.mocked(openCollaborationTask).mockResolvedValueOnce(false)
+  }
+
+  mount()
+  publish(task())
+  fireEvent.click(screen.getByRole('button', { name: /1 assistants collaborating/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Research assistant/ }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'View conversation' })))
+  expect($collaborationCapsuleOpen.get()).toBe(true)
+  expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toContain('Reconnect to its workspace and try again.')
+  expect((screen.getByRole('button', { name: 'View conversation' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('keeps retry preparation on the original task source without opening its child conversation', async () => {
+  mount()
+  const failed = task('failed')
+  publish(failed)
+  fireEvent.click(screen.getByRole('button', { name: /1 tasks need attention/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Research assistant/ }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Return to retry' })))
+  expect(prepareCollaborationRetry).toHaveBeenCalledWith(failed, expect.any(Function))
+  expect(openCollaborationTask).not.toHaveBeenCalled()
+  expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
 })

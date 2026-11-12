@@ -12,8 +12,9 @@ import {
   interruptCollaborationTask,
   steerCollaborationTask
 } from '@/store/collaboration-capsule'
+import { $collaborationCapsuleOpen } from '@/store/collaboration-capsule-view'
 
-import { openCollaborationGroup, prepareCollaborationRetry } from './collaboration-navigation'
+import { openCollaborationTask, prepareCollaborationRetry } from './collaboration-navigation'
 import { collaborationTaskMeta, taskRunning } from './collaboration-presentation'
 import { CollaborationTranscript } from './collaboration-transcript'
 
@@ -67,9 +68,25 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
   }
 
   const openSession = async () => {
-    if (!(await openCollaborationGroup(group, navigate))) {
+    if (pending) {
+      return
+    }
+
+    setPending(true)
+    setFeedback('')
+    setFailed(false)
+
+    try {
+      if (!(await openCollaborationTask(task))) {
+        throw new Error('unavailable')
+      }
+
+      $collaborationCapsuleOpen.set(false)
+    } catch {
       setFailed(true)
       setFeedback(copy.unavailable)
+    } finally {
+      setPending(false)
     }
   }
 
@@ -94,7 +111,13 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
       )}
       <div className="cc-detail-meta">{meta}</div>
       <div className="cc-detail-actions">
-        <Button className="cc-small-button" onClick={() => void openSession()} size="xs" variant="secondary">
+        <Button
+          className="cc-small-button"
+          disabled={pending}
+          onClick={() => void openSession()}
+          size="xs"
+          variant="secondary"
+        >
           {copy.openSession}
           <ArrowRight className="cc-icon" />
         </Button>

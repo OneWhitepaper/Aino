@@ -11,6 +11,7 @@ const fixture = vi.hoisted(() => ({
   hint: vi.fn(),
   tileScope: vi.fn(),
   reveal: vi.fn(),
+  panel: vi.fn(() => true),
   visible: true,
   registerRoom: vi.fn(() => 'canonical:exact-room'),
   openRoom: vi.fn(),
@@ -27,6 +28,8 @@ vi.mock('@/plugins/hermes-bots/canonical-group-registry', () => ({ registerCanon
 vi.mock('@/plugins/hermes-bots/group-chat-view', () => ({ openGroupChat: fixture.openRoom }))
 vi.mock('@/components/pane-shell/tree/store', () => ({ revealTreePane: fixture.reveal }))
 vi.mock('../open-session', () => ({ openSession: fixture.open }))
+vi.mock('./subagent-panel', () => ({ openSubagentPanel: fixture.panel, subagentPanelSourceKey: () => 'foreground-anchor' }))
+vi.mock('@/store/tool-session', () => ({ $toolSession: { get: () => ({ storedId: 'foreground' }) } }))
 vi.mock('../chat/composer/focus', () => ({
   requestComposerInsertAcked: fixture.insert,
   getVisibleComposerSurfaceId: () => (fixture.visible ? 'source-surface' : null)
@@ -56,7 +59,7 @@ import { $selectedStoredSessionId } from '@/store/session'
 import { $focusedStoredSessionId } from '@/store/session-focus'
 import { $sessionTiles } from '@/store/session-states'
 
-import { openCollaborationGroup, prepareCollaborationRetry } from './collaboration-navigation'
+import { openCollaborationGroup, openCollaborationTask, prepareCollaborationRetry } from './collaboration-navigation'
 
 const groups = $collaborationGroups as WritableAtom<CollaborationGroup[]>
 const focused = $focusedStoredSessionId as WritableAtom<string | null>
@@ -96,6 +99,29 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('collaboration source navigation', () => {
+  it.each([false, true])('opens the exact capsule child in the tool panel without activating any parent (room=%s)', async room => {
+    const child = { ...task, id: 'exact-child', parentRuntimeId: 'member-runtime', storedSessionId: 'member-history',
+      goal: 'Review changes', displayName: 'Review', status: 'failed', stream: [], sessionId: 'child-history' } as unknown as CollaborationTask
+
+    groups.set([group({ tasks: [child], ...(room ? { roomBinding: { connectionId: 'room', profile: 'authority', roomId: 'room-1' } } : {}) })])
+    expect(await openCollaborationTask(child)).toBe(true)
+    expect(fixture.panel).toHaveBeenCalledWith(expect.objectContaining({
+      anchorSourceKey: 'foreground-anchor', taskId: 'exact-child',
+      inspection: { runtimeId: 'member-runtime', storedId: 'member-history', owner },
+      row: expect.objectContaining({ subagentId: 'exact-child', sessionId: 'child-history', goal: 'Review changes', status: 'failed' })
+    }))
+    expect(fixture.open).not.toHaveBeenCalled()
+    expect(fixture.openRoom).not.toHaveBeenCalled()
+    expect(fixture.switchScope).not.toHaveBeenCalled()
+    expect(fixture.insert).not.toHaveBeenCalled()
+  })
+
+  it('rejects a capsule entry after its exact source has changed accounts', async () => {
+    groups.set([group({ tasks: [{ ...task, owner: { connectionId: 'foreign', profile: 'research' } }] })])
+    expect(await openCollaborationTask(task)).toBe(false)
+    expect(fixture.panel).not.toHaveBeenCalled()
+  })
+
   it.each(['bots', 'sessions'] as const)('reveals the declared %s rail after choosing the exact source', async mode => {
     const dispose = registry.register({ id: 'owning-rail', area: 'panes', data: { sidebarMode: mode } })
 
