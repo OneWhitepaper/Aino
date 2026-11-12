@@ -12,10 +12,12 @@ from tests.ci.test_desktop_bundle_smoke import smoke_workflow
 from tests.ci.test_desktop_release_tag_admission import _workflow
 
 
-def test_candidate_identity_requires_run_commit_architecture_and_archive_digest():
+@pytest.mark.parametrize("target", ["linux-arm64", "win32-x64", "win32-arm64", "darwin-x64"])
+def test_candidate_identity_requires_run_commit_architecture_and_archive_digest(target):
     commit, digest = "a" * 40, "b" * 64
-    options = dict(artifact_id="17", run="23", commit=commit, target="linux-arm64", digest=digest)
-    metadata = dict(id=17, name=f"aino-unverified-linux-arm64-{commit}", expired=False,
+    options = dict(artifact_id="17", run="23", commit=commit, target=target, digest=digest)
+    label = target.replace("win32-", "windows-")
+    metadata = dict(id=17, name=f"aino-unverified-{label}-{commit}", expired=False,
                     digest=f"sha256:{digest}", workflow_run=dict(id=23, head_sha=commit))
     validate_artifact(metadata, **options)
     for key, value in (("artifact_id", "18"), ("run", "24"), ("commit", "c" * 40),
@@ -34,8 +36,10 @@ def test_resmoke_admission_selects_one_source_and_requires_both_sandboxed_launch
         assert gate(candidate["if"], inputs, {}, github={"event_name": "workflow_dispatch"}) == bool(artifact)
         assert gate(jobs["validate"]["if"], inputs, {}) != bool(artifact)
         assert not gate(candidate["if"], inputs, {}, github={"event_name": "workflow_call"})
-    for arch, runner in (("x64", "ubuntu-24.04"), ("arm64", "ubuntu-24.04-arm")):
-        assert evaluate(candidate["runs-on"], {"arch": arch}, {}) == runner
+    for platform, arch, runner in (("linux", "x64", "ubuntu-24.04"), ("linux", "arm64", "ubuntu-24.04-arm"),
+                                   ("win32", "x64", "windows-latest"), ("win32", "arm64", "windows-11-arm"),
+                                   ("darwin", "x64", "macos-15-intel")):
+        assert evaluate(candidate["runs-on"], {"platform": platform, "arch": arch}, {}) == runner
     (verdict,) = [step for step in candidate["steps"] if set(step.get("env", {})) == {"DIRECT", "EXTRACTED"}]
     assert gate(verdict["if"], {"format": "AppImage"}, {}, failed=True, job_if=False)
     for direct in ("success", "failure", "skipped", ""):
@@ -63,6 +67,7 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     python = root / "python"
     python.symlink_to(sys.executable)
     (root / "manifest.json").write_text(json.dumps({"runtime": {"storePython": "python"}}))
+    (root.parent / "install-stamp.json").write_text("{}")
     env = {**os.environ, "HERMES_DESKTOP_VARIANT": "bundled", "HERMES_PAYLOAD_TAG": tag,
            "HERMES_BUILD_COMMIT": "" if tag else commit, "_HERMES_CHANNEL_REQUEST_JSON": ""}
     names = json.loads(subprocess.check_output(["node", "-e",
@@ -94,3 +99,49 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     else:
         assert result.returncode == 0, result.stderr
         assert f"CANDIDATE_EXE={install / names[layout]}" in (tmp_path / "env").read_text()
+
+
+@pytest.mark.platforms("posix")
+def test_resmoke_verifies_stamp_in_the_same_shell_step_that_discovers_its_path(tmp_path):
+    """GITHUB_ENV writes become visible only to later Actions steps."""
+    from pm.store import current_target
+    commit, tag = 'a' * 40, 'v0.1.5'
+    root = tmp_path / 'install/resources/agent-payload'
+    root.mkdir(parents=True)
+    (root / 'python').symlink_to(sys.executable)
+    (root / 'manifest.json').write_text(json.dumps({'runtime': {'storePython': 'python'}}))
+    stamp = {'commit': commit, 'tag': tag, 'payload': 'bundled', 'distribution': 'desktop-app',
+             'dirty': False, 'updateMechanism': 'external'}
+    (root.parent / 'install-stamp.json').write_text(json.dumps(stamp))
+    env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': tag,
+           'HERMES_BUILD_COMMIT': '', '_HERMES_CHANNEL_REQUEST_JSON': ''}
+    name = subprocess.check_output(['node', '-e',
+        "console.log(require('./apps/desktop/electron-builder.config.cjs').linux.executableName)"],
+        env=env, text=True, encoding='utf-8', timeout=10).strip()
+    (root.parent.parent / name).symlink_to(sys.executable)
+    artifact = tmp_path / 'fixture.AppImage'
+    artifact.write_bytes(b'exact archive identity fixture')
+    (tmp_path / 'candidate-download').mkdir()
+    (tmp_path / 'candidate-download/source-artifact.json').write_text('{}')
+    (tmp_path / 'candidate-proof').mkdir()
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    (commands / 'python').symlink_to(sys.executable)
+    # The fixture has no complete bundled environment. Stub only that later
+    # subprocess; stamp CLI, identity config, file/architecture checks run real.
+    reached = tmp_path / 'payload-reached'
+    shell = commands / 'bash'
+    shell.write_text('#!/bin/sh\nif [ "$1" = scripts/smoke-payload.sh ]; then\n'
+                     f'  printf "%s" "$2" > "{reached}"\n  exit 0\nfi\nexec /bin/bash "$@"\n')
+    shell.chmod(0o755)
+    env.update(EXPECTED_COMMIT=commit, EXPECTED_TARGET=current_target(), RELEASE_TAG=tag,
+               CANDIDATE_PLATFORM='linux', CANDIDATE_FORMAT='AppImage', CANDIDATE_ROOT=str(root),
+               CANDIDATE_INSTALL=str(root.parent.parent), CANDIDATE_APPIMAGE=str(artifact),
+               RUNNER_TEMP=str(tmp_path), GITHUB_ENV=str(tmp_path / 'env'), PATH=f'{commands}{os.pathsep}{env["PATH"]}')
+    env.pop('CANDIDATE_STAMP', None)
+    step = next(row for row in smoke_workflow()['jobs']['native-candidate']['steps']
+                if row.get('name') == 'Verify product identity architecture and provenance')
+    result = subprocess.run(['/bin/bash', '-euo', 'pipefail', '-c', step['run']], env=env,
+                            capture_output=True, text=True, check=False, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert reached.read_text() == str(root)

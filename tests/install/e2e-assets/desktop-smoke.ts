@@ -200,6 +200,14 @@ function redact(text: string): string {
     .replace(/((?:authorization|api[_ -]?key|token|secret|password)\s*[:=]\s*)(?:Bearer\s+)?[^\s,"']+/gi, '$1[redacted]')
 }
 
+function smokeErrorStack(error: unknown): string {
+  return redact(error instanceof Error ? error.stack ?? String(error) : String(error))
+}
+
+function observerPayloadRoot(options: SmokeOptions): string | undefined {
+  return options.origin === 'bundled' ? options.root : undefined
+}
+
 function captureBackendLogs(homes: readonly string[], outDir: string, phase: string): void {
   for (const home of homes) {
     for (const name of ['desktop.log', 'errors.log', 'agent.log']) {
@@ -363,15 +371,19 @@ function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefin
   return accountHome
 }
 
-async function prepareSmokeWindow(
+export async function prepareSmokeWindow(
   app: ElectronApplication,
-  account: Awaited<ReturnType<typeof prepareAccountFixture>>,
+  account: Pick<NonNullable<Awaited<ReturnType<typeof prepareAccountFixture>>>, 'signIn'> | undefined,
   log: (message: string) => void
 ): Promise<Page> {
   let page = await pickAppWindow(app, log)
   page.on('pageerror', (error: Error): void => { log(error.message) })
+  if (account) {
+    // Native login retires this renderer; workspace-only IPC belongs to its replacement.
+    page = await account.signIn(app, page)
+    page.on('pageerror', (error: Error): void => { log(error.message) })
+  }
   await prepareWindowForInput(app, page)
-  if (account) { page = await account.signIn(app, page) }
 
   return page
 }
@@ -442,7 +454,8 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // resolves to (its machine root), not an arbitrary listener, and retain the
     // OS listener + installed-tree proof below.
     fs.writeFileSync(path.join(out, `desktop-backend-${options.phase}.log`), connection.logs.map(redact).join('\n'))
-    const backend = localBackendProcess(Number(base.port), running.pid, predictedHome ?? options.home)
+    const backend = localBackendProcess(Number(base.port), running.pid, predictedHome ?? options.home,
+      observerPayloadRoot(options))
     // `identity.hermesRoot` was asserted against options.root above. For a listener that
     // descends from this app process, on a platform that cannot read the backend's own
     // environment, those two facts are the available evidence; a ledger-attached host
@@ -477,6 +490,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     if (app) { await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}-failed.zip`) }).catch((): void => {}) }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ status: 'failed', phase: options.phase, origin: options.origin, root: options.root,
       executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)),
+      stack: smokeErrorStack(error),
       account: account?.proof() }, null, 2)}\n`)
     throw error
   } finally {
