@@ -15,7 +15,7 @@ def validate_artifact(metadata: dict, *, artifact_id: str, run: str, commit: str
                       target: str, digest: str) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", commit) or not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise ValueError("Exact commit and archive SHA256 are required")
-    if target not in ("linux-x64", "linux-arm64", "win32-x64", "win32-arm64"):
+    if target not in ("linux-x64", "linux-arm64", "win32-x64", "win32-arm64", "darwin-x64"):
         raise ValueError("Unsupported candidate target")
     label = target.replace("win32-", "windows-")
     workflow = metadata.get("workflow_run") or {}

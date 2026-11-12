@@ -25,6 +25,7 @@ import { createRequire } from 'node:module';
 import { runUpdateWindowChat } from './update-window-chat.mjs';
 import { updateWindowEnvironment } from './smoke-env.mjs';
 import { prepareNativeLaunchEnvironment } from './mac-native-launch-env.mjs';
+import { prepareSmokeWindow } from './desktop-smoke.ts';
 import { signInPlatformFixture } from '../../../tests-js/scripts/platform-account-fixture.ts';
 import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts';
 
@@ -33,7 +34,7 @@ const require = createRequire(import.meta.url);
 const { _electron } = createRequire(new URL('../../../tests-js/package.json', import.meta.url))('@playwright/test');
 const { observeProcessClose } = require('./process-close.cjs');
 const { prepareWindowForInput } = require('./window-input.cjs');
-const { pickAppWindow, openAbout, waitForUpdate, waitForMacUpdateClose } = require('./update-ui.cjs');
+const { openAbout, waitForUpdate, waitForMacUpdateClose } = require('./update-ui.cjs');
 
 const { values } = parseArgs({
   options: {
@@ -93,10 +94,9 @@ const oldPid = await app.evaluate(() => process.pid);
 log(`launched Electron pid=${oldPid}`);
 fs.writeFileSync(path.join(values['chat-out'], 'old-pid'), `${oldPid}\n`);
 
-const page = await pickAppWindow(app, log);
-
-await prepareWindowForInput(app, page);
-if (values['platform-account-env']) await signInPlatformFixture(page);
+const page = await prepareSmokeWindow(
+  app, values['platform-account-env'] ? { signIn: signInPlatformFixture } : undefined, log,
+);
 
 await runUpdateWindowChat(app, page, {
   mockUrl: values['mock-url'], outDir: values['chat-out'],

@@ -363,15 +363,19 @@ function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefin
   return accountHome
 }
 
-async function prepareSmokeWindow(
+export async function prepareSmokeWindow(
   app: ElectronApplication,
-  account: Awaited<ReturnType<typeof prepareAccountFixture>>,
+  account: Pick<NonNullable<Awaited<ReturnType<typeof prepareAccountFixture>>>, 'signIn'> | undefined,
   log: (message: string) => void
 ): Promise<Page> {
   let page = await pickAppWindow(app, log)
   page.on('pageerror', (error: Error): void => { log(error.message) })
+  if (account) {
+    // Native login retires this renderer; workspace-only IPC belongs to its replacement.
+    page = await account.signIn(app, page)
+    page.on('pageerror', (error: Error): void => { log(error.message) })
+  }
   await prepareWindowForInput(app, page)
-  if (account) { page = await account.signIn(app, page) }
 
   return page
 }

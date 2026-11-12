@@ -71,8 +71,11 @@ jobs:
   native-candidate:
     name: Re-smoke native ${{ inputs.platform }}-${{ inputs.arch }} candidate
     if: github.event_name == 'workflow_dispatch' && inputs.artifact-id != ''
-    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 90
+    runs-on: ${{ inputs.platform == 'win32' && (inputs.arch == 'arm64' && 'windows-11-arm' || 'windows-latest') || inputs.platform == 'darwin' && 'macos-15-intel' || (inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       actions: read
@@ -80,23 +83,33 @@ jobs:
       EXPECTED_COMMIT: ${{ inputs.sha }}
       EXPECTED_TARGET: ${{ inputs.platform }}-${{ inputs.arch }}
       RELEASE_TAG: ${{ inputs.tag }}
+      CANDIDATE_PLATFORM: ${{ inputs.platform }}
+      CANDIDATE_FORMAT: ${{ inputs.format }}
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Require Linux candidate on its native host
-        env:
-          PLATFORM: ${{ inputs.platform }}
-          FORMAT: ${{ inputs.format }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+          architecture: ${{ inputs.arch }}
+      - name: Require the candidate on its native host
+        shell: python
         run: |
-          python3 - <<'PYCODE'
-          import os
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, os.environ['GITHUB_WORKSPACE'])
           from pm.store import current_target
-          if os.environ['PLATFORM'] != 'linux' or os.environ['FORMAT'] not in ('AppImage', 'deb') or current_target() != os.environ['EXPECTED_TARGET']:
-              raise SystemExit('GitHub candidate re-smoke requires a native Linux AppImage or DEB installation')
-          PYCODE
+          from pm.package import machine_matches_binary
+          target = os.environ['EXPECTED_TARGET']
+          supported = {'linux-x64': ('AppImage', 'deb'), 'linux-arm64': ('AppImage', 'deb'),
+                       'win32-x64': ('zip',), 'win32-arm64': ('zip',), 'darwin-x64': ('zip',)}
+          if (os.environ['CANDIDATE_FORMAT'] not in supported.get(target, ())
+                  or current_target() != target or machine_matches_binary(Path(sys.executable), target) is not True):
+              raise SystemExit('Candidate re-smoke requires its supported format and native host/interpreter')
       - name: Install system desktop dependencies
+        if: inputs.platform == 'linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64 libfuse2t64
@@ -109,7 +122,7 @@ jobs:
           cache-node: false
           archive-inputs: false
       - name: Install locked smoke dependencies
-        if: inputs.format == 'AppImage'
+        if: inputs.format != 'deb'
         run: just js-install-tests
       - name: Install locked package tools and smoke dependencies
         if: inputs.format == 'deb'
@@ -125,7 +138,8 @@ jobs:
           ARTIFACT_SHA256: ${{ inputs.artifact-sha256 }}
         run: |
           python -m scripts.ci.native_candidate_artifact --artifact-id "$ARTIFACT_ID" --run "$ARTIFACT_RUN" --commit "$EXPECTED_COMMIT" --target "$EXPECTED_TARGET" --digest "$ARTIFACT_SHA256" --out "$RUNNER_TEMP/candidate-download"
-      - name: Extract and inspect the exact artifact
+      - name: Extract and inspect the exact AppImage
+        if: inputs.platform == 'linux'
         id: metadata
         run: |
           set -euo pipefail
@@ -139,18 +153,62 @@ jobs:
           echo "CANDIDATE_APPIMAGE=${files[0]}" >> "$GITHUB_ENV"
           echo "CANDIDATE_ROOT=$PWD/squashfs-root/resources/agent-payload" >> "$GITHUB_ENV"
           echo "CANDIDATE_INSTALL=$PWD/squashfs-root" >> "$GITHUB_ENV"
+      - name: Extract the exact Windows ZIP
+        if: inputs.platform == 'win32'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archives = @(Get-ChildItem "$env:RUNNER_TEMP/candidate-download/*.zip")
+          if ($archives.Count -ne 1) { throw 'Expected one exact Windows candidate ZIP' }
+          $install = "$env:RUNNER_TEMP/candidate-extracted"
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $install
+          $exe = @(Get-ChildItem "$install/*.exe" | Where-Object { $_.Name -notin @('elevate.exe', 'chrome_crashpad_handler.exe') })
+          if ($exe.Count -ne 1) { throw 'Expected one packaged desktop executable' }
+          if ((Get-AuthenticodeSignature $exe[0].FullName).Status -ne 'NotSigned') { throw 'Native ZIP candidate must be explicitly unsigned' }
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/candidate-proof" | Out-Null
+          "CANDIDATE_ARTIFACT=$($archives[0].FullName)" >> $env:GITHUB_ENV
+          "CANDIDATE_EXE=$($exe[0].FullName)" >> $env:GITHUB_ENV
+          "CANDIDATE_INSTALL=$install" >> $env:GITHUB_ENV
+          "CANDIDATE_ROOT=$install/resources/agent-payload" >> $env:GITHUB_ENV
+      - name: Extract the exact Intel Mac ZIP
+        if: inputs.platform == 'darwin'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=("$RUNNER_TEMP/candidate-download/"*.zip)
+          test "${#archives[@]}" -eq 1
+          mkdir "$RUNNER_TEMP/candidate-extracted" "$RUNNER_TEMP/candidate-proof"
+          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/candidate-extracted"
+          apps=("$RUNNER_TEMP/candidate-extracted/"*.app)
+          test "${#apps[@]}" -eq 1
+          echo "CANDIDATE_ARTIFACT=${archives[0]}" >> "$GITHUB_ENV"
+          echo "CANDIDATE_INSTALL=${apps[0]}" >> "$GITHUB_ENV"
+          echo "CANDIDATE_ROOT=${apps[0]}/Contents/Resources/agent-payload" >> "$GITHUB_ENV"
       - name: Verify product identity architecture and provenance
         run: |
           python - <<'PYCODE'
-          import hashlib, json, os, subprocess
+          import hashlib, json, os, plistlib, shutil, subprocess
           from pathlib import Path
           from pm.package import machine_matches_binary
           root = Path(os.environ['CANDIDATE_ROOT'])
+          install = Path(os.environ['CANDIDATE_INSTALL'])
+          platform = os.environ.get('CANDIDATE_PLATFORM', 'linux')
           env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': '' if os.environ['RELEASE_TAG'] else os.environ['EXPECTED_COMMIT']}
-          names = json.loads(subprocess.check_output(['node', '-e', "const c=require('./apps/desktop/electron-builder.config.cjs'); console.log(JSON.stringify([c.linux.executableName,c.executableName]))"], text=True, env=env))
-          # Older admitted AppImages predate the Linux command-name correction.
-          executables = [Path(os.environ['CANDIDATE_INSTALL']) / name for name in dict.fromkeys(names)
-                         if (Path(os.environ['CANDIDATE_INSTALL']) / name).is_file()]
+          config = json.loads(subprocess.check_output(['node', '-e', "const c=require('./apps/desktop/electron-builder.config.cjs'); console.log(JSON.stringify({linux:c.linux.executableName,legacy:c.executableName,windows:c.win.executableName,product:c.productName}))"], text=True, env=env))
+          if platform == 'linux':
+              # Older admitted AppImages predate the Linux command-name correction.
+              executables = [install / name for name in dict.fromkeys([config['linux'], config['legacy']])
+                             if (install / name).is_file()]
+          elif platform == 'win32':
+              executables = [install / (config['windows'] + '.exe')]
+          else:
+              if install.name != config['product'] + '.app':
+                  raise SystemExit('Packaged Mac product name differs from its identity')
+              with (install / 'Contents/Info.plist').open('rb') as stream:
+                  executable = plistlib.load(stream)['CFBundleExecutable']
+              if Path(executable).name != executable:
+                  raise SystemExit('Mac executable must belong to the app bundle')
+              executables = [install / 'Contents/MacOS' / executable]
           if len(executables) != 1:
               raise SystemExit(f'Expected exactly one product executable, found {len(executables)}')
           exe = executables[0]
@@ -158,16 +216,26 @@ jobs:
           for binary in (exe, root / manifest['runtime']['storePython']):
               if machine_matches_binary(binary, os.environ['EXPECTED_TARGET']) is not True:
                   raise SystemExit(f'Wrong native architecture: {binary.name}')
-          artifact = Path(os.environ['CANDIDATE_APPIMAGE'])
+          artifact = Path(os.environ.get('CANDIDATE_ARTIFACT') or os.environ['CANDIDATE_APPIMAGE'])
           with artifact.open('rb') as stream:
               digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+          resources = root.parent
+          stamp = json.loads((resources / 'install-stamp.json').read_text())
           proof = Path(os.environ['RUNNER_TEMP']) / 'candidate-proof'
-          (proof / 'artifact.json').write_text(json.dumps({'commit': os.environ['EXPECTED_COMMIT'], 'target': os.environ['EXPECTED_TARGET'], 'name': artifact.name, 'sha256': digest, 'bytes': artifact.stat().st_size, 'nativeBinaryAudit': True}, indent=2))
-          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+          (proof / 'artifact.json').write_text(json.dumps({'commit': os.environ['EXPECTED_COMMIT'], 'driverCommit': os.environ.get('GITHUB_SHA'), 'target': os.environ['EXPECTED_TARGET'], 'name': artifact.name, 'sha256': digest, 'bytes': artifact.stat().st_size, 'nativeBinaryAudit': True, 'stamp': stamp}, indent=2))
+          shutil.copyfile(Path(os.environ['RUNNER_TEMP']) / 'candidate-download/source-artifact.json', proof / 'source-artifact.json')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
               stream.write(f'CANDIDATE_EXE={exe}' + chr(10))
+              stream.write(f'CANDIDATE_STAMP={resources / "install-stamp.json"}' + chr(10))
           PYCODE
-          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG"
-          cp "$RUNNER_TEMP/candidate-download/source-artifact.json" "$RUNNER_TEMP/candidate-proof/"
+          args=()
+          if [ -n "$RELEASE_TAG" ]; then args+=(--tag "$RELEASE_TAG"); fi
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform "$CANDIDATE_PLATFORM" --format "$CANDIDATE_FORMAT" --stamp "$CANDIDATE_STAMP" --commit "$EXPECTED_COMMIT" "${args[@]}"
+          bash scripts/smoke-payload.sh "$CANDIDATE_ROOT" 2>&1 | tee "$RUNNER_TEMP/candidate-proof/payload-smoke.log"
+      - name: Native ZIP startup login chat and tool smoke
+        if: inputs.format == 'zip'
+        run: |
+          node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/candidate-home" --user-data "$RUNNER_TEMP/candidate-user-data" --out "$RUNNER_TEMP/candidate-proof" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
       - name: Prepare native installer packaging tools
         if: inputs.format == 'deb'
         run: |

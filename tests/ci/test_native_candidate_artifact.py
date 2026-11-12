@@ -12,10 +12,12 @@ from tests.ci.test_desktop_bundle_smoke import smoke_workflow
 from tests.ci.test_desktop_release_tag_admission import _workflow
 
 
-def test_candidate_identity_requires_run_commit_architecture_and_archive_digest():
+@pytest.mark.parametrize("target", ["linux-arm64", "win32-x64", "win32-arm64", "darwin-x64"])
+def test_candidate_identity_requires_run_commit_architecture_and_archive_digest(target):
     commit, digest = "a" * 40, "b" * 64
-    options = dict(artifact_id="17", run="23", commit=commit, target="linux-arm64", digest=digest)
-    metadata = dict(id=17, name=f"aino-unverified-linux-arm64-{commit}", expired=False,
+    options = dict(artifact_id="17", run="23", commit=commit, target=target, digest=digest)
+    label = target.replace("win32-", "windows-")
+    metadata = dict(id=17, name=f"aino-unverified-{label}-{commit}", expired=False,
                     digest=f"sha256:{digest}", workflow_run=dict(id=23, head_sha=commit))
     validate_artifact(metadata, **options)
     for key, value in (("artifact_id", "18"), ("run", "24"), ("commit", "c" * 40),
@@ -34,8 +36,10 @@ def test_resmoke_admission_selects_one_source_and_requires_both_sandboxed_launch
         assert gate(candidate["if"], inputs, {}, github={"event_name": "workflow_dispatch"}) == bool(artifact)
         assert gate(jobs["validate"]["if"], inputs, {}) != bool(artifact)
         assert not gate(candidate["if"], inputs, {}, github={"event_name": "workflow_call"})
-    for arch, runner in (("x64", "ubuntu-24.04"), ("arm64", "ubuntu-24.04-arm")):
-        assert evaluate(candidate["runs-on"], {"arch": arch}, {}) == runner
+    for platform, arch, runner in (("linux", "x64", "ubuntu-24.04"), ("linux", "arm64", "ubuntu-24.04-arm"),
+                                   ("win32", "x64", "windows-latest"), ("win32", "arm64", "windows-11-arm"),
+                                   ("darwin", "x64", "macos-15-intel")):
+        assert evaluate(candidate["runs-on"], {"platform": platform, "arch": arch}, {}) == runner
     (verdict,) = [step for step in candidate["steps"] if set(step.get("env", {})) == {"DIRECT", "EXTRACTED"}]
     assert gate(verdict["if"], {"format": "AppImage"}, {}, failed=True, job_if=False)
     for direct in ("success", "failure", "skipped", ""):
@@ -63,6 +67,7 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     python = root / "python"
     python.symlink_to(sys.executable)
     (root / "manifest.json").write_text(json.dumps({"runtime": {"storePython": "python"}}))
+    (root.parent / "install-stamp.json").write_text("{}")
     env = {**os.environ, "HERMES_DESKTOP_VARIANT": "bundled", "HERMES_PAYLOAD_TAG": tag,
            "HERMES_BUILD_COMMIT": "" if tag else commit, "_HERMES_CHANNEL_REQUEST_JSON": ""}
     names = json.loads(subprocess.check_output(["node", "-e",
