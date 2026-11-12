@@ -1,6 +1,7 @@
 """The upgrade must preserve OLD chats even when NEW intentionally isolates accounts."""
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import json
 import sqlite3
 
 import pytest
@@ -29,7 +30,7 @@ def fixture(tmp_path):
 
 def test_real_old_chat_rows_survive_without_being_adopted_by_another_account(fixture):
     module, database, receipt = fixture
-    snapshot = module.snapshot_chat(receipt)
+    snapshot = json.loads(json.dumps(module.snapshot_chat(receipt)))
     with sqlite3.connect(database) as connection:
         connection.execute("INSERT INTO messages (id, session_id, role, content) VALUES (4, 'new-session', 'user', 'new account message')")
     result = module.verify_chat(snapshot)

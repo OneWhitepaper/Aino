@@ -365,6 +365,9 @@ phase_update() {
     --out "$LOG_DIR/new-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/new-bundle-verify.log"
   ok "NEW bundle: codesign, identity ($new_identity), team ($new_team), version $new_version, stamp commit $new_commit"
 
+  # The fixture used session-only sign-in. NEW therefore relaunches at login;
+  # its authenticated gateway belongs to the account home reached below, not
+  # OLD's installation home. Observe that selected gateway after real sign-in.
   # ── user state survived ───────────────────────────────────────────────
   preserve_after_upgrade
   grep -qF "user_state_marker=$(manifest_side old commit)" "$HERMES_HOME/desktop-bundled-marker.txt" \
