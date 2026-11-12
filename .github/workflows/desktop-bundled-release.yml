@@ -324,7 +324,7 @@ jobs:
           subprocess.run([sys.executable, 'scripts/bundles/desktop.py', '--prepared', prepared, '--', '--publish=never'], check=True)
       - name: Retain packages for inspection even if smoke fails
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-unverified-${{ matrix.target.artifact }}-${{ github.sha }}
           path: apps/desktop/release/${{ matrix.target.glob }}
@@ -459,7 +459,7 @@ jobs:
       - name: Save verified unsigned Windows or Linux candidate
         id: verified
         if: matrix.target.platform != 'darwin'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-unsigned-${{ matrix.target.artifact }}-${{ github.sha }}
           path: apps/desktop/release/${{ matrix.target.glob }}
@@ -468,7 +468,7 @@ jobs:
           retention-days: 14
       - name: Save smoke diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-unsigned-${{ matrix.target.artifact }}-proof-${{ github.run_id }}
           path: ${{ runner.temp }}/candidate-proof
