@@ -365,27 +365,9 @@ phase_update() {
     --out "$LOG_DIR/new-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/new-bundle-verify.log"
   ok "NEW bundle: codesign, identity ($new_identity), team ($new_team), version $new_version, stamp commit $new_commit"
 
-  # The watcher already proved OLD exited. Discover the canonical gateway
-  # through its private control identity, rather than scanning argv or
-  # assuming that a detached gateway is an Electron child.
-  step "probing the relaunched app's backend health"
-  "$NODE_BIN" --input-type=module - "$old_app" "$HERMES_HOME" "$new_commit" "$ASSETS/bundled-gateway-health.py" <<'NODE' | tee "$LOG_DIR/backend-health.json"
-import fs from 'node:fs';
-import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-const [app, home, commit, probe] = process.argv.slice(2);
-const resources = path.join(app, 'Contents/Resources');
-const stamp = JSON.parse(fs.readFileSync(path.join(resources, 'install-stamp.json'), 'utf8'));
-const payload = path.join(resources, 'agent-payload');
-const output = execFileSync(path.join(payload, stamp.runtime.storePython), ['-B', probe, home, commit], {
-  cwd: payload, encoding: 'utf8', timeout: 110_000,
-  env: { ...process.env, NO_PROXY: '127.0.0.1,localhost,::1', no_proxy: '127.0.0.1,localhost,::1',
-    PYTHONPATH: [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(p => path.join(payload, p)).join(path.delimiter) },
-});
-process.stdout.write(output);
-NODE
-  ok "NEW canonical gateway identity and health verified without starting one"
-
+  # The fixture used session-only sign-in. NEW therefore relaunches at login;
+  # its authenticated gateway belongs to the account home reached below, not
+  # OLD's installation home. Observe that selected gateway after real sign-in.
   # ── user state survived ───────────────────────────────────────────────
   preserve_after_upgrade
   grep -qF "user_state_marker=$(manifest_side old commit)" "$HERMES_HOME/desktop-bundled-marker.txt" \
@@ -414,6 +396,10 @@ NODE
     --out "$LOG_DIR" --phase new --expect-commit "$new_commit" --mock-url "$HERMES_E2E_MOCK_URL" \
     --platform-account --tool-smoke \
     2>&1 | ts_prefix | tee "$LOG_DIR/desktop-chat-new.log"
+  ok "NEW authenticated workspace's selected gateway passed exact commit, listener and health checks"
+  "$(_preserve_python)" "$ASSETS/bundled-chat-preservation.py" verify \
+    "$LOG_DIR/legacy-chat-snapshot.json" "$LOG_DIR/legacy-chat-preservation.json"
+  ok "OLD real chat remains intact in its original isolated home without adopting it into the new account"
 
   step "PASS: packaged $(manifest_side old tag) -> $new_tag via the real About -> Update now route"
 }

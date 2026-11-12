@@ -130,7 +130,40 @@ export function startPlatformServer() {
   })
 }
 
-/** Real native login retires the invoking renderer; return its account-owned replacement. */
+/** Wait for the authenticated renderer: historical bundles reuse it, current bundles replace it. */
+export async function platformLoginWorkspace(app: ElectronApplication, page: Page,
+  submit: () => Promise<unknown>, timeoutMs = 120_000): Promise<Page> {
+  const candidates = new Set<Page>([page])
+
+  const opened = (candidate: Page): void => { candidates.add(candidate) }
+  let workspace: Page | undefined
+  app.on('window', opened)
+
+  try {
+    await submit()
+    await expect.poll(async () => {
+      for (const candidate of [...candidates].reverse()) {
+        if (!candidate.isClosed() && await candidate.getByRole('button', {
+          name: 'My account · Native member', exact: true
+        }).isVisible().catch(() => false)) {
+          workspace = candidate
+
+          return true
+        }
+      }
+
+      return false
+    }, { timeout: timeoutMs, message: 'The submitted native account did not reach an authenticated workspace' }).toBe(true)
+
+    if (workspace !== page) { await expect.poll(() => page.isClosed(), { timeout: timeoutMs }).toBe(true) }
+
+    return workspace!
+  } finally {
+    app.removeListener('window', opened)
+  }
+}
+
+/** Use the real sign-in UI and return the renderer owned by that account. */
 export async function signInPlatformFixture(app: ElectronApplication, page: Page): Promise<Page> {
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
@@ -138,16 +171,8 @@ export async function signInPlatformFixture(app: ElectronApplication, page: Page
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('246810')
-  const nextWindow = app.waitForEvent('window', { timeout: 120_000 })
 
-  const submit = page.getByRole('button', { name: 'Sign in', exact: true }).click().catch(error => {
+  return platformLoginWorkspace(app, page, () => page.getByRole('button', { name: 'Sign in', exact: true }).click().catch(error => {
     if (!page.isClosed()) { throw error }
-  })
-
-  const [workspace] = await Promise.all([nextWindow, submit])
-
-  await expect.poll(() => page.isClosed()).toBe(true)
-  await expect(workspace.getByRole('button', { name: 'My account · Native member', exact: true })).toBeVisible({ timeout: 120_000 })
-
-  return workspace
+  }))
 }

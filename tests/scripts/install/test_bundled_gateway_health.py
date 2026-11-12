@@ -35,3 +35,12 @@ def test_old_gateway_that_never_changes_does_not_pass_upgrade(tmp_path, monkeypa
 
     with pytest.raises(AssertionError, match="Gateway did not restart on NEW code"):
         probe.wait_for_new_gateway(tmp_path, "new", timeout=2)
+
+
+def test_new_gateway_must_match_the_authenticated_ui_connection(probe):
+    endpoint = SimpleNamespace(api_origin="http://127.0.0.1:12345")
+    probe.assert_selected_gateway(endpoint, "http://localhost:12345")
+    with pytest.raises(AssertionError, match="authenticated UI connection"):
+        probe.assert_selected_gateway(endpoint, "http://127.0.0.1:54321")
+    with pytest.raises(AssertionError):
+        probe.assert_selected_gateway(endpoint, "https://example.com:12345")

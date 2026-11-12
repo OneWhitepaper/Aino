@@ -12,8 +12,10 @@ import { resolveDesktopHermesHome } from '../../../apps/desktop/electron/data-pa
 import { applyBundleEnvironment } from '../../../apps/desktop/scripts/bundle-env.mjs'
 import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatReady } from '../../../tests-js/scripts/desktop-chat-smoke.ts'
 import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit, reusedDesktopBuildCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
+import { desktopToolMarker } from '../../../tests-js/scripts/desktop-tool-smoke.ts'
 import { _electron, type ElectronApplication, type Page, z } from '../../../tests-js/scripts/e2e-driver-deps.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
+import { bundledUpgradeHealth } from '../../../tests-js/scripts/bundled-upgrade-probe.ts'
 import { type MockServer, startMockServer } from '../../../tests-js/scripts/mock-server.ts'
 import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture.ts'
 
@@ -206,6 +208,15 @@ function smokeErrorStack(error: unknown): string {
 
 function observerPayloadRoot(options: SmokeOptions): string | undefined {
   return options.origin === 'bundled' ? options.root : undefined
+}
+
+function observeUpgradeGateway(options: SmokeOptions, identity: ChatIdentity,
+  connection: { baseUrl: string; mode?: string }, predictedHome: string | undefined): unknown {
+  if (options.phase !== 'new' || options.origin !== 'bundled' || !options['platform-account']) { return undefined }
+  const health = bundledUpgradeHealth({ root: options.root, home: predictedHome ?? options.home, commit: options['expect-commit'], identity, connection })
+  fs.writeFileSync(path.join(options.out, 'backend-health.json'), JSON.stringify(health, null, 2) + '\n')
+
+  return health
 }
 
 function captureBackendLogs(homes: readonly string[], outDir: string, phase: string): void {
@@ -464,13 +475,14 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     const provenanceCommit = readInstallationCommit(options.root, options.origin)
     assertBackendOrigin(backend, options.root, options.origin, { appReportedRoot: identity.hermesRoot, installedCommit: provenanceCommit })
     if (provenanceCommit !== options['expect-commit']) { throw new Error('Installed commit differs from --expect-commit') }
+    const gatewayHealth = observeUpgradeGateway(options, identity, connection, predictedHome)
     // Trace only chat actions. Connection probes can return credential-bearing logs.
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const reusedBuildCommit = reusedDesktopBuildCommit(options.root, options.origin, provenanceCommit)
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit })
     let tool
     if (options['tool-smoke']) {
-      const marker = path.join(options.home, `native-tool-${randomUUID()}.txt`)
+      const marker = desktopToolMarker(identity, options.home, predictedHome)
       const content = `Native tool verified ${options['expect-commit']} ${randomUUID()}`
       const toolChat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase,
         outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit,
@@ -479,7 +491,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
       tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
     }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, tool, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    const result = { ...chat, tool, gatewayHealth, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
     await gracefulClose(app)

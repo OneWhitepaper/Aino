@@ -6,6 +6,16 @@ from pathlib import Path
 import sys
 import time
 import urllib.request
+from urllib.parse import urlsplit
+
+
+def assert_selected_gateway(endpoint, selected_origin: str) -> None:
+    expected = urlsplit(selected_origin)
+    actual = urlsplit(endpoint.api_origin)
+    assert expected.scheme == actual.scheme == "http"
+    assert expected.hostname in {"127.0.0.1", "localhost", "::1"}
+    assert actual.hostname in {"127.0.0.1", "localhost", "::1"}
+    assert expected.port == actual.port, "Gateway differs from the authenticated UI connection"
 
 
 def wait_for_new_gateway(home: Path, commit: str, timeout: float = 90):
@@ -35,6 +45,7 @@ def main() -> None:
     home = Path(sys.argv[1]).resolve()
     commit = sys.argv[2]
     discovery = wait_for_new_gateway(home, commit)
+    assert_selected_gateway(discovery.endpoint, sys.argv[3])
     identity = get_running_pid_identity_strict(home / "gateway.pid")
     assert identity is not None
     pid, _ = identity

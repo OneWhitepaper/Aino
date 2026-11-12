@@ -28,6 +28,7 @@ import { prepareNativeLaunchEnvironment } from './mac-native-launch-env.mjs';
 import { prepareSmokeWindow } from './desktop-smoke.ts';
 import { signInPlatformFixture } from '../../../tests-js/scripts/platform-account-fixture.ts';
 import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts';
+import { execFileSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 // The checkout's tests-js declares the driver's Playwright.
@@ -105,6 +106,11 @@ await runUpdateWindowChat(app, page, {
   root: path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
   userData: launchEnv.HERMES_DESKTOP_USER_DATA_DIR,
 });
+const oldStamp = JSON.parse(fs.readFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/install-stamp.json'), 'utf8'));
+execFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/agent-payload', oldStamp.runtime.storePython), [
+  '-B', path.join(import.meta.dirname, 'bundled-chat-preservation.py'), 'snapshot',
+  path.join(values['chat-out'], 'desktop-chat-old.json'), path.join(values['chat-out'], 'legacy-chat-snapshot.json'),
+], { encoding: 'utf8', timeout: 30_000 });
 await shot(page, '01-app-booted');
 
 await openAbout(page, { log, shot, prepare: () => prepareWindowForInput(app, page) });
