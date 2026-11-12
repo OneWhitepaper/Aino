@@ -331,6 +331,22 @@ jobs:
           compression-level: 0
           if-no-files-found: warn
           retention-days: 14
+      - name: Install locked native smoke driver dependencies
+        shell: python
+        run: |
+          import os, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, os.environ['GITHUB_WORKSPACE'])
+          from scripts.bundles.desktop_inputs import build_environment
+          from scripts.bundles.desktop_prepare import PreparedDesktop
+          prepared = PreparedDesktop.load(Path(os.environ['RUNNER_TEMP']) / 'desktop-job' / 'prepared.json')
+          prepared.validate()
+          env = build_environment(prepared, prepared.request.variant, os.environ)
+          workspaces = [*prepared.request.workspaces(), 'tests-js']
+          subprocess.run([str(prepared.node), 'scripts/build/node-deps.mjs', '--source', str(prepared.request.source),
+                          '--reuse', '--native-toolchain', prepared.native_toolchain,
+                          *[arg for name in workspaces for arg in ('--workspace', name)]],
+                         cwd=prepared.request.source, env=env, check=True)
       - name: Extract Windows ZIP
         if: matrix.target.platform == 'win32'
         shell: pwsh

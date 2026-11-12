@@ -42,6 +42,9 @@ test.runIf(process.platform === 'linux')('afterPack uses the provisioned Python 
     mkdirSync(venv, { recursive: true })
     writeFileSync(path.join(payload, 'manifest.json'), '{}')
     writeFileSync(path.join(store, 'python3'), 'payload interpreter link target')
+    execFileSync(python, ['-c',
+      'from pathlib import Path; import sys; from scripts.bundles.payload import record_tools; from pm.store import current_target; record_tools(Path(sys.argv[1]),Path("pm/lock.json"),current_target(),{"python":"python"})',
+      payload], { cwd: path.resolve(import.meta.dirname, '../../..'), encoding: 'utf8' })
     symlinkSync('/builder/tools/python/bin/python3', path.join(venv, 'python'))
     symlinkSync('python', path.join(venv, 'python3'))
     await afterPack({ electronPlatformName: process.platform, appOutDir: directory })
