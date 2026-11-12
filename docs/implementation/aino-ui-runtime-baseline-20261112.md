@@ -56,6 +56,8 @@ Final checkpoint checks:
   code-health findings. Desktop type checking and lint passed with no errors.
 - Electron platform suite: 451 files passed, 11 environment-dependent files
   skipped; 4,389 cases passed and 66 skipped in one complete run.
+- Final renderer suite: all 1,899 files and 15,613 cases passed in one run
+  against the stable source after the Bot hydration repair.
 - Real Electron acceptance: product identity across ordinary/Bot/group/child
   requests (2 cases), the full tabbed panel flow (12 cases), native compositor
   and panel motion (2 cases), and same-account relogin (1 case) passed. Native
@@ -69,9 +71,19 @@ Final checkpoint checks:
 - Minimal installer/update source fixtures now include the real shared brand
   resource, matching production source checkouts. Seventeen related Python
   cases passed on macOS; Linux-only fresh-install cases are verified by CI.
+- Built-in, official-provider and custom model inheritance each passed three
+  consecutive real Electron/API runs, including actual provider responses.
+- Nix's isolated desktop-entry generator now carries the shared identity
+  module and brand data. Its generated launcher is checked against the shared
+  brand and executable; isolated staging and 65 related Python cases passed.
+  The full Nix build is verified on the Linux CI host.
+- Sealed CLI and cold-runtime source fixtures also carry their real brand
+  resources. Eight related cases passed; two Linux cases remain host-gated.
+- Prompt snapshots now include the Aino guidance and tool schemas. Checkout
+  paths are normalized only in snapshot output. Two snapshot cases passed;
+  rendering from a second real checkout produced byte-identical output.
 
-The final renderer run, repeated native model-inheritance acceptance and remote
-CI results are tracked in the pull request before merge. No installation package
+Remote CI results are tracked in the pull request before merge. No installation package
 or production deployment is part of this checkpoint.
 
 ## Upgrade requirements

@@ -215,6 +215,8 @@ json.dump(sorted(leaf_paths(DEFAULT_CONFIG)), sys.stdout, indent=2)
           nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pillow ])) ];
         } ''
           python3 - <<'PY'
+          from configparser import ConfigParser
+          import json
           from pathlib import Path
           from PIL import Image
 
@@ -230,7 +232,16 @@ json.dump(sorted(leaf_paths(DEFAULT_CONFIG)), sys.stdout, indent=2)
           with Image.open(launcher) as image, Image.open(dist / 'apple-touch-icon.png') as window_icon:
               assert image.size == window_icon.size
               assert image.convert('RGBA').tobytes() == window_icon.convert('RGBA').tobytes()
-          print('PASS: desktop and web ship decodable generated icons; launcher matches window icon')
+          brand = json.loads(Path('${../apps/desktop/brand.json}').read_text(encoding='utf-8-sig'))
+          entry_path = desktop / 'applications' / (brand['appId'] + '.desktop')
+          entry = ConfigParser(interpolation=None)
+          assert entry.read(entry_path), entry_path
+          identity = entry['Desktop Entry']
+          assert identity['Name'] == brand['productName']
+          assert identity['StartupWMClass'] == brand['appId']
+          assert identity['Exec'] == '${self'.packages.desktop}/bin/hermes-desktop'
+          assert identity['Icon'] == str(launcher)
+          print('PASS: desktop launcher, shared brand and generated window icons agree; web icons decode')
           PY
           mkdir -p $out
         '';
