@@ -39,6 +39,7 @@ function canonical(home: string): StagedSession | undefined {
   if (!fs.existsSync(file)) {
     return undefined
   }
+
   const db = new DatabaseSync(file, { readOnly: true })
 
   try {
@@ -155,6 +156,7 @@ test('same-account relogin recovers an empty staged Bot model without marking it
       if (remaining > 0 && previousCodeAt > 0) {
         await page.waitForTimeout(Math.min(remaining, 60_000))
       }
+
       await page.getByRole('button', { name: 'Send code', exact: true }).click()
       await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
       await page
@@ -251,6 +253,7 @@ test('same-account relogin recovers an empty staged Bot model without marking it
     if (!(await page.locator('[data-sidebar-mode-header]').innerText()).includes('Bot')) {
       await botMode(page)
     }
+
     await page.locator('[data-slot="bots-roster"] [data-roster-key="local::default"]').click()
     await expect(surface()).toBeVisible()
     expect(canonical(accountSandbox.hermesHome)!.id).toBe(sid)
@@ -322,6 +325,7 @@ test('same-account relogin recovers an empty staged Bot model without marking it
     if (!(await page.locator('[data-sidebar-mode-header]').innerText()).includes('Bot')) {
       await botMode(page)
     }
+
     await page.locator('[data-slot="bots-roster"] [data-roster-key="local::default"]').click()
     await expect(surface()).toBeVisible()
     await expect(surface().getByText(/This chat belongs to another account/)).toHaveCount(0)

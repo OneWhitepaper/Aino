@@ -94,7 +94,7 @@ import { botRosterMeta, botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './ro
 import { startScreenAutoRaise } from './screen-autoraise'
 import { ProfileGroupScreenPortal } from './screen-portal'
 import { startHideSweepScheduler } from './session-sweep'
-import { bumpBotOpenGeneration, getBotOpenGeneration, ID, pluginText, setPluginCtx } from './shared'
+import { $pendingBotOpen, bumpBotOpenGeneration, getBotOpenGeneration, ID, pluginText, setPluginCtx } from './shared'
 import tabBotsIcon from './tab-bots.svg'
 import type { GroupChat, RosterRow } from './types'
 import { loadBotSections } from './user-sections'
@@ -823,7 +823,7 @@ export default {
               const stored = String(payload.stored_session_id || '')
               const claim = $openBotChat.get()
 
-              if (!stored || !claim) {
+              if (!stored || !claim || $pendingBotOpen.get()) {
                 return
               }
 
@@ -848,7 +848,10 @@ export default {
               }
 
               const generation = getBotOpenGeneration()
-              void openBotCanonicalChat(bot, { background: true })
+              void openBotCanonicalChat(bot, {
+                background: true,
+                openingStillCurrent: () => generation === getBotOpenGeneration()
+              })
                 .then(opened => {
                   // A user action while the re-resume ran owns the center now.
                   if (!opened || generation !== getBotOpenGeneration()) {

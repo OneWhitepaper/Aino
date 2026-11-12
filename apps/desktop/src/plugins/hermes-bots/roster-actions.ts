@@ -87,7 +87,13 @@ export function trackInboundActivity(roster: RosterRow[]) {
     // Activity in the exact bot owner the user is currently looking at is
     // already visible — never badge the open chat or its same-named twin.
     if ($selectedBot.get() === key) {
-      refreshOpenBotChat(bot)
+      if ($pendingBotOpen.get()) {
+        // Retry this activity on the next roster poll after explicit hydration
+        // settles. Consuming it now could leave a just-fetched transcript stale.
+        rosterWatermarks.set(key, prev)
+      } else {
+        refreshOpenBotChat(bot)
+      }
 
       continue
     }
@@ -162,7 +168,7 @@ function refreshOpenBotChat(
   const page = window.location.hash
   const stillCurrent = () => generation === getBotOpenGeneration() && (!foreground || window.location.hash === page)
 
-  void openBotCanonicalChat(bot, {
+  return openBotCanonicalChat(bot, {
     background: !foreground,
     openingStillCurrent: stillCurrent
   }).catch(error => {
@@ -321,7 +327,11 @@ export async function openRosterBot(
     // message_agent). Force a registry open so forceResume re-pulls the
     // latest transcript instead of leaving a stale snapshot until the next
     // user turn (#99393 class; #95600 only covered the not-yet-open path).
-    refreshOpenBotChat(bot, { allowWhileBusy: true, foreground: true })
+    // A refresh still owns an explicit hydration wait. Background activity
+    // must not start a second host.openSession and supersede that wait.
+    $pendingBotOpen.set({ generation, key })
+    await refreshOpenBotChat(bot, { allowWhileBusy: true, foreground: true })
+    settlePendingBotOpen(generation)
 
     return true
   }

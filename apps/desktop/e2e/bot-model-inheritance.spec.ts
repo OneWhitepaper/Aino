@@ -71,6 +71,7 @@ async function startProvider() {
     for await (const chunk of req) {
       chunks.push(Buffer.from(chunk))
     }
+
     const body = JSON.parse(Buffer.concat(chunks).toString()) as { model: string; stream?: boolean }
     requests.push({ model: body.model, authorized: req.headers.authorization === `Bearer ${key}`, path: req.url })
     const text = `Inherited ${body.model} reached its own endpoint.`
@@ -174,6 +175,7 @@ function chatOnDisk(home: string, bot: string): StoredChat | null {
   if (!fs.existsSync(dbPath)) {
     return null
   }
+
   const db = new DatabaseSync(dbPath, { readOnly: true })
 
   try {
@@ -289,11 +291,13 @@ for (const source of Object.keys(SOURCES) as Source[]) {
       if (source === 'aino') {
         await chooseBuiltinDefault(page)
       }
+
       await createBot(page, bot)
       await expect.poll(() => chatOnDisk(accountHome.hermesHome, bot), { timeout: 60_000 }).toBeTruthy()
       const chat = chatOnDisk(accountHome.hermesHome, bot)!
       const surface = page.locator(`[data-chat-surface][data-session-anchor="session-tile:${chat.id}"]:visible`)
       await expect(surface).toBeVisible()
+
       const config = parse(
         fs.readFileSync(path.join(accountHome.hermesHome, 'profiles', bot, 'config.yaml'), 'utf8')
       ) as ProfileConfig
@@ -306,9 +310,11 @@ for (const source of Object.keys(SOURCES) as Source[]) {
           model_source: 'aino',
           model_id: BUILTIN
         })
+
         const bindings = (await nativeBindingObservations(launched.app)).filter(
           entry => entry.profile === bot && entry.ok
         )
+
         expect(bindings.length).toBeGreaterThan(0)
         expect(bindings.every(entry => entry.modelId === BUILTIN)).toBe(true)
         expect(provider.requests).toEqual([])
@@ -367,7 +373,22 @@ for (const source of Object.keys(SOURCES) as Source[]) {
         await info.attach('provider-model-route', { contentType: 'application/json', body: receipt })
       }
 
-      expect(await collectErrorBanners(page)).toEqual([])
+      const errors = await collectErrorBanners(page)
+
+      if (errors.length) {
+        await page.getByRole('button', { name: /^Notifications and status/ }).click()
+        const failedOpen = page.locator('.notification-list-item').filter({ hasText: 'Could not open' })
+
+        if (await failedOpen.count()) {
+          await failedOpen.first().click()
+          await info.attach('bot-open-error-detail', {
+            contentType: 'text/plain',
+            body: await page.locator('.notification-panel-body').innerText()
+          })
+        }
+      }
+
+      expect(errors).toEqual([])
       await page.screenshot({ path: info.outputPath('inherited-bot-window.png') })
       await info.attach('inherited-bot-window', {
         path: info.outputPath('inherited-bot-window.png'),

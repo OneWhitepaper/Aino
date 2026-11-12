@@ -41,8 +41,8 @@ export function setPluginCtx(ctx: PluginContext | null) {
  *  live in the same module. */
 let botOpenGeneration = 0
 
-/** Cold open still in flight. Published after the fronted-tab miss and before
- *  source prep. Not chat ownership — never route or highlight from this key.
+/** Explicit open still in flight, including hydration of a fronted tab.
+ *  Not chat ownership — never route or highlight from this key.
  *  The generation guards the clear: a superseded flight never releases its
  *  successor's mark. A bump (another open, a group, or Sessions) drops it. */
 export const $pendingBotOpen = atom<null | { generation: number; key: string }>(null)

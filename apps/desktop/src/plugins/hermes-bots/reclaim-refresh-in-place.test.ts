@@ -27,7 +27,10 @@ const { openBotCanonicalChat, onEvent } = vi.hoisted(() => ({
 
     return () => undefined
   }),
-  openBotCanonicalChat: vi.fn(async () => ({ openedId: 'bot-chat-tip', registryId: 'bot-chat' }))
+  openBotCanonicalChat: vi.fn(async (_bot: RosterRow, _options?: { openingStillCurrent?: () => boolean }) => ({
+    openedId: 'bot-chat-tip',
+    registryId: 'bot-chat'
+  }))
 }))
 
 const listeners: Array<(event: { payload?: unknown }) => void> = []
@@ -117,7 +120,8 @@ vi.mock('./i18n', async importOriginal => {
 })
 const plugin = (await import('./plugin')).default
 
-const { $openBotChat, $selectedRosterKey } = await import('./bot-state')
+const { $openBotChat, $pendingBotOpen, $selectedRosterKey } = await import('./bot-state')
+const { bumpBotOpenGeneration } = await import('./shared')
 const { $lastRoster } = await import('./data')
 
 const BOT: RosterRow = { connectionId: 'local', name: 'alpha' } as RosterRow
@@ -154,6 +158,7 @@ beforeEach(() => {
   openBotCanonicalChat.mockResolvedValue({ openedId: 'bot-chat-tip', registryId: 'bot-chat' })
   listeners.length = 0
   $openBotChat.set(null)
+  $pendingBotOpen.set(null)
   $selectedRosterKey.set('local::alpha')
   $lastRoster.set([BOT])
   register()
@@ -168,7 +173,23 @@ describe('session.reclaimed re-resumes the open Bot Chat WITHOUT navigating (iss
     expect(openBotCanonicalChat).toHaveBeenCalledTimes(1)
     // THE contract: the re-resume is background — refreshInPlace, never a
     // navigating open that would replace /kanban or any other route.
-    expect(openBotCanonicalChat).toHaveBeenCalledWith(BOT, { background: true })
+    expect(openBotCanonicalChat).toHaveBeenCalledWith(BOT, {
+      background: true,
+      openingStillCurrent: expect.any(Function)
+    })
+    const options = openBotCanonicalChat.mock.calls[0][1] as { openingStillCurrent: () => boolean }
+    expect(options.openingStillCurrent()).toBe(true)
+    bumpBotOpenGeneration()
+    expect(options.openingStillCurrent()).toBe(false)
+  })
+
+  it('leaves a foreground open to hydrate instead of starting a competing background wake', () => {
+    $openBotChat.set({ key: 'local::alpha', openedRegistryId: 'bot-chat', openedSessionId: 'bot-chat-tip' })
+    $pendingBotOpen.set({ generation: 1, key: 'local::alpha' })
+
+    listeners.forEach(listener => listener(reclaim('bot-chat')))
+
+    expect(openBotCanonicalChat).not.toHaveBeenCalled()
   })
 
   it('ignores a reclaim for a session the claim does not own', async () => {

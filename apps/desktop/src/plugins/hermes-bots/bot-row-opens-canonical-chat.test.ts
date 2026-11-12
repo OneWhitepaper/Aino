@@ -55,6 +55,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   focusedSessionId = null
+  // @ts-expect-error — restore the harness default (no focus verb).
+  delete host.focusOpenWorkspaceSession
 })
 
 describe('a row click lands on the canonical chat, never a remembered side tab', () => {
@@ -62,11 +64,6 @@ describe('a row click lands on the canonical chat, never a remembered side tab',
     ...bot,
     canonical_session: { id: 'bot-chat', resolved_id: 'bot-chat-tip' }
   } as RosterRow
-
-  afterEach(() => {
-    // @ts-expect-error — restore the harness default (no focus verb).
-    delete host.focusOpenWorkspaceSession
-  })
 
   it('fronts an open Bot Chat tab without a registry round-trip, side tabs excluded', async () => {
     const focus = vi.fn((_key: string, _probe: unknown, only?: readonly string[]) =>
@@ -166,11 +163,58 @@ describe('the open Bot Chat follows its session on the gateway', () => {
       canonical_session: { id: 'bot-chat', resolved_id: 'bot-chat-tip', last_active: lastActive }
     }) as RosterRow
 
+  it.each([false, true])(
+    'lets an explicit open finish hydration before a roster refresh (fronted: %s)',
+    async fronted => {
+      const hydratingBot = (lastActive: number) => ({
+        ...activeBot(lastActive),
+        name: `hydrating-${fronted ? 'fronted' : 'cold'}`
+      })
+
+      let finishOpen = () => undefined as void
+      let started = () => undefined as void
+
+      const openingStarted = new Promise<void>(resolve => {
+        started = resolve
+      })
+
+      openBotCanonicalChat.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            finishOpen = () => resolve({ openedId: 'bot-chat-tip', registryId: 'bot-chat' })
+            started()
+          })
+      )
+      trackInboundActivity([hydratingBot(10)])
+
+      if (fronted) {
+        host.focusOpenWorkspaceSession = vi.fn(() => 'bot-chat-tip') as never
+        focusBotChat()
+      }
+
+      const opening = openRosterBot(hydratingBot(10))
+      await openingStarted
+      focusBotChat()
+      trackInboundActivity([hydratingBot(20)])
+      finishOpen()
+
+      await expect(opening).resolves.toBe(true)
+      expect(openBotCanonicalChat).toHaveBeenCalledTimes(1)
+      expect(notifyBotOpenFailure).not.toHaveBeenCalled()
+      trackInboundActivity([hydratingBot(20)])
+      expect(openBotCanonicalChat).toHaveBeenCalledTimes(2)
+      expect(openBotCanonicalChat).toHaveBeenLastCalledWith(hydratingBot(20), {
+        background: true,
+        openingStillCurrent: expect.any(Function)
+      })
+    }
+  )
+
   it('re-opens the focused Bot Chat when its canonical session advances', () => {
     $selectedBot.set('alpha')
-    focusBotChat()
     trackInboundActivity([activeBot(100)]) // seeds the watermark
 
+    focusBotChat()
     trackInboundActivity([activeBot(200)])
 
     expect(openBotCanonicalChat).toHaveBeenCalledTimes(1)

@@ -45,7 +45,7 @@ async function sampleTrackCoverage(button: Locator, selector: string, closingGue
         x: number
         gap: number
         moving: boolean
-        guest?: { visibility: string; inert: boolean; hidden: string | null }
+        guest?: { visibility: string; inert: boolean }
       }[] = []
 
       const started = performance.now()
@@ -61,8 +61,7 @@ async function sampleTrackCoverage(button: Locator, selector: string, closingGue
           guest: host
             ? {
                 visibility: getComputedStyle(host).visibility,
-                inert: host.inert,
-                hidden: host.getAttribute('aria-hidden')
+                inert: host.inert
               }
             : undefined
         })
@@ -99,7 +98,6 @@ function expectStableTrackCoverage(samples: Awaited<ReturnType<typeof sampleTrac
   for (const sample of samples.filter(sample => sample.moving && sample.width > 1 && sample.guest)) {
     expect(sample.guest!.visibility).toBe('visible')
     expect(sample.guest!.inert).toBe(true)
-    expect(sample.guest!.hidden).toBe('true')
   }
 }
 

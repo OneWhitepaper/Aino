@@ -50,6 +50,30 @@ resources in isolated source fixtures, notification assertions that also matched
 screen-reader announcements, and a panel-header focus issue. These runs are not
 counted as successful acceptance.
 
+Final checkpoint checks:
+
+- `scripts/check`: all 14 checks passed, including zero blocking/advisory
+  code-health findings. Desktop type checking and lint passed with no errors.
+- Electron platform suite: 451 files passed, 11 environment-dependent files
+  skipped; 4,389 cases passed and 66 skipped in one complete run.
+- Real Electron acceptance: product identity across ordinary/Bot/group/child
+  requests (2 cases), the full tabbed panel flow (12 cases), native compositor
+  and panel motion (2 cases), and same-account relogin (1 case) passed. Native
+  browser content keeps its instance, viewport and page state through motion.
+- Explicit Bot opening now finishes hydration before background roster/reclaim
+  refreshes can open the same session. Deferred activity remains available to
+  the next poll. The race was reproduced before the fix; 123 related cases
+  passed after it, including cold and already-fronted chats.
+- Generated skill documentation was refreshed from the installed Aino help
+  skill. Documentation link checks and the English Docusaurus build passed.
+- Minimal installer/update source fixtures now include the real shared brand
+  resource, matching production source checkouts. Seventeen related Python
+  cases passed on macOS; Linux-only fresh-install cases are verified by CI.
+
+The final renderer run, repeated native model-inheritance acceptance and remote
+CI results are tracked in the pull request before merge. No installation package
+or production deployment is part of this checkpoint.
+
 ## Upgrade requirements
 
 Import the exact stable Hermes v0.23.1 release while retaining the above Aino
