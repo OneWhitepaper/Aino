@@ -190,6 +190,21 @@ active correction window, while `stale_generation` rejects settled/replaced work
 Managed-worker corrections currently return `unsupported_control`; normal durable
 queue submission and Stop remain separate controls.
 
+## Shared authority semantic summaries
+
+`session.summary({session_id, language, retry})` runs the existing cited-summary service
+through the owner's bounded auxiliary pool. It requires session-control permission;
+an optional `profile` must resolve to the same authority. The request borrows the
+resident agent's route or resolves the session's frozen launch policy without building
+an agent. Aino device credentials keep their live binding checks and billing metadata.
+
+The transcript, cached system prompt and tool snapshot are unchanged. Citations and
+the separate summary cache use the conversation's current physical segment. Foreground
+work supersedes generation: the response becomes `busy`, and its late result is not
+cached. Disconnect, model revision, profile and ownership are rechecked before inference
+and before publication. The standalone transport uses the same summary and billing
+helpers; it is never a fallback for a refused canonical request.
+
 ## Shared authority setup readiness
 
 Authenticated local clients can call `setup.status` and `setup.runtime_check` before

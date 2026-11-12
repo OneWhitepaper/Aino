@@ -20,7 +20,8 @@ async def test_claimed_image_turn_materializes_and_old_generation_cannot_spend(t
     from gateway.session_controls import AuthorityConnection
     from plugins.image_gen.aino import AinoImageGenProvider
     from tests.plugins.image_gen.test_aino_provider import PNG
-    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from agent.managed_image_provider import current_image_binding
+    from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_usage import begin_managed_usage, current_usage_metadata, end_managed_usage
 
     home = tmp_path / "profile"

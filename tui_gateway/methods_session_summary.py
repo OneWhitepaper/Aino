@@ -8,10 +8,7 @@ method = _registry.method
 @method("session.summary")
 def _generate_session_summary_rpc(rid, params):
     from copy import deepcopy
-    from dataclasses import replace
-    from uuid import uuid4
-    from agent.auxiliary_billing_scope import BillingScope, ManagedCredential, billing_scope
-    from hermes_cli.web_session_summary import SummaryBusy, summary_for_db
+    from hermes_cli.web_session_summary import SummaryBusy, authorized_summary, summary_for_db
     from tui_gateway.managed_model_runtime import ManagedBindingError
     from tui_gateway.managed_session import runtime_for_session, submit_refusal, transport_may_use_session
 
@@ -83,21 +80,9 @@ def _generate_session_summary_rpc(rid, params):
                     if deferred_inputs != (current_kwargs.get("model_override"), current_kwargs.get("provider_override")):
                         raise RuntimeError("session summary model changed")
 
-        key = (runtime or {}).get("api_key")
-        scope = BillingScope("turn", None, session["session_key"], str(uuid4()), "session_summary")
-        if isinstance(key, ManagedCredential):
-            def authorized_key():
-                authority_check()
-                return key()
-            runtime["api_key"] = replace(key, get_key=authorized_key)
-            scope = BillingScope("aino", key.user_id, key.session_id, str(uuid4()), "session_summary")
-        token = billing_scope.set(scope)
-        try:
-            result = summary_for_db(db, session["session_key"], language, generate=True,
-                                    retry=params.get("retry", False), main_runtime=runtime,
-                                    authority_check=authority_check, should_yield=should_yield)
-        finally:
-            billing_scope.reset(token)
+        result = authorized_summary(db, session["session_key"], language, runtime=runtime,
+                                    retry=params.get("retry", False), authority_check=authority_check,
+                                    should_yield=should_yield)
         return _ok(rid, result)
 
 

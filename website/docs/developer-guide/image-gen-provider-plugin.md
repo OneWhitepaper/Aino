@@ -15,6 +15,32 @@ identifier here and requires a matching, short-lived image-purpose lease at
 dispatch. `list_models()` returns the current preference for readback without
 copying account credentials or duplicating the remote model catalog.
 
+## Account-managed image execution
+
+The Aino image plugin combines the published
+`agent.managed_image_provider.ManagedImageGenMixin` with the existing
+OpenAI-compatible image executor. Put the mixin first in the class's base list.
+The executor supplies `_image_config()`, `_image_dependencies_available()`,
+`_size(size, aspect)`, `_client(openai, base_url, api_key)` and `generate(...)`;
+configuration/dependency probes, source-image loading, multipart edits, output caching and
+usage extraction continue through that executor's normal implementation.
+
+The mixin owns the account-managed policy rather than exposing billing internals
+to the plugin. It reads the saved `image_gen` preference, requires a matching
+image-purpose authority from the executing turn, resolves refreshed credentials
+at each physical request, and keeps image billing correlated with the current
+turn. The runtime alone binds and retires that authority. A plugin cannot acquire
+it from environment variables, another session or an unrelated text-model key.
+
+Image requests disable SDK retries. An uncertain outcome remains uncertain and
+cannot automatically replay a paid generation or edit. Explicit device-key
+rejections report the owner and credential version of the request that actually
+failed; an upstream authentication or billing failure does not revoke a device.
+Models and supported quality values remain bounded by the live account catalog.
+The concrete consumer is `plugins/image_gen/aino`, registered through the normal
+backend discovery path. Other image plugins keep using `ImageGenProvider` and
+their own authentication policy.
+
 Image-gen provider plugins register a backend that services every `image_generate` tool call — DALL·E, gpt-image, Grok, Flux, Imagen, Stable Diffusion, fal, Replicate, a local ComfyUI rig, anything. Built-in providers (OpenAI, OpenAI-Codex, xAI, FAL, Krea, DeepInfra, OpenRouter, Meta Model API) all ship as plugins. You can add a new one, or override a bundled one, by dropping a directory into `plugins/image_gen/<name>/`.
 
 :::tip

@@ -13,6 +13,11 @@ from .groups_bot_relay import GroupsApproveResult, GroupsCreateResult, GroupsRet
 from .prompt_voice import AttachedImageResult, ImageAttachBytesParams
 from .profiles_vault_complete_foreign_subagents import ProfileCanonicalSession, ProfileRow, ProfilesListResult
 from .registry import canonical_method
+from .sessions import SessionSummaryParams, SessionSummaryResult
+
+
+class CanonicalSummaryParams(SessionSummaryParams):
+    profile: str | None = None
 
 
 class CanonicalConfigGetResult(ConfigGetResult):
@@ -121,6 +126,7 @@ class CanonicalBotCancelResult(Result):
 
 for _name, _params, _result in (
     ('diagnostics.collect', DiagnosticsCollectParams, DiagnosticsCollectResult),
+    ('session.summary', CanonicalSummaryParams, SessionSummaryResult),
     ('config.get', ConfigGetParams, CanonicalConfigGetResult),
     ('config.set', CanonicalConfigSetParams, ConfigSetResult),
     ('profiles.list', CanonicalProfilesParams, CanonicalProfilesResult),

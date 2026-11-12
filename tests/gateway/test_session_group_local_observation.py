@@ -26,7 +26,7 @@ def test_renewed_local_member_turn_defers_when_its_owner_socket_disappears(
     target_authority.profile_id = str(target)
     monkeypatch.setenv('HERMES_HOME', str(source))
     config = run._load_gateway_config()
-    monkeypatch.setattr(run, '_load_gateway_config', lambda: {
+    monkeypatch.setattr(run, '_load_gateway_config', lambda *_args: {
         **config, 'hosted_rooms': {'profiles': {'other': str(target)}}})
     with SessionDB(source / 'state.db') as db:
         authority = SimpleNamespace(profile_id=str(source), db=db,

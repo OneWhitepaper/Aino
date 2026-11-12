@@ -140,6 +140,12 @@
       "entries": [
         "hermes_cli.plugin_session:session_client"
       ]
+    },
+    {
+      "source": "image-gen-provider-plugin.md § Account-managed image execution (Aino image plugin)",
+      "entries": [
+        "agent.managed_image_provider:ManagedImageGenMixin"
+      ]
     }
   ]
 }

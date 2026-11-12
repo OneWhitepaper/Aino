@@ -12551,6 +12551,48 @@
         "description": "``prompt.submit``: the admission receipt, or ``{voice_stopped: true}``.",
         "title": "CanonicalSubmitResult"
       },
+      "CanonicalSummaryParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "language": {
+            "default": "zh",
+            "enum": [
+              "zh",
+              "en",
+              "zh-hant",
+              "ja"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "retry": {
+            "default": false,
+            "title": "Retry",
+            "type": "boolean"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "CanonicalSummaryParams",
+        "type": "object"
+      },
       "CanonicalTurnAuthor": {
         "additionalProperties": false,
         "properties": {
@@ -53532,6 +53574,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/CanonicalCorrectionResult"
+        }
+      }
+    },
+    {
+      "name": "session.summary",
+      "summary": "",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/CanonicalSummaryParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SessionSummaryResult"
         }
       }
     },

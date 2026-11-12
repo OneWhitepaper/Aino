@@ -224,7 +224,8 @@ def _session_runtime(authority, ref):
         # fallback=False: only the session's primary route. If it cannot resolve (an AuthError), the
         # one-shot fails with 5030 instead of walking the route's fallback chain, because that walk
         # sets the runner-wide fallback notice the next turn would report.
-        model, kwargs = _resolve_policy_agent_runtime(authority.runner, policy, fallback=False)
+        model, kwargs = _resolve_policy_agent_runtime(
+            authority.runner, policy, source=authority.sessions[ref.session_id].source, fallback=False)
         runtime = {key: kwargs[key] for key in ('provider', 'base_url', 'api_key', 'api_mode') if kwargs.get(key)}
         return {**runtime, 'model': model} if model else runtime or None
     return resolve

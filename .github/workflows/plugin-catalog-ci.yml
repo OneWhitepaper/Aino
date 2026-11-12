@@ -79,7 +79,7 @@ jobs:
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
           UPSTREAM=3b421578588243f920886e6fe79a6faa87ea026e
-          CATALOG_TREE=3df55a3c113e79a77db5f6826668aabaf3bea7f8
+          CATALOG_TREE=5302bba64a72ff88ef0724065a62cd57cb7c37dc
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
@@ -90,6 +90,8 @@ jobs:
             # imported entries continue through the pinned-source gate below.
             # AI SENSE, Toll and Hermes Android use reachable replacement commits with plugin
             # subtrees identical to their original pins (recorded in each entry).
+            # Limbic uses its official v0.9.5 commit: only a removed evaluation
+            # fixture differs; runtime, manifest and assets remain identical.
             # Any unreviewed catalog edit is rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
               echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.1"

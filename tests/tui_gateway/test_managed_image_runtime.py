@@ -8,7 +8,7 @@ import pytest
 
 
 def test_image_scope_restores_owner_and_keeps_only_live_credentials():
-    from tui_gateway.managed_image_runtime import current_image_binding, managed_image_scope
+    from agent.managed_image_provider import current_image_binding, managed_image_scope
 
     first = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
     second = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
@@ -27,7 +27,7 @@ def test_image_scope_restores_owner_and_keeps_only_live_credentials():
 
 @pytest.mark.parametrize("purpose,offset", [("chat", 120), ("image", -1)])
 def test_image_scope_refuses_chat_or_expired_lease(purpose, offset):
-    from tui_gateway.managed_image_runtime import current_image_binding, managed_image_scope
+    from agent.managed_image_provider import current_image_binding, managed_image_scope
 
     binding = SimpleNamespace(purpose=purpose, expires_at=datetime.now(UTC) + timedelta(seconds=offset))
     with managed_image_scope(lambda: binding):
@@ -36,7 +36,8 @@ def test_image_scope_refuses_chat_or_expired_lease(purpose, offset):
 
 def test_canonical_scope_fences_generation_and_rechecks_live_selection(monkeypatch):
     from hermes_state_runtime import RuntimeStoreError
-    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from agent.managed_image_provider import current_image_binding
+    from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import get_registry
 
     authority = SimpleNamespace(profile_id="profile", sessions={"sid": object()}, executing={"sid": 7})
@@ -60,7 +61,8 @@ def test_canonical_scope_fences_generation_and_rechecks_live_selection(monkeypat
 
 
 def test_copied_legacy_turn_cannot_keep_image_authority_after_scope_exit(monkeypatch):
-    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from agent.managed_image_provider import current_image_binding
+    from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import get_registry
 
     lease = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
@@ -75,7 +77,8 @@ def test_copied_legacy_turn_cannot_keep_image_authority_after_scope_exit(monkeyp
 @pytest.mark.parametrize("boundary", ["selection", "lease"])
 @pytest.mark.parametrize("change", ["generation", "session"])
 def test_canonical_scope_refuses_owner_changed_during_resolution(monkeypatch, boundary, change):
-    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from agent.managed_image_provider import current_image_binding
+    from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import get_registry
 
     authority = SimpleNamespace(profile_id="profile", sessions={"sid": object()}, executing={"sid": 7})
@@ -104,7 +107,7 @@ def test_canonical_scope_refuses_owner_changed_during_resolution(monkeypatch, bo
 
 
 def test_image_rejection_uses_its_owner_and_cannot_outlive_scope():
-    from tui_gateway.managed_image_runtime import managed_image_scope, notify_image_credential_rejection
+    from agent.managed_image_provider import managed_image_scope, notify_image_credential_rejection
     from tui_gateway.managed_model_runtime import ManagedModelOwner
 
     binding = SimpleNamespace(purpose='image', expires_at=None,
@@ -127,7 +130,8 @@ def test_image_rejection_uses_its_owner_and_cannot_outlive_scope():
 @pytest.mark.parametrize('boundary', ['generation', 'session', 'selection'])
 def test_image_rejection_cannot_notify_after_canonical_owner_changes(monkeypatch, boundary):
     from hermes_state_runtime import RuntimeStoreError
-    from tui_gateway.managed_image_runtime import conversation_image_scope, notify_image_credential_rejection
+    from agent.managed_image_provider import notify_image_credential_rejection
+    from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import ManagedModelOwner, get_registry
 
     notices = []

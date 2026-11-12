@@ -451,6 +451,13 @@ Native clients may persist private assistant replay in `reasoning_details` with 
 
 Providers may override `get_model_context_length(model, *, base_url="", api_key="")` with a qualified positive token bound, or return `None` for the existing lookup chain. The optional runtime arguments let a session-managed provider read its authenticated catalog limit without probing another endpoint or sharing it across accounts. Callable credentials are passed unchanged and should not be invoked just to look up metadata. Older hooks accepting only `model` remain supported. Explicit configuration and endpoint-scoped overrides take precedence; the provider bound is consulted before generic caches and HTTP probes. Do not confuse a catalog maximum with an account entitlement.
 
+The base implementation already reads live catalog metadata for a profile whose
+`auth_type` is `session_managed`, when core has supplied a managed credential for
+the exact model and base URL. The Aino profile uses that implementation directly.
+Plain API keys, arbitrary callable objects, custom-provider credentials and
+credentials for a different route return `None`; the hook never resolves a
+secret merely to inspect the context limit.
+
 For a nonstandard cost surface, `get_usage_cost(model, usage)` may return an `agent.usage_pricing.CostResult`, or `None` for normal pricing. `usage` is a `CanonicalUsage` whose `raw_usage` retains response metadata when available. Classify native list-price totals as `estimated`, never `actual` or `included`; missing invoice information is not proof of zero charges. The default hooks return `None`, preserving existing providers.
 
 ## Hook reference examples

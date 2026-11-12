@@ -347,6 +347,8 @@ export interface MockBackendFixture {
 }
 
 export interface MockBackendOptions {
+  /** Exercise the managed canonical owner instead of the legacy isolated serve fixture. */
+  nativeGateway?: boolean
   /** Exercise native compositor painting with the desktop's GPU defaults. */
   allowGpu?: boolean
   /**
@@ -389,7 +391,7 @@ export async function setupMockBackend(options: MockBackendOptions = {}): Promis
   writeEnvFile(sandbox.hermesHome, 'e2e-mock-key', mock.url)
 
   // 3. Build env + launch
-  const env = buildAppEnv(sandbox)
+  const env = buildAppEnv(sandbox, options.nativeGateway ? { HERMES_DESKTOP_ISOLATED_BACKEND: '0' } : {})
   let launched: Awaited<ReturnType<typeof launchDesktop>>
 
   try {
@@ -483,6 +485,7 @@ export async function setupDeadBackend(options: DeadBackendOptions = {}): Promis
       ? { HERMES_DESKTOP_BOOT_FAKE_ERROR: 'Failed to connect to Hermes backend: connection refused' }
       : {}
   )
+
   const { app, page } = await launchDesktop(env)
 
   return {
@@ -618,6 +621,7 @@ export async function waitForAppReady(
       if (visible) {
         break
       }
+
       await page.waitForTimeout(500)
     }
   }
