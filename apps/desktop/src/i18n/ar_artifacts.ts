@@ -161,7 +161,17 @@ export const arArtifacts = {
       fallbackTitle: 'معاينة',
       restartNoActiveSession: 'لا توجد جلسة نشطة لإعادة تشغيلها في الخلفية.',
 
-      restartMissingTaskId: 'لم تُرجع إعادة التشغيل في الخلفية معرّف مهمة.'
+      restartMissingTaskId: 'لم تُرجع إعادة التشغيل في الخلفية معرّف مهمة.',
+      vaultFill: 'ملء بيانات دخول محفوظة',
+      vaultTitle: site => `بيانات الدخول المحفوظة لـ ${site}`,
+      vaultLoading: 'جارٍ تحميل بيانات الدخول المحفوظة…',
+      vaultEmpty: 'لا توجد بيانات دخول محفوظة لهذا الموقع',
+      vaultUnlock: name => `فتح قفل ${name}`,
+      vaultOpenSettings: 'فتح إعدادات خزنة بيانات الاعتماد',
+      vaultFilled: label => `تم ملء ${label}. راجع النموذج ثم سجّل الدخول.`,
+      vaultFillFailed: 'تعذّر ملء بيانات الدخول',
+      vaultLoadFailed: 'تعذّر تحميل بيانات الدخول المحفوظة',
+      vaultPageNotReady: 'لا تزال الصفحة قيد التحميل. أعد المحاولة عند اكتمالها.'
     }
   }
 } satisfies Pick<TranslationOverrides, 'artifacts' | 'artifactCard' | 'artifactPreview' | 'preview'>

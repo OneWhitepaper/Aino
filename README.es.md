@@ -30,6 +30,11 @@ Comprueba las actualizaciones desde Configuración → Acerca de. Las [versiones
 
 Envía los problemas del producto a [Aino Issues](https://github.com/OneWhitepaper/Aino/issues), indicando versión, sistema y pasos de reproducción. La opción de enviar diagnósticos a Nous es un servicio externo separado y requiere consentimiento explícito. Un enlace privado de Nous no concede acceso a los responsables de Aino.
 
+El instalador de código fuente usa PM para Python 3.14, Node.js, npm, pnpm,
+ripgrep, FFmpeg y las dependencias de Python. Si falta Git, descarga el archivo
+verificado de Git for Windows en el almacén del motor, sin reemplazar el Git
+del sistema. MSIX/App Installer es una distribución separada.
+
 ## Desarrollo
 
 Clona [este repositorio](https://github.com/OneWhitepaper/Aino) y sigue [CONTRIBUTING.md](CONTRIBUTING.md) y la [guía de compilación](apps/desktop/BUILDING.md). Elige valores aislados para `HERMES_HOME` y `HERMES_RUNTIME_DIR` antes de activar el entorno.

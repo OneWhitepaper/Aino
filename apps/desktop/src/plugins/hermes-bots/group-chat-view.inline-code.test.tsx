@@ -76,13 +76,14 @@ it('themes inline code in room message bodies with the chat inline-code tokens',
     { id: 'm1', thread: 'a', from: { kind: 'member' as const, name: 'builder' }, text: 'discover_models', at: 1 }
   ]
 
-  $groupChats.set({ Room: { log, watermarks: {}, sessions: {} } })
+  $groupChats.set({ Room: { engine: 'desktop', log, watermarks: {}, sessions: {} } })
 
   const { getByTestId } = render(<GroupChatWorkspace group="Room" members={[{ name: 'builder' }] as never} />)
   // The room paints once the canonical `groups.capabilities` gate resolves.
   await waitFor(() => expect(getByTestId('renderer-code')).toBeTruthy())
   const style = getComputedStyle(getByTestId('renderer-code'))
 
+  expect(getByTestId('renderer-code').closest('[dir]')?.getAttribute('dir')).toBe('auto')
   expect(style.color).toBe('var(--ui-inline-code-foreground)')
   expect(style.background).toBe('var(--ui-inline-code-background)')
 })

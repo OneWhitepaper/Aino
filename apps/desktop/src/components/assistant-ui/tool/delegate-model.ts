@@ -152,6 +152,9 @@ function fromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: 
  * delegations may have identical text and shape. A persisted child result is
  * authoritative over an older live snapshot or synthetic tool completion.
  */
+const sameDelegation = (childId: string | undefined, parentId: string) =>
+  childId === parentId || (childId?.startsWith(`${parentId}-`) ?? false)
+
 export function mergeDelegateRows(
   rows: readonly DelegateRow[],
   live: readonly SubagentProgress[],
@@ -175,10 +178,25 @@ export function mergeDelegateRows(
     const native = row.subagentId
       ? claim(candidate => candidate.id === row.subagentId)
       : row.delegationId
-        ? claim(candidate => candidate.delegationId === row.delegationId && candidate.taskIndex === index)
+        ? claim(
+            candidate =>
+              sameDelegation(candidate.delegationId, row.delegationId!) &&
+              candidate.taskIndex === index &&
+              candidate.goal === row.goal
+          )
         : undefined
+    const sameBatch =
+      native ??
+      (row.delegationId
+        ? (claim(
+            candidate => sameDelegation(candidate.delegationId, row.delegationId!) && candidate.goal === row.goal
+          ) ??
+          claim(
+            candidate => sameDelegation(candidate.delegationId, row.delegationId!) && candidate.taskIndex === index
+          ))
+        : undefined)
 
-    const matched = native ?? (prefix ? claim(candidate => candidate.id === `${prefix}${index}`) : undefined)
+    const matched = sameBatch ?? (prefix ? claim(candidate => candidate.id === `${prefix}${index}`) : undefined)
 
     if (!matched) {
       return row
@@ -192,7 +210,7 @@ export function mergeDelegateRows(
       sessionId: matched.sessionId || row.sessionId
     }
 
-    if (!isDelegateRowLive(row.status) && (row.status !== 'dispatched' || !native)) {
+    if (!isDelegateRowLive(row.status) && (row.status !== 'dispatched' || !sameBatch)) {
       return {
         ...merged,
         activity: row.activity.length ? row.activity : merged.activity,

@@ -42,7 +42,7 @@ def rig(tmp_path, monkeypatch):
 
 @contextmanager
 def image_scope(binding, **kwargs):
-    from tui_gateway.managed_image_runtime import managed_image_scope
+    from agent.managed_image_provider import managed_image_scope
     with managed_image_scope(lambda: binding, **kwargs):
         yield
 

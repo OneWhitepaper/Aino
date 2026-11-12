@@ -78,7 +78,7 @@ import {
   groupWorkspacePaneId
 } from './group-panes'
 import { annotateOrphanedGroupChatMembers } from './hygiene'
-import { BOTS_LOCALES } from './i18n'
+import { BOTS_LOCALES, botsText } from './i18n'
 import { displayName, rosterConnectionLabel } from './labels'
 import { startBotRelay, stopBotRelay } from './relay'
 import { $activityToasts, openRosterBot } from './roster-actions'
@@ -752,7 +752,7 @@ export default {
             setBotsWorkspaceOwner(
               groupOpenOwnerKey(group) ?? groupWorkspaceOwnerKey(group),
               null,
-              'New group conversations start in the group composer.'
+              botsText().group.startInComposer()
             )
           } else if (selected) {
             setBotsWorkspaceOwner(botWorkspaceOwnerKey(selected), selected)

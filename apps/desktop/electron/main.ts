@@ -189,17 +189,13 @@ import {
   connectionDialFieldsChanged,
   connectionIdForPendingLogin,
   mergeConnectionInput,
-  migrateV1ToRegistry,
   normalizeConnectionInput,
-  normalizeRegistry,
   parseBackendScopeKey,
   profileMetadataFromApiProfiles,
   reconcileAppliedGlobalConnection,
-  reconcileRegistryDrift,
   registryDialConnectionId,
   registrySourceOwnsPrimaryBackend,
   rememberSshEnumeration,
-  removeConnection,
   type ResolvedConnectionDescriptor,
   resolvedConnectionId,
   resolveRegistryLocalRoute,
@@ -216,6 +212,8 @@ import {
 } from './connection-registry'
 import type { RegistryConnection } from './connection-registry'
 import type { RosterProfileMetadata } from './connection-registry'
+import { forgetRemovedGlobalRoute, registerGlobalRoute, removeSavedConnection } from './connection-registry-remove'
+import { buildRemoteBlock } from './connection-remote-block'
 import { liveWindowState, overlayWindowState } from './connection-window-state'
 import { describeCrashReason, installCrashForensics } from './crash-forensics'
 import { adoptServedDashboardToken } from './dashboard-token'
@@ -270,6 +268,7 @@ import {
 import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { registerFsIpc } from './fs-ipc'
 import { directoryExists, fileExists } from './fs-probes'
+import { createDesktopGatewayConnectionsStore } from './gateway-connections-store'
 import { downloadViaTokenToFile as downloadViaNativeGatewayToFile } from './gateway-download-transport'
 import type {
   GatewayFileSaveContext,
@@ -308,6 +307,7 @@ import {
   tightenSecretFileMode,
   writeSecretFileAtomic
 } from './hardening'
+import { isHermesProcess } from './hermes-process'
 import { assertNotPassiveSpawn } from './host-backend-singleton'
 import {
   findFrameByIdentifier,
@@ -406,6 +406,7 @@ import { runNativeLogin } from './native-oauth-login'
 import { loadNativeTokenSet, type NativeTokenStoreIo, persistNativeTokenSet } from './native-token-store'
 import { execGit, killTimedGitChildren, setNoConsoleGitRoots } from './no-console-git'
 import { registerNativeNotifications } from './notification-ipc'
+import { connectionConfigUrls, createRemovedConnectionCookieCleaner } from './oauth-jar-removal'
 import { loginFlightKey, OauthLoginFlights } from './oauth-login-flights'
 import { startOauthLoginWindow } from './oauth-login-window'
 import { isExpectedOauthNavigationAbort } from './oauth-navigation'
@@ -453,7 +454,9 @@ import { hasClosePreviewFlag, previewGuestInputAction } from './preview-guest-es
 import { registerPreviewGuestIpc } from './preview-guest-ipc'
 import { commandFocusedGuest } from './preview-guest-offscreen'
 import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
+import { isPreviewPartition, previewPartitionForProfile } from './preview-guest-throttle'
 import { PreviewReachRegistry } from './preview-reach'
+import { PreviewSigninsRecord, registerPreviewSigninsIpc, runSigninExport } from './preview-signins'
 import { FirstRunSetupResetError, runPrimaryBackendStartup } from './primary-backend-startup'
 import { joinPrimaryBoot, primaryBootRequest, primaryDialClaimKey, primaryProfileRestorable } from './primary-boot-join'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
@@ -571,6 +574,7 @@ import {
   readSecretStoragePolicy,
   SECRET_STORAGE_POLICY_FILE,
   type SecretStoragePolicy,
+  transitionSecretStorageEncryption,
   writeSecretStoragePolicy
 } from './secret-storage-policy'
 import { selectRunnableBinary } from './select-runnable-binary'
@@ -615,6 +619,7 @@ import {
   windowOpacityFor,
   windowOpacityOptions
 } from './translucency'
+import { uiPreferencesRoot } from './ui-preferences'
 import { registerMachineUiPreferences } from './ui-preferences-ipc'
 import {
   UPDATE_HANDOFF_DWELL_MS,
@@ -812,7 +817,7 @@ let f12Blocked = false
 
 // Preload must be plain JS — Electron's sandbox can't run .ts, and tsx's
 // ESM loader is broken on Electron 40's Node (ERR_INVALID_RETURN_PROPERTY_VALUE).
-// Dev (`npm run dev`) and prod both load the esbuild output from dist/.
+// Dev (`pnpm run dev`) and prod both load the esbuild output from dist/.
 const PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'electron-preload.js')
 const PLATFORM_CAPTCHA_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'platform-captcha-preload.js')
 const PREVIEW_GUEST_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'preview-guest-preload.js')
@@ -886,7 +891,7 @@ if (IS_WINDOWS) {
   }
 }
 
-// Renderer debugging port. On for dev-server runs (`hgui` / `npm run dev`) so
+// Renderer debugging port. On for dev-server runs (`hgui` / `pnpm run dev`) so
 // the CDP tooling in scripts/ can attach; never for a packaged build — see
 // electron/dev-cdp.ts. Must run before app `ready` like the switches above;
 // Chromium binds it at launch.
@@ -1366,11 +1371,6 @@ const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_HERMES_ROOT, '.hermes-bootstr
 const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1
 
 let DESKTOP_CONNECTION_CONFIG_PATH = path.join(accountWorkspaceUiRoot, 'connection.json')
-// v2 multi-connection registry (named agent sources). Lives BESIDE
-// connection.json — v1 stays on disk untouched so older builds sharing the
-// profile keep working; the registry imports from it once and then owns its
-// own file. Same secret posture as connection.json (encrypted tokens, 0600).
-let DESKTOP_CONNECTIONS_REGISTRY_PATH = path.join(accountWorkspaceUiRoot, 'connections.json')
 const DESKTOP_INSTALLATION_PATH = path.join(app.getPath('userData'), 'desktop-installation.json')
 const DESKTOP_UPDATE_CONFIG_PATH = path.join(app.getPath('userData'), 'updates.json')
 let DESKTOP_WINDOW_STATE_PATH = path.join(accountWorkspaceUiRoot, 'window-state.json')
@@ -1926,8 +1926,25 @@ let bootstrapRepairAttempt = 0
 const MAX_BOOTSTRAP_REPAIR_SOFT_ATTEMPTS = 3
 let connectionConfigCache = null
 let connectionConfigCacheMtime = null
-let connectionRegistryCache = null
-let connectionRegistryCacheMtime = null
+
+function accountGatewayConnectionsStore() {
+  return createDesktopGatewayConnectionsStore({
+    root: uiPreferencesRoot(HERMES_HOME),
+    userData: accountWorkspaceUiRoot,
+    readV1Config: () => readDesktopConnectionConfig(),
+    decrypt: secret => decryptDesktopSecret(secret),
+    log: message => rememberLog(message),
+    encodeSecret: value => gatewaySecretEncryptionOverride === false
+      ? { encoding: 'plain', value } : encryptDesktopSecret(value),
+    secretStorage: () => (gatewaySecretEncryptionOverride ?? secretStoragePolicy().on) ? 'safeStorage' : 'plain'
+  })
+}
+
+let gatewaySecretEncryptionOverride: boolean | null = null
+let gatewayConnectionsStore = accountGatewayConnectionsStore()
+let stopGatewayConnectionsWatch = () => undefined as void
+const gatewayRegistryWork = new Set<Promise<unknown>>()
+
 const remoteHeaderSessions = new WeakSet<object>()
 const remoteWsHeaderStore = createRemoteWsHeaderStore()
 let previewShortcutActive = false
@@ -4768,6 +4785,8 @@ const nativeLoginControllers = new Set<AbortController>()
 
 async function retireAccountWorkspace(): Promise<void> {
   accountRehomeInProgress = true
+  stopGatewayConnectionsWatch()
+  await Promise.allSettled([...gatewayRegistryWork])
   remoteSessionCookies.retire()
   oauthLoginFlights.retire()
   recoverCloudCookieSession.retire()
@@ -4846,7 +4865,6 @@ function activateAccountWorkspace(workspace: ReturnType<typeof accountWorkspace>
   HERMES_HOME = workspace.home
   DESKTOP_PROFILE_CONFIG_PATH = path.join(workspace.ui, 'active-profile.json')
   DESKTOP_CONNECTION_CONFIG_PATH = path.join(workspace.ui, 'connection.json')
-  DESKTOP_CONNECTIONS_REGISTRY_PATH = path.join(workspace.ui, 'connections.json')
   DESKTOP_WINDOW_STATE_PATH = path.join(workspace.ui, 'window-state.json')
   POOL_LIMITS_PATH = path.join(workspace.ui, 'pool-limits.json')
   DESKTOP_BACKEND_OWNERSHIP_PATH = path.join(workspace.ui, 'backend-ownership.json')
@@ -4854,9 +4872,11 @@ function activateAccountWorkspace(workspace: ReturnType<typeof accountWorkspace>
   HUD_STATE_PATH = path.join(workspace.ui, 'hud-state.json')
   SECRET_STORAGE_POLICY_PATH = path.join(workspace.ui, SECRET_STORAGE_POLICY_FILE)
   DESKTOP_LOG_PATH = path.join(workspace.home, 'logs', 'desktop.log')
-  connectionConfigCache = connectionConfigCacheMtime = connectionRegistryCache = connectionRegistryCacheMtime = null
+  connectionConfigCache = connectionConfigCacheMtime = null
   _secretStoragePolicy = null
   activeProfileMigrationAttempted = false
+  gatewayConnectionsStore = accountGatewayConnectionsStore()
+  startGatewayConnectionsWatch()
   poolLimits = readPersistedPoolLimits()
   primaryProfilePin.clear()
   migrateLegacyEncryptedSecretsOnce()
@@ -5078,7 +5098,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
     }
   }
 
-  // 2. Development source -- when running `npm run dev` from a checkout, the
+  // 2. Development source -- when running `pnpm run dev` from a checkout, the
   //    cloned repo at SOURCE_REPO_ROOT takes precedence over ACTIVE and any
   //    installed `hermes` on PATH so local Python edits are actually exercised.
   //    (In dev with no checkout, SOURCE_REPO_ROOT won't pass isHermesSourceRoot.)
@@ -6542,10 +6562,20 @@ async function hasLiveOauthSession(baseUrl) {
   return readLive()
 }
 
+const clearRemovedOauthJars = createRemovedConnectionCookieCleaner({
+  sessionFor: partition =>
+    partition === OAUTH_SESSION_PARTITION ? getOauthSession() : app.isReady() ? session.fromPartition(accountPartition(partition)) : null,
+  clearMirror: (partition, url) => remoteSessionCookies.clear(accountPartition(partition), url),
+  v1RemoteUrl: () => readDesktopConnectionConfig()?.remote?.url,
+  sharedUrls: () => [resolvePortalBaseUrl(), ...connectionConfigUrls(readDesktopConnectionConfig())]
+})
+
 async function clearOauthSession(baseUrl) {
   const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
   scope.clear(baseUrl)
   const sess = getOauthSessionForUrl(baseUrl)
+  // The in-memory mirror is sent as an explicit Cookie header: it goes with the jar.
+  remoteSessionCookies.clear(resolveOauthPartitionForUrl(baseUrl), baseUrl)
 
   if (!sess) {
     return
@@ -6793,44 +6823,32 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
 // tokens it holds itself: the access token authenticates REST via
 // ``Authorization: Bearer`` (which the gateway gate now accepts) and mints WS
 // tickets the same way, so NO browser session cookie or embedded webview is
-// involved. Tokens are persisted encrypted at rest via Electron ``safeStorage``
-// (OS keychain) keyed by gateway base URL, and refreshed via
+// involved. Tokens are stored in the account-owned gateway connection store,
+// bound to the issuing gateway URL, and refreshed via
 // ``/auth/native/refresh`` before expiry. This is the desktop half of the
 // feature; the server half lives in hermes_cli/dashboard_auth/native_flow.py.
 // ---------------------------------------------------------------------------
 
 // In-memory cache of decrypted native tokens, keyed by normalized base URL.
-// Backed by the encrypted on-disk store so it survives restarts.
+// Backed by the account-owned on-disk store so it survives restarts.
 const _nativeTokens = new Map<string, NativeTokenSet>()
 
-function _nativeTokenStorePath() {
-  // Co-located with the connection config under userData; one JSON file mapping
-  // baseUrl → { encoding, value } safeStorage payloads.
-  return path.join(accountWorkspaceUiRoot, 'native-oauth-tokens.json')
-}
-
-// The electron-coupled half of the token store: safeStorage encryption plus the
-// userData file. native-token-store.ts owns the serialization/parse round trip
-// so it can be tested without an Electron runtime.
+// Account-owned sign-ins share the gateway registry's storage and URL binding.
 function _nativeTokenStoreIo(): NativeTokenStoreIo {
-  return {
-    encrypt: encryptDesktopSecret,
-    decrypt: decryptDesktopSecret,
-    readStoreText: () => fs.readFileSync(_nativeTokenStorePath(), 'utf8'),
-    writeStoreText: (text: string) => {
-      fs.mkdirSync(path.dirname(_nativeTokenStorePath()), { recursive: true })
-      fs.writeFileSync(_nativeTokenStorePath(), text, { mode: 0o600 })
-    },
-    rememberLog
-  }
+  return gatewayConnectionsStore.nativeTokenIo(rememberLog)
 }
 
 function _persistNativeTokens(baseUrl: string, tokens: NativeTokenSet | null) {
   persistNativeTokenSet(baseUrl, tokens, _nativeTokenStoreIo())
 }
 
-function _loadNativeTokens(baseUrl: string): NativeTokenSet | null {
+function _loadNativeTokens(baseUrl: string, fresh = false): NativeTokenSet | null {
   baseUrl = normalizeRemoteBaseUrl(baseUrl)
+
+  if (fresh) {
+    _nativeTokens.delete(baseUrl)
+  }
+
   const cached = _nativeTokens.get(baseUrl)
 
   if (cached) {
@@ -7186,8 +7204,9 @@ function secretStoragePolicy(): SecretStoragePolicy {
 }
 
 function setSecretStoragePolicy(next: SecretStoragePolicy) {
-  _secretStoragePolicy = { on: next.on === true, migrated: next.migrated === true }
-  writeSecretStoragePolicy(_secretStoragePolicy, _secretStoragePolicyIo)
+  const normalized = { on: next.on === true, migrated: next.migrated === true }
+  writeSecretStoragePolicy(normalized, _secretStoragePolicyIo)
+  _secretStoragePolicy = normalized
 }
 
 /**
@@ -7248,10 +7267,10 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
     })
   }
 
-  // v2 connections.json registry.
+  // Shared gateway registry; even an empty store carries the explicit policy.
   const registry = readDesktopConnectionsRegistry()
 
-  if (registry.connections?.some(blockNeedsRewrite)) {
+  if (registry.connections?.some(blockNeedsRewrite) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
     touched = true
     writeDesktopConnectionsRegistry({ ...registry, connections: registry.connections.map(rewriteBlock) })
   }
@@ -7259,19 +7278,22 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
   // Native OAuth token store: baseUrl → blob.
   const io = _nativeTokenStoreIo()
 
+  let store: unknown
+
   try {
-    const store = JSON.parse(io.readStoreText())
-
-    if (store && typeof store === 'object' && !Array.isArray(store)) {
-      const entries = Object.entries(store)
-
-      if (entries.some(([, v]) => shouldRewrite(v))) {
-        touched = true
-        io.writeStoreText(JSON.stringify(Object.fromEntries(entries.map(([k, v]) => [k, reencode(v)]))))
-      }
-    }
+    store = JSON.parse(io.readStoreText())
   } catch {
     // Missing/corrupt native token store: nothing to rewrite.
+    return touched
+  }
+
+  if (store && typeof store === 'object' && !Array.isArray(store)) {
+    const entries = Object.entries(store)
+
+    if (entries.some(([, v]) => shouldRewrite(v)) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
+      touched = true
+      io.writeStoreText(JSON.stringify(Object.fromEntries(entries.map(([k, v]) => [k, reencode(v)]))))
+    }
   }
 
   return touched
@@ -7330,70 +7352,49 @@ function migrateLegacyEncryptedSecretsOnce() {
 /**
  * Settings → Gateway toggle: flip keychain-backed encryption and re-encode
  * every stored secret to match. Turning ON encrypts plain blobs through
- * strict safeStorage (throws loudly when the keychain is unusable — the
- * toggle stays off and the renderer shows the error). Turning OFF decrypts
+ * strict safeStorage. A partial rewrite keeps encryption enabled so already
+ * encrypted credentials remain readable. Turning OFF decrypts
  * back to plain; this is user-initiated, so a keychain prompt here is
  * expected and acceptable.
  */
 function applySecretStorageEncryption(on: boolean) {
-  const enable = on === true
+  return transitionSecretStorageEncryption(on === true, {
+    policy: secretStoragePolicy,
+    setPolicy: setSecretStoragePolicy,
+    canEncrypt: () => {
+      try {
+        return Boolean(safeStorage.isEncryptionAvailable())
+      } catch {
+        return false
+      }
+    },
+    rewrite: enable => {
+      if (enable) {
+        const needsEncrypt = (secret: any) => secret?.encoding === 'plain' && Boolean(secret.value)
+        rewriteAllStoredSecrets(needsEncrypt, secret =>
+          needsEncrypt(secret) ? encryptDesktopSecretStrict(String(secret.value), safeStorage) : secret
+        )
 
-  if (secretStoragePolicy().on === enable) {
-    return { on: enable }
-  }
+        return
+      }
 
-  if (enable) {
-    const needsEncrypt = (secret: any) => secret?.encoding === 'plain' && Boolean(secret.value)
+      const needsDecrypt = (secret: any) => secret?.encoding === SAFE_STORAGE_ENCODING
+      gatewaySecretEncryptionOverride = false
 
-    // Probe FIRST so an unusable keychain fails before any store is touched.
-    if (
-      !(() => {
-        try {
-          return Boolean(safeStorage.isEncryptionAvailable())
-        } catch {
-          return false
-        }
-      })()
-    ) {
-      throw new Error(
-        'OS keychain encryption is unavailable on this machine, so stored gateway secrets cannot be encrypted.'
-      )
+      try {
+        rewriteAllStoredSecrets(needsDecrypt, (secret: any) => {
+          if (!needsDecrypt(secret)) {return secret}
+          const plaintext = decryptDesktopSecret(secret)
+
+          if (!plaintext) {throw new Error('A saved credential could not be decrypted; encryption remains enabled.')}
+
+          return { encoding: 'plain', value: plaintext }
+        })
+      } finally {
+        gatewaySecretEncryptionOverride = null
+      }
     }
-
-    setSecretStoragePolicy({ on: true, migrated: true })
-
-    try {
-      rewriteAllStoredSecrets(needsEncrypt, secret =>
-        needsEncrypt(secret) ? encryptDesktopSecretStrict(String(secret.value), safeStorage) : secret
-      )
-    } catch (error) {
-      // Encryption failed midway: revert the policy so reads keep working
-      // against whatever encodings are on disk (mixed stores read fine —
-      // decryptDesktopSecret handles both encodings under either policy).
-      setSecretStoragePolicy({ on: false, migrated: true })
-      throw error
-    }
-
-    return { on: true }
-  }
-
-  // Turning OFF: decrypt everything back to plain while the keychain is
-  // still readable, then flip the policy.
-  const needsDecrypt = (secret: any) => secret?.encoding === SAFE_STORAGE_ENCODING
-
-  rewriteAllStoredSecrets(needsDecrypt, (secret: any) => {
-    if (!needsDecrypt(secret)) {
-      return secret
-    }
-
-    const plaintext = decryptDesktopSecret(secret)
-
-    return plaintext ? { encoding: 'plain', value: plaintext } : secret
   })
-
-  setSecretStoragePolicy({ on: false, migrated: true })
-
-  return { on: false }
 }
 
 function encryptDesktopSecret(value, options = {}) {
@@ -7802,134 +7803,33 @@ function writeDesktopConnectionConfig(config) {
 
 // ── v2 connection registry (multi-source) ──────────────────────────────────
 
-/**
- * Read the v2 registry, importing from v1 connection.json exactly once (when
- * connections.json does not exist yet). Same mtime-cache + tighten-mode
- * discipline as readDesktopConnectionConfig; a corrupt registry degrades to
- * local-only via normalizeRegistry rather than throwing at boot.
- *
- * An EXISTING registry is additionally reconciled against v1 when the two have
- * drifted — see reconcileRegistryDrift. The one-shot migration cannot cover a
- * user who registered nothing and then pointed Settings -> Gateway at a remote,
- * and until that heals, every launch re-homes them onto a local backend.
- */
-function readDesktopConnectionsRegistry() {
-  let mtime = null
-
-  try {
-    mtime = fs.statSync(DESKTOP_CONNECTIONS_REGISTRY_PATH).mtimeMs
-  } catch {
-    mtime = null
-  }
-
-  if (connectionRegistryCache && connectionRegistryCacheMtime === mtime) {
-    return connectionRegistryCache
-  }
-
-  let registry
-
-  if (mtime === null) {
-    // First run on this build: import the v1 single-connection config. The v1
-    // file is NOT modified or deleted — older builds keep reading it. The
-    // migration is deterministic over the v1 input, so even if two processes
-    // race the first run (updater relaunch, second window), both derive the
-    // same registry and the later atomic write is a no-op content-wise.
-    registry = migrateV1ToRegistry(readDesktopConnectionConfig())
-
-    try {
-      writeDesktopConnectionsRegistry(registry)
-    } catch {
-      // Write failed (full disk, read-only userData). Keep the migrated
-      // registry in memory so list/save keep working this session instead of
-      // hard-failing every hermes:connections:* call.
-      connectionRegistryCache = registry
-      connectionRegistryCacheMtime = null
-    }
-
-    return connectionRegistryCache
-  }
-
-  try {
-    // Same rationale as connection.json: tighten BEFORE parse so a corrupt
-    // file that still holds token bytes gets its mode fixed anyway.
-    tightenSecretFileMode(DESKTOP_CONNECTIONS_REGISTRY_PATH)
-    registry = normalizeRegistry(JSON.parse(fs.readFileSync(DESKTOP_CONNECTIONS_REGISTRY_PATH, 'utf8')))
-  } catch {
-    // Whole-file corruption (truncated write, mangled hand-edit). The
-    // degraded local-only registry keeps boot working, but the file BYTES are
-    // the user's connection data — preserve them in a sidecar BEFORE any
-    // later write (drift reconcile, connection save) overwrites the file
-    // (#94246: recovery must never be data loss).
-    preserveCorruptRegistrySidecar()
-    registry = normalizeRegistry(null)
-  }
-
-  if (registry?.quarantined?.length) {
-    rememberLog(
-      `[connections] ${registry.quarantined.length} malformed registry entr${registry.quarantined.length === 1 ? 'y was' : 'ies were'} quarantined (kept under "quarantined" in connections.json); healthy connections loaded normally.`
-    )
-  }
-
-  // Heal v1 -> v2 drift: the v1 global route names a remote this registry has
-  // never heard of, so the live descriptor resolves to no connectionId and the
-  // launch pick sends the window somewhere else. Persist so the repair is a
-  // one-time event rather than a recomputation on every read; a failed write
-  // still returns the healed registry for this session.
-  const reconciled = reconcileRegistryDrift(registry, readDesktopConnectionConfig())
-
-  if (reconciled.changed) {
-    registry = reconciled.registry
-
-    try {
-      writeDesktopConnectionsRegistry(registry)
-
-      return connectionRegistryCache
-    } catch {
-      connectionRegistryCache = registry
-      connectionRegistryCacheMtime = null
-
-      return registry
-    }
-  }
-
-  connectionRegistryCache = registry
-  connectionRegistryCacheMtime = mtime
-
-  return registry
+// The account home holds gateway-connections.json, shared with its local Webapp
+// and imported once from that account's legacy UI directory.
+// Untyped as before: callers hand entries to looser route-source shapes.
+function readDesktopConnectionsRegistry(): any {
+  return gatewayConnectionsStore.read()
 }
 
-// Copy an unparseable connections.json aside (once per corruption event) so a
-// later registry write can never destroy the only copy of the user's saved
-// connections (#94246). Best effort: failure to preserve must not block boot.
-function preserveCorruptRegistrySidecar() {
+// connection.json's app-global route outranks the list's primary at boot, so a
+// gateway removed from the list (by the Webapp, or by a build that left the route
+// behind) must leave connection.json too, or Desktop keeps dialing it.
+function forgetDesktopGlobalRouteIfRemoved() {
   try {
-    const rawText = fs.readFileSync(DESKTOP_CONNECTIONS_REGISTRY_PATH, 'utf8')
-
-    if (!rawText.trim()) {
-      return
-    }
-
-    const sidecar = `${DESKTOP_CONNECTIONS_REGISTRY_PATH}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`
-
-    if (!fs.existsSync(sidecar)) {
-      fs.writeFileSync(sidecar, rawText, { mode: 0o600 })
-    }
-
-    rememberLog(
-      `[connections] connections.json could not be parsed; preserved the original file at ${sidecar} and continuing with a local-only registry. No connection data was deleted.`
-    )
-  } catch {
-    // The read itself failed (missing file, permissions) — nothing to save.
+    // Strict: an unreadable store must not read as "every gateway was removed".
+    forgetRemovedGlobalRoute(gatewayConnectionsStore.readStrict(), {
+      readConfig: readDesktopConnectionConfig,
+      writeConfig: writeDesktopConnectionConfig,
+      log: rememberLog
+    })
+  } catch (error) {
+    rememberLog(`[connections] could not reset a removed gateway's route: ${(error as Error).message}`)
   }
 }
 
 function writeDesktopConnectionsRegistry(registry) {
-  fs.mkdirSync(path.dirname(DESKTOP_CONNECTIONS_REGISTRY_PATH), { recursive: true })
-  // Owner-only for the same reason as connection.json: entries carry
-  // safeStorage-encrypted tokens plus URLs and SSH host/user/keyPath.
-  writeSecretFileAtomic(DESKTOP_CONNECTIONS_REGISTRY_PATH, JSON.stringify(registry, null, 2))
-  connectionRegistryCache = registry
-  connectionRegistryCacheMtime = fs.statSync(DESKTOP_CONNECTIONS_REGISTRY_PATH).mtimeMs
+  gatewayConnectionsStore.write(registry)
+  // A remove or re-point drops that entry's sign-in on disk; the URL-keyed cache follows.
+  _nativeTokens.clear()
 }
 
 /**
@@ -8085,36 +7985,6 @@ function writeActiveDesktopProfile(name: string | null): string | null {
   return desktopProfilePreferences.remember(name)
 }
 
-// True when the given pid belongs to a running process whose command line
-// contains "hermes", avoiding false positives from stale gateway.pid files
-// whose PID was recycled by the OS to an unrelated process.
-function isHermesProcess(pid) {
-  try {
-    process.kill(pid, 0) // signal 0 = existence check, no signal sent
-  } catch {
-    return false
-  }
-
-  // On macOS / Linux, check the command line to avoid PID recycling false positives.
-  try {
-    const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8')
-
-    return cmdline.includes('hermes')
-  } catch {
-    // /proc not available (macOS) — fall back to ps. Use -o args= to inspect
-    // the full command line, not just the process name.  -o comm= would return
-    // "python3" for any Python process, creating false positives.
-    try {
-      const { execSync } = require('child_process')
-      const out = execSync(`ps -p ${pid} -o args=`, { encoding: 'utf8', timeout: 2000 })
-
-      return out.includes('hermes')
-    } catch {
-      return false
-    }
-  }
-}
-
 // Seed active-profile.json from the best available signal when the file does
 // not yet exist.  Runs exactly once (no-op once the file exists).  Priority:
 //   1. Legacy ~/.hermes/active_profile (explicit CLI choice via hermes profile use)
@@ -8235,66 +8105,6 @@ async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionCon
   }
 }
 
-// Build + validate a `{ url, authMode, token }` remote block. OAuth gateways
-// authenticate via the login-window session cookie (verified at connect time in
-// resolveRemoteBackend), so only token-auth remotes require a saved token.
-// `org` (optional) is the Hermes Cloud org slug/id the instance was discovered
-// under — persisted so Settings can reopen into the same org; omitted from the
-// block when empty so plain remote connections stay unchanged.
-function buildRemoteBlock(
-  remoteUrl,
-  authMode,
-  token,
-  org?: string,
-  headers?: object,
-  name?: string,
-  remoteProfile?: string
-) {
-  if (authMode !== 'oauth' && !decryptDesktopSecret(token)) {
-    throw new Error('Remote gateway session token is required.')
-  }
-
-  const block: {
-    url: string
-    authMode: string
-    token: object
-    headers?: object
-    org?: string
-    name?: string
-    remoteProfile?: string
-  } = {
-    url: normalizeRemoteBaseUrl(remoteUrl),
-    authMode,
-    token
-  }
-
-  const remoteHeaders = normalizeRemoteHeaders(headers)
-
-  if (Object.keys(remoteHeaders).length > 0) {
-    block.headers = remoteHeaders
-  }
-
-  const nameValue = typeof name === 'string' ? name.trim() : ''
-
-  if (nameValue) {
-    block.name = nameValue
-  }
-
-  const orgValue = typeof org === 'string' ? org.trim() : ''
-
-  if (orgValue) {
-    block.org = orgValue
-  }
-
-  const remoteProfileName = normalizeRemoteProfileName(remoteProfile)
-
-  if (remoteProfileName) {
-    block.remoteProfile = remoteProfileName.remoteProfile
-  }
-
-  return block
-}
-
 function coerceDesktopConnectionConfig(input: any = {}, existing = readDesktopConnectionConfig(), options: any = {}) {
   const persistToken = options.persistToken !== false
   const key = connectionScopeKey(input.profile)
@@ -8379,7 +8189,16 @@ function coerceDesktopConnectionConfig(input: any = {}, existing = readDesktopCo
     if (remoteLike) {
       profiles[key] = {
         mode,
-        ...buildRemoteBlock(remoteUrl, authMode, nextToken, cloudOrg, remoteHeaders, cloudName, input.remoteProfile)
+        ...buildRemoteBlock(
+          decryptDesktopSecret,
+          remoteUrl,
+          authMode,
+          nextToken,
+          cloudOrg,
+          remoteHeaders,
+          cloudName,
+          input.remoteProfile
+        )
       }
     } else {
       const localEntry = localProfileEntry(rawExistingBlock)
@@ -8399,7 +8218,7 @@ function coerceDesktopConnectionConfig(input: any = {}, existing = readDesktopCo
   }
 
   const nextRemote = remoteLike
-    ? buildRemoteBlock(remoteUrl, authMode, nextToken, cloudOrg, remoteHeaders, cloudName)
+    ? buildRemoteBlock(decryptDesktopSecret, remoteUrl, authMode, nextToken, cloudOrg, remoteHeaders, cloudName)
     : existingMode === 'ssh'
       ? rawExistingBlock
       : { url: remoteUrl ? normalizeRemoteBaseUrl(remoteUrl) : remoteUrl, authMode, token: nextToken }
@@ -11250,8 +11069,7 @@ async function startHermesAttempt(requestedProfile?: string, inheritsPrimary = f
         // The pre-update resolve can miss a registry primary (stale cache, v1
         // mode=local winning the first read). Re-read after the update gate
         // and select launchMode=primary before any local attach or spawn.
-        connectionRegistryCache = null
-        connectionRegistryCacheMtime = null
+        gatewayConnectionsStore.invalidate()
         attemptedRemote = true
 
         return resolveRemoteBackend(primaryProfile, { primary: true, forceRegistryPrimary: true })
@@ -11582,10 +11400,13 @@ function installPreviewGuestPreload() {
     }
 
     contents.on('will-attach-webview', (_attachEvent, webPreferences, params) => {
-      applyPreviewGuestAttachPrefs(webPreferences, params.partition, PREVIEW_GUEST_PRELOAD_PATH)
+      const partition =
+        params.partition && isPreviewPartition(params.partition) ? accountPartition(params.partition) : params.partition
 
-      if (ACCOUNT_SCOPED && params.partition === 'persist:hermes-preview') {
-        webPreferences.partition = accountPartition(params.partition)
+      applyPreviewGuestAttachPrefs(webPreferences, partition, PREVIEW_GUEST_PRELOAD_PATH, p => session.fromPartition(p))
+
+      if (partition !== params.partition) {
+        webPreferences.partition = partition
       }
     })
   })
@@ -14099,17 +13920,21 @@ ipcMain.handle('hermes:connections:save', async (_event, payload) => {
 ipcMain.handle('hermes:connections:remove', async (_event, id) => {
   const key = String(id || '')
   managedConnectionUpdateGate.assertCanMutate(key)
-  const registry = removeConnection(readDesktopConnectionsRegistry(), key)
-  writeDesktopConnectionsRegistry(registry)
-  // Tear down anything the removed connection still had running: pooled
-  // backends under its composite keys and any ssh tunnel scopes it owned.
+  // Every jar it rode, primary or not (#98242); its native sign-in goes with the write (signedInIdsGone).
+  await clearRemovedOauthJars(key, readDesktopConnectionsRegistry())
+
+  // A fresh read after that await, written without yielding: a save or removal
+  // another window made meanwhile must not be overwritten by an older snapshot.
+  const registry = await removeSavedConnection(key, readDesktopConnectionsRegistry(), readDesktopConnectionConfig(), {
+    writeConfig: writeDesktopConnectionConfig,
+    writeRegistry: writeDesktopConnectionsRegistry
+  })
+
+  // Tear down owned backends/tunnels and evict per-id metadata: label slugs
+  // are recycled, so cached profiles must not follow a re-added connection.
   await stopRegistryConnectionBackends(key)
-  // …and everything cached ABOUT it. Ids are recycled label slugs, so re-adding "Mac mini"
-  // gets `mac-mini` back — with the removed machine's profile list still cached under it.
   evictConnectionCaches(key)
-  // And the renderer side: without this push, secondaries scoped to the
-  // removed connection keep their WebSocket open (remote/cloud have no local
-  // process to kill) and stream ghost events until page reload.
+  // Secondary windows must close remote/cloud sockets with no process to stop.
   broadcastConnectionsChanged({ connectionId: key, reason: 'removed' })
   desktopProfilePreferences.connectionRemoved(key)
 
@@ -14904,8 +14729,23 @@ ipcMain.handle('hermes:cloud:agent-sign-in', async (_event, dashboardUrl) => {
 })
 ipcMain.handle('hermes:connection-config:save', async (_event, payload) => {
   assertCanMutateManagedPrimaryRouting()
-  const config = coerceDesktopConnectionConfig(payload)
-  writeDesktopConnectionConfig(config)
+  const previousConfig = readDesktopConnectionConfig()
+  const previousRegistry = readDesktopConnectionsRegistry()
+  const config = coerceDesktopConnectionConfig(payload, previousConfig)
+
+  // The saved list learns an app-global route when the user picks it, never on a
+  // later read: a read-time repair re-adds a gateway removed since (#142906).
+  await applyConnectionConfigAtomically({
+    previousConfig,
+    previousRegistry,
+    nextConfig: config,
+    nextRegistry: connectionScopeKey(payload?.profile)
+      ? previousRegistry
+      : registerGlobalRoute(previousRegistry, config),
+    writeConfig: writeDesktopConnectionConfig,
+    writeRegistry: writeDesktopConnectionsRegistry,
+    apply: async () => undefined
+  })
 
   return sanitizeDesktopConnectionConfig(config, payload?.profile)
 })
@@ -14917,7 +14757,11 @@ ipcMain.handle('hermes:connection-config:apply', async (_event, payload) => {
 
   const key = connectionScopeKey(payload?.profile)
   const scope = key || ''
-  const nextRegistry = key ? previousRegistry : reconcileAppliedGlobalConnection(previousRegistry, config)
+
+  // registerGlobalRoute: an applied SSH route joins the list (reconcileApplied… leaves SSH alone).
+  const nextRegistry = key
+    ? previousRegistry
+    : registerGlobalRoute(reconcileAppliedGlobalConnection(previousRegistry, config), config, { select: true })
 
   // Primary apply: the applied window's recorded route still names the source
   // it just LEFT, and a profile-less re-dial is answered from that record
@@ -15011,6 +14855,61 @@ ipcMain.on('hermes:previewShortcutActive', (_event, active) => {
 })
 
 registerPreviewGuestIpc(owner => streamThrottle.holdWindow(owner))
+// The in-app browser's real-profile sign-ins: main decides "local" from the route's own connection.
+registerPreviewSigninsIpc(ipcMain, () => {
+  // Capture the account before queueing. The existing IPC fence drains this
+  // whole promise before activation can replace any mutable backend roots.
+  const home = HERMES_HOME
+  const suffix = accountPartition('')
+  const store = new PreviewSigninsRecord(path.join(accountWorkspaceUiRoot, 'preview-signins.json'))
+
+  return {
+    session: profile => session.fromPartition(`${previewPartitionForProfile(profile)}${suffix}`),
+    store,
+    log: rememberLog,
+    resolveRoute: async (sender, profile, connectionId, operation) => {
+      const source = windowConnectionRoutes.get(sender.id) ?? null
+
+      const route = connectionId
+        ? { connectionId, profile: profile || 'default' }
+        : resolveDesktopConnectionRequest(profile, source, primaryProfileKey())
+
+      if (operation === 'existing') {
+        if (route.connectionId) {
+          return { profile: route.profile, local: registryConnectionKind(route.connectionId) === 'local' }
+        }
+
+        const options = profileRouteOptions(route.profile)
+        const owner = resolveProfileBackendRoute(route.profile, options)
+
+        return {
+          profile: route.profile,
+          local:
+            !options.profileRemoteOverride &&
+            (owner.backend === 'pool' || (!options.globalRemote && !options.primaryRemoteActive))
+        }
+      }
+
+      const connection = await connectDesktopProfileRoute(
+        route,
+        sender,
+        !connectionId && desktopConnectionRequestInheritsPrimary(profile, source)
+      )
+
+      return { profile: route.profile, local: connection.mode !== 'remote' }
+    },
+    exportSignins: async profile =>
+      runSigninExport(
+        await ensureRuntime(
+          await resolveHermesBackend(['--profile', profile, 'browser', 'export-signins', '--json']),
+          () => undefined
+        ),
+        resolveHermesCwd(),
+        home,
+        profileBackendParentEnv({ hermesHome: home, profile })
+      )
+  }
+})
 
 ipcMain.on('hermes:f12ShortcutActive', (event, active) => {
   if (active) {
@@ -16244,6 +16143,46 @@ registerLocalSkinIpc(
 )
 registerMachineUiPreferences(() => HERMES_HOME)
 
+// The Webapp shares the owning account's gateway list. Retire its watcher and
+// finish its asynchronous teardown before activating another account's roots.
+function startGatewayConnectionsWatch() {
+  const store = gatewayConnectionsStore
+
+  const track = (work: Promise<unknown>) => {
+    const task = work.catch(error => rememberLog(`[connections] registry teardown failed: ${String(error)}`))
+    gatewayRegistryWork.add(task)
+    void task.finally(() => gatewayRegistryWork.delete(task))
+  }
+
+  stopGatewayConnectionsWatch = store.watch({
+    onRegistry: (changes, { after, before }) => {
+      if (store !== gatewayConnectionsStore) {
+        return
+      }
+
+      if (changes.some(change => change.reason === 'removed')) {
+        forgetDesktopGlobalRouteIfRemoved()
+      }
+
+      for (const change of changes) {
+        if (change.reason === 'removed') {
+          track(clearRemovedOauthJars(change.connectionId, before, after))
+        }
+
+        if (change.reason !== 'saved') {
+          track(stopRegistryConnectionBackends(change.connectionId))
+          evictConnectionCaches(change.connectionId)
+        }
+
+        broadcastConnectionsChanged(change)
+      }
+    },
+    onTokens: () => _nativeTokens.clear()
+  })
+}
+
+startGatewayConnectionsWatch()
+
 // Renderer error toasts (notifyError): the toast shows the summarized copy,
 // so the caller posts the full error here for desktop.log. Fire-and-forget,
 // like renderer-error — the toast must never depend on this round-trip.
@@ -16405,7 +16344,7 @@ ipcMain.handle('hermes:version', async (_event, scope?: { connectionId?: string;
     // True when the bundle on disk is not the one this process loaded — a
     // plain app restart (no rebuild, no installer) clears the skew above.
     // Packaged only: a dev `--build-only` rewrites build/install-stamp.json
-    // under a running `npm start`, which is a rebuild the developer asked for,
+    // under a running `pnpm start`, which is a rebuild the developer asked for,
     // not a torn install to offer a restart for.
     bundleSwapPending: IS_PACKAGED && detectBundleSwap(INSTALL_STAMP, readBundleSwapStamp(process.resourcesPath))
   }
@@ -17024,6 +16963,8 @@ app.whenReady().then(() => {
   // Settings → Gateway. Must run before createWindow() and the first
   // connection resolution.
   migrateLegacyEncryptedSecretsOnce()
+  // After the store's one-time import: drop a stale route to a removed gateway.
+  forgetDesktopGlobalRouteIfRemoved()
 
   // Expose the renderer's accessibility tree to the OS (#118271, Windows
   // twin #92607): dictation tools that insert text through the accessibility

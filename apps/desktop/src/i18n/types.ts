@@ -32,6 +32,7 @@ import type { NotificationSettingsTranslations } from './types_notifications'
 import type { OnboardingTranslations } from './types_onboarding'
 import type { PluginPreviewAccessTranslations } from './types_plugin_preview_access'
 import type { PluginUpdateAllTranslations, PluginUpdateTranslations } from './types_plugin_update'
+import type { PreviewWebCopy } from './types_preview_web'
 import type { SidebarProjectsTranslations } from './types_projects'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
 import type { SummaryTranslations } from './types_summary_surface'
@@ -2037,6 +2038,11 @@ export interface UpstreamTranslations extends NoticeTranslations {
         disabledTitle: string
         disabledMessage: string
         failedSave: string
+        reimportSignins: string
+        signinsImportedTitle: string
+        signinsImported: (count: number) => string
+        signinsRemote: string
+        signinsFailed: string
         prompt: {
           title: string
           body: string
@@ -4365,62 +4371,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
       sentTitle: string
       sentMessage: (count: number) => string
     }
-    web: {
-      embeddedPreviewHint: string
-      appFailedToBoot: string
-      serverNotFound: string
-      remoteLoopback: string
-      failedToLoad: string
-      tryAgain: string
-      restarting: string
-      askRestart: string
-      lookingRestart: (taskId: string) => string
-      restartingTitle: string
-      restartingMessage: string
-      startRestartFailed: (message: string) => string
-      restartFailed: string
-      hideConsole: string
-      showConsole: string
-      hideDevTools: string
-      openDevTools: string
-      goBack: string
-      goForward: string
-      reload: string
-      address: string
-      addressPlaceholder: string
-      blankPageBody: string
-      finishedRestarting: (message?: string) => string
-      failedRestarting: (message: string) => string
-      unknownError: string
-      restartedTitle: string
-      reloadingNow: string
-      restartFailedTitle: string
-      restartFailedMessage: string
-      stillWorking: string
-      workspaceReloading: string
-      fileChanged: (url: string) => string
-      filesChanged: (count: number, url: string) => string
-      watchFailed: (message: string) => string
-      moduleMimeDescription: string
-      loadFailedConsole: (code: number | undefined, message: string) => string
-      unreachableDescription: string
-      openTarget: (url: string) => string
-      fallbackTitle: string
-      annotate: string
-      annotateOn: string
-      annotateNeedPage: string
-      annotateFailed: string
-      commenting: string
-      addComments: (count: number) => string
-      commentPlaceholder: string
-      commentTitle: (n: number) => string
-      saveComment: string
-      cancelComment: string
-
-      restartNoActiveSession: string
-
-      restartMissingTaskId: string
-    }
+    web: PreviewWebCopy
 
     browserTab: string
 
@@ -4600,6 +4551,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
       react: string
       dismissError: string
       responseStopped: string
+      /** Greyed notice on a safety-refused turn kept for display, used when the
+       *  backend sent none in display_metadata.content_refused.notice. */
+      contentRefusedNotice: string
       /** Layer titles for the structured error card (agent/error_surface.py).
        *  `generic` is the fallback when the backend sent no descriptor. */
       errorLayers: {

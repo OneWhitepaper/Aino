@@ -1,4 +1,3 @@
-import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { execFileSync } from 'node:child_process'
 import type * as DiagnosticsChannel from 'node:diagnostics_channel'
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
@@ -6,6 +5,7 @@ import type { ClientRequest } from 'node:http'
 import * as path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import {

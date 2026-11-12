@@ -1,50 +1,8 @@
-"""The existing managed registry's image authority, resolved for the exact executing turn."""
+"""Resolve the exact executing turn's authority before binding managed image work."""
 
 from contextlib import contextmanager
-from contextvars import ContextVar
-from datetime import UTC, datetime
 
-
-_image_binding = ContextVar("managed_image_binding_resolver", default=None)
-
-
-@contextmanager
-def managed_image_scope(resolve, *, on_rejection=None):
-    active = [True]
-
-    def live_binding():
-        return resolve() if active[0] else None
-
-    token = _image_binding.set((live_binding, on_rejection))
-    try:
-        yield
-    finally:
-        active[0] = False
-        _image_binding.reset(token)
-
-
-def current_image_binding():
-    scope = _image_binding.get()
-    binding = scope[0]() if scope else None
-    if (binding is None or binding.purpose != "image"
-            or (binding.expires_at is not None and binding.expires_at <= datetime.now(UTC))):
-        return None
-    return binding
-
-
-def notify_image_credential_rejection(owner_user_id, credential_version):
-    scope = _image_binding.get()
-    if scope is None or scope[1] is None or type(credential_version) is not int or credential_version <= 0:
-        return
-    binding = current_image_binding()
-    if binding is None or binding.owner.user_id != owner_user_id:
-        return
-    scope[1]({
-        'text': 'Aino device authorization was rejected. Check this device\'s authorization in your account.',
-        'level': 'error', 'kind': 'sticky', 'key': 'aino.managed_credential_rejected',
-        'code': 'managed_credential_rejected', 'billing_source': 'aino', 'purpose': 'image',
-        'owner_user_id': owner_user_id, 'managed_credential_version': credential_version,
-    })
+from agent.managed_image_provider import managed_image_scope
 
 
 @contextmanager

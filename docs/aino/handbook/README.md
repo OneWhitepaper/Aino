@@ -36,6 +36,10 @@
 | Windows 兼容问题 | [Windows 兼容问题](references/windows-quirks.md) |
 | 开发与扩展规范 | [开发与扩展规范](references/contributor-guide.md) |
 
+## v0.23.1 技术补充
+
+[浏览器登录与 Vault、跨网关群聊、插件 RPC/Hook、只读会话历史](references/runtime-0231-additions.md)说明新增协议及 Aino 账户边界。各能力按当前连接实际通告及安装状态判断，不以文档代替授权或运行验收。原 19 篇专题继续保留。
+
 ## 配套模板
 
 | 模板 | 使用范围 |

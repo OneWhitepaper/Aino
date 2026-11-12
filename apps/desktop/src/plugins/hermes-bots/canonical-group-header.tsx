@@ -14,10 +14,21 @@ import {
 } from '@hermes/plugin-sdk'
 import { type ReactNode, useState } from 'react'
 
-import { type CanonicalDriverActivity, CanonicalGroupAttention, type CanonicalMemberPhase, canonicalMemberStatus } from './canonical-group-activity'
+import {
+  type CanonicalDriverStatus,
+  CanonicalGroupAttention,
+  type CanonicalMemberPhase,
+  canonicalMemberStatus
+} from './canonical-group-activity'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { CanonicalGroupAvatarStack, CanonicalMemberAvatar, useCanonicalMembers } from './canonical-group-members'
-import type { CanonicalGroupBinding, CanonicalRoom, CanonicalRoomMember } from './canonical-groups'
+import { peerMemberStates } from './canonical-group-peers'
+import type {
+  CanonicalGroupBinding,
+  CanonicalPendingAction,
+  CanonicalRoom,
+  CanonicalRoomMember
+} from './canonical-groups'
 
 interface CanonicalGroupHeaderProps {
   /** The host already names a main conversation; its content header is a compact toolbar. */
@@ -26,7 +37,7 @@ interface CanonicalGroupHeaderProps {
   binding?: CanonicalGroupBinding
   busy: boolean
   canStop: boolean
-  driver?: CanonicalDriverActivity
+  driver?: CanonicalDriverStatus<CanonicalPendingAction>
   infoOpen?: boolean
   infoPanelId?: string
   onBack?: () => void
@@ -60,6 +71,14 @@ export function CanonicalGroupHeader({
   const labels = useCanonicalGroupLabels()
   const { nameFor } = useCanonicalMembers(binding)
   const members = room?.members ?? []
+  const badges: Record<string, string> = {
+    missing: labels.peerNotJoinedBadge,
+    unavailable: labels.peerOfflineBadge,
+    needs_reauthorization: labels.peerRejoinBadge
+  }
+  const peerBadges = new Map(
+    peerMemberStates(members, driver?.peer_routes).map(({ member, status }) => [member.member_id, badges[status]])
+  )
 
   const state = room?.disbanded_at
     ? labels.roomDisbanded
@@ -77,7 +96,7 @@ export function CanonicalGroupHeader({
         </Button>
       )}
       <div className="aino-group-heading">
-        {!mainTab && <h2>{room?.name || labels.loadingGroup}</h2>}
+        {!mainTab && <h2 title={room?.name}>{room?.name || labels.loadingGroup}</h2>}
         <div className="aino-group-participants">
           {members.slice(0, 3).map(member => (
             <Button
@@ -90,7 +109,11 @@ export function CanonicalGroupHeader({
               variant="ghost"
             >
               <CanonicalMemberAvatar binding={binding} member={member} size={24} />
-              <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+              <span>
+                {nameFor(member)}
+                {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+                {peerBadges.get(member.member_id) && <small className="ml-2">{peerBadges.get(member.member_id)}</small>}
+              </span>
             </Button>
           ))}
           {members.length > 3 && (
@@ -147,7 +170,7 @@ interface CanonicalGroupInfoProps {
   onMention?: (member: CanonicalRoomMember) => void
   onRename: (name: string) => void
   phases: Map<string, CanonicalMemberPhase>
-  driver?: CanonicalDriverActivity
+  driver?: CanonicalDriverStatus<CanonicalPendingAction>
   renderPane?: (content: ReactNode, managing: boolean) => ReactNode
   room?: CanonicalRoom
 }
@@ -179,6 +202,14 @@ export function CanonicalGroupInfo({
   const [ending, setEnding] = useState(false)
   const [section, setSection] = useState('members')
   const members = room?.members ?? []
+  const badges: Record<string, string> = {
+    missing: labels.peerNotJoinedBadge,
+    unavailable: labels.peerOfflineBadge,
+    needs_reauthorization: labels.peerRejoinBadge
+  }
+  const peerBadges = new Map(
+    peerMemberStates(members, driver?.peer_routes).map(({ member, status }) => [member.member_id, badges[status]])
+  )
 
   const rename = (name: string) => {
     setRenaming(null)
@@ -234,7 +265,10 @@ export function CanonicalGroupInfo({
                     <li className="aino-group-info-member" data-phase={status?.phase || 'idle'} key={member.member_id}>
                       <CanonicalMemberAvatar binding={binding} member={member} />
                       <div className="aino-group-member-copy">
-                        <span className="aino-group-member-name">{name}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+                        <span className="aino-group-member-name">
+                          {name}
+                          {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+                        </span>
                         <span className="aino-group-member-phase">
                           {status?.label ?? (available ? labels.ready : labels.memberUnavailable)}
                         </span>
@@ -293,7 +327,13 @@ export function CanonicalGroupInfo({
                   <ul>
                     {members.map(member => (
                       <li className="aino-group-info-identifier" key={member.member_id}>
-                        <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+                        <span>
+                          {nameFor(member)}
+                          {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+                          {peerBadges.get(member.member_id) && (
+                            <small className="ml-2">{peerBadges.get(member.member_id)}</small>
+                          )}
+                        </span>
                         <code>@{member.handle}</code>
                       </li>
                     ))}

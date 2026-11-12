@@ -1,15 +1,17 @@
 import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { PreviewSigninsResult } from '@/global'
 import { type ProfileScope, profileScopeKey, saveHermesConfigRecord } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { claimPreviewSigninsSync, syncPreviewSignins } from '@/lib/preview-signins'
 import { $activeConnectionId } from '@/store/connections'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile } from '@/store/profile'
 
 import { hermesConfigCacheWriter, useHermesConfigRecord } from '../hooks/use-config-record'
 
-import { ToggleRow } from './primitives'
+import { RowFootnoteAction, ToggleRow } from './primitives'
 
 interface BrowserRealProfilePanelProps {
   /** Capabilities profile-scope override — the toggle reads/writes THIS
@@ -40,7 +42,9 @@ export function readUseRealProfile(record: Record<string, unknown> | undefined):
  * the default browser's profile (cookies/logins) into a Hermes-owned copy;
  * turning it OFF deletes the snapshot store on next use. The toggle writes
  * config.yaml through the same deep-merging PUT /api/config every other
- * settings surface uses — applies to new sessions.
+ * settings surface uses — applies to new sessions. It also signs the in-app
+ * Browser tab in with the profile's cookies (Electron main imports them for a
+ * local backend; off removes them), and "Re-import sign-ins" refreshes them.
  */
 export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProps) {
   const { t } = useI18n()
@@ -66,6 +70,48 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
 
   const enabled = readUseRealProfile(config)
 
+  const reportSignins = useCallback(
+    (result: null | PreviewSigninsResult, announce: boolean) => {
+      if (!result) {
+        return
+      }
+
+      if (result.status === 'error') {
+        notify({ kind: 'warning', title: copy.signinsFailed, message: result.error || '' })
+      } else if (result.status === 'imported' && (announce || result.imported > 0)) {
+        notify({ kind: 'info', title: copy.signinsImportedTitle, message: copy.signinsImported(result.imported) })
+      } else if (result.status === 'remote' && announce) {
+        notify({ kind: 'info', title: copy.signinsImportedTitle, message: copy.signinsRemote })
+      }
+    },
+    [copy]
+  )
+
+  const reimport = useCallback(async () => {
+    const version = revision.current
+    const isCurrent = () =>
+      revision.current === version &&
+      $activeConnectionId.get() === connectionId &&
+      $activeGatewayProfile.get() === activeProfile
+    setBusy(true)
+
+    try {
+      const result = await syncPreviewSignins(true, writeScope)
+
+      if (isCurrent()) {
+        reportSignins(result, true)
+      }
+    } catch (err) {
+      if (isCurrent()) {
+        notifyError(err, copy.signinsFailed)
+      }
+    } finally {
+      if (isCurrent()) {
+        setBusy(false)
+      }
+    }
+  }, [activeProfile, connectionId, copy, reportSignins, writeScope])
+
   const toggle = useCallback(
     async (on: boolean) => {
       if (!config) {
@@ -86,6 +132,7 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
         $activeGatewayProfile.get() === activeProfile
 
       setBusy(true)
+      claimPreviewSigninsSync(on, writeScope)
       setConfig(next)
 
       try {
@@ -102,6 +149,12 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
           title: on ? copy.enabledTitle : copy.disabledTitle,
           message: on ? copy.enabledMessage : copy.disabledMessage
         })
+        // After the save: the backend re-checks the key it just wrote before exporting anything.
+        const result = await syncPreviewSignins(on, writeScope)
+
+        if (isCurrent()) {
+          reportSignins(result, false)
+        }
       } catch (err) {
         if (isCurrent()) {
           setConfig(config)
@@ -113,11 +166,16 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
         }
       }
     },
-    [activeProfile, config, connectionId, copy, profile, setConfig, writeScope]
+    [activeProfile, config, connectionId, copy, profile, reportSignins, setConfig, writeScope]
   )
 
   return (
     <ToggleRow
+      below={
+        enabled ? (
+          <RowFootnoteAction onClick={() => void reimport()}>{copy.reimportSignins}</RowFootnoteAction>
+        ) : undefined
+      }
       checked={enabled}
       description={copy.description}
       disabled={busy || !config}

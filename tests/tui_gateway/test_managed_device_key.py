@@ -71,7 +71,7 @@ def test_device_key_catalog_identity_survives_auxiliary_and_delegated_requests()
 
 
 def test_permanent_image_binding_resolves_only_inside_its_live_turn():
-    from tui_gateway.managed_image_runtime import current_image_binding, managed_image_scope
+    from agent.managed_image_provider import current_image_binding, managed_image_scope
 
     binding = _binding(device_payload() | {
         "purpose": "image", "api_mode": "images_generations",

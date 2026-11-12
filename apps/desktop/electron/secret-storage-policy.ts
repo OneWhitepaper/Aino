@@ -69,6 +69,39 @@ export function writeSecretStoragePolicy(policy: SecretStoragePolicy, io: Secret
   io.writeText(JSON.stringify({ on: policy.on === true, migrated: policy.migrated === true }))
 }
 
+export interface SecretStorageTransition {
+  policy: () => SecretStoragePolicy
+  setPolicy: (policy: SecretStoragePolicy) => void
+  canEncrypt: () => boolean
+  rewrite: (enable: boolean) => void
+}
+
+/** Keep policy ordering shared by every native secret store. */
+export function transitionSecretStorageEncryption(enable: boolean, deps: SecretStorageTransition): { on: boolean } {
+  if (!enable && !deps.policy().on) {
+    return { on: false }
+  }
+
+  if (enable) {
+    if (!deps.canEncrypt()) {
+      throw new Error(
+        'OS keychain encryption is unavailable on this machine, so stored gateway secrets cannot be encrypted.'
+      )
+    }
+
+    deps.setPolicy({ on: true, migrated: true })
+
+    // A partial rewrite can already have persisted encrypted credentials.
+    // Keep them readable, and allow a later explicit opt-in to finish the work.
+    deps.rewrite(true)
+  } else {
+    deps.rewrite(false)
+    deps.setPolicy({ on: false, migrated: true })
+  }
+
+  return { on: enable }
+}
+
 /** One stored secret blob as it appears on disk. */
 interface StoredSecret {
   encoding?: string

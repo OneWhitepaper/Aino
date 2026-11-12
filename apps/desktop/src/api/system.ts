@@ -1,9 +1,8 @@
+import type { AudioSpeakResponse, AudioTranscriptionResponse } from '@/types/audio'
 import type {
   ActionResponse,
   ActionStatusResponse,
-  AudioSpeakResponse,
   AudioSttLeaseResponse,
-  AudioTranscriptionResponse,
   AudioTtsLeaseResponse,
   BackendUpdateCheckResponse,
   CuratorStatusResponse,
@@ -316,7 +315,6 @@ export interface DebugShareResponse {
   redacted: boolean
   auto_delete_seconds: number | null
 }
-
 
 export function runDebugShare(): Promise<DebugShareResponse> {
   return hermesApi<DebugShareResponse>({

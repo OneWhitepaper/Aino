@@ -72,7 +72,7 @@ async function setupSeededMockBackend(): Promise<MockBackendFixture> {
   }
 }
 
-test('resume hides real context-compaction handoffs', async ({}, testInfo) => {
+test('resume hides real context-compaction handoffs', async ({ browserName: _browserName }, testInfo) => {
   const fixture = await setupSeededMockBackend()
 
   try {
@@ -97,7 +97,7 @@ test('resume hides real context-compaction handoffs', async ({}, testInfo) => {
   }
 })
 
-test('live verify-on-stop continuations stay out of the transcript', async ({}, testInfo) => {
+test('live verify-on-stop continuations stay out of the transcript', async ({ browserName: _browserName }, testInfo) => {
   const sandbox = createSandbox('live-verification-nudge')
   const projectRoot = path.join(sandbox.root, 'project')
   const changedFile = path.join(projectRoot, 'e2e-verification-target.py')

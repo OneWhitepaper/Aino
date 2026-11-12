@@ -8,6 +8,7 @@ import * as fs from 'node:fs'
 import * as net from 'node:net'
 import * as path from 'node:path'
 
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { MOCK_REPLY, startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import {
@@ -16,7 +17,6 @@ import {
   launchDesktop,
   type Sandbox,
 } from './fixtures'
-import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { collectErrorBanners, type ElectronApplication, expect, installErrorBannerGuard, type Page, test } from './test'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../..')
@@ -150,8 +150,8 @@ async function newSession(page: Page, label: string): Promise<void> {
 
 const peerTest = test.extend<{ gateways: { app: ElectronApplication; source: Page } }>({
   // Playwright requires object destructuring even for a fixture with no dependencies.
-  // eslint-disable-next-line no-empty-pattern
-  gateways: async ({}, runTest, info) => {
+
+  gateways: async ({ browserName: _browserName }, runTest, info) => {
     const local = createSandbox('peer-local')
     const remote = createSandbox('peer-remote')
     const mock = await startMockServer()

@@ -18,7 +18,7 @@
  * Plugin dialog, which still requires the user's explicit confirmation.
  */
 
-import type { ConnectionState } from '@hermes/shared'
+import { type ConnectionState, PLUGIN_CATALOG_NAME_RE } from '@hermes/shared'
 import type { ReadableAtom } from 'nanostores'
 
 import { PRODUCT_NAME, REPOSITORY_URL } from '@/lib/brand'
@@ -33,9 +33,6 @@ export const PLUGIN_CATALOG_URL = `${CATALOG_ORIGIN}/docs/api/plugins.json`
 export const PLUGIN_CATALOG_DOCS_URL = `${REPOSITORY_URL}/blob/main/website/docs/user-guide/features/plugin-catalog.md`
 export const SKILLS_DOCS_URL = `${REPOSITORY_URL}/tree/main/optional-skills`
 export const SUBMIT_MOD_URL = `${REPOSITORY_URL}/compare`
-
-/** Catalog names are directory names under `plugin-catalog/`; anything else is not a lookup key. */
-export const PLUGIN_CATALOG_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 const FETCH_TIMEOUT_MS = 15_000
 const LOOKUP_TIMEOUT_MS = 20_000

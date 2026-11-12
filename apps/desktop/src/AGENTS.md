@@ -61,7 +61,7 @@ terminal-only: neither command discovery nor argument completion may offer it on
 **Rule:** palette curation hides noise (terminal-only / messaging-only built-ins), NEVER
 user-activated extensions. If you tighten `desktop-slash-commands.ts`, keep
 `isDesktopSlashExtensionCommand` flowing into both paths. Test: from `apps/desktop`,
-`npx vitest run src/lib/desktop-slash-commands.test.ts` (workspace deps install at the repo root).
+`pnpm exec vitest run src/lib/desktop-slash-commands.test.ts` (workspace deps install at the repo root).
 
 ## Bot Mode (`src/plugins/hermes-bots/`) — one bot = ONE canonical forever-chat, identified by NAME
 

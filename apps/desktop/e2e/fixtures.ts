@@ -17,7 +17,7 @@
  * `electron-builder --dir` step and matches `hermes desktop --source`. The
  * packaged-binary path is already covered by `launch.spec.ts`.
  *
- * Prerequisite: `npm run build && node scripts/bundle-electron-main.mjs --dev`
+ * Prerequisite: `pnpm run build && node scripts/bundle-electron-main.mjs --dev`
  * builds the renderer and the source-test Electron main/preloads.
  */
 
@@ -243,14 +243,14 @@ function assertDistBuilt(): void {
 
   if (!fs.existsSync(electronMain)) {
     throw new Error(
-      `Desktop dist not built. Run 'cd apps/desktop && npm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
+      `Desktop dist not built. Run 'cd apps/desktop && pnpm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
         `Missing: ${electronMain}`
     )
   }
 
   if (!fs.existsSync(indexHtml)) {
     throw new Error(
-      `Desktop dist/index.html not found. Run 'cd apps/desktop && npm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
+      `Desktop dist/index.html not found. Run 'cd apps/desktop && pnpm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
         `Missing: ${indexHtml}`
     )
   }
@@ -258,18 +258,17 @@ function assertDistBuilt(): void {
 
 /**
  * Find the Electron binary. In the nix devshell, `electron` is on PATH.
- * As a fallback, use the node_modules/electron install from either package.
+ * As a fallback, use the desktop package's node_modules/electron install.
  */
 export function findElectron(): string {
   // In dev mode, we use the `electron` binary directly (not the packaged app).
   // The dev:electron script in package.json does exactly this: `electron .`
   // after building. We replicate that here.
   //
-  // The desktop package is searched first: npm workspaces only hoist
-  // `electron` to the repo root when nothing conflicts, so a workspace-local
-  // install is just as ordinary an outcome as a hoisted one. The rules live in
-  // ./electron-binary so they can be unit-tested per platform.
-  return resolveElectronBinary([DESKTOP_ROOT, REPO_ROOT])
+  // pnpm links `electron` into the desktop package, the workspace that
+  // declares it. The rules live in ./electron-binary so they can be
+  // unit-tested per platform.
+  return resolveElectronBinary([DESKTOP_ROOT])
 }
 
 /**
@@ -348,6 +347,8 @@ export interface MockBackendFixture {
 }
 
 export interface MockBackendOptions {
+  /** Exercise the managed canonical owner instead of the legacy isolated serve fixture. */
+  nativeGateway?: boolean
   /** Exercise native compositor painting with the desktop's GPU defaults. */
   allowGpu?: boolean
   /**
@@ -390,7 +391,7 @@ export async function setupMockBackend(options: MockBackendOptions = {}): Promis
   writeEnvFile(sandbox.hermesHome, 'e2e-mock-key', mock.url)
 
   // 3. Build env + launch
-  const env = buildAppEnv(sandbox)
+  const env = buildAppEnv(sandbox, options.nativeGateway ? { HERMES_DESKTOP_ISOLATED_BACKEND: '0' } : {})
   let launched: Awaited<ReturnType<typeof launchDesktop>>
 
   try {
@@ -484,6 +485,7 @@ export async function setupDeadBackend(options: DeadBackendOptions = {}): Promis
       ? { HERMES_DESKTOP_BOOT_FAKE_ERROR: 'Failed to connect to Hermes backend: connection refused' }
       : {}
   )
+
   const { app, page } = await launchDesktop(env)
 
   return {
@@ -537,18 +539,18 @@ export interface PackagedAppFixture {
 }
 
 /**
- * Launch the *packaged* Electron binary (from `npm run pack` →
+ * Launch the *packaged* Electron binary (from `pnpm run pack` →
  * `electron-builder --dir`) with `BOOT_FAKE=1` so it simulates boot
  * progress without spawning a real Hermes backend.
  *
  * Uses the same sandbox isolation (credential stripping, isolated
  * HERMES_HOME + userData, unique app name) as the dev-mode fixtures.
  *
- * Skips if the packaged binary doesn't exist — run `npm run pack` first.
+ * Skips if the packaged binary doesn't exist — run `pnpm run pack` first.
  */
 export async function setupPackagedApp(): Promise<PackagedAppFixture> {
   if (!packagedBinaryExists()) {
-    throw new Error(`Built app binary not found: ${PACKAGED_BINARY_PATH}. Run 'npm run pack' first.`)
+    throw new Error(`Built app binary not found: ${PACKAGED_BINARY_PATH}. Run 'pnpm run pack' first.`)
   }
 
   const sandbox = createSandbox('packaged')
@@ -619,6 +621,7 @@ export async function waitForAppReady(
       if (visible) {
         break
       }
+
       await page.waitForTimeout(500)
     }
   }

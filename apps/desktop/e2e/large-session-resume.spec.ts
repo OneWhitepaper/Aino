@@ -25,6 +25,7 @@ const EXPECTED_TEXT = 'E2E persisted user message 52'
 // oldest row means the baseline reflects the fully-mounted transcript.
 const OLDEST_SEEDED_TEXT = 'E2E persisted user message 0: audit the compatibility matrix'
 const BACKGROUND_PROMPT = 'E2E background inference must remain attached across resume'
+
 const HISTORY_TURNS = Array.from(
   { length: 27 },
   (_, index) => `E2E persisted user message ${index * 2}: audit the compatibility matrix`,
@@ -51,6 +52,7 @@ async function setupSeededDesktop(mockServer?: MockServerOptions): Promise<Seede
   writeEnvFile(sandbox.hermesHome)
 
   const builder = await RealSessionBuilder.start(sandbox.hermesHome)
+
   try {
     await builder.createSession({ title: SESSION_TITLE, turns: HISTORY_TURNS })
   } finally {
@@ -115,9 +117,12 @@ async function submitPrompt(page: Page, prompt: string): Promise<void> {
 async function startPaintObserver(page: Page): Promise<void> {
   await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="aui_thread-viewport"]')
+
     const state = { bursts: 0, timeline: [] as Array<{ mutations: number; time: number }> }
+
     ;(window as Window & { __largeSessionPaints?: typeof state }).__largeSessionPaints = state
-    if (!viewport) return
+
+    if (!viewport) {return}
 
     let additions = 0
     let flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -126,8 +131,10 @@ async function startPaintObserver(page: Page): Promise<void> {
         (count, record) => count + (record.type === 'childList' && record.addedNodes.length > 0 ? 1 : 0),
         0,
       )
-      if (additions === 0) return
-      if (flushTimer) clearTimeout(flushTimer)
+
+      if (additions === 0) {return}
+
+      if (flushTimer) {clearTimeout(flushTimer)}
       flushTimer = setTimeout(() => {
         state.bursts += 1
         state.timeline.push({ mutations: additions, time: Date.now() })
@@ -140,21 +147,25 @@ async function startPaintObserver(page: Page): Promise<void> {
 async function paintState(page: Page): Promise<PaintState> {
   const state = await page.evaluate(() => (window as Window & { __largeSessionPaints?: PaintState }).__largeSessionPaints)
   expect(state, 'paint observer should attach to the thread viewport').toBeDefined()
+
   return state!
 }
 
 async function textNodeOccurrences(page: Page, expected: string): Promise<number> {
   return page.evaluate(text => {
     const viewport = document.querySelector('[data-slot="aui_thread-viewport"]')
-    if (!viewport) return 0
+
+    if (!viewport) {return 0}
 
     const walker = document.createTreeWalker(viewport, NodeFilter.SHOW_TEXT)
     let count = 0
+
     while (walker.nextNode()) {
       if (walker.currentNode.textContent?.includes(text)) {
         count += 1
       }
     }
+
     return count
   }, expected)
 }
@@ -186,7 +197,7 @@ test.describe('large session resume', () => {
     fixture = null
   })
 
-  test('cold resume of an unchanged session has one user row and bounded transcript paints', async ({}, testInfo) => {
+  test('cold resume of an unchanged session has one user row and bounded transcript paints', async ({ browserName: _browserName }, testInfo) => {
     fixture = await setupSeededDesktop()
     await waitForAppReady(fixture, 120_000)
 
@@ -195,7 +206,7 @@ test.describe('large session resume', () => {
   })
 
   for (const resumeKind of ['fast', 'cold'] as const) {
-    test(`${resumeKind} resume keeps background inference attached without duplicate messages`, async ({}, testInfo) => {
+    test(`${resumeKind} resume keeps background inference attached without duplicate messages`, async ({ browserName: _browserName }, testInfo) => {
       fixture = await setupSeededDesktop({ holdFirstStreamForPrompt: BACKGROUND_PROMPT })
       await waitForAppReady(fixture, 120_000)
 

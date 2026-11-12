@@ -40,6 +40,9 @@ const COMPARED_FIELDS = [
   'errorResolved',
   // The renderer localizes backend-authored failure boundaries only when marked.
   'failedTurnNotice',
+  // Safety-refused display block — drives the greyed notice, so attaching or
+  // changing it (resume replay) must repaint, like errorSurface.
+  'contentRefused',
   'hidden',
   'branchGroupId',
   'interim',
@@ -165,9 +168,7 @@ function failureMetadataEquivalent(a: ChatMessage, b: ChatMessage): boolean {
   return !(
     a.failedTurnNotice !== b.failedTurnNotice ||
     a.errorResolved !== b.errorResolved ||
-    (a.errorSurface?.layer ?? null) !== (b.errorSurface?.layer ?? null) ||
-    (a.errorSurface?.code ?? null) !== (b.errorSurface?.code ?? null) ||
-    (a.errorSurface?.retryable ?? null) !== (b.errorSurface?.retryable ?? null)
+    displayDescriptorsDiffer(a, b)
   )
 }
 
@@ -179,6 +180,19 @@ const FLAG_FIELDS = ['interim', 'queuedTurnStarted'] as const
 
 const flagsDiffer = (a: ChatMessage, b: ChatMessage) =>
   FLAG_FIELDS.some(field => (a[field] ?? false) !== (b[field] ?? false))
+
+// Structured display descriptors — the error card (errorSurface) and the
+// safety-refused notice (contentRefused) each arrive as a fresh object per
+// resume/replay, so identity comparison would repaint forever; both need a
+// structural compare of their rendered fields. Kept out of the host comparator
+// so its branch count stays within the ratchet.
+const displayDescriptorsDiffer = (a: ChatMessage, b: ChatMessage) =>
+  (a.errorSurface?.layer ?? null) !== (b.errorSurface?.layer ?? null) ||
+  (a.errorSurface?.code ?? null) !== (b.errorSurface?.code ?? null) ||
+  (a.errorSurface?.retryable ?? null) !== (b.errorSurface?.retryable ?? null) ||
+  // Safety-refused block: compare presence and notice.
+  Boolean(a.contentRefused) !== Boolean(b.contentRefused) ||
+  (a.contentRefused?.notice ?? null) !== (b.contentRefused?.notice ?? null)
 
 export function chatMessagesEquivalent(a: ChatMessage, b: ChatMessage): boolean {
   if (

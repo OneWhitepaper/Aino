@@ -9,7 +9,8 @@ export interface NativeAccessTokenOptions {
 export interface NativeAccessTokenCoordinatorDeps {
   clearTokens: (baseUrl: string) => void
   isRefreshAuthRejection: (error: unknown) => boolean
-  loadTokens: (baseUrl: string) => NativeTokenSet | null
+  /** `fresh` bypasses the in-memory cache before a refresh mutates shared storage. */
+  loadTokens: (baseUrl: string, fresh?: boolean) => NativeTokenSet | null
   normalizeBaseUrl: (baseUrl: string) => string
   nowSeconds?: () => number
   refreshTokens: (baseUrl: string, tokens: NativeTokenSet) => Promise<NativeTokenSet>
@@ -81,6 +82,21 @@ export function createNativeAccessTokenCoordinator(deps: NativeAccessTokenCoordi
       if (epochFor(baseUrl) !== flightEpoch) {
         throw new NativeAuthChangedError()
       }
+
+      // A Webapp or another Desktop may replace/revoke this host's sign-in
+      // before the file watcher fires. Neither a stale rotation nor its 401
+      // may overwrite that writer's decision. Other hosts remain independent.
+      const current = deps.loadTokens(baseUrl, true)
+
+      if (
+        !current ||
+        current.accessToken !== tokens.accessToken ||
+        current.refreshToken !== tokens.refreshToken ||
+        current.provider !== tokens.provider ||
+        current.userId !== tokens.userId
+      ) {
+        throw new NativeAuthChangedError()
+      }
     }
 
     const refreshFlight = (async (): Promise<string | null> => {
@@ -121,7 +137,9 @@ export function createNativeAccessTokenCoordinator(deps: NativeAccessTokenCoordi
     ensure,
     beginLogin,
     invalidateAll: () => {
-      for (const key of new Set([...authEpochs.keys(), ...loginEpochs.keys(), ...refreshFlights.keys()])) { beginExplicitAuthChange(key) }
+      for (const key of new Set([...authEpochs.keys(), ...loginEpochs.keys(), ...refreshFlights.keys()])) {
+        beginExplicitAuthChange(key)
+      }
     },
     storeTokens: (rawBaseUrl: string, tokens: NativeTokenSet) => {
       const baseUrl = deps.normalizeBaseUrl(rawBaseUrl)

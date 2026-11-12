@@ -188,7 +188,7 @@ export function rosterSectionRenderers({
       <div className="flex min-w-0 items-center gap-1.5 px-2 py-1 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
         <GatewayKindGlyph kind={section.option?.kind} />
         <span className="min-w-0 flex-1 truncate">
-          {section.option?.label || section.option?.connectionId || 'Current gateway'}
+          {section.option?.label || section.option?.connectionId || b.roster.currentGateway}
         </span>
         <span className="shrink-0 font-normal tabular-nums">{section.rows.length}</span>
       </div>

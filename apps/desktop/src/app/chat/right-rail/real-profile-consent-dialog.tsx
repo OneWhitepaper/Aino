@@ -15,6 +15,7 @@ import type { HermesConnection } from '@/global'
 import { saveHermesConfigRecord } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Check, Globe } from '@/lib/icons'
+import { claimPreviewSigninsSync, syncPreviewSignins } from '@/lib/preview-signins'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile } from '@/store/profile'
 import {
@@ -129,7 +130,9 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
       $connection.get()?.connectionId === connection?.connectionId &&
       $activeGatewayProfile.get() === activeProfile
 
+    const scope = writeScope
     setBusy(true)
+    claimPreviewSigninsSync(true, scope)
     setConfig(next)
 
     try {
@@ -138,6 +141,7 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
       await saveHermesConfigRecord({ browser: { use_real_profile: true } }, writeScope)
 
       if (isCurrent()) {
+        void syncPreviewSignins(true, scope).catch(() => undefined)
         notify({ kind: 'info', title: copy.enabledTitle, message: copy.enabledMessage })
       }
     } catch (err) {

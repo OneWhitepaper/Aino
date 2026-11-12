@@ -243,6 +243,8 @@ class ProviderProfile:
     # Temperature: None = use caller's default, OMIT_TEMPERATURE = don't send
     fixed_temperature: Any = None
     default_max_tokens: int | None = None
+    # Opt-in: auxiliary calls forward an explicit max_tokens only on routes known to honor it (#139778).
+    forwards_max_tokens: bool = field(default=False, kw_only=True)
     # ``response_format`` types the API rejects outright (e.g. ("json_schema",)); aux requests omit them up front.
     unsupported_response_formats: tuple = ()
     default_aux_model: str = (
@@ -392,7 +394,19 @@ class ProviderProfile:
         return None
 
     def get_model_context_length(self, model: str, *, base_url: str = "", api_key: Any = "") -> int | None:
-        """Provider-qualified context bound; explicit user overrides take precedence."""
+        """Provider-qualified context bound; explicit user overrides take precedence.
+
+        Session-managed profiles read metadata from the exact live credential;
+        a plain/custom key never acquires managed metadata by duck typing.
+        """
+        if self.auth_type != "session_managed":
+            return None
+        from agent.auxiliary_billing_scope import ManagedCredential
+
+        if (isinstance(api_key, ManagedCredential) and model == api_key.model
+                and base_url.rstrip("/") == api_key.base_url.rstrip("/")
+                and api_key.get_context_window is not None):
+            return api_key.get_context_window()
         return None
 
     def get_usage_cost(self, model: str, usage: Any) -> Any | None:

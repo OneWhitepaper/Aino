@@ -7,7 +7,9 @@ sources are omitted. Protocol, command and module names are not product copy.
 import json
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parent.parent
+from hermes_cli._startup_fast import project_root_str
+
+_ROOT = Path(project_root_str())
 _SOURCE_BRAND = _ROOT / "apps" / "desktop" / "brand.json"
 _DATA = Path(__file__).resolve().parent / "data"
 _BRAND = json.loads(

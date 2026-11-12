@@ -8,7 +8,8 @@ import type { CanonicalGroupEvent } from './canonical-group-history'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { markRoomLead } from './canonical-group-lead'
 import { useCanonicalMembers } from './canonical-group-members'
-import { forgetCanonicalGroup, syncCanonicalGroupName } from './canonical-group-registry'
+import { peerRenewalBeforeSend, usePeerRenewal } from './canonical-group-peer-join'
+import { forgetCanonicalGroup, registerCanonicalGroup, syncCanonicalGroupName } from './canonical-group-registry'
 import {
   attemptCanonicalGroupSend,
   prepareCanonicalGroupSend,
@@ -20,8 +21,13 @@ import {
 import type { PreparedCanonicalGroupSend } from './canonical-group-send'
 import { useCanonicalGroupSendRecovery } from './canonical-group-send-recovery'
 import { CanonicalGroupSurface, type CanonicalGroupSurfaceState } from './canonical-group-surface'
-import { actCanonicalGroup, canonicalGroupRequest } from './canonical-groups'
-import type { CanonicalGroupBinding, CanonicalPendingAction, CanonicalRoomMember } from './canonical-groups'
+import { actCanonicalGroup, canonicalGroupRequest, disbandCanonicalGroup } from './canonical-groups'
+import type {
+  CanonicalGroupBinding,
+  CanonicalPendingAction,
+  CanonicalRoom,
+  CanonicalRoomMember
+} from './canonical-groups'
 import {
   $groupComposerDraftEpoch,
   canonicalGroupComposerDraftKey,
@@ -101,6 +107,7 @@ function holdDraft(held: HeldDraft | null, next: HeldDraft): HeldDraft {
   if (!held) {
     return next
   }
+
   const ids = new Set(held.attachments.map(attachment => attachment.attachment_id))
 
   return {
@@ -133,12 +140,14 @@ export function CanonicalGroupWorkspace({
   mainTab = false,
   visible = true,
   onBack,
+  onReplaced,
   showBack = true
 }: {
   binding: CanonicalGroupBinding
   mainTab?: boolean
   visible?: boolean
   onBack?: () => void
+  onReplaced?: (key: string) => void
   showBack?: boolean
 }) {
   const draftEpoch = useValue($groupComposerDraftEpoch)
@@ -150,6 +159,7 @@ export function CanonicalGroupWorkspace({
       key={JSON.stringify([draftEpoch, binding.connectionId, binding.profile, binding.roomId])}
       mainTab={mainTab}
       onBack={onBack}
+      onReplaced={onReplaced}
       showBack={showBack}
       visible={visible}
     />
@@ -161,12 +171,14 @@ function CanonicalRoomView({
   mainTab,
   visible,
   onBack,
+  onReplaced,
   showBack
 }: {
   binding: CanonicalGroupBinding
   mainTab: boolean
   visible: boolean
   onBack?: () => void
+  onReplaced?: (key: string) => void
   showBack: boolean
 }) {
   const [binding] = useState(() => ({ ...initialBinding }))
@@ -210,9 +222,11 @@ function CanonicalRoomView({
   const seen = useRef<{ epoch?: number; seq: number }>({ seq: 0 })
 
   const draft = pending ? String(pending.params.payload.text ?? '') : composerDraft.main
+
   const attachments = pending
     ? ((pending.params.payload.attachments as Attachment[] | undefined) ?? [])
     : (composerDraft.canonicalAttachments ?? [])
+
   const sentDraft = useRef<{ revision: number; payload: Record<string, unknown> } | null>(null)
   const ownsDraft = () => canonicalGroupComposerDraftKey(binding) === composerKey
 
@@ -220,6 +234,7 @@ function CanonicalRoomView({
     if (!alive.current || !ownsDraft()) {
       return
     }
+
     setComposerDraft(
       updateGroupComposerDraft(composerKey, current => ({
         ...current,
@@ -232,6 +247,7 @@ function CanonicalRoomView({
     if (!alive.current || !ownsDraft()) {
       return
     }
+
     setComposerDraft(updateGroupComposerDraft(composerKey, current => ({ ...current, canonicalAttachments: value })))
   }
 
@@ -239,10 +255,12 @@ function CanonicalRoomView({
     if (!alive.current || !ownsDraft()) {
       return
     }
+
     const next = updateGroupComposerDraft(composerKey, current => ({
       ...current,
       canonicalReply: typeof value === 'function' ? value(current.canonicalReply ?? null) : value
     }))
+
     setReplyValue(next.canonicalReply ?? null)
     setComposerDraft(next)
   }
@@ -309,6 +327,26 @@ function CanonicalRoomView({
     }
   }, [binding, journalAttempt])
 
+  const readFailure = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+
+    return /timed out|timeout/i.test(message)
+      ? labels.readTimedOut
+      : [labels.readTimedOut, labels.invalidLogCursor].includes(message)
+        ? message
+        : labels.groupsUnreachable
+  }
+
+  const publishRoomSnapshot = (snapshot: RoomState) => {
+    syncCanonicalGroupName(binding, snapshot.room.name)
+    setState(snapshot)
+    const driver = snapshot.driver_status
+    if (driver && !driver.working && !driver.counts?.stopping && !driver.pending_actions?.length) {
+      setNotice(current => (current === 'stopped' ? '' : current))
+    }
+    setReadError('')
+  }
+
   const refresh = async (includeHistory = true) => {
     const version = ++revision.current
     const snapshot = await canonicalGroupRequest<RoomState>(binding, 'groups.state', { room_id: binding.roomId })
@@ -330,9 +368,7 @@ function CanonicalRoomView({
         seen.current.seq === snapshot.room.latest_seq)
     ) {
       if (alive.current && version === revision.current) {
-        syncCanonicalGroupName(binding, snapshot.room.name)
-        setState(snapshot)
-        setReadError('')
+        publishRoomSnapshot(snapshot)
       }
 
       return snapshot
@@ -351,23 +387,26 @@ function CanonicalRoomView({
         'groups.log',
         { room_id: binding.roomId, since_seq: cursor, limit: 100 }
       )
+
       log.push(...page.events)
 
       if (!page.has_more) {
         break
       }
+
       const next = page.events.at(-1)?.seq
 
       if (!next || next <= cursor) {
         throw new Error(labels.invalidLogCursor)
       }
+
       cursor = next
     }
 
     if (alive.current && version === revision.current) {
       seen.current = { epoch, seq: log.at(-1)?.seq ?? cursor }
-      syncCanonicalGroupName(binding, snapshot.room.name)
-      setState(snapshot)
+      publishRoomSnapshot(snapshot)
+
       setEvents(current => {
         const next = fresh ? log : [...current, ...log.filter(event => event.seq > since)]
 
@@ -393,7 +432,7 @@ function CanonicalRoomView({
         active = !!snapshot.driver_status?.working
       } catch (e) {
         if (!cancelled) {
-          setReadError(String(e instanceof Error ? e.message : e))
+          setReadError(readFailure(e))
         }
       }
 
@@ -458,6 +497,7 @@ function CanonicalRoomView({
     if (!ownsDraft()) {
       return
     }
+
     const current = groupComposerDraftSnapshot(composerKey)
     const sent = sentDraft.current
 
@@ -582,6 +622,7 @@ function CanonicalRoomView({
   // by the hint beside the restored draft; its raw reason code (`invalid_params`) is not shown.
   const settleFailedSend = async (exact: PreparedCanonicalGroupSend, words: Words, run: SendRun, error: unknown) => {
     run.posted = !admittedNothing(error)
+
     const left = run.posted
       ? undefined
       : await withdrawCanonicalGroupSend(exact.binding, exact.params.event_id).catch(() => undefined)
@@ -595,19 +636,24 @@ function CanonicalRoomView({
     }
   }
 
-  const sendIntent = async (run: SendRun) => {
+  const retireDeliveredIntent = async () => {
     if (!pending && delivered.current) {
       await retireCanonicalGroupSend(binding, delivered.current)
       delivered.current = null
     }
+  }
 
+  const sendIntent = async (run: SendRun) => {
+    await retireDeliveredIntent()
     const typed = { text: draft, attachments, thread_id: reply?.thread ?? draftThread.current }
     const replacing = editing.current
+
     const exact =
       pending ??
       (replacing
         ? await replaceCanonicalGroupSend(binding, replacing, typed)
         : await prepareCanonicalGroupSend(binding, typed))
+
     editing.current = null
 
     if (!alive.current) {
@@ -630,8 +676,15 @@ function CanonicalRoomView({
       text: String(exact.params.payload.text ?? ''),
       attachments: (exact.params.payload.attachments as Attachment[] | undefined) ?? []
     }
+
     sentDraft.current = { revision: groupComposerDraftSnapshot(composerKey).revision, payload: exact.params.payload }
     setPending(exact)
+    // The durable intent is saved before a peer renewal; Stop can hold it back.
+    await peerRenewalBeforeSend(exact.binding, state, methods)
+
+    if (!alive.current) {
+      return
+    }
 
     if ((await attemptCanonicalGroupSend(exact.binding, exact.params.event_id)) === null) {
       if (alive.current) {
@@ -687,10 +740,12 @@ function CanonicalRoomView({
     ) {
       return
     }
+
     stopIntent.current = null
     setSendHint('')
     setNotice('')
     let settle!: (mayHavePosted: boolean) => void
+
     const run: SendRun = {
       stopped: false,
       posted: false,
@@ -698,12 +753,14 @@ function CanonicalRoomView({
         settle = resolve
       })
     }
+
     sending.current = run
     void mutate(() =>
       sendIntent(run).finally(() => {
         if (sending.current === run) {
           sending.current = null
         }
+
         settle(run.posted)
       })
     ).catch(() => undefined)
@@ -713,11 +770,14 @@ function CanonicalRoomView({
     if (fresh) {
       stopIntent.current = null
     }
+
     const cancelId = (stopIntent.current ??= randomUuid())
+
     const result = await canonicalGroupRequest<{ cancelled?: unknown } | undefined>(binding, 'groups.stop', {
       room_id: binding.roomId,
       cancel_id: cancelId
     })
+
     const cancelled = result?.cancelled
 
     if (typeof cancelled !== 'number' || !Number.isSafeInteger(cancelled) || cancelled < 0) {
@@ -738,12 +798,14 @@ function CanonicalRoomView({
     if (stopPending.current) {
       return
     }
+
     stopPending.current = true
     const covered = sending.current
 
     if (covered) {
       covered.stopped = true
     }
+
     setStopping(true)
     setNotice('')
     setError('')
@@ -753,6 +815,7 @@ function CanonicalRoomView({
       const replay = stopIntent.current !== null
       const first = requestStop()
       first.catch(() => undefined)
+
       let cancelled =
         covered && (await covered.settled) ? (await first.catch(() => 0)) + (await requestStop(true)) : await first
 
@@ -762,7 +825,7 @@ function CanonicalRoomView({
       }
 
       if (alive.current) {
-        setNotice(cancelled ? labels.stopped : labels.nothingRunning)
+        setNotice('stopped')
         await refresh()
       }
     } catch (e) {
@@ -792,25 +855,57 @@ function CanonicalRoomView({
         stopIntent.current = null
       }
 
-      return actCanonicalGroup(binding, action, choice)
+      return actCanonicalGroup(binding, action, choice).catch(error => {
+        const reasons = new Map([
+          ['session_busy', labels.discardStopPending],
+          // Older members use the same reason as a network failure, with this detail on the wire.
+          [
+            'peer_unreachable',
+            typeof error?.data?.detail === 'string' &&
+            error.data.detail.includes('gateway is too old to confirm this turn never started')
+              ? labels.discardPeerUpdateRequired
+              : labels.discardPeerUnreachable
+          ]
+        ])
+
+        const message =
+          action.kind === 'discard'
+            ? reasons.get(error?.data?.reason)
+            : action.kind === 'retry' && error?.data?.reason === 'session_busy'
+              ? labels.retryBusy
+              : undefined
+
+        const member = state?.room.members?.find(member => member.member_id === action.member_id)
+
+        throw message ? new Error(message.replace('{name}', member ? nameFor(member) : labels.memberGeneric)) : error
+      })
     })
 
   const rename = (name: string) =>
-    void mutate(() =>
-      canonicalGroupRequest(binding, 'groups.rename', { room_id: binding.roomId, event_id: randomUuid(), name })
-    ).catch(() => undefined)
+    void mutate(async () => {
+      const { room } = await canonicalGroupRequest<{ room: CanonicalRoom }>(binding, 'groups.rename', {
+        room_id: binding.roomId,
+        event_id: randomUuid(),
+        name
+      })
+      registerCanonicalGroup(binding, room)
+    }).catch(() => undefined)
 
   // Rejects so ConfirmDialog stays open with the error; a disbanded room no longer reads back, so leave it.
   const end = async () => {
-    await canonicalGroupRequest(binding, 'groups.disband', { room_id: binding.roomId, cancel_id: randomUuid() })
+    if (!(await disbandCanonicalGroup(binding, labels))) {
+      throw new Error(labels.disbandUnconfirmed)
+    }
 
     if (alive.current) {
       onBack?.()
     }
+
     forgetCanonicalGroup(binding)
     host.notify({ kind: 'success', message: labels.disbanded(state?.room.name || binding.roomName || '') })
   }
 
+  usePeerRenewal(binding, state, methods, visible)
   const driver = state?.driver_status
   const members = state?.room.members ?? []
   const { nameFor } = useCanonicalMembers(binding)
@@ -863,7 +958,7 @@ function CanonicalRoomView({
         journalError={journalError}
         mainTab={mainTab}
         methods={methods}
-        notice={notice}
+        notice={notice === 'stopped' ? labels.stopped : notice}
         onAbandonRetry={recovery.begin}
         onAction={act}
         onAttachmentsChange={setAttachments}
@@ -876,8 +971,9 @@ function CanonicalRoomView({
         onDisband={end}
         onDraftChange={setDraft}
         onJournalReload={() => setJournalAttempt(value => value + 1)}
-        onRefresh={() => void refresh().catch(e => setReadError(String(e)))}
+        onRefresh={() => void refresh().catch(e => setReadError(readFailure(e)))}
         onRename={rename}
+        onReplaced={onReplaced}
         onReply={replyTo}
         onSend={send}
         onStop={() => void stop()}

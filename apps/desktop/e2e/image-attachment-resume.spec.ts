@@ -164,7 +164,7 @@ test.describe('attached image resume', () => {
     fixture = null
   })
 
-  test('renders a persisted attachment as a thumbnail on first open and after a cold reload', async ({}, testInfo) => {
+  test('renders a persisted attachment as a thumbnail on first open and after a cold reload', async ({ browserName: _browserName }, testInfo) => {
     // Seeding through the real gateway plus two full app boots does not fit the
     // default per-test budget on a cold runner.
     test.slow()

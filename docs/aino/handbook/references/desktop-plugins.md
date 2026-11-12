@@ -8,6 +8,8 @@
 > 来源：`skills/autonomous-ai-agents/hermes-agent/references/desktop-plugins.md`；原帮助技能署名 Hermes Agent + Teknium，MIT。下方保留完整原文、表格、命令与示例。
 > 随文资源：[桌面插件 JavaScript 模板](../templates/plugin.js)。原文内 `templates/...` 按原技能目录书写，此处链接指向手册中的实际副本。
 
+# Desktop App Plugins — UI Panes, Commands, Widgets
+
 Write plugins for the Hermes desktop app: statusbar items, layout panes,
 command-palette commands, keybinds, routes, and themes. A plugin is a single
 plain-JavaScript ESM file the app loads at runtime — no build step, no repo
@@ -175,7 +177,7 @@ The ONLY import surface is `@hermes/plugin-sdk` (plus `react` /
   `pl.desktop.yaml`); missing keys fall back to the bundled catalog then
   English; a string where English has a function takes positional `{0}`/`{1}`
   placeholders. Dropped on unload. Key set: `locales/_keys.desktop.json`
-  (`npm run i18n:keys`). Registering never changes `display.language`.
+  (`pnpm run i18n:keys`). Registering never changes `display.language`.
   `host.i18n.registerAppLocale` is the ctx-less twin (returns the disposer);
   `host.i18n.languageOptions()` lists bundled ∪ registered ∪ backend languages.
 - Data: `useQuery`/`useMutation`/`useQueryClient`/`queryClient` (the app's ONE

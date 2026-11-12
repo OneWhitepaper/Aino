@@ -12,8 +12,9 @@ test.afterAll(async () => {
   await fixture?.cleanup()
 })
 
-test('keeps navigation paint continuous into the titlebar without boxed icons', async ({}, testInfo) => {
+test('keeps navigation paint continuous into the titlebar without boxed icons', async ({ browserName: _browserName }, testInfo) => {
   const { page } = fixture
+
   const original = await page.evaluate(() => ({
     theme: document.documentElement.getAttribute('data-hermes-theme'),
     glass: document.documentElement.hasAttribute('data-hermes-glass'),
@@ -46,6 +47,7 @@ test('keeps navigation paint continuous into the titlebar without boxed icons', 
           tabLabelsFit: tabs.every(tab => {
             const label =
               tab.querySelector<HTMLElement>('[data-slot="pane-tab-label"]') ?? tab.children[1]?.firstElementChild
+
             return !label || label.scrollWidth <= label.clientWidth
           }),
           sidebarShadow: getComputedStyle(sidebar).boxShadow,
@@ -65,8 +67,10 @@ test('keeps navigation paint continuous into the titlebar without boxed icons', 
   } finally {
     await page.evaluate(original => {
       const root = document.documentElement
-      if (original.theme === null) root.removeAttribute('data-hermes-theme')
-      else root.setAttribute('data-hermes-theme', original.theme)
+
+      if (original.theme === null) {root.removeAttribute('data-hermes-theme')}
+      else {root.setAttribute('data-hermes-theme', original.theme)}
+
       root.toggleAttribute('data-hermes-glass', original.glass)
       root.classList.toggle('dark', original.dark)
     }, original)
@@ -118,13 +122,15 @@ test('preserves navigation and the Sessions, Agent Hub and Terminal tabs', async
     await tab.click()
     await expect(tab).toHaveAttribute('data-active', 'true')
   }
+
   await expect(page.locator('[data-aino-sidebar]')).toBeVisible()
   await expect(page.locator('[contenteditable="true"]').first()).toBeVisible()
 })
 
-test('keeps the rail boundary aligned through resize, mirroring and hiding', async ({}, testInfo) => {
+test('keeps the rail boundary aligned through resize, mirroring and hiding', async ({ browserName: _browserName }, testInfo) => {
   const { page, app } = fixture
   const rail = page.locator('[data-aino-sidebar]')
+
   const boundary = () =>
     page.evaluate(() => {
       const sidebar = document.querySelector<HTMLElement>('[data-aino-sidebar]')!
@@ -134,9 +140,11 @@ test('keeps the rail boundary aligned through resize, mirroring and hiding', asy
       const top = getComputedStyle(titlebar, '::before')
       const side = rect.left < 1 ? 'left' : 'right'
       const edge = side === 'left' ? rect.right : rect.left
+
       const sash = [...document.querySelectorAll<HTMLElement>('[data-sash-axis="x"]')].find(
         el => Math.abs(el.getBoundingClientRect().left + 1 - edge) < 2
       )
+
       const line = sash?.querySelector<HTMLElement>('span')
       const stroke = line && getComputedStyle(line)
 
@@ -150,6 +158,7 @@ test('keeps the rail boundary aligned through resize, mirroring and hiding', asy
         width: rect.width
       }
     })
+
   const expectBoundary = async () => {
     await expect.poll(async () => (await boundary()).aligned).toBe(true)
     expect((await boundary()).continuous).toBe(true)
@@ -160,6 +169,7 @@ test('keeps the rail boundary aligned through resize, mirroring and hiding', asy
   const before = await rail.boundingBox()
   await page.mouse.move(before!.x + before!.width, 350)
   await page.mouse.down()
+
   try {
     await page.mouse.move(before!.x + before!.width + 60, 350, { steps: 8 })
     await expect.poll(async () => (await boundary()).width).toBeGreaterThan(before!.width + 30)
@@ -228,30 +238,37 @@ test('keeps the rail boundary aligned through resize, mirroring and hiding', asy
   await page.reload()
   await waitForAppReady(fixture, 120_000)
   const hideFiles = page.getByRole('button', { name: 'Hide right sidebar', exact: true })
-  if (await hideFiles.isVisible()) await hideFiles.click()
+
+  if (await hideFiles.isVisible()) {await hideFiles.click()}
   await expect(page.locator('[data-tree-group="hidden-files"]')).toBeHidden()
   await expectBoundary()
 })
 
-test('highlights the whole navigation boundary through hover, clamped drag and release', async ({}, testInfo) => {
+test('highlights the whole navigation boundary through hover, clamped drag and release', async ({ browserName: _browserName }, testInfo) => {
   const { page, app } = fixture
   const rail = page.locator('[data-aino-sidebar]')
+
   const paint = () =>
     page.evaluate(() => {
       const titlebar = document.querySelector<HTMLElement>('[data-slot="app-titlebar"]')!
       const top = getComputedStyle(titlebar, '::after')
+
       const rail = document
         .querySelector<HTMLElement>('[data-aino-sidebar]')!
         .closest<HTMLElement>('[data-tree-group]')!
+
       const bounds = rail.getBoundingClientRect()
       const edge = bounds.left < 1 ? bounds.right : bounds.left
+
       const sash = [...document.querySelectorAll<HTMLElement>('[data-navigation-boundary]')].find(
         node => Math.abs(node.getBoundingClientRect().left + 1 - edge) < 2
       )!
+
       const band = sash.children[1] as HTMLElement
       const bottom = getComputedStyle(band)
       const bandRect = band.getBoundingClientRect()
       const translateX = top.transform === 'none' ? 0 : new DOMMatrixReadOnly(top.transform).e
+
       return {
         topOpacity: top.content === 'none' ? 0 : Number(top.opacity),
         bottomOpacity: Number(bottom.opacity),
@@ -263,9 +280,11 @@ test('highlights the whole navigation boundary through hover, clamped drag and r
         side: bounds.left < 1 ? 'left' : 'right'
       }
     })
+
   const expectHighlight = async (opacity: number) => {
     await expect.poll(async () => (await paint()).bottomOpacity).toBe(opacity)
     await expect.poll(async () => (await paint()).topOpacity).toBe(opacity)
+
     if (opacity) {
       const result = await paint()
       expect(result.colorMatches).toBe(true)
@@ -284,9 +303,11 @@ test('highlights the whole navigation boundary through hover, clamped drag and r
         ({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 800, false),
         width
       )
+
       if ((await paint()).side !== side) {
         await page.getByRole('button', { name: 'Swap sidebar sides', exact: true }).click()
       }
+
       await expect.poll(async () => (await paint()).side).toBe(side)
       await page.mouse.move(width / 2, 450)
       await expectHighlight(0)
@@ -295,6 +316,7 @@ test('highlights the whole navigation boundary through hover, clamped drag and r
       await page.mouse.move(edge + 1, 300)
       await expectHighlight(1)
       await page.mouse.down()
+
       try {
         // Beyond the minimum size, the pointer no longer follows the sash.
         await page.mouse.move(side === 'left' ? -100 : width + 100, 300, { steps: 6 })
@@ -303,14 +325,17 @@ test('highlights the whole navigation boundary through hover, clamped drag and r
       } finally {
         await page.mouse.up()
       }
+
       await page.mouse.move(width / 2, 450)
       await expectHighlight(0)
     }
   } finally {
     await page.mouse.up()
+
     if ((await paint()).side !== 'left') {
       await page.getByRole('button', { name: 'Swap sidebar sides', exact: true }).click()
     }
+
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1220, 800, false))
   }
 })

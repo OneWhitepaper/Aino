@@ -309,6 +309,31 @@ def summary_for_db(db, session_id, language="zh", *, generate=False, retry=False
             return _payload(source, cached)
 
 
+def authorized_summary(db, session_id, language, *, runtime, retry=False, authority_check, should_yield):
+    """Both transports lend their checked runtime; billing and key checks have one implementation."""
+    from dataclasses import replace
+    from uuid import uuid4
+    from agent.auxiliary_billing_scope import BillingScope, ManagedCredential, billing_scope
+
+    runtime = dict(runtime) if runtime is not None else None
+    key = (runtime or {}).get('api_key')
+    scope = BillingScope('turn', None, session_id, str(uuid4()), 'session_summary')
+    if isinstance(key, ManagedCredential):
+        def authorized_key():
+            authority_check()
+            return key()
+        runtime['api_key'] = replace(key, get_key=authorized_key)
+        scope = BillingScope('aino', key.user_id, key.session_id, str(uuid4()), 'session_summary')
+    if runtime is not None:
+        runtime['session_id'] = session_id
+    token = billing_scope.set(scope)
+    try:
+        return summary_for_db(db, session_id, language, generate=True, retry=retry, main_runtime=runtime,
+                              authority_check=authority_check, should_yield=should_yield)
+    finally:
+        billing_scope.reset(token)
+
+
 def session_summary(session_id, profile=None, language="zh", *, generate=False, retry=False):
     from hermes_cli.web_routers.mcp import _profile_secret_scope
     from hermes_cli.web_server_profiles import _config_profile_scope

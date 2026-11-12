@@ -31,6 +31,7 @@ export * from './api/skills'
 export * from './api/system'
 export * from './api/toolsets'
 export * from './api/webapp-access'
+export type { AudioSpeakResponse, AudioTranscriptionResponse } from '@/types/audio'
 
 export type {
   ActionResponse,
@@ -41,8 +42,6 @@ export type {
   AnalyticsSkillEntry,
   AnalyticsSkillsSummary,
   AnalyticsTotals,
-  AudioSpeakResponse,
-  AudioTranscriptionResponse,
   AudioTtsLeaseResponse,
   AutomationBlueprint,
   AutomationBlueprintField,

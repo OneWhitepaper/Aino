@@ -20,9 +20,11 @@ function fakePage(options: {
 }) {
   let evaluations = 0
   let url = options.initialUrl ?? 'file:///app/index.html'
+
   const settings = {
     click: async () => { url = 'file:///app/index.html#/settings' },
   }
+
   const chooseLater = {
     click: async () => { throw new Error('not visible') },
     waitFor: async () => undefined,
@@ -31,8 +33,11 @@ function fakePage(options: {
   return {
     evaluate: async () => {
       evaluations += 1
-      if (evaluations === 1) return options.marker
-      if (typeof options.status === 'function') return options.status()
+
+      if (evaluations === 1) {return options.marker}
+
+      if (typeof options.status === 'function') {return options.status()}
+
       return options.status
     },
     getByRole: (_role: string, query: { name: RegExp }) => ({
@@ -42,7 +47,7 @@ function fakePage(options: {
     url: () => url,
     waitForLoadState: async () => undefined,
     waitForURL: async (pattern: RegExp) => {
-      if (!pattern.test(url)) throw new Error(`URL did not match: ${url}`)
+      if (!pattern.test(url)) {throw new Error(`URL did not match: ${url}`)}
     },
   }
 }
@@ -99,6 +104,7 @@ test('skips an auxiliary renderer before accepting the main Settings window', as
     initialUrl: 'file:///app/index.html?win=intro',
     marker: { hasButton: true, hasMainRoot: true, hasDesktopApi: true },
   })
+
   const main = fakePage({
     marker: { hasButton: true, hasMainRoot: true, hasDesktopApi: true },
     status: { version: '0.21.3', active_sessions: 0, gateway_running: false },
@@ -113,11 +119,13 @@ test('rejection closes only the supplied application process tree', async () => 
   const discoveryCommands: unknown[][] = []
   const rootSignals: string[] = []
   const descendantSignals: Array<[number, string]> = []
+
   const processHandle = {
     pid: 100,
     kill: (signal: string) => { rootSignals.push(signal) },
     once: () => undefined,
   }
+
   const app = {
     close: async () => { throw new Error('renderer rejected close') },
     process: () => processHandle,
@@ -133,6 +141,7 @@ test('rejection closes only the supplied application process tree', async () => 
       discoveryTimeoutMs: 321,
       execFileSync: (...args: unknown[]) => {
         discoveryCommands.push(args)
+
         return '100 1\n101 100\n102 101\n200 1\n'
       },
       kill: (pid: number, signal: string) => { descendantSignals.push([pid, signal]) },
@@ -198,6 +207,7 @@ test('descendant discovery timeout prevents cleanup success', async () => {
 
 test('windows forced cleanup runs the bounded owned-tree command', async () => {
   const commands: unknown[][] = []
+
   const app = {
     close: async () => { throw new Error('renderer rejected close') },
     process: () => ({ pid: 456 }),
@@ -208,6 +218,7 @@ test('windows forced cleanup runs the bounded owned-tree command', async () => {
     discoveryTimeoutMs: 987,
     execFileSync: (...args: unknown[]) => {
       commands.push(args)
+
       return args[0] === 'powershell.exe'
         ? JSON.stringify({ ProcessId: 456, ParentProcessId: 1 })
         : ''
@@ -236,10 +247,12 @@ test('windows forced cleanup runs the bounded owned-tree command', async () => {
 
 test('windows cleanup rejects when the root exits but an owned child remains', async () => {
   const livenessChecks: number[] = []
+
   const app = {
     close: async () => { throw new Error('renderer rejected close') },
     process: () => ({ pid: 456 }),
   }
+
   const processTable = JSON.stringify([
     { ProcessId: 456, ParentProcessId: 1 },
     { ProcessId: 457, ParentProcessId: 456 },
@@ -251,6 +264,7 @@ test('windows cleanup rejects when the root exits but an owned child remains', a
     execFileSync: (file: string) => file === 'powershell.exe' ? processTable : '',
     isPidAlive: (pid: number) => {
       livenessChecks.push(pid)
+
       return pid === 457
     },
     platform: 'win32',

@@ -326,6 +326,11 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const ruBaseOverrides = {
+  gatewayGroupOpen: {
+    opening: "Открываем групповой чат…",
+    lookupFailed: "Не удалось найти эту группу на шлюзе. Попробуйте ещё раз.",
+    missing: "Этот групповой чат больше не существует."
+  },
   notificationCenter: notificationCenterCopy['ru'],
   platformModels: {
     permanent: 'Без срока действия',
@@ -1470,6 +1475,13 @@ const ruBaseOverrides = {
       clearDirFailed: 'Не удалось очистить папку по умолчанию'
     },
     toolsets: {
+      browserRealProfile: {
+        reimportSignins: 'Импортировать входы заново',
+        signinsImportedTitle: 'Входы во встроенном браузере',
+        signinsImported: count => `Встроенный браузер вошёл с cookie из профиля браузера: ${count}.`,
+        signinsRemote: 'Этот бэкенд работает на другом компьютере, поэтому его профиль браузера не импортируется во встроенный браузер.',
+        signinsFailed: 'Не удалось импортировать входы во встроенный браузер',
+      },
       loadingConfig: 'Загрузка конфигурации',
       savedTitle: 'Учётные данные сохранены',
       savedMessage: key => `${key} обновлён.`,
@@ -3888,6 +3900,7 @@ const ruBaseOverrides = {
       readAloud: 'Зачитать вслух',
       copyFullResponse: 'Копировать весь ответ',
       readAloudFullResponseHint: 'Shift+клик: прочитать весь ответ',
+      contentRefusedNotice: 'Это сообщение отклонено фильтром безопасности модели — попробуйте другой запрос.',
       editMessage: 'Изменить сообщение',
       expandMessage: 'Развернуть сообщение',
       scrollToBottom: 'Прокрутить вниз',

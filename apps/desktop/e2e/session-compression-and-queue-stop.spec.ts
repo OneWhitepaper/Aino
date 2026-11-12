@@ -2,10 +2,11 @@
  * E2E coverage for session compression, which rotates a live backend session.
  */
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
+
+import { MOCK_REPLY, receivedUserTexts, restartMockServer } from '../../../tests-js/scripts/mock-server'
 
 import { type MockBackendFixture, setupMockBackend, waitForAppReady } from './fixtures'
-import { MOCK_REPLY, receivedUserTexts, restartMockServer } from '../../../tests-js/scripts/mock-server'
 
 async function send(page: Page, text: string, delay = 15): Promise<void> {
   const composer = page.locator('[contenteditable="true"]').first()
@@ -122,7 +123,7 @@ auxiliary:
     await fixture?.cleanup()
   })
 
-  test('queues an Enter-submitted draft instead of steering while compaction is active', async ({}, testInfo) => {
+  test('queues an Enter-submitted draft instead of steering while compaction is active', async ({ browserName: _browserName }, testInfo) => {
     const { page } = fixture
     const queued = 'E2E_QUEUED_DURING_COMPACTION'
 

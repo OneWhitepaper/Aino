@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type { WritableAtom } from 'nanostores'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import { CANONICAL_GROUP_LOCALES } from './canonical-group-locales'
 import {
   $canonicalGroupBindings,
   publishCanonicalGroup,
@@ -95,7 +96,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
 
-  for (const close of [...groupChatMainTabs.values()]) {close()}
+  for (const close of [...groupChatMainTabs.values()]) {
+    close()
+  }
   groupChatMainTabs.clear()
   $canonicalGroupBindings.set({})
   localStorage.clear()
@@ -152,19 +155,45 @@ it('opens resolved same-name rooms as separate immutable tabs with matching titl
   expect(local.workspaceScope).not.toEqual(other.workspaceScope)
 
   request.mockImplementation(async (owner, method, params) => {
-    if (method === 'groups.state') {return { room: owner.connectionId === 'local' ? room : otherRoom, driver_status: {} }}
+    if (method === 'groups.state') {
+      return { room: owner.connectionId === 'local' ? room : otherRoom, driver_status: {} }
+    }
 
-    if (method === 'groups.log') {return { events: [{ seq: 1, room_id: params.room_id, kind: 'message.member', actor: { kind: 'member', id: 'helper' }, payload: { text: `${owner.connectionId} reply` } }] }}
+    if (method === 'groups.log') {
+      return {
+        events: [
+          {
+            seq: 1,
+            room_id: params.room_id,
+            kind: 'message.member',
+            actor: { kind: 'member', id: 'helper' },
+            payload: { text: `${owner.connectionId} reply` }
+          }
+        ]
+      }
+    }
     throw new Error(`Unexpected RPC: ${method}`)
   })
   const LocalWorkspace = local.render
-  const view = render(<>{local.tabTitle?.()}<LocalWorkspace /></>)
+  const view = render(
+    <>
+      {local.tabTitle?.()}
+      <LocalWorkspace />
+    </>
+  )
   await screen.findByText('local reply')
   expect(screen.queryByText('remote reply')).toBeNull()
-  expect(request.mock.calls.filter(call => call[1] === 'groups.state').map(call => call[0].connectionId)).toEqual(['local'])
+  expect(request.mock.calls.filter(call => call[1] === 'groups.state').map(call => call[0].connectionId)).toEqual([
+    'local'
+  ])
   view.unmount()
   const RemoteWorkspace = other.render
-  render(<>{other.tabTitle?.()}<RemoteWorkspace /></>)
+  render(
+    <>
+      {other.tabTitle?.()}
+      <RemoteWorkspace />
+    </>
+  )
   await screen.findByText('remote reply')
 })
 
@@ -172,13 +201,31 @@ it('freezes an unresolved name lookup to its opener and an old close cannot clea
   request.mockImplementation(async (owner, method, params) => {
     const ownedRoom = { ...room, room_id: `${owner.connectionId}-room`, name: 'Team' }
 
-    if (method === 'groups.capabilities') {return { driver: true }}
+    if (method === 'groups.capabilities') {
+      return { driver: true }
+    }
 
-    if (method === 'groups.list') {return { rooms: [ownedRoom], next_offset: null }}
+    if (method === 'groups.list') {
+      return { rooms: [ownedRoom], next_offset: null }
+    }
 
-    if (method === 'groups.state') {return { room: ownedRoom, driver_status: {} }}
+    if (method === 'groups.state') {
+      return { room: ownedRoom, driver_status: {} }
+    }
 
-    if (method === 'groups.log') {return { events: [{ seq: 1, room_id: params.room_id, kind: 'message.member', actor: { kind: 'member', id: 'helper' }, payload: { text: `${owner.connectionId} reply` } }] }}
+    if (method === 'groups.log') {
+      return {
+        events: [
+          {
+            seq: 1,
+            room_id: params.room_id,
+            kind: 'message.member',
+            actor: { kind: 'member', id: 'helper' },
+            payload: { text: `${owner.connectionId} reply` }
+          }
+        ]
+      }
+    }
     throw new Error(`Unexpected RPC: ${method}`)
   })
   openGroupChat('Team', 'name')
@@ -193,7 +240,12 @@ it('freezes an unresolved name lookup to its opener and an old close cannot clea
   expect(groupChatMainTabs.has('Team')).toBe(true)
 
   const LocalWorkspace = local.render
-  render(<>{local.tabTitle?.()}<LocalWorkspace /></>)
+  render(
+    <>
+      {local.tabTitle?.()}
+      <LocalWorkspace />
+    </>
+  )
   await screen.findByText('local reply')
   expect(screen.queryByText('remote reply')).toBeNull()
   // The gate and paginated room discovery each negotiate capabilities. Every
@@ -202,7 +254,9 @@ it('freezes an unresolved name lookup to its opener and an old close cannot clea
   expect(reads.some(call => call[1] === 'groups.capabilities')).toBe(true)
   expect(reads.some(call => call[1] === 'groups.state' && call[2].room_id === 'local-room')).toBe(true)
 
-  for (const [owner] of reads) {expect(owner).toMatchObject({ ...route, targetProfile: route.profile })}
+  for (const [owner] of reads) {
+    expect(owner).toMatchObject({ ...route, targetProfile: route.profile })
+  }
   expect(request.mock.calls.some(call => call[1] === 'groups.create')).toBe(false)
 })
 
@@ -243,7 +297,12 @@ it('opens the production workspace under one host title while preserving group t
   openGroupChat(key, 'key')
   const [, options] = openWorkspace.mock.calls[0] as Parameters<typeof host.openWorkspace>
   const Workspace = options.render
-  render(<><h1>{options.title}</h1><Workspace /></>)
+  render(
+    <>
+      <h1>{options.title}</h1>
+      <Workspace />
+    </>
+  )
   const region = await screen.findByRole('region', { name: room.name })
 
   expect(screen.getAllByRole('heading', { name: room.name })).toHaveLength(1)
@@ -287,7 +346,7 @@ it('closes a main group tab after a confirmed disband without showing a redundan
         throw new Error('Room is busy')
       }
 
-      return {}
+      return { tombstone: { room_id: room.room_id, disbanded_at: 1 } }
     }
 
     return {}
@@ -301,7 +360,9 @@ it('closes a main group tab after a confirmed disband without showing a redundan
   fireEvent.click(screen.getByRole('button', { name: 'Disband' }))
   const dialog = await screen.findByRole('dialog')
   fireEvent.click(within(dialog).getByRole('button', { name: 'Disband' }))
-  await within(dialog).findByText('Room is busy')
+  await within(dialog).findByText(
+    CANONICAL_GROUP_LOCALES.en.disbandKept.replace('{reason}', CANONICAL_GROUP_LOCALES.en.disbandUnconfirmed)
+  )
   expect(onClose).not.toHaveBeenCalled()
 
   refuse = false

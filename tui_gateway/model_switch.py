@@ -58,9 +58,10 @@ def _append_model_switch_marker(
 
 def _snapshot_agent_model_runtime(agent) -> dict:
     """Capture the current agent model runtime for a one-turn restore."""
+    from agent.route_verdicts import primary_runtime_for_restore
     return {**{k: getattr(agent, k, "") for k in _RUNTIME_KEYS},
             "reasoning_config": copy.deepcopy(getattr(agent, "reasoning_config", None)),
-            "primary_runtime": copy.deepcopy(getattr(agent, "_primary_runtime", None))}
+            "primary_runtime": primary_runtime_for_restore(agent)}
 
 
 def _restore_agent_model_runtime(agent, snapshot: dict | None) -> None:
@@ -88,6 +89,11 @@ def _restore_agent_model_runtime(agent, snapshot: dict | None) -> None:
         agent.switch_model(
             new_model=model, new_provider=provider, api_key=api_key, base_url=base_url,
             api_mode=api_mode, capabilities=snapshot.get("capabilities"))
+        # Endpoint-stamped, so this applies only when the switch landed on the primary's URL; the model
+        # check keeps a fallback that shares that URL from inheriting the primary's verdicts.
+        if isinstance(primary, dict) and primary.get("model") == model:
+            from agent.route_verdicts import restore_primary_route_verdicts
+            restore_primary_route_verdicts(agent, copy.deepcopy(primary))
         if "reasoning_config" in snapshot:
             agent.reasoning_config = snapshot["reasoning_config"]
 
@@ -374,6 +380,34 @@ def _validate_managed_model_switch(session: dict, one_turn: bool, explicit_provi
 LARGE_MODEL_NOTICE_KEY = "model.large_notice"
 
 
+def _commit_switch_with_composer_provenance(
+    sid, session, agent, result, current_model, restore_snapshot, *, pin_session_override, one_turn, persist_global,
+):
+    """Capture the profile default before committing a composer pick, and roll it back on failure."""
+    records_composer_override = (
+        pin_session_override and isinstance(session, dict) and not one_turn
+        and not persist_global and session.get("follow_profile_config"))
+    had_composer_profile = "composer_override_profile" in session
+    previous_composer_profile = session.get("composer_override_profile")
+    if records_composer_override:
+        profile_model, profile_provider = _config_model_target()
+        session["composer_override_profile"] = {
+            "model": profile_model, "provider": profile_provider}
+    try:
+        if agent:
+            _commit_agent_switch(sid, session, agent, result, current_model, restore_snapshot)
+        elif session.get("managed_model_params"):
+            from .managed_session import release_selection
+            release_selection(sid, session)
+    except Exception:
+        if records_composer_override:
+            if had_composer_profile:
+                session["composer_override_profile"] = previous_composer_profile
+            else:
+                session.pop("composer_override_profile", None)
+        raise
+
+
 def _apply_model_switch(
     sid: str, session: dict, raw_input: str, *, confirm_expensive_model: bool = False,
     pin_session_override: bool = True, parsed_flags: Any | None = None,
@@ -388,6 +422,8 @@ def _apply_model_switch(
     model_input, explicit_provider, one_turn, persist_global, reasoning_effort = _switch_request(
         raw_input, parsed_flags, persist_override)
     _validate_managed_model_switch(session, one_turn, explicit_provider)
+    if persist_global:  # refused before switch_model() touches the live session
+        _refuse_managed_model_pick(reasoning_effort)
     agent = session.get("agent")
     if one_turn and not agent:
         raise ValueError("/model --once requires a live session")
@@ -408,6 +444,8 @@ def _apply_model_switch(
         custom_providers=custom_provs)
     if not result.success:
         raise ValueError(result.error_message or "model switch failed")
+    if persist_global:  # the exact plan, incl. conditional clears: still before any confirm or commit
+        _refuse_managed_model_pick(reasoning_effort, result)
     restore_snapshot = _snapshot_agent_model_runtime(agent) if (one_turn and agent) else None
     if agent:
         _merge_preflight_warning(result, agent, session, cfg, custom_provs)
@@ -415,29 +453,9 @@ def _apply_model_switch(
         confirm = _expensive_model_confirm(result, current_base_url, current_api_key, agent)
         if confirm is not None:
             return confirm
-    records_composer_override = (
-        pin_session_override and isinstance(session, dict) and not one_turn
-        and not persist_global and session.get("follow_profile_config"))
-    had_composer_profile = "composer_override_profile" in session
-    previous_composer_profile = session.get("composer_override_profile")
-    if records_composer_override:
-        profile_model, profile_provider = _config_model_target()
-        session["composer_override_profile"] = {
-            "model": profile_model, "provider": profile_provider}
-    try:
-        if agent:
-            # Provenance must exist before this transaction persists the switched runtime.
-            _commit_agent_switch(sid, session, agent, result, current_model, restore_snapshot)
-        elif session.get("managed_model_params"):
-            from .managed_session import release_selection
-            release_selection(sid, session)
-    except Exception:
-        if records_composer_override:
-            if had_composer_profile:
-                session["composer_override_profile"] = previous_composer_profile
-            else:
-                session.pop("composer_override_profile", None)
-        raise
+    _commit_switch_with_composer_provenance(
+        sid, session, agent, result, current_model, restore_snapshot,
+        pin_session_override=pin_session_override, one_turn=one_turn, persist_global=persist_global)
     # PER-SESSION override so a rebuild of THIS session (/new, resume) re-derives the model.
     # Deliberately NOT written to process-global env (HERMES_MODEL & co.): the desktop hosts
     # every same-profile session in one process, so os.environ would leak the switch to all.

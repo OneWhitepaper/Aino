@@ -18,6 +18,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
   const { pluginSdkMock } = await import('./group-test-utils')
   const base = await pluginSdkMock(host)
   const popover = await import('@/components/ui/popover')
+  const { en } = await import('@/i18n/en')
 
   return {
     ...base,
@@ -28,7 +29,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
     Input: (props: React.ComponentProps<'input'>) => <input {...props} />,
     RowButton: (props: React.ComponentProps<'button'>) => <button type="button" {...props} />,
     Textarea: (props: React.ComponentProps<'textarea'>) => <textarea {...props} />,
-    useI18n: () => ({ t: (_key: string, fallback: string) => fallback }),
+    useI18n: () => ({ t: en }),
     // The plugin bundle normally lands via `ctx.i18n.register` at load, so
     // without this every localized label renders empty.
     usePluginI18n: () => translateBots
@@ -231,9 +232,9 @@ describe('the @-token at the caret', () => {
 
     typeInto(input, '@')
 
-    expect(options().filter(label => label === 'Every bot in the room')).toHaveLength(1)
+    expect(options().filter(label => label === 'Everyone')).toHaveLength(1)
     typeInto(input, '@all')
-    expect(input.value).toBe('@Every bot in the room')
+    expect(input.value).toBe('@Everyone')
     expect(options()).toEqual([])
   })
 
@@ -242,7 +243,7 @@ describe('the @-token at the caret', () => {
 
     typeInto(input, 'ping @every')
 
-    expect(options().filter(label => label === 'Every bot in the room')).toHaveLength(1)
+    expect(options().filter(label => label === 'Everyone')).toHaveLength(1)
     expect(options().some(label => label.toLowerCase().startsWith('alpha'))).toBe(false)
   })
 
@@ -439,9 +440,9 @@ describe('approval card (#91706)', () => {
     render(<GroupClarifyCard entry={entry} members={MEMBERS} />)
 
     expect(screen.queryByRole('button', { name: 'Respond' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'once' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
     // A second click while the first is in flight must not double-submit.
-    fireEvent.click(screen.getByRole('button', { name: 'session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Allow this session' }))
 
     await vi.waitFor(() => expect(answer).toHaveBeenCalledTimes(1))
     expect(answer).toHaveBeenCalledWith(entry, MEMBERS[0], 'once')
@@ -458,13 +459,18 @@ describe('approval card (#91706)', () => {
     const profile = 'u6d4b-u8bd5'
     $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
     const member = { name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }
-    render(<GroupClarifyCard entry={{ ...entry, member: profile, memberKey: `studio::${profile}` }} members={[member]} />)
+    render(
+      <GroupClarifyCard entry={{ ...entry, member: profile, memberKey: `studio::${profile}` }} members={[member]} />
+    )
 
     expect(screen.getByText('@工作室测试助手 wants to run a command:')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'once' }))
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith({
-      kind: 'error', message: 'Could not send the answer to @工作室测试助手: Connection interrupted'
-    }))
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
+    await vi.waitFor(() =>
+      expect(notify).toHaveBeenCalledWith({
+        kind: 'error',
+        message: 'Could not send the answer to @工作室测试助手: Connection interrupted'
+      })
+    )
     expect(notify.mock.calls.flatMap(call => call.map(String)).join(' ')).not.toContain(profile)
     expect(answer).toHaveBeenCalledWith(expect.objectContaining({ member: profile }), member, 'once')
   })

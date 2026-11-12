@@ -282,6 +282,23 @@ function cleanErrorText(value: string) {
   return value.replace(/^Error:\s*/, '').trim()
 }
 
+// FastAPI routes that raise with a dict detail ({message, kind} for SSH reach) carry the sentence in detail.message.
+function objectDetailMessage(text: string): string | undefined {
+  const start = text.indexOf('{')
+
+  if (start < 0) {
+    return undefined
+  }
+
+  try {
+    const message = (JSON.parse(text.slice(start)) as { detail?: { message?: unknown } } | null)?.detail?.message
+
+    return typeof message === 'string' && message.trim() ? message.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** True when an error string is a disk-full / ENOSPC / SQLITE_FULL failure. */
 export function isDiskFullErrorMessage(message: string): boolean {
   return (
@@ -471,6 +488,23 @@ function isLaunchCredentialsRefusal(error: unknown): boolean {
   return error instanceof Error && error.message.trim() === 'launch_credentials_unavailable'
 }
 
+function errorSummaryInput(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback
+  const unwrapped = raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw
+  const cleaned = cleanErrorText(unwrapped)
+  const rpcData = error && typeof error === 'object' ? (error as { data?: unknown }).data : undefined
+
+  const rpcError =
+    rpcData && typeof rpcData === 'object' ? (rpcData as { detail?: unknown; reason?: unknown }) : undefined
+
+  const rpcDetail = typeof rpcError?.detail === 'string' ? cleanErrorText(rpcError.detail) : undefined
+  const rawDetail = rpcDetail ?? cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
+  const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined
+  const isStructuredStorageFailure = reason ? /^(storage_[a-z_]+|disk_full)$/.test(reason) : false
+  const summaryInput = isStructuredStorageFailure ? JSON.stringify({ code: reason, detail: rawDetail }) : rawDetail
+  return { summaryInput, rawDetail }
+}
+
 // Exported so flows that surface errors inline (e.g. ConfirmDialog's onConfirm
 // rethrow) can reuse the same IPC-unwrapping + summarizing as notifyError.
 export function readableError(
@@ -498,20 +532,11 @@ export function readableError(
     }
   }
 
-  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback
-  const unwrapped = raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw
-  const cleaned = cleanErrorText(unwrapped)
-  const rpcData = error && typeof error === 'object' ? (error as { data?: unknown }).data : undefined
-
-  const rpcError =
-    rpcData && typeof rpcData === 'object' ? (rpcData as { detail?: unknown; reason?: unknown }) : undefined
-
-  const rpcDetail = typeof rpcError?.detail === 'string' ? cleanErrorText(rpcError.detail) : undefined
-  const detail = rpcDetail ?? cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
-  const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined
-  const isStructuredStorageFailure = reason ? /^(storage_[a-z_]+|disk_full)$/.test(reason) : false
-  const summaryInput = isStructuredStorageFailure ? JSON.stringify({ code: reason, detail }) : detail
-  const summary = summarizeErrorMessage(summaryInput, fallback)
+  const { summaryInput, rawDetail } = errorSummaryInput(error, fallback)
+  const classified = summarizeErrorMessage(summaryInput, fallback)
+  const plain = classified.category === 'unclassified' ? objectDetailMessage(rawDetail) : undefined
+  const detail = plain ?? rawDetail
+  const summary = plain ? summarizeErrorMessage(plain, fallback) : classified
   const detailIsOnlyStorageCode = /^storage_[a-z_]+$/i.test(detail.trim())
 
   return {

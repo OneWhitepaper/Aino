@@ -11,8 +11,8 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/aino-help.md",
-      "sourceSha256": "e5512ebc13bc76473f32c536d1cf5882e3e4d0c58a9c1b37223926cab20216e3",
-      "sourceLines": 85,
+      "sourceSha256": "9723f27182d64ab55dd08e477c5120288d4b32633350232c9c44f3ec25cf99a2",
+      "sourceLines": 89,
       "destination": "references/aino-help.md",
       "adaptation": "Complete current Aino local routing copied byte-for-byte."
     },
@@ -32,10 +32,10 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/configuration.md",
-      "sourceSha256": "60e98213eda62521ec21fdc10dc916fb30858025de34e52437482ef68a2fcfe1",
+      "sourceSha256": "5f417d6f1206972c13333fb0e7d9e5467d56478b213a8420d610fa10c0a73be2",
       "sourceLines": 92,
       "destination": "references/configuration.md",
-      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained. Updated source body to upstream v0.23.1; Aino applicability preserved."
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/contributor-guide.md",
@@ -53,10 +53,10 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/desktop-plugins.md",
-      "sourceSha256": "5f043c22ee1fc72cac041c3ef060b5bb6b6cc6dc36de0040319ad2107d493fe7",
+      "sourceSha256": "23d08d2f3f7ba865890557ff5e70ff6238dbe13167f3193c909ae3779563f8bb",
       "sourceLines": 245,
       "destination": "references/desktop-plugins.md",
-      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained. Updated source body to upstream v0.23.1; Aino applicability preserved."
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/native-mcp.md",
@@ -179,5 +179,19 @@
     }
   ],
   "license": "MIT",
-  "originalAuthor": "Hermes Agent + Teknium"
+  "originalAuthor": "Hermes Agent + Teknium",
+  "supplements": [
+    {
+      "destination": "references/runtime-0231-additions.md",
+      "version": "v0.23.1",
+      "adaptation": "Aino-authored compatibility supplement; not a verbatim upstream chapter.",
+      "sources": [
+        "website/docs/user-guide/features/credential-vault.md",
+        "website/docs/user-guide/bot-mode.md",
+        "website/docs/user-guide/multi-connection-desktop.md",
+        "website/docs/developer-guide/plugins/public-api.md",
+        "website/docs/developer-guide/gateway-local-sessions.md"
+      ]
+    }
+  ]
 }

@@ -4,6 +4,9 @@
 
 import { type CanonicalGroupMessages } from './canonical-group-locales'
 import { type CrossGatewayGroupMessages } from './cross-gateway-locales'
+import { type GroupChatMessages } from './group-chat-locales'
+import type { BotsMessages as AinoBotsMessages } from './i18n-types'
+import type { RosterChromeMessages } from './roster-chrome-locales'
 
 export type BotsMessages = {
   canonical: { [K in keyof CanonicalGroupMessages]: string }
@@ -78,45 +81,45 @@ export type BotsMessages = {
     created: (name: string) => string
     createdOn: (name: string, target: string) => string
   }
-  roster: {
-    search: string
-    searchPlaceholder: string
-    newBotOrGroup: string
-    groupChats: string
-    emptyTitle: string
-    emptyDesc: string
-    noMatchQuery: (query: string) => string
-    noMatchQueryOn: (query: string, gateway: string) => string
-    noMatchFiltersOn: (gateway: string) => string
-    noMatchFilters: string
-    clearFilters: string
-    allHidden: string
-    allHiddenDesc: string
-    showHidden: string
-    noHiddenMatch: string
-    hiddenFromRoster: string
-    pinned: string
-    needsAttention: string
-    needsInput: string
-    /** The kind filter's three options, in menu order. */
-    botsAndGroups: string
-    botsOnly: string
-    groupsOnly: string
-    /** The activity filter's four options, in menu order. */
-    anyActivity: string
-    activeNow: string
-    recentlyActive: string
-    older: string
-    /** How a row's owning gateway is doing — see `botSourceStatus`. */
-    gatewayRemoved: string
-    onDemand: string
-    ready: string
-    statusUnknown: string
-    unavailable: string
-    retryNow: string
-    rosterUnavailable: (reason: string) => string
-    waitingForGateway: string
-  }
+  roster: { [K in keyof RosterChromeMessages]: RosterChromeMessages[K] } & AinoBotsMessages['roster'] & {
+      search: string
+      searchPlaceholder: string
+      newBotOrGroup: string
+      groupChats: string
+      emptyTitle: string
+      emptyDesc: string
+      noMatchQuery: (query: string) => string
+      noMatchQueryOn: (query: string, gateway: string) => string
+      noMatchFiltersOn: (gateway: string) => string
+      noMatchFilters: string
+      clearFilters: string
+      allHidden: string
+      allHiddenDesc: string
+      showHidden: string
+      noHiddenMatch: string
+      hiddenFromRoster: string
+      pinned: string
+      needsAttention: string
+      needsInput: string
+      /** The kind filter's three options, in menu order. */
+      botsAndGroups: string
+      botsOnly: string
+      groupsOnly: string
+      /** The activity filter's four options, in menu order. */
+      anyActivity: string
+      activeNow: string
+      recentlyActive: string
+      older: string
+      /** How a row's owning gateway is doing — see `botSourceStatus`. */
+      gatewayRemoved: string
+      onDemand: string
+      ready: string
+      statusUnknown: string
+      unavailable: string
+      retryNow: string
+      rosterUnavailable: (reason: string) => string
+      waitingForGateway: string
+    }
   /** User-made roster sections (folders the user files bots into). */
   sections: {
     newSection: string
@@ -226,85 +229,77 @@ export type BotsMessages = {
     generating: string
   }
   /** Group chats: the room, its composer, threads and activity feed. */
-  group: {
-    newTitle: string
-    manageDesc: string
-    manageTitle: string
-    settingsTitle: string
-    settingsDesc: string
-    nameLabel: string
-    holdDetection: string
-    holdDetectionHint: string
-    compressHistory: string
-    compressHistoryHint: (member: string) => string
-    compressing: (member: string) => string
-    compressDone: (member: string, compressed: number, detail: string) => string
-    compressNothing: (member: string) => string
-    compressFailed: (member: string, error: string) => string
-    searchToAdd: string
-    searchToAddPlaceholder: string
-    removeFromSelection: string
-    disbandTitle: string
-    deleteTitle: string
-    deleteAction: string
-    composerPlaceholder: string
-    slashCommandsUnsupported: string
-    attachHint: string
-    newThread: string
-    reply: string
-    replyInThread: string
-    replyInThreadPlaceholder: string
-    openThread: string
-    collapseThread: string
-    collapseThreadLabel: string
-    activity: string
-    noActivityYet: string
-    showActivity: string
-    hideActivity: string
-    stop: string
-    stopHint: string
-    allHeldStatus: (count: number) => string
-    heldMembersStatus: (members: string) => string
-    holdReleaseHint: string
-    needsYourInput: string
-    noMembersToSend: (group: string) => string
-    pictureGenerationFailed: string
-    nameTaken: (name: string) => string
-    memberCount: (count: number) => string
-    /** The reader's own lines in a room: the transcript speaker and the roster preview. */
-    you: string
-    /** How many of a room's members are reachable right now. */
-    availableCount: (available: number, total: number) => string
-    settingsHint: (group: string) => string
-    settingsLabel: (group: string) => string
-    disbandHint: (group: string) => string
-    disbandLabel: (group: string) => string
-    disbandAction: string
-    disbanding: string
-    disbandDone: string
-    disbanded: (group: string) => string
-    /** Wraps the bolded group name, so the name can lead the sentence in
-     *  languages that put it there — see core's cron.deleteDesc* pair. */
-    disbandDescPrefix: string
-    disbandDescSuffix: (count: number) => string
-    stopped: (group: string) => string
-    removeAttachment: string
-    threadFallback: string
-    replyCount: (replies: number) => string
-    dropToThread: string
-    dropToRoom: string
-    waitingForAnswer: string
-    memberThinking: (name: string) => string
-    roomWorking: string
-    messageRoom: (group: string) => string
-    newThreadPlaceholder: (group: string) => string
-    everyoneMeta: string
-    commandApproval: string
-    answerFailed: (handle: string, error: string) => string
-    wantsToRunCommand: (handle: string) => string
-    asks: (handle: string) => string
-    answerTo: (member: string) => string
-  }
+  group: { [K in keyof GroupChatMessages]: GroupChatMessages[K] } & AinoBotsMessages['group'] & {
+      newTitle: string
+      manageDesc: string
+      manageTitle: string
+      settingsTitle: string
+      settingsDesc: string
+      nameLabel: string
+      holdDetection: string
+      holdDetectionHint: string
+      compressHistory: string
+      compressHistoryHint: (member: string) => string
+      compressing: (member: string) => string
+      compressDone: (member: string, compressed: number, detail: string) => string
+      compressNothing: (member: string) => string
+      compressFailed: (member: string, error: string) => string
+      searchToAdd: string
+      searchToAddPlaceholder: string
+      removeFromSelection: string
+      disbandTitle: string
+      deleteTitle: string
+      deleteAction: string
+      composerPlaceholder: string
+      slashCommandsUnsupported: string
+      attachHint: string
+      newThread: string
+      reply: string
+      replyInThread: string
+      replyInThreadPlaceholder: string
+      openThread: string
+      collapseThread: string
+      collapseThreadLabel: string
+      activity: string
+      noActivityYet: string
+      showActivity: string
+      hideActivity: string
+      stop: string
+      stopHint: string
+      heldMembersStatus: (members: string) => string
+      holdReleaseHint: string
+      needsYourInput: string
+      noMembersToSend: (group: string) => string
+      pictureGenerationFailed: string
+      nameTaken: (name: string) => string
+      /** The reader's own lines in a room: the transcript speaker and the roster preview. */
+      you: string
+      settingsHint: (group: string) => string
+      settingsLabel: (group: string) => string
+      disbandHint: (group: string) => string
+      disbandLabel: (group: string) => string
+      disbandAction: string
+      disbanding: string
+      disbandDone: string
+      disbanded: (group: string) => string
+      stopped: (group: string) => string
+      removeAttachment: string
+      threadFallback: string
+      replyCount: (replies: number) => string
+      dropToThread: string
+      dropToRoom: string
+      waitingForAnswer: string
+      memberThinking: (name: string) => string
+      roomWorking: string
+      messageRoom: (group: string) => string
+      newThreadPlaceholder: (group: string) => string
+      everyoneMeta: string
+      commandApproval: string
+      answerFailed: (handle: string, error: string) => string
+      wantsToRunCommand: (handle: string) => string
+      asks: (handle: string) => string
+      answerTo: (member: string) => string
+    }
   /** Skills hub + MCP setup surfaces embedded in the bot editor. */
   tools: {
     installHint: (name: string) => string

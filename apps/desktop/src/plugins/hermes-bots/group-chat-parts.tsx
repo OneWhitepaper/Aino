@@ -22,7 +22,7 @@ import {
   useI18n,
   useValue
 } from '@hermes/plugin-sdk'
-import type { ClipboardEvent, ReactNode, Ref } from 'react'
+import type { ClipboardEvent, ReactNode, Ref, RefObject } from 'react'
 import { useId, useImperativeHandle, useRef, useState } from 'react'
 
 import { avatarColor, botAppearance, BotFace } from './avatar'
@@ -188,8 +188,39 @@ interface GroupMentionInputProps {
 
 export interface GroupMentionInputHandle {
   focus: () => void
+  focusEnd: () => void
   openMentions: () => void
   mention: (handle: string) => void
+}
+
+/** Focus a reply composer after its draft has painted. */
+export function focusComposerEnd(
+  input: RefObject<{
+    focus: () => void
+    focusEnd?: () => void
+    value?: string
+    setSelectionRange?: (start: number, end: number) => void
+  } | null>
+) {
+  requestAnimationFrame(() => {
+    const el = input.current
+
+    if (!el) {
+      return
+    }
+
+    if (el.focusEnd) {
+      el.focusEnd()
+
+      return
+    }
+
+    el.focus()
+
+    if (el.value !== undefined) {
+      el.setSelectionRange?.(el.value.length, el.value.length)
+    }
+  })
 }
 
 /** The native textarea shows names while its owning draft keeps exact addresses.
@@ -219,7 +250,7 @@ export function GroupMentionInput({
   const [token, setToken] = useState<MentionToken | null>(null)
   const [selected, setSelected] = useState(0)
   const listId = useId()
-  const allLabel = everyoneLabel || b.group.everyoneMeta
+  const allLabel = everyoneLabel || b.canonical.allMembers
 
   const seats = groupMentionSeats({ members, handleFor, nameFor, avatarFor, detailFor }, allMeta)
 
@@ -324,7 +355,16 @@ export function GroupMentionInput({
       setSelected(0)
     }
 
-    return { focus: () => inputRef.current?.focus(), openMentions: () => append(), mention: handle => append(handle) }
+    return {
+      focus: () => inputRef.current?.focus(),
+      focusEnd: () => {
+        const el = inputRef.current
+        el?.focus()
+        el?.setSelectionRange(el.value.length, el.value.length)
+      },
+      openMentions: () => append(),
+      mention: handle => append(handle)
+    }
   })
 
   return (
@@ -592,6 +632,15 @@ interface GroupClarifyCardProps {
  *    closed choice. Answer sends via the member's own source. */
 export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
   const b = useBots()
+  const { t } = useI18n()
+
+  const approvalLabels: Record<string, string> = {
+    once: b.canonical.allowOnce,
+    deny: b.canonical.deny,
+    session: t.assistant.approval.allowSession,
+    always: t.assistant.approval.alwaysAllow
+  }
+
   const { group } = entry
   const isApproval = entry.kind === 'approval'
   const member = members.find(m => groupMemberKey(m) === entry.memberKey) || members.find(m => m.name === entry.member)
@@ -746,7 +795,7 @@ export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
                     size="sm"
                     variant={chosen ? 'default' : 'secondary'}
                   >
-                    {choice}
+                    {isApproval ? approvalLabels[choice] || choice : choice}
                   </Button>
                 )
               })}

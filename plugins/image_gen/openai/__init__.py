@@ -172,8 +172,14 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         tag="GPT Image 2 / 2.5 Flare / 2.5 Sunburst — text-to-image & image editing",
         key="OPENAI_API_KEY", prompt="OpenAI API key", url="https://platform.openai.com/api-keys")
 
+    def _image_config(self):
+        return load_image_gen_config()
+
+    def _image_dependencies_available(self):
+        return openai_importable()
+
     def is_available(self) -> bool:
-        return bool(_resolve_endpoint()[1]) and openai_importable()
+        return bool(_resolve_endpoint()[1]) and self._image_dependencies_available()
 
     def capabilities(self) -> dict[str, Any]:
         # images.edit() accepts up to 16 source images.
@@ -185,6 +191,9 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
 
     def _model(self):
         return _resolve_model()
+
+    def _size(self, size, aspect):
+        return _resolve_image_size(size, aspect)
 
     def _client(self, openai, base_url, api_key):
         return _build_client(openai, base_url, api_key)
@@ -203,7 +212,7 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         if not prompt:
             return prompt_required_error("openai", aspect)
         try:
-            size = _resolve_image_size(size, aspect)
+            size = self._size(size, aspect)
         except ValueError as exc:
             return error_factory(self.provider_id, aspect)(str(exc), "invalid_argument")
         base_url, api_key = self._endpoint()

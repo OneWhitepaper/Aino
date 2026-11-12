@@ -1,5 +1,5 @@
 import { Button, Codicon, GlyphSpinner } from '@hermes/plugin-sdk'
-import { type ReactNode, useEffect, useState } from 'react'
+import { Fragment, type MouseEvent, type ReactNode, useEffect, useState } from 'react'
 
 import type { CanonicalGroupEvent } from './canonical-group-history'
 import { CanonicalMemberAvatar, useCanonicalMembers } from './canonical-group-members'
@@ -260,6 +260,8 @@ export interface CanonicalDriverStatus<Action extends { kind: string } = { kind:
   blocked?: boolean
   counts?: Record<string, number>
   pending_actions?: Action[]
+  /** Each member of another gateway with a registered route, and its status (`ready` once joined). */
+  peer_routes?: { member_id: string; status: string }[]
 }
 
 export interface CanonicalActivityLabels extends RoomStatusLabels {
@@ -305,12 +307,14 @@ export function CanonicalGroupRoster({
   members = [],
   label,
   labels,
-  statuses
+  statuses,
+  peerBadges
 }: {
   members?: CanonicalRoomMember[]
   label: string
   labels: RoomStatusLabels & { lead: string }
   statuses: Map<string, MemberStatus>
+  peerBadges?: ReadonlyMap<string, string | undefined>
 }) {
   if (!members.length) {
     return null
@@ -324,7 +328,11 @@ export function CanonicalGroupRoster({
         return (
           <MemberStatusChip
             avatar={<RoomBotAvatar name={avatarName(member)} size={18} />}
-            badge={(member as { lead?: unknown }).lead ? labels.lead : undefined}
+            badge={
+              [(member as { lead?: unknown }).lead && labels.lead, peerBadges?.get(member.member_id)]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             key={member.member_id}
             labels={labels}
             name={canonicalMemberName(member)}
@@ -376,12 +384,16 @@ export function CanonicalGroupCycle({
   statuses
 }: {
   cycle: null | RoomCycle
-  driver?: CanonicalDriverActivity
+  driver?: CanonicalDriverStatus
   members?: CanonicalRoomMember[]
   labels: CanonicalActivityLabels
   statuses: Map<string, MemberStatus>
 }) {
   const busy = members.filter(member => isBusyStatus(statusOf(statuses, member)))
+
+  if (cycle?.kind === 'settled' && (driver?.pending_actions?.length || driver?.counts?.deferred)) {
+    return null
+  }
 
   if (cycle) {
     // Names only (the chips and typing rows carry each member's tool and time), and only the members of
@@ -409,7 +421,7 @@ export function CanonicalGroupCycle({
  *  read per thread; the round comes from the live tasks' own thread (`replyThread`'s when it has work). */
 export function useCanonicalRoomLive(
   events: CanonicalGroupEvent[],
-  driver: CanonicalDriverActivity | undefined,
+  driver: CanonicalDriverStatus | undefined,
   members: CanonicalRoomMember[],
   replyThread?: string
 ) {
@@ -420,8 +432,20 @@ export function useCanonicalRoomLive(
   const focus = focusThread(log, replyThread)
   const outcomes = memberOutcomes(log)
 
+  const stopConfirmed =
+    !!driver?.counts &&
+    driver.working === false &&
+    activity?.length === 0 &&
+    driver.pending_actions?.length === 0 &&
+    Object.entries(driver.counts).every(
+      ([status, count]) => count === 0 || ['settled', 'cancelled', 'failed'].includes(status)
+    )
+
+  const cycle = roomCycle(log, activity, driver?.max_rounds, focus, stopConfirmed)
+
   return {
-    cycle: roomCycle(log, activity, driver?.max_rounds, focus),
+    // "Settled" isn't true while a turn waits on a person: its Retry and Discard say what's next.
+    cycle: cycle?.kind === 'settled' && driver?.pending_actions?.length ? null : cycle,
     statuses: new Map(
       members.map(member => [member.member_id, memberStatus(member.member_id, activity, outcomes, now)])
     ),
@@ -469,11 +493,29 @@ export function CanonicalGroupAttention({
   labels: AttentionLabels
 }) {
   const parts = canonicalRoomAttention(driver, labels)
-  const text = parts.join(' · ')
+  const approvals = driver?.pending_actions?.filter(action => action.kind === 'approval').length ?? 0
+  const approvalText = labels.statusApprovals.replace('{count}', String(approvals))
+
+  const jumpToApproval = (event: MouseEvent<HTMLButtonElement>) => {
+    const card = event.currentTarget.closest('section')?.querySelector<HTMLElement>('[data-pending-action="approval"]')
+    card?.scrollIntoView({ block: 'center' })
+    card?.focus({ preventScroll: true })
+  }
 
   return parts.length ? (
-    <p aria-live="polite" className="aino-group-attention text-xs text-(--ui-text-secondary)" title={text}>
-      {text}
+    <p aria-live="polite" className="aino-group-attention text-xs text-(--ui-text-secondary)">
+      {parts.map((part, index) => (
+        <Fragment key={part}>
+          {index > 0 && ' · '}
+          {approvals && part === approvalText ? (
+            <Button onClick={jumpToApproval} size="inline" variant="text">
+              {part}
+            </Button>
+          ) : (
+            part
+          )}
+        </Fragment>
+      ))}
     </p>
   ) : null
 }

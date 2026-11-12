@@ -25,6 +25,7 @@ import {
 } from './canonical-group-history'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { useCanonicalMembers } from './canonical-group-members'
+import { CanonicalPeerJoinRows } from './canonical-group-peer-join'
 import { CanonicalGroupRoomSettings } from './canonical-group-room-settings'
 import type {
   CanonicalGroupBinding,
@@ -33,7 +34,7 @@ import type {
   CanonicalRoomContext,
   CanonicalRoomMember
 } from './canonical-groups'
-import type { GroupMentionInputHandle } from './group-chat-parts'
+import { focusComposerEnd, type GroupMentionInputHandle } from './group-chat-parts'
 
 export interface CanonicalGroupSurfaceState {
   room: CanonicalRoom & { authority_epoch?: number }
@@ -74,6 +75,7 @@ export interface CanonicalGroupSurfaceProps {
   onUploadingChange: (uploading: boolean) => void
   onAction: (action: CanonicalPendingAction, choice?: 'once' | 'deny') => Promise<void>
   onBack?: () => void
+  onReplaced?: (key: string) => void
   onDisband: () => Promise<void>
   onRename: (name: string) => void
   onRefresh: () => void
@@ -81,7 +83,12 @@ export interface CanonicalGroupSurfaceProps {
   onStop: () => void
 }
 
-function surfacePresentation(state: CanonicalGroupSurfaceState | null, restored: boolean, busy: boolean, pending: boolean) {
+function surfacePresentation(
+  state: CanonicalGroupSurfaceState | null,
+  restored: boolean,
+  busy: boolean,
+  pending: boolean
+) {
   const members = state?.room.members ?? []
   const phases = canonicalMemberPhases(state?.driver_status)
   const working = !!state?.driver_status?.working || phases.size > 0
@@ -143,7 +150,13 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   )
 
   const files = groupFiles.length ? (
-    <CanonicalGroupAttachments attachments={groupFiles} binding={binding} disabled={!visible} downloads={offersGroupMethod(props.methods, 'groups.attachment.download')} readOnly />
+    <CanonicalGroupAttachments
+      attachments={groupFiles}
+      binding={binding}
+      disabled={!visible}
+      downloads={offersGroupMethod(props.methods, 'groups.attachment.download')}
+      readOnly
+    />
   ) : undefined
 
   const info = (
@@ -156,8 +169,16 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
       driver={state?.driver_status}
       files={files}
       id={infoId}
-      management={<CanonicalGroupRoomSettings autoRouting={!!state?.driver_status?.routing_modes?.includes('auto')} binding={binding}
-        context={state?.context} disabled={busy || !offersGroupMethod(props.methods, 'groups.context')} members={members.map(member => ({ ...member, display_name: nameFor(member) }))} onSaved={props.onRefresh} />}
+      management={
+        <CanonicalGroupRoomSettings
+          autoRouting={!!state?.driver_status?.routing_modes?.includes('auto')}
+          binding={binding}
+          context={state?.context}
+          disabled={busy || !offersGroupMethod(props.methods, 'groups.context')}
+          members={members.map(member => ({ ...member, display_name: nameFor(member) }))}
+          onSaved={props.onRefresh}
+        />
+      }
       onClose={() => setInfoOpen(false)}
       onDisband={onDisband}
       onMention={locked ? undefined : mention}
@@ -223,6 +244,13 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
         phases={phases}
         room={state?.room}
       />
+      <CanonicalPeerJoinRows
+        binding={binding}
+        methods={props.methods}
+        onChanged={props.onRefresh}
+        onReplaced={props.onReplaced}
+        state={state}
+      />
       <div className="aino-group-layout">
         <div className="aino-group-chat">
           {searchOpen && (
@@ -257,10 +285,21 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
                 events={events}
                 members={members}
                 onMention={locked ? undefined : mention}
-                onReply={locked ? undefined : props.onReply}
-                pause={{ busy, stopping: props.stopping, maxContinues: state?.driver_status?.max_continues,
+                onReply={
+                  locked || !props.onReply
+                    ? undefined
+                    : (...args) => {
+                        props.onReply?.(...args)
+                        focusComposerEnd(input)
+                      }
+                }
+                pause={{
+                  busy,
+                  stopping: props.stopping,
+                  maxContinues: state?.driver_status?.max_continues,
                   onContinue: offersGroupMethod(props.methods, 'groups.continue') ? props.onContinue : undefined,
-                  onStop: offersGroupSafetyMethod(props.methods, 'groups.stop') ? onStop : undefined }}
+                  onStop: offersGroupSafetyMethod(props.methods, 'groups.stop') ? onStop : undefined
+                }}
                 searchQuery={query}
               />
             </div>

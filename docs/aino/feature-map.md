@@ -33,6 +33,10 @@
 | 设置分类及字段 | `app/settings/config-subpages.ts`、`app/settings/index.tsx` | [设置](settings.md) |
 | 对话 MCP 安装确认与授权 | `tools/connectors/tool.py` 及相应桌面连接卡片 | [扩展与安全](extensions-and-safety.md) |
 | 消息网关与定时计划 | `gateway/`、`cron/`、`hermes_cli/subcommands/cron.py` | [调度与网关](scheduling-and-gateway.md) |
+| 浏览器登录导入与预览 Vault | `electron/preview-signins.ts`、`tools/browser_vault_preview.py` | [设置](settings.md)、[技术补充](handbook/references/runtime-0231-additions.md) |
+| 跨网关群成员与授权 | `gateway/session_group_peers.py`、`tui_gateway/hosted_room_peer_transport.py` | [会话与协作](conversations-and-collaboration.md) |
+| Plugin RPC、会话事件及 Hook | `hermes_cli/plugin_rpc.py`、`gateway/session_plugin_rpc.py`、`hermes_cli/plugins_session_env.py` | [扩展与安全](extensions-and-safety.md) |
+| 不附着执行的存储会话只读分页 | `gateway/session_stored_reads.py`、`gateway/session_transcript_subagent.py` | [文件与面板](files-and-panels.md) |
 | 云同步退役后的兼容契约 | `apps/desktop/shared/platform-sync-contract.ts` | [故障恢复](troubleshooting.md) |
 
 表中未以 `apps/desktop/src/` 开头的前端相对路径均位于该目录下。运行服务源文件则使用仓库根目录路径。计费与设备鉴权还依赖独立部署的 Aino API；本仓库不能单独证明线上部署状态。
