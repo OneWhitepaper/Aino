@@ -1,7 +1,7 @@
 import type { PluginTranslate } from '@hermes/plugin-sdk'
 
-// Bind the message SHAPE to a plugin translator: string leaves resolve now,
-// function leaves forward their args through t(path, …).
+// Resolve leaves when read: a module-level translator keeps its identity
+// across language changes, including while an async caller holds this binding.
 export type Bound<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => string
     ? (...args: A) => string
@@ -15,24 +15,26 @@ export function bind<T extends object>(t: PluginTranslate, template: T, prefix =
 
   for (const [key, value] of Object.entries(template)) {
     const path = prefix ? `${prefix}.${key}` : key
-    out[key] =
-      typeof value === 'function'
-        ? (...args: unknown[]) => {
-            const translated = t(path, ...args)
 
-            // Test harnesses and older hosts can expose a translator before
-            // the plugin bundle has been registered. In that case the core
-            // resolver returns the raw dotted key; keep the English bundle as
-            // the final local fallback so a key never leaks into the UI.
-            return translated === path ? (value as (...a: unknown[]) => string)(...args) : translated
-          }
-        : value && typeof value === 'object'
-          ? bind(t, value as object, path)
-          : (() => {
-              const translated = t(path)
+    if (typeof value === 'string') {
+      Object.defineProperty(out, key, {
+        enumerable: true,
+        get: () => {
+          const translated = t(path)
 
-              return translated === path ? value : translated
-            })()
+          return translated === path ? value : translated
+        }
+      })
+    } else {
+      out[key] =
+        typeof value === 'function'
+          ? (...args: unknown[]) => {
+              const translated = t(path, ...args)
+
+              return translated === path ? (value as (...a: unknown[]) => string)(...args) : translated
+            }
+          : bind(t, value as object, path)
+    }
   }
 
   return out as Bound<T>

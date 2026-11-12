@@ -37,8 +37,8 @@ it('shows a rejected loader’s cause and reloads only when the user clicks Relo
 
   await bootRenderer(() => Promise.reject(error)).catch(error => showBootFailure(error, reload))
 
-  expect(console.error).toHaveBeenCalledWith('Hermes failed to load', error)
-  expect(within(root).getByRole('heading', { level: 1 }).textContent).toBe('Hermes couldn’t load')
+  expect(console.error).toHaveBeenCalledWith('Aino failed to load', error)
+  expect(within(root).getByRole('heading', { level: 1 }).textContent).toBe('Aino couldn’t load')
   expect(within(root).getByRole('alert').textContent).toContain(
     'Part of the app didn’t load; reloading usually fixes it.'
   )
@@ -63,7 +63,7 @@ it.each(['element', 'text'])('leaves mounted %s content untouched and still logs
 
   expect([...root.childNodes]).toEqual([content])
   expect(root.textContent).toBe('Already mounted')
-  expect(console.error).toHaveBeenCalledWith('Hermes failed to load', error)
+  expect(console.error).toHaveBeenCalledWith('Aino failed to load', error)
   expect(reload).not.toHaveBeenCalled()
 })
 
@@ -85,7 +85,7 @@ it.each(['hud', 'overlay', 'quick', 'wake'])(
     showBootFailure(error, vi.fn())
 
     expect(root.childNodes).toHaveLength(0)
-    expect(console.error).toHaveBeenCalledWith('Hermes failed to load', error)
+    expect(console.error).toHaveBeenCalledWith('Aino failed to load', error)
   }
 )
 
@@ -98,8 +98,8 @@ it('shows the notice in an opaque secondary window', () => {
 it('shows a decorative wordmark above the accessible heading without app CSS', () => {
   showBootFailure(new Error('CSS failed'), vi.fn())
 
-  const wordmark = within(root).getByText('HERMES AGENT')
-  const heading = within(root).getByRole('heading', { level: 1, name: 'Hermes couldn’t load' })
+  const wordmark = within(root).getByText('AINO')
+  const heading = within(root).getByRole('heading', { level: 1, name: 'Aino couldn’t load' })
   const alert = within(root).getByRole('alert')
   expect(wordmark.tagName).toBe('P')
   expect(wordmark.getAttribute('aria-hidden')).toBe('true')
@@ -143,7 +143,7 @@ it('paints its own background and ink from the theme snapshot, whatever the page
   expect(notice.style.color).toBe(palette.foreground)
   expect(notice.style.position).toBe('fixed')
   expect(notice.style.inset).toBe('0px')
-  expect(within(root).getByText('HERMES AGENT').style.color).toBe(palette.accent)
+  expect(within(root).getByText('AINO').style.color).toBe(palette.accent)
   const button = within(root).getByRole('button', { name: 'Reload' })
   expect(button.style.backgroundColor).toBe(palette.accent)
   expect(button.style.color).toBe(palette.accentForeground)
@@ -173,7 +173,7 @@ it.each([
   expect(notice.style.backgroundColor).toBe('')
   expect(notice.style.color).toBe('')
   expect(notice.style.position).toBe('')
-  expect(within(root).getByText('HERMES AGENT').style.color).toBe('currentcolor')
+  expect(within(root).getByText('AINO').style.color).toBe('currentcolor')
   const button = within(root).getByRole('button', { name: 'Reload' })
   expect(button.style.backgroundColor).toBe('transparent')
   expect(button.style.color).toBe('inherit')
@@ -213,7 +213,7 @@ it.each(['FontFace', 'document.fonts'])('shows recovery when %s is unavailable',
   expect(() => showBootFailure(new Error('CSS failed'), vi.fn())).not.toThrow()
   expect(FontFace).not.toHaveBeenCalled()
   expect(add).not.toHaveBeenCalled()
-  expect(within(root).getByText('HERMES AGENT').style.fontFamily).toContain('system-ui')
+  expect(within(root).getByText('AINO').style.fontFamily).toContain('system-ui')
 })
 
 it.each(['constructor', 'load', 'rejection'])('keeps recovery usable after a font %s failure', async failure => {

@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
 import { ListRow, Pill } from '@/app/settings/primitives'
+import { WebappOauthPasteField } from '@/app/settings/webapp-oauth-paste-field'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ErrorIcon } from '@/components/ui/error-state'
@@ -135,6 +136,7 @@ export function RemoteSetupFields({
           )}
         </Field>
       ) : null}
+      <WebappOauthPasteField />
       {!urlOnly && setup.authResolved && credentials.authMode === 'token' ? (
         <Field description={copy.tokenDesc} stacked={firstRun} title={copy.tokenTitle}>
           <Input

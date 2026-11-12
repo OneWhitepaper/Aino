@@ -8,7 +8,7 @@ import { resolveElectronBinary } from './electron-binary'
 import { _electron, expect, test } from './test'
 
 /** Native Chromium geometry, without a backend or the app's other scroll observers. */
-test('timeline reads stay logarithmic with real skipped tool-heavy groups', async ({}, testInfo) => {
+test('timeline reads stay logarithmic with real skipped tool-heavy groups', async ({ browserName: _browserName }, testInfo) => {
   const temporary = mkdtempSync(path.join(tmpdir(), 'hermes-timeline-position-'))
   const main = path.join(temporary, 'main.cjs')
   writeFileSync(
@@ -29,6 +29,7 @@ app.whenReady().then(() => {
     globalName: 'TimelinePosition',
     write: false
   })
+
   const app = await _electron.launch({
     executablePath: resolveElectronBinary([path.resolve('.'), path.resolve('../..')]),
     args: ['--no-sandbox', main]
@@ -38,6 +39,7 @@ app.whenReady().then(() => {
     const page = await app.firstWindow()
     await page.setContent('<div id="viewport" style="height:600px;overflow:auto"></div>')
     await page.addScriptTag({ content: bundle.outputFiles[0].text })
+
     const results = await page.evaluate(async () => {
       const count = 512
       const viewport = document.getElementById('viewport')!
@@ -60,10 +62,12 @@ app.whenReady().then(() => {
           createTimelinePositionReader: (viewport: HTMLElement, indexes: Map<string, number>) => { read: () => number }
         }
       }).TimelinePosition
+
       const reader = api.createTimelinePositionReader(viewport, new Map(starts.map((_, index) => [`u${index}`, index])))
       const original = Element.prototype.getBoundingClientRect
       let outer = 0
       let inner = 0
+
       Element.prototype.getBoundingClientRect = function () {
         if (this.getAttribute('data-slot') === 'aui_message-group') {
           outer++

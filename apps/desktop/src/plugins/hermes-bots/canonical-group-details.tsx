@@ -83,18 +83,28 @@ export function useStickToBottom() {
       return
     }
 
+    let lastTop = el.scrollTop
+
     const onScroll = () => {
-      pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+
+      if (el.scrollTop < lastTop || nearBottom) {
+        pinned.current = nearBottom
+      }
+      lastTop = el.scrollTop
     }
 
     const follow = () => {
       if (pinned.current) {
         el.scrollTop = el.scrollHeight
       }
+      lastTop = el.scrollTop
     }
+
     const observer = new ResizeObserver(follow)
     el.addEventListener('scroll', onScroll)
     observer.observe(content)
+    observer.observe(el)
     follow()
 
     return () => {
@@ -197,6 +207,7 @@ export function CanonicalPendingCard({
       data-member-id={action.member_id}
       data-pending-action={action.kind}
       data-task-id={action.task_id}
+      tabIndex={-1}
     >
       <div className="mt-0.5 shrink-0">{avatar}</div>
       <div className="grid min-w-0 flex-1 gap-1.5">

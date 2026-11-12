@@ -4,7 +4,7 @@ import type { Translations } from './types'
 
 // The in-app browser pane's copy (`preview.web`), composed by ja.ts.
 export const jaPreviewWeb: TranslationOverride<Translations['preview']['web']> = {
-  embeddedPreviewHint: '埋め込みプレビューを許可しないサイトもあります。元のページをブラウザーのタブで開いてください。',
+  embeddedPreviewHint: '埋め込みプレビューを許可しないサイトです。元のページをブラウザーのタブで開いてください。',
   appFailedToBoot: 'プレビューアプリの起動に失敗しました',
   serverNotFound: 'サーバーが見つかりません',
   remoteLoopback:
@@ -46,5 +46,17 @@ export const jaPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   loadFailedConsole: (code, message) => `読み込みに失敗しました${code ? ` (${code})` : ''}: ${message}`,
   unreachableDescription: 'プレビューページに到達できませんでした。',
   openTarget: url => `${url} を開く`,
-  fallbackTitle: 'プレビュー'
+  fallbackTitle: 'プレビュー',
+  vaultFill: '保存済みのログインを入力',
+  vaultTitle: site => `${site} の保存済みログイン`,
+  vaultLoading: '保存済みのログインを読み込み中…',
+  vaultEmpty: 'このサイトの保存済みログインはありません',
+  vaultUnlock: name => `${name} のロックを解除`,
+  vaultOpenSettings: '認証情報ボールトの設定を開く',
+  vaultFilled: label => `${label} を入力しました。フォームを確認してからサインインしてください。`,
+  vaultFillFailed: 'ログインを入力できませんでした',
+  vaultLoadFailed: '保存済みのログインを読み込めませんでした',
+  vaultPageNotReady: 'ページを読み込み中です。完了してから再試行してください。',
+  restartNoActiveSession: 'バックグラウンドで再起動するアクティブなセッションがありません。',
+  restartMissingTaskId: 'バックグラウンド再起動からタスク ID が返されませんでした。'
 }

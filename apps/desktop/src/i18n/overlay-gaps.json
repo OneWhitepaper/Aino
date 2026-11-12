@@ -529,25 +529,13 @@
     "zh-hant"
   ],
   "assistant.thread.errorAuthKinds.api_key.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorAuthKinds.api_key.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorAuthKinds.oauth.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorChooseModel": [
     "ar",
@@ -557,18 +545,10 @@
     "zh-hant"
   ],
   "assistant.thread.errorCodes.SESSION_NOT_OWNED.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.SESSION_NOT_OWNED.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.SESSION_OWNER_BUSY.body": [
     "ar",
@@ -611,357 +591,189 @@
     "zh-hant"
   ],
   "assistant.thread.errorCodes.auth.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.auth.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.auth_permanent.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.auth_permanent.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.billing.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.billing.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.content_policy_blocked.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.content_policy_blocked.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.context_overflow.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.context_overflow.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.disk_full.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.disk_full.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.empty_response.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.empty_response.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.format_error.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.format_error.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.free_tier_at_capacity.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_at_capacity.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_disabled.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_disabled.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_model_not_free.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_model_not_free.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_outage.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_outage.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_rate_limited.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_rate_limited.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_refused.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_refused.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_route.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.free_tier_route.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.invalid_response.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.invalid_response.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.loop_error.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.loop_error.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.model_not_found.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.model_not_found.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.no_reply.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.no_reply.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.overloaded.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.overloaded.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.payload_too_large.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.payload_too_large.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.provider_policy_blocked.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.provider_policy_blocked.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.rate_limit.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.rate_limit.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.server_error.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.server_error.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.ssl_cert_verification.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.ssl_cert_verification.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.stream_drop.body": [
     "ar",
     "ja",
     "ru",
-    "zh",
-    "zh-hant"
+    "zh"
   ],
   "assistant.thread.errorCodes.stream_drop.title": [
     "ar",
     "ja",
     "ru",
-    "zh",
-    "zh-hant"
+    "zh"
   ],
   "assistant.thread.errorCodes.timeout.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.timeout.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.truncated.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.truncated.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.upstream_blocked.body": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.upstream_blocked.title": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorCodes.upstream_rate_limit.body": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCodes.upstream_rate_limit.title": [
-    "ar",
     "ru"
   ],
   "assistant.thread.errorCompressConversation": [
@@ -979,11 +791,7 @@
     "zh-hant"
   ],
   "assistant.thread.errorDetails": [
-    "ar",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
+    "ru"
   ],
   "assistant.thread.errorGenericProvider": [
     "ar",

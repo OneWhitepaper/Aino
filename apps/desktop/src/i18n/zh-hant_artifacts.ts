@@ -162,7 +162,17 @@ export const zhHantArtifacts = {
       fallbackTitle: '預覽',
       restartNoActiveSession: '沒有作用中的工作階段可在背景重新啟動。',
 
-      restartMissingTaskId: '背景重新啟動未回傳工作任務 ID。'
+      restartMissingTaskId: '背景重新啟動未回傳工作任務 ID。',
+      vaultFill: '填入已儲存的登入資訊',
+      vaultTitle: site => `${site} 的已儲存登入資訊`,
+      vaultLoading: '正在載入已儲存的登入資訊…',
+      vaultEmpty: '此網站沒有已儲存的登入資訊',
+      vaultUnlock: name => `解鎖 ${name}`,
+      vaultOpenSettings: '開啟憑證保險庫設定',
+      vaultFilled: label => `已填入 ${label}。請檢查表單，然後登入。`,
+      vaultFillFailed: '無法填入登入資訊',
+      vaultLoadFailed: '無法載入已儲存的登入資訊',
+      vaultPageNotReady: '頁面仍在載入。載入完成後請再試一次。'
     }
   }
 } satisfies Pick<TranslationOverrides, 'artifacts' | 'artifactCard' | 'artifactPreview' | 'preview'>

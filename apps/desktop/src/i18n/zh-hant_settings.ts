@@ -4,6 +4,7 @@ import { configPagesFor } from './config-pages'
 import type { TranslationOverrides } from './define-locale'
 import { zhHantDelegationRouting } from './zh-hant_delegation_routing'
 import { zhHantMemoryLayers } from './zh-hant_memory_layers'
+import { zhHantModelPicker } from './zh-hant_model_picker'
 import { zhHantUpdateChannel } from './zh-hant_update_channel'
 
 const configPageFieldLabels: Record<string, string> = defineFieldCopy({
@@ -1002,7 +1003,14 @@ export const zhHantSettings = {
       unavailableDesc: '桌面 IPC 橋接器未公開閘道設定。',
       webappHostTitle: 'Hermes 主機',
       webappHostDesc:
-        'Webapp 一律使用提供它的 Hermes 主機。如需切換閘道、登入 Hermes Cloud 或管理已儲存的連線，請使用 Hermes Desktop 應用程式。',
+        'Webapp 一律在提供它的 Hermes 主機上執行。下方已儲存的連線是這台機器的清單，與 Hermes Desktop 應用程式共用；其他閘道透過此主機連線。',
+      webappOauthPaste: {
+        title: '完成登入',
+        description: '如果登入分頁停在無法開啟的位址（此瀏覽器不在閘道所在的機器上），請將該位址貼到這裡。',
+        placeholder: 'http://127.0.0.1:…/webapp/gateway-connections/oauth/callback?…',
+        finish: '完成',
+        failed: '無法完成登入'
+      },
       title: '閘道連線',
       envOverride: '環境變數覆寫',
       intro:
@@ -1829,15 +1837,20 @@ export const zhHantSettings = {
       browserRealProfile: {
         label: '使用我的真實瀏覽器設定檔',
         description:
-          '將預設瀏覽器的登入資訊與 Cookie 複製到受管理的快照中，代理使用該快照進行瀏覽。絕不會直接開啟你的真實設定檔。將套用於新工作階段。',
+          '將預設瀏覽器的登入資訊與 Cookie 複製到受管理的快照中，代理使用該快照進行瀏覽，應用程式內瀏覽器也會用它們登入。絕不會直接開啟你的真實設定檔。將套用於新工作階段。',
         enabledTitle: '真實設定檔瀏覽：已開啟',
         enabledMessage: '新工作階段將使用預設瀏覽器設定檔的快照進行瀏覽。',
         disabledTitle: '真實設定檔瀏覽：已關閉',
-        disabledMessage: '設定檔快照將被刪除；新工作階段使用乾淨的瀏覽器。',
+        disabledMessage: '設定檔快照將被刪除，應用程式內瀏覽器也會登出這些登入；新工作階段使用乾淨的瀏覽器。',
         failedSave: '無法儲存真實設定檔設定',
+        reimportSignins: '重新匯入登入資訊',
+        signinsImportedTitle: '應用程式內瀏覽器登入',
+        signinsImported: count => `已使用瀏覽器設定檔中的 ${count} 個 Cookie 登入應用程式內瀏覽器。`,
+        signinsRemote: '此後端在另一台機器上執行，因此不會將其瀏覽器設定檔匯入應用程式內瀏覽器。',
+        signinsFailed: '無法將登入資訊匯入應用程式內瀏覽器',
         prompt: {
           title: '讓網站保持登入狀態',
-          body: '讓 Hermes 使用預設瀏覽器設定檔的快照進行瀏覽，網站開啟時即已登入。',
+          body: '讓 Hermes 使用預設瀏覽器設定檔的快照進行瀏覽，無論是代理還是應用程式內瀏覽器，網站開啟時即已登入。',
           bulletSnapshot: 'Cookie 與登入資訊會複製到受管理的快照中。',
           bulletLiveProfile: '絕不會直接開啟你的真實瀏覽器設定檔。',
           bulletLocal: '所有資料都不會離開這台電腦。',
@@ -1937,47 +1950,7 @@ export const zhHantSettings = {
 memoryLayers: zhHantMemoryLayers
 },
 
-  modelPicker: {
-    title: '切換模型',
-    current: '目前：',
-    unknown: '（未知）',
-    search: '篩選提供方和模型...',
-    noModels: '找不到模型。',
-    addProvider: '新增提供方',
-    loadFailed: '無法載入模型',
-    downloading: '下載中',
-    localDownloadsHeading: '本地',
-    noAuthenticatedProviders: '沒有已驗證的提供方。',
-    pro: 'Pro',
-    proNeedsSubscription: 'Pro 模型需要付費 Nous 訂閱。',
-    free: '免費',
-    freeTier: '免費層',
-    priceTitle: '每百萬 Token 的輸入/輸出價格',
-    wasPrice: '原價',
-    customModel: '自訂模型',
-    addCustomModelAction: '新增自訂模型…',
-    customModelPlaceholder: '輸入模型 ID，例如 openai/gpt-5',
-    today: '今日',
-    week: '本週',
-    month: '本月',
-    topTier: '大型模型（每月）',
-    included: '下列模型均已包含',
-    pausedRenewal: '已暫停：續費未到帳',
-    pausedOther: '已暫停',
-    includedUsedUp: '包含用量已用完',
-    limitReached: name => `已達${name}上限`,
-    limitNames: { day: '每日', month: '每月', top_tier: '每月大型模型', week: '每週' },
-    limitThenCredits: '付費模型現在使用你的額度（按量付費）',
-    limitThenCreditsLarge: '大型模型現在使用你的額度（按量付費）',
-    limitThenWait: '在此之前僅可使用免費模型',
-    limitThenWaitLarge: '在此之前大型模型已暫停',
-    percentUsed: percent => `已用 ${percent}`,
-    resetsIn: duration => `${duration}後重設`,
-    usageLevels: { free: '免費', top_tier: '大' },
-    sectionRecommended: '推薦',
-    sectionOther: '其他模型',
-    largeFootnote: '大型模型也會消耗你的每月大型模型額度。'
-  },
+  modelPicker: zhHantModelPicker,
 
   modelVisibility: {
     title: '模型',

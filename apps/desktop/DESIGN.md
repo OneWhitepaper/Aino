@@ -1417,7 +1417,7 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   tool group backed by the existing pane tree. Its plus opens a localized new-tab
   chooser, with a discoverable tab list, maximize/restore and full-panel hide.
   The tool-only PaneTabStrip variant is 45px high with 32px tabs, 3px gaps,
-  7px fully rounded selected outlines, 12px labels and 14px lead icons; other
+  6px selected outlines, 12px labels and 14px lead icons; other
   custom tab strips retain their existing geometry.
   Hide releases all of that group's width and keeps its selected tab and live
   resources. Every safe tool-only group uses this chrome, including an unmarked

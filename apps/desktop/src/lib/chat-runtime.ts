@@ -433,6 +433,14 @@ export function messageCreatedAt(message: Pick<ChatMessage, 'timestamp'>, nowMs 
     : new Date(nowMs)
 }
 
+// The safety-refused notice rides metadata.custom on the system row, like
+// asyncResult — extracted so toRuntimeMessage keeps its complexity in budget.
+function contentRefusedMeta(
+  message: ChatMessage
+): { contentRefused: NonNullable<ChatMessage['contentRefused']> } | Record<string, never> {
+  return message.contentRefused ? { contentRefused: message.contentRefused } : {}
+}
+
 function runtimeMessageMetadata(message: ChatMessage) {
   // Reactions and the durable row id ride metadata.custom for every role — the
   // established channel for per-message extras (attachmentRefs below).
@@ -483,7 +491,8 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
           ...(message.modelSwitch ? { modelSwitch: message.modelSwitch } : {}),
           ...(message.failedTurnNotice ? { failedTurnNotice: true } : {}),
           ...(message.asyncResult ? { asyncResult: message.asyncResult } : {}),
-          ...(message.asyncResultKind ? { asyncResultKind: message.asyncResultKind } : {})
+          ...(message.asyncResultKind ? { asyncResultKind: message.asyncResultKind } : {}),
+          ...contentRefusedMeta(message)
         }
       }
     } as ThreadMessage

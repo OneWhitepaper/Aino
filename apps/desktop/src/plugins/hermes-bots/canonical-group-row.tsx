@@ -102,7 +102,7 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
           <ContextMenuItem onSelect={onOpen}>{labels.openGroup}</ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={() => setConfirming(true)} variant="destructive">
-            {group.deleteAction}
+            {group.disbandAction}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -120,7 +120,7 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
           destructive
           doneLabel={labels.disbandDone}
           onClose={() => setConfirming(false)}
-          onConfirm={() => disbandGatewayGroupRoom(room, labels.disbanded(room.name))}
+          onConfirm={() => disbandGatewayGroupRoom(room, labels.disbanded(room.name), labels)}
           open
           title={labels.disbandTitle}
         />

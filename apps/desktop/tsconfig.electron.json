@@ -28,6 +28,7 @@
     "../shared/src/file-url.ts",
     "../shared/src/hermes-cloud.ts",
     "../shared/src/translucency.ts",
+    "../shared/src/desktop-plugin-files.ts",
     "../shared/src/json-rpc-gateway.ts",
     "../shared/src/json-rpc-channel.ts",
     "../shared/src/gateway-events.ts",

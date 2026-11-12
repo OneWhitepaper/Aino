@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useI18n } from '@/i18n'
 import { notifyError } from '@/store/notifications'
@@ -24,31 +24,36 @@ export function useKeychainEncryption(): KeychainEncryption {
   const g = t.settings.gateway
   const [keychainEncryption, setKeychainEncryptionState] = useState(false)
   const [keychainEncryptionBusy, setKeychainEncryptionBusy] = useState(false)
+  const scope = useRef({ revision: 0, active: false }).current
 
   useEffect(() => {
-    let cancelled = false
+    scope.active = true
+    const request = ++scope.revision
 
     void window.hermesDesktop
       ?.getSecretStorageEncryption?.()
       .then(res => {
-        if (!cancelled && res) {
+        if (scope.active && request === scope.revision && res) {
           setKeychainEncryptionState(res.on === true)
         }
       })
       .catch(() => {})
 
     return () => {
-      cancelled = true
+      scope.active = false
     }
-  }, [])
+  }, [scope])
 
   const setKeychainEncryption = async (on: boolean) => {
-    const setEncryption = window.hermesDesktop?.setSecretStorageEncryption
+    const desktop = window.hermesDesktop
+    const setEncryption = desktop?.setSecretStorageEncryption
 
     if (!setEncryption) {
       return
     }
 
+    const request = ++scope.revision
+    const previous = keychainEncryption
     setKeychainEncryptionBusy(true)
     // Optimistic paint; the IPC result (or a failure rollback) gets the last word.
     setKeychainEncryptionState(on)
@@ -56,12 +61,25 @@ export function useKeychainEncryption(): KeychainEncryption {
     try {
       const res = await setEncryption(on)
 
-      setKeychainEncryptionState(res?.on === true)
+      if (scope.active && request === scope.revision) {
+        setKeychainEncryptionState(res?.on === true)
+      }
     } catch (err) {
-      setKeychainEncryptionState(!on)
-      notifyError(err, g.keychainEncryptionFailed)
+      if (!scope.active || request !== scope.revision) {
+        return
+      }
+
+      // Native may have safely retained encryption after a partial rewrite.
+      const actual = await desktop?.getSecretStorageEncryption?.().catch(() => null)
+
+      if (scope.active && request === scope.revision) {
+        setKeychainEncryptionState(actual ? actual.on === true : previous)
+        notifyError(err, g.keychainEncryptionFailed)
+      }
     } finally {
-      setKeychainEncryptionBusy(false)
+      if (scope.active && request === scope.revision) {
+        setKeychainEncryptionBusy(false)
+      }
     }
   }
 

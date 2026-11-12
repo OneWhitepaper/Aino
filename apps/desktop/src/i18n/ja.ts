@@ -28,6 +28,7 @@ import { jaOnboarding } from './ja_onboarding'
 import { jaPluginPreviewAccess } from './ja_plugin_preview_access'
 import { jaPluginUpdateAll } from './ja_plugin_update_all'
 import { jaPluginSettings, jaPluginsTab } from './ja_plugins'
+import { jaPreviewWeb } from './ja_preview_web'
 import { jaProjects } from './ja_projects'
 import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
@@ -280,6 +281,11 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const jaBaseOverrides = {
+  gatewayGroupOpen: {
+    opening: "グループチャットを開いています…",
+    lookupFailed: "ゲートウェイでこのグループを検索できませんでした。もう一度お試しください。",
+    missing: "このグループチャットはもう存在しません。"
+  },
   notificationCenter: notificationCenterCopy['ja'],
   appearancePage: appearancePage.ja,
   home: homeGuidance.ja,
@@ -1415,15 +1421,20 @@ const jaBaseOverrides = {
       browserRealProfile: {
         label: '実際のブラウザプロファイルを使用',
         description:
-          '既定ブラウザのログイン情報と Cookie を管理されたスナップショットにコピーし、エージェントはそれを使ってブラウジングします。実際のプロファイルが直接開かれることはありません。新しいセッションに適用されます。',
+          '既定ブラウザのログイン情報と Cookie を管理されたスナップショットにコピーし、エージェントはそれを使ってブラウジングします。アプリ内ブラウザにもそれでログインします。実際のプロファイルが直接開かれることはありません。新しいセッションに適用されます。',
         enabledTitle: '実プロファイルブラウジング：オン',
         enabledMessage: '新しいセッションは既定ブラウザプロファイルのスナップショットでブラウジングします。',
         disabledTitle: '実プロファイルブラウジング：オフ',
-        disabledMessage: 'プロファイルのスナップショットは削除され、新しいセッションはクリーンなブラウザを使用します。',
+        disabledMessage: 'プロファイルのスナップショットは削除され、アプリ内ブラウザもそのログインから外れます。新しいセッションはクリーンなブラウザを使用します。',
         failedSave: '実プロファイル設定を保存できませんでした',
+        reimportSignins: 'ログイン情報を再インポート',
+        signinsImportedTitle: 'アプリ内ブラウザのログイン',
+        signinsImported: count => `ブラウザプロファイルの Cookie ${count} 件でアプリ内ブラウザにログインしました。`,
+        signinsRemote: 'このバックエンドは別のマシンで動作しているため、そのブラウザプロファイルはアプリ内ブラウザにインポートされません。',
+        signinsFailed: 'アプリ内ブラウザにログイン情報をインポートできませんでした',
         prompt: {
           title: 'サイトにログインしたまま利用',
-          body: 'Hermes が既定ブラウザプロファイルのスナップショットでブラウジングできるようにすると、サイトはログイン済みの状態で開きます。',
+          body: 'Hermes が既定ブラウザプロファイルのスナップショットでブラウジングできるようにすると、エージェントでもアプリ内ブラウザでも、サイトはログイン済みの状態で開きます。',
           bulletSnapshot: 'Cookie とログイン情報は管理されたスナップショットにコピーされます。',
           bulletLiveProfile: '実際のブラウザプロファイルが直接開かれることはありません。',
           bulletLocal: 'データがこのコンピュータの外に出ることはありません。',
@@ -3551,55 +3562,7 @@ const jaBaseOverrides = {
       sentTitle: 'チャットに送信しました',
       sentMessage: count => `${count} 件のログエントリーがコンポーザーに追加されました`
     },
-    web: {
-      embeddedPreviewHint: '埋め込みプレビューを許可しないサイトです。元のページをブラウザーのタブで開いてください。',
-      appFailedToBoot: 'プレビューアプリの起動に失敗しました',
-      serverNotFound: 'サーバーが見つかりません',
-      remoteLoopback:
-        'このアドレスはエージェントを実行しているマシンを指しており、このマシンではありません。ブラウザペインはページをローカルで読み込むため、リモートの開発サーバーにはポート転送か到達可能なホスト名が必要です。',
-      failedToLoad: 'プレビューの読み込みに失敗しました',
-      tryAgain: '再試行',
-      restarting: 'Hermes を再起動中...',
-      askRestart: 'Hermes にサーバーの再起動を依頼',
-      lookingRestart: taskId => `Hermes は再起動するプレビューサーバーを検索中です (${taskId})`,
-      restartingTitle: 'プレビューサーバーを再起動中',
-      restartingMessage: 'Hermes はバックグラウンドで作業中です。進捗はプレビューコンソールで確認してください。',
-      startRestartFailed: message => `サーバー再起動を開始できませんでした: ${message}`,
-      restartFailed: 'サーバーの再起動に失敗しました',
-      hideConsole: 'プレビューコンソールを非表示',
-      showConsole: 'プレビューコンソールを表示',
-      hideDevTools: 'プレビュー DevTools を非表示',
-      openDevTools: 'プレビュー DevTools を開く',
-      goBack: '戻る',
-      goForward: '進む',
-      reload: 'ページを再読み込み',
-      address: 'アドレス',
-      addressPlaceholder: 'アドレスを入力',
-      blankPageBody: '上のアドレス欄に入力するか、Hermes にページを開くよう頼んでください。',
-      finishedRestarting: message =>
-        `Hermes がプレビューサーバーの再起動を完了しました${message ? `: ${message}` : ''}`,
-      failedRestarting: message => `サーバーの再起動に失敗しました: ${message}`,
-      unknownError: '不明なエラー',
-      restartedTitle: 'プレビューサーバーが再起動しました',
-      reloadingNow: 'プレビューを再読み込み中です。',
-      restartFailedTitle: 'プレビューの再起動に失敗しました',
-      restartFailedMessage: 'Hermes がサーバーを再起動できませんでした。',
-      stillWorking:
-        'Hermes はまだ作業中ですが、再起動の結果がまだ届いていません。サーバーコマンドがフォアグラウンドで実行されている可能性があります。',
-      workspaceReloading: 'ワークスペースが変更され、プレビューを再読み込み中',
-      fileChanged: url => `ファイルが変更され、プレビューを再読み込み中: ${url}`,
-      filesChanged: (count, url) => `${count} 件のファイルが変更され、プレビューを再読み込み中: ${url}`,
-      watchFailed: message => `プレビューファイルを監視できませんでした: ${message}`,
-      moduleMimeDescription:
-        'モジュールスクリプトが間違った MIME タイプで提供されています。通常、静的ファイルサーバーがプロジェクトの開発サーバーの代わりに Vite/React アプリを提供していることを意味します。',
-      loadFailedConsole: (code, message) => `読み込みに失敗しました${code ? ` (${code})` : ''}: ${message}`,
-      unreachableDescription: 'プレビューページに到達できませんでした。',
-      openTarget: url => `${url} を開く`,
-      fallbackTitle: 'プレビュー',
-      restartNoActiveSession: 'バックグラウンドで再起動するアクティブなセッションがありません。',
-
-      restartMissingTaskId: 'バックグラウンド再起動からタスク ID が返されませんでした。'
-    }
+    web: jaPreviewWeb
   },
 
   interfaceMode: {
@@ -3849,6 +3812,7 @@ const jaBaseOverrides = {
       readAloud: '読み上げ',
       copyFullResponse: '回答全体をコピー',
       readAloudFullResponseHint: 'Shiftを押しながらクリック: 回答全体を読み上げ',
+      contentRefusedNotice: 'このメッセージはモデルの安全フィルターによって拒否されました。別の内容でお試しください。',
       editMessage: 'メッセージを編集',
       stop: '停止',
       restorePrevious: '前のチェックポイントに戻す',

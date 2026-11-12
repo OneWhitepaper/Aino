@@ -2750,10 +2750,11 @@ export function dropTilesForProfile(
   }
 
   persistTiles()
-  // The rail is a profile-keyed family too: a deleted profile's tabs must not
-  // outlive it, or a later profile of the same name inherits them.
-  dropPreviewTabsForProfile(name)
-  dropBrowserProfilePrefs(name)
+  // The rail is a profile-keyed family too (a later same-named profile must not inherit the tabs).
+  // F4: the cookie jar lives in LOCAL userData — clear it only for a LOCAL delete, never a remote one.
+  const previewConnection = route ? routeConnection || LOCAL_CONNECTION_ID : ambientConnection
+  dropPreviewTabsForProfile(name, previewConnection === LOCAL_CONNECTION_ID, previewConnection)
+  dropBrowserProfilePrefs(name, route?.connectionId?.trim() || undefined)
 }
 
 /**
@@ -2819,7 +2820,7 @@ export function migrateTilesForProfile(oldProfile: string, newProfile: string): 
   migrateStatusDrawersForProfile(from, to)
   // Sibling family: the rail's profile-keyed buckets move with the rename, or
   // the renamed profile opens with an empty rail and the old name keeps them.
-  migratePreviewTabsForProfile(from, to)
+  migratePreviewTabsForProfile(from, to, LOCAL_CONNECTION_ID)
   migrateBrowserProfilePrefs(from, to)
 }
 

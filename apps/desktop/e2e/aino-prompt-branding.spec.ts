@@ -177,7 +177,7 @@ test('ordinary, Bot, group and real delegated children preserve Aino identity an
     await choice.getByRole('checkbox').click()
   }
 
-  await create.getByRole('textbox', { name: '群组名称', exact: true }).fill('Aino 身份验收小组')
+  await create.getByRole('textbox', { name: '群聊名称', exact: true }).fill('Aino 身份验收小组')
   await create.getByRole('button', { name: '新建群聊 (2)', exact: true }).click()
   await expect(create).toBeHidden({ timeout: 30_000 })
   const roomComposer = page.getByRole('textbox', { name: '群组消息', exact: true }).filter({ visible: true })

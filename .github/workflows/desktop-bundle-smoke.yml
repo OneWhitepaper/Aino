@@ -110,13 +110,13 @@ jobs:
           archive-inputs: false
       - name: Install locked smoke dependencies
         if: inputs.format == 'AppImage'
-        run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
+        run: just js-install-tests
       - name: Install locked package tools and smoke dependencies
         if: inputs.format == 'deb'
         run: |
-          npm ci --workspace apps/desktop --workspace tests-js --include-workspace-root --ignore-scripts --no-audit --no-fund
+          pnpm install --frozen-lockfile --filter "{./apps/desktop}..." --filter "{./tests-js}..." --ignore-scripts
           sudo apt-get install -y -qq rpm
-          node node_modules/vitest/vitest.mjs run apps/desktop/scripts/run-electron-builder.test.mjs
+          pnpm --dir apps/desktop exec vitest run --project electron scripts/run-electron-builder.test.mjs
       - name: Fetch exact existing candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -178,7 +178,7 @@ jobs:
           node apps/desktop/scripts/prepare-packaging-tools.mjs --source "$GITHUB_WORKSPACE" --out "$RUNNER_TEMP/package-tools" --cache "$RUNNER_TEMP/package-cache" --target "$EXPECTED_TARGET" --format deb --format rpm
           version=$(node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG" | tr -d '"')
           cp "$CANDIDATE_INSTALL/AppRun" "$RUNNER_TEMP/candidate-proof/supplier-AppRun"
-          node -e 'console.log(JSON.stringify({electronBuilder:require("./node_modules/electron-builder/package.json").version,appBuilderLib:require("./node_modules/app-builder-lib/package.json").version}))' > "$RUNNER_TEMP/candidate-proof/supplier-versions.json"
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; import {join} from "node:path"; import {pinnedPackageRoot} from "./apps/desktop/scripts/prepare-packaging-tools.mjs"; const version = name => JSON.parse(readFileSync(join(pinnedPackageRoot(process.cwd(), name), "package.json"), "utf8")).version; console.log(JSON.stringify({electronBuilder:version("electron-builder"),appBuilderLib:version("app-builder-lib")}))' > "$RUNNER_TEMP/candidate-proof/supplier-versions.json"
           echo "HERMES_DESKTOP_VARIANT=$HERMES_DESKTOP_VARIANT" >> "$GITHUB_ENV"
           echo "HERMES_PAYLOAD_TAG=$HERMES_PAYLOAD_TAG" >> "$GITHUB_ENV"
           echo "HERMES_BUILD_COMMIT=$HERMES_BUILD_COMMIT" >> "$GITHUB_ENV"
@@ -423,7 +423,7 @@ jobs:
       - name: Install locked chat driver dependencies
         id: dependencies
         shell: bash
-        run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
+        run: just js-install-tests
 
       - name: Audit native TLS fixture before downloading the application
         if: runner.os == 'macOS'
@@ -612,8 +612,11 @@ jobs:
     name: Windows install and chat
     needs: validate
     if: inputs.platform == 'win32'
+    # GitHub-hosted for both arches: on blacksmith Windows runners the installed MSIX app exits
+    # before Playwright attaches (every x64 smoke there failed; the same commit's arm64 MSIX on a
+    # GitHub-hosted runner chats), as the install/update GUI legs did (f1b290e7734).
     runs-on: ${{ inputs.arch == 'arm64' && 'windows-11-arm' || 'windows-latest' }}
-    # windows-11-arm runners are much slower (npm ci alone runs 12+ minutes and
+    # windows-11-arm runners are much slower (the dependency install alone runs 12+ minutes and
     # the MSIX leg exceeds 30 total); x64 legs complete in ~14.
     timeout-minutes: 45
     cache-mode: read

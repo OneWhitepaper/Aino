@@ -42,7 +42,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { avatarColor, botAppearance, BotFace } from './avatar'
 import { isBackfilledFacePng } from './avatar-image'
-import { groupCreationSource, groupDrivenByDesktop, groupExecutionMode } from './canonical-group-capabilities'
+import {
+  groupCreationSource,
+  groupDrivenByDesktop,
+  groupExecutionMode,
+  groupRoomRecorded
+} from './canonical-group-capabilities'
 import type { GroupExecutionMode } from './canonical-group-capabilities'
 import type { CanonicalGroupMessages } from './canonical-group-locales'
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
@@ -56,7 +61,14 @@ import {
   resolveCanonicalGroup
 } from './canonical-group-registry'
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
-import { canonicalGroupCreateError, canonicalGroupRequest, canonicalGroupRoster, createCanonicalGroup, onCanonicalConnection } from './canonical-groups'
+import type { GroupCreationIntent } from './canonical-groups'
+import {
+  canonicalGroupCreateError,
+  canonicalGroupRequest,
+  canonicalGroupRoster,
+  createCanonicalGroup,
+  onCanonicalConnection
+} from './canonical-groups'
 import type { CanonicalGroupRoute } from './canonical-groups'
 import {
   $botMeta,
@@ -92,11 +104,12 @@ import {
   updateGroupChat
 } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
-import { GroupClarifyCard, GroupImageControls, GroupMentionInput } from './group-chat-parts'
+import type { GroupMentionInputHandle } from './group-chat-parts'
+import { focusComposerEnd, GroupClarifyCard, GroupImageControls, GroupMentionInput } from './group-chat-parts'
 import type { GroupRoomPrompt } from './group-chat-parts'
 import { GroupMemberPicker } from './group-chat-view-members'
 import { compressGroupMemberHistory } from './group-compress'
-import { stickyGroupEngine } from './group-engine'
+import { gatewayGroupEngine, type GatewayGroupEngine, stickyGroupEngine } from './group-engine'
 import { sweepExternalGroupWrites } from './group-external-writes'
 import { GroupHoldStatus } from './group-hold-status'
 import {
@@ -607,10 +620,12 @@ interface GroupChatWorkspaceProps {
   /** Main tabs already expose Close; only the in-pane fallback needs Back. */
   mainTab?: boolean
   visible?: boolean
+  owner?: Omit<GatewayGroupEngine, 'kind'>
 }
 
 export function GroupChatWorkspace(props: GroupChatWorkspaceProps) {
   const draftEpoch = useValue($groupComposerDraftEpoch)
+  const b = useBots()
   const bindings = useValue($canonicalGroupBindings)
   const openedConnection = props.route?.connectionId
   const openedProfile = props.route?.profile
@@ -624,25 +639,50 @@ export function GroupChatWorkspace(props: GroupChatWorkspaceProps) {
     [props.group, props.origin, openedConnection, openedProfile]
   )
 
-  const binding = canonicalGroupBindingFor(bindings, route, props.group, props.origin ?? 'name')
   const record: GroupChatRoom | undefined = useValue($groupChats)[props.group]
+  const owner = canonicalGroupKeyRoute(props.group, props.origin ?? 'name') ?? gatewayGroupEngine(record).engine
+  const binding = canonicalGroupBindingFor(bindings, owner ?? route, props.group, props.origin ?? 'name')
 
   // The in-panel fallback has no tab to close, so leaving deselects the room, as in the legacy view.
-  if (binding) {
+  if (
+    binding &&
+    (!owner ||
+      (binding.connectionId === owner.connectionId &&
+        binding.profile === owner.profile &&
+        binding.roomId === owner.roomId))
+  ) {
     return (
-      <CanonicalGroupWorkspace
-        binding={binding}
-        mainTab={props.mainTab}
-        onBack={props.onBack ?? (() => $groupChatWorkspace.set(null))}
-        showBack={!props.mainTab}
-        visible={props.visible}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        {canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null && !!record?.log?.length && (
+          <details className="max-h-64 shrink-0 overflow-y-auto p-3">
+            <summary className="cursor-pointer text-xs">{b.canonical.earlierMessages}</summary>
+            <GateEarlierMessages labels={b.canonical} room={record} />
+          </details>
+        )}
+        <div className="min-h-0 flex-1">
+          <CanonicalGroupWorkspace
+            binding={binding}
+            mainTab={props.mainTab}
+            onBack={props.onBack ?? (() => $groupChatWorkspace.set(null))}
+            onReplaced={key => openGroupChat(key, 'key')}
+            showBack={!props.mainTab}
+            visible={props.visible}
+          />
+        </div>
+      </div>
     )
   }
 
-  // Created across machines: no gateway here can own the room, so this Desktop
-  // drives it, even after a membership edit leaves every bot on one machine.
-  if (canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null && groupDrivenByDesktop(record, props.members, route.connectionId)) {
+  // A recorded gateway owner takes precedence over membership inference.
+  if (owner) {
+    return <GroupExecutionGate {...props} owner={owner} route={route} />
+  }
+
+  // Desktop ownership survives subsequent membership edits.
+  if (
+    canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null &&
+    groupDrivenByDesktop(record, props.members, route.connectionId)
+  ) {
     return <LegacyGroupChatWorkspace {...props} key={draftEpoch} />
   }
 
@@ -650,7 +690,11 @@ export function GroupChatWorkspace(props: GroupChatWorkspaceProps) {
 }
 
 type GateLookup = 'pending' | 'missing' | 'failed'
-interface GateOpenCopy { opening: string; lookupFailed: string; missing: string }
+interface GateOpenCopy {
+  opening: string
+  lookupFailed: string
+  missing: string
+}
 /** Why a gateway connection cannot open group chats right now; each reason has its own words. */
 type GateUnavailable = 'unsupported' | 'stopped' | 'unreachable'
 
@@ -658,12 +702,18 @@ type GateUnavailable = 'unsupported' | 'stopped' | 'unreachable'
  *  read, is too old; an answer whose room driver isn't running is stopped; anything else, a socket
  *  that isn't open included, did not reach the gateway. */
 function gateUnavailable(value: unknown, error?: unknown): GateUnavailable {
-  if (error !== undefined) {return (error as { code?: unknown } | null)?.code === -32601 ? 'unsupported' : 'unreachable'}
+  if (error !== undefined) {
+    return (error as { code?: unknown } | null)?.code === -32601 ? 'unsupported' : 'unreachable'
+  }
 
   return (value as { driver?: unknown } | null)?.driver === false ? 'stopped' : 'unsupported'
 }
 
-const UNAVAILABLE_COPY = { unsupported: 'groupsUnsupported', stopped: 'groupDriverStopped', unreachable: 'groupsUnreachable' } as const
+const UNAVAILABLE_COPY = {
+  unsupported: 'groupsUnsupported',
+  stopped: 'groupDriverStopped',
+  unreachable: 'groupsUnreachable'
+} as const
 
 interface GatePlan {
   classic: boolean
@@ -677,7 +727,17 @@ interface GatePlan {
  *  main; on a gateway connection (or while that is unknown) what happened, why, what to do, and what
  *  happens to its earlier messages. Only a classic room whose Bots can form a gateway group here is
  *  offered Start new group. Workspace routing decides which rooms reach this gate. */
-function groupGatePlan({ mode, unavailable, lookup, props, route, canonical, open }: {
+function groupGatePlan({
+  mode,
+  unavailable,
+  lookup,
+  props,
+  route,
+  canonical,
+  open,
+  recorded,
+  updateRequired
+}: {
   mode: GroupExecutionMode | 'checking'
   unavailable: GateUnavailable
   lookup: GateLookup
@@ -685,18 +745,29 @@ function groupGatePlan({ mode, unavailable, lookup, props, route, canonical, ope
   route: { connectionId: string; profile: string }
   canonical: CanonicalGroupMessages
   open: GateOpenCopy
+  /** This Desktop has a room record for the name (`groupRoomRecorded`). */
+  recorded: boolean
+  /** What New group chat says when this gateway is too old to run group chats. */
+  updateRequired: string
 }): GatePlan {
   const plan = { classic: false, problem: '', canCreate: false, retry: null }
 
-  if (mode === 'legacy') {return { ...plan, classic: true, message: '' }}
+  // An outdated gateway keeps running the rooms it already ran; a new name is a new group chat,
+  // which it cannot run, so the gate says so as New group chat does.
+  if (mode === 'legacy' && !props.owner) {
+    return recorded
+      ? { ...plan, classic: true, message: '' }
+      : { ...plan, message: updateRequired, retry: 'capability' }
+  }
 
   if (mode !== 'canonical') {
-    return mode === 'checking' ? { ...plan, message: canonical.checkingDriver }
+    return mode === 'checking'
+      ? { ...plan, message: canonical.checkingDriver }
       : { ...plan, message: canonical[UNAVAILABLE_COPY[unavailable]], retry: 'capability' }
   }
 
   // A `canonical:` key names an existing gateway room; it never seeds a new one.
-  const classicRoom = canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null
+  const classicRoom = !props.owner && canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null
 
   if (lookup !== 'missing') {
     const message = lookup === 'pending' ? open.opening : classicRoom ? canonical.groupsUnreachable : open.lookupFailed
@@ -704,34 +775,59 @@ function groupGatePlan({ mode, unavailable, lookup, props, route, canonical, ope
     return { ...plan, message, retry: lookup === 'pending' ? null : 'lookup' }
   }
 
-  if (!classicRoom) {return { ...plan, message: open.missing, retry: 'lookup' }}
+  if (!classicRoom) {
+    return { ...plan, message: open.missing, retry: 'lookup' }
+  }
   const checked = canonicalGroupRoster(route, props.members)
 
-  if (!('problem' in checked)) {return { ...plan, message: canonical.legacyRoom, canCreate: true }}
-
-  if (checked.problem !== 'otherConnection') {
-    return { ...plan, message: canonical.legacyRoomBlocked, problem: canonicalGroupCreateError({ canonicalGroupProblem: checked.problem }, canonical) }
+  if (!('problem' in checked)) {
+    return { ...plan, message: canonical.legacyRoom, canCreate: true }
   }
 
-  const elsewhere = [...new Set(props.members.filter(member => !onCanonicalConnection(route, member))
-    .map(member => member.connectionLabel || member.connectionId).filter((label): label is string => Boolean(label)))]
+  if (checked.problem !== 'otherConnection') {
+    return {
+      ...plan,
+      message: canonical.legacyRoomBlocked,
+      problem: canonicalGroupCreateError({ canonicalGroupProblem: checked.problem }, canonical)
+    }
+  }
 
-  return { ...plan, message: canonical.legacyRoomElsewhere,
-    problem: elsewhere.length ? canonical.otherConnections.replace('{connections}', elsewhere.join(', ')) : '' }
+  const elsewhere = [
+    ...new Set(
+      props.members
+        .filter(member => !onCanonicalConnection(route, member))
+        .map(member => member.connectionLabel || member.connectionId)
+        .filter((label): label is string => Boolean(label))
+    )
+  ]
+
+  return {
+    ...plan,
+    message: canonical.legacyRoomElsewhere,
+    problem: elsewhere.length ? canonical.otherConnections.replace('{connections}', elsewhere.join(', ')) : ''
+  }
 }
 
 /** A classic room's earlier messages under the gate: read only and fully inert (no MEDIA:, file or
  *  session resolution, no directive cards; only a public web link opens, on a click). */
 function GateEarlierMessages({ room, labels }: { room: GroupChatRoom | undefined; labels: CanonicalGroupMessages }) {
-  if (!room?.log?.length) {return null}
+  if (!room?.log?.length) {
+    return null
+  }
 
-  return <section aria-label={labels.earlierMessages} className="grid gap-2 border-t border-(--ui-stroke-secondary) pt-3">
-    <p className="text-xs text-(--ui-text-tertiary)">{labels.earlierMessages}</p>
-    {room.log.map((entry, index) => <div className="grid gap-0.5 text-xs" data-selectable-text="true" key={entry.id ?? `${entry.at}:${index}`}>
-      <strong className="text-[0.7rem] font-semibold">{entry.from.kind === 'user' ? labels.you : entry.from.name}</strong>
-      {MessageTextContent ? <MessageTextContent media={false} previewOnly text={entry.text} /> : entry.text}
-    </div>)}
-  </section>
+  return (
+    <section aria-label={labels.earlierMessages} className="grid gap-2 border-t border-(--ui-stroke-secondary) pt-3">
+      <p className="text-xs text-(--ui-text-tertiary)">{labels.earlierMessages}</p>
+      {room.log.map((entry, index) => (
+        <div className="grid gap-0.5 text-xs" data-selectable-text="true" key={entry.id ?? `${entry.at}:${index}`}>
+          <strong className="text-[0.7rem] font-semibold">
+            {entry.from.kind === 'user' ? labels.you : entry.from.name}
+          </strong>
+          {MessageTextContent ? <MessageTextContent media={false} previewOnly text={entry.text} /> : entry.text}
+        </div>
+      ))}
+    </section>
+  )
 }
 
 function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalGroupRoute }) {
@@ -739,11 +835,18 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
   const { t } = useI18n()
   const ambientConnectionId = useValue(host.state.connectionId)
   const ambientProfile = useValue(host.state.profile)
-  const { connectionId, profile } = props.route
-  const gateway = useValue(host.state.gateway)
+  const intent = useRef<GroupCreationIntent>({})
+  const connectionId = props.owner?.connectionId ?? props.route.connectionId
+  const profile = props.owner?.profile ?? props.route.profile
+  const foregroundGateway = useValue(host.state.gateway)
+  const gateway = connectionId === ambientConnectionId ? foregroundGateway : 'open'
   const activationEpoch = useGatewayActivationEpoch()
   const source = JSON.stringify([connectionId, profile, gateway, activationEpoch])
-  const [capability, setCapability] = useState<{ source: string; mode: GroupExecutionMode; unavailable: GateUnavailable } | null>(null)
+  const [capability, setCapability] = useState<{
+    source: string
+    mode: GroupExecutionMode
+    unavailable: GateUnavailable
+  } | null>(null)
   const current = capability?.source === source ? capability : null
   const mode = current ? current.mode : 'checking'
   const [error, setError] = useState('')
@@ -765,7 +868,10 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
     setError('')
     const route = { connectionId: connectionId ?? '', profile }
     const origin = props.origin ?? 'name'
-    void resolveCanonicalGroup(route, props.group, origin)
+    const lookupKey = props.owner
+      ? `canonical:${encodeURIComponent(connectionId ?? '')}:${encodeURIComponent(profile)}:${props.owner.roomId}`
+      : props.group
+    void resolveCanonicalGroup(route, lookupKey, props.owner ? 'key' : origin)
       .then(resolved => {
         if (cancelled) {
           return
@@ -787,7 +893,7 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
     return () => {
       cancelled = true
     }
-  }, [mode, source, props.group, props.origin, lookupAttempt, connectionId, profile])
+  }, [mode, source, props.group, props.origin, lookupAttempt, connectionId, profile, props.owner])
   useEffect(() => {
     let cancelled = false
     setCapability(null)
@@ -800,7 +906,11 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
     }
 
     void canonicalGroupRequest<unknown>({ connectionId: connectionId ?? '', profile }, 'groups.capabilities')
-      .then(result => { if (!cancelled) {setCapability({ source, mode: groupExecutionMode(result), unavailable: gateUnavailable(result) })} })
+      .then(result => {
+        if (!cancelled) {
+          setCapability({ source, mode: groupExecutionMode(result), unavailable: gateUnavailable(result) })
+        }
+      })
       .catch(e => {
         if (!cancelled) {
           setCapability({ source, mode: 'unavailable', unavailable: gateUnavailable(undefined, e) })
@@ -808,57 +918,113 @@ function GroupExecutionGate(props: GroupChatWorkspaceProps & { route: CanonicalG
         }
       })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [connectionId, profile, gateway, source, capabilityAttempt, ambientConnectionId, ambientProfile])
 
   const route = { connectionId: connectionId ?? '', profile }
 
-  const plan = groupGatePlan({ mode, unavailable: current?.unavailable ?? 'unreachable', lookup: lookupStatus, props, route,
-    canonical: b.canonical, open: t.gatewayGroupOpen })
+  const place =
+    connectionId === 'local'
+      ? b.bot.thisDevice
+      : props.members.find(member => member.connectionId === connectionId)?.connectionLabel ||
+        connectionId ||
+        b.bot.thisDevice
 
-  if (plan.classic) {return <LegacyGroupChatWorkspace {...props} />}
+  const plan = groupGatePlan({
+    mode,
+    unavailable: current?.unavailable ?? 'unreachable',
+    lookup: lookupStatus,
+    props,
+    route,
+    canonical: b.canonical,
+    open: t.gatewayGroupOpen,
+    recorded: groupRoomRecorded(classicRoom),
+    updateRequired: b.crossGateway.ownerUpdateRequired(place)
+  })
+
+  if (plan.classic) {
+    return <LegacyGroupChatWorkspace {...props} />
+  }
   const { canCreate } = plan
 
-  return <section aria-label={props.group} className="grid gap-3 p-3">
-    {!props.mainTab && <h2>{props.group}</h2>}
-    <p>{plan.message}</p>
-    {plan.problem && <p role="status">{plan.problem}</p>}
-    {error && <p role="alert">{error}</p>}
-    {plan.retry && <Button onClick={() => (plan.retry === 'capability' ? setCapabilityAttempt : setLookupAttempt)(value => value + 1)}>
-      {t.common.retry}</Button>}
-    {canCreate && <Button disabled={busy} onClick={() => {
-      const sourceCurrent = groupCreationSource(route, activationEpoch)
+  return (
+    <section aria-label={props.group} className="grid gap-3 p-3">
+      {!props.mainTab && <h2>{props.group}</h2>}
+      <p>{plan.message}</p>
+      {plan.problem && <p role="status">{plan.problem}</p>}
+      {error && <p role="alert">{error}</p>}
+      {plan.retry && (
+        <Button
+          onClick={() => (plan.retry === 'capability' ? setCapabilityAttempt : setLookupAttempt)(value => value + 1)}
+        >
+          {t.common.retry}
+        </Button>
+      )}
+      {canCreate && (
+        <Button
+          disabled={busy}
+          onClick={() => {
+            const sourceCurrent = groupCreationSource(route, activationEpoch)
 
-      if (!sourceCurrent()) {
-        setError(b.canonical.driverUnavailable)
+            if (!sourceCurrent()) {
+              setError(b.canonical.driverUnavailable)
 
-            return
-          }
+              return
+            }
 
-      setBusy(true)
-      void createCanonicalGroup(route, props.group, props.members)
-        .then(({ room }) => {
-          refreshGatewayGroupRooms()
+            setBusy(true)
+            void createCanonicalGroup(route, props.group, props.members, intent.current)
+              .then(({ room }) => {
+                refreshGatewayGroupRooms()
 
-          if (sourceCurrent()) {openGroupChat(registerCanonicalGroup(route, room), 'key')}
-        })
-        .catch(e => { if (sourceCurrent()) {setError(canonicalGroupCreateError(e, b.canonical))} }).finally(() => setBusy(false))
-    }}>{b.canonical.startGatewayGroup}</Button>}
-    {canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null && <GateEarlierMessages labels={b.canonical} room={classicRoom} />}
-  </section>
+                if (sourceCurrent()) {
+                  publishCanonicalGroup(route, props.group, { authority: route, room }, props.origin ?? 'name')
+                }
+              })
+              .catch(e => {
+                if (sourceCurrent()) {
+                  setError(canonicalGroupCreateError(e, b.canonical))
+                }
+              })
+              .finally(() => setBusy(false))
+          }}
+        >
+          {b.canonical.startGatewayGroup}
+        </Button>
+      )}
+      {canonicalGroupKeyRoute(props.group, props.origin ?? 'name') === null && (
+        <GateEarlierMessages labels={b.canonical} room={classicRoom} />
+      )}
+    </section>
+  )
 }
 
 function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = true }: GroupChatWorkspaceProps) {
+  const { locale } = useI18n()
   const b = useBots()
-  const rooms: Record<string, GroupChatRoom> = useValue($groupChats)
   const allMeta: Record<string, BotMeta> = useValue($botMeta)
   // A former member's line is labelled from the live roster (renderEntry).
   const liveRoster: RosterRow[] = useValue($lastRoster)
 
-  const room: GroupChatRoom = rooms[group] || { log: [], running: false }
+  const room: GroupChatRoom = useValue($groupChats)[group] || { log: [], running: false }
 
-  const { composerKey, composerKeyRef, composerDraft, setComposerDraft, updateComposerDraft,
-    draft, replyDrafts, replyThread, pendingImages, setDraft, setReplyDrafts, setReplyThread, setPendingImages } = useLegacyGroupComposer(group, room)
+  const {
+    composerKey,
+    composerKeyRef,
+    composerDraft,
+    setComposerDraft,
+    updateComposerDraft,
+    draft,
+    replyDrafts,
+    replyThread,
+    pendingImages,
+    setDraft,
+    setReplyDrafts,
+    setReplyThread,
+    setPendingImages
+  } = useLegacyGroupComposer(group, room)
 
   useLegacyGroupBrowserHandoff(group, composerKey, composerKeyRef, setComposerDraft)
 
@@ -888,6 +1054,10 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
   // view on mount and whenever the log grows — but only when the user is
   // already near the bottom, so reading history is never yanked away.
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
+  const [mainComposerInput, threadReplyInput] = [
+    useRef<GroupMentionInputHandle>(null),
+    useRef<GroupMentionInputHandle>(null)
+  ]
   const stickToBottomRef = useRef(true)
   // eslint-disable-next-line no-restricted-syntax -- tracks live scroll position from a DOM listener, not an atom
   useEffect(() => {
@@ -1099,7 +1269,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
           {summaryActivity ? (
             <span
               className={cn('min-w-0 flex-1 truncate', groupActivityTone(summaryActivity.kind))}
-            >{`${groupActivityLabel(summaryActivity, group)} · ${relativeTime(summaryActivity.at)}`}</span>
+            >{`${groupActivityLabel(summaryActivity, group)} · ${relativeTime(summaryActivity.at, undefined, locale)}`}</span>
           ) : null}
         </RowButton>
       </div>
@@ -1119,7 +1289,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
                   {groupActivityLabel(event, group)}
                 </span>
                 <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-                  {relativeTime(event.at)}
+                  {relativeTime(event.at, undefined, locale)}
                 </span>
               </div>
             ))
@@ -1307,12 +1477,11 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
       current.includes(`@${tag}`) ? current : `@${tag} ${current}`.replace(/\s+$/, ' ')
 
     const thread = groupThreadOf(entry)
+    const inThread = replyThread === thread
+    focusComposerEnd(inThread ? threadReplyInput : mainComposerInput)
 
-    if (replyThread === thread) {
-      setReplyDrafts(prev => ({
-        ...prev,
-        [thread]: seed(prev[thread] || '')
-      }))
+    if (inThread) {
+      setReplyDrafts(prev => ({ ...prev, [thread]: seed(prev[thread] || '') }))
     } else {
       setDraft(seed)
     }
@@ -1365,7 +1534,13 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
     return (
       <div className="aino-group-message" data-own={isUser ? 'true' : 'false'} key={entryKey}>
         <div aria-hidden="true" className="aino-group-message-avatar">
-          {isUser ? <span className="aino-group-human-avatar"><Codicon name="account" /></span> : speakerFace(entry.from.name, meta)}
+          {isUser ? (
+            <span className="aino-group-human-avatar">
+              <Codicon name="account" />
+            </span>
+          ) : (
+            speakerFace(entry.from.name, meta)
+          )}
         </div>
         <div className="aino-group-message-main">
           <div className="aino-group-message-meta">
@@ -1410,6 +1585,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
             // back in so drag-select and ⌘C work in group chat logs.
             data-selectable-text="true"
             data-slot="group-chat-message-content"
+            dir="auto"
           >
             {MessageTextContent ? (
               <MessageTextContent decorateText={mentionText} media={!member?.remoteSource} text={entry.text} />
@@ -1506,6 +1682,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
               onSubmitDraft={() => submitReply(id)}
               pickerLabel={b.canonical.pickerLabel}
               placeholder={b.group.replyInThreadPlaceholder}
+              ref={threadReplyInput}
               value={replyDrafts[id] || ''}
             />
             {attachButton(id)}
@@ -1641,6 +1818,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
             onSubmitDraft={submit}
             pickerLabel={b.canonical.pickerLabel}
             placeholder={b.group.newThreadPlaceholder(group)}
+            ref={mainComposerInput}
             value={draft}
           />
           <div className="aino-group-composer-toolbar">

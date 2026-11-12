@@ -25,6 +25,11 @@ import { zhHantFirstRun } from './zh-hant_first_run'
 import { zhHantSettings } from './zh-hant_settings'
 
 const zhHantBaseOverrides = {
+  gatewayGroupOpen: {
+    opening: "正在開啟群組聊天…",
+    lookupFailed: "無法在閘道上查找此群組，請重試。",
+    missing: "此群組聊天已不存在。"
+  },
   notificationCenter: notificationCenterCopy['zh-hant'],
   appearancePage: appearancePage['zh-hant'],
   home: homeGuidance['zh-hant'],

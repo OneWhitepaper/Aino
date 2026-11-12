@@ -11,18 +11,19 @@ def stop_managed_auxiliary_replay(client, error):
         raise error
 
 
-def should_retry_same_provider(task: Optional[str], exc: Exception, tag: str, *, managed=False) -> bool:
-    """True when ``exc`` is a transient transport blip worth a same-provider retry; critical-path
+def should_retry_same_provider(task: Optional[str], failure, tag: str, *, managed=False) -> bool:
+    """True when ``failure`` is a transient transport blip worth a same-provider retry; critical-path
     tasks skip it on a full-budget timeout (``_should_skip_same_provider_retry``) and go straight
     to fallback."""
     from agent import auxiliary_client as aux
+    from agent import auxiliary_error_policy as aux_errors
     from agent.managed_inference_errors import raise_managed_operation_error
-    raise_managed_operation_error(exc, managed=managed)
-    if not aux._is_transient_transport_error(exc):
+    raise_managed_operation_error(failure.error, managed=managed)
+    if not aux_errors.same_provider_retry(failure.verdict):
         return False
-    if aux._should_skip_same_provider_retry(task, exc):
+    if aux._should_skip_same_provider_retry(task, failure):
         aux.logger.info("Auxiliary %s%s: timeout on the critical path; "
-                    "skipping same-provider retry and falling back: %s", task, tag, exc)
+                    "skipping same-provider retry and falling back: %s", task, tag, failure.error)
         return False
     return True
 
@@ -34,8 +35,9 @@ def ladder_step_call(
     if step.kind == "call":
         return "call", step.args, dict(provider=req.resolved_provider, api_mode=req.resolved_api_mode)
     if step.kind == "retry_same_provider":
-        retry_provider, retry_model = step.args
-        return "retry", (), dict(retry_kwargs, resolved_provider=retry_provider, resolved_model=retry_model)
+        retry_provider, retry_model, repairs = step.args
+        return "retry", (), dict(retry_kwargs, resolved_provider=retry_provider, resolved_model=retry_model,
+                                 repairs=repairs)
     return "fallback", step.args, candidate_kwargs
 
 

@@ -1,16 +1,27 @@
-import { Alert, AlertDescription, atom, Button, Codicon, host, randomUuid, Tip, useQuery, useValue } from '@hermes/plugin-sdk'
+import { Alert, AlertDescription, atom, Button, Codicon, host, Tip, useQuery, useValue } from '@hermes/plugin-sdk'
 import { useEffect, useMemo, useState } from 'react'
 
 import { $botChatFocused } from './bot-state'
 import { seatableGroupBots, useGroupCapability } from './canonical-group-capabilities'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
+import type { CanonicalGroupMessages } from './canonical-group-locales'
 import { canonicalMemberName } from './canonical-group-members'
 import { CanonicalGroupRow } from './canonical-group-row'
-import { canonicalGroupRequest, discoverCanonicalGroups, listCanonicalRooms } from './canonical-groups'
+import { disbandCanonicalGroup, discoverCanonicalGroups, listCanonicalRooms } from './canonical-groups'
 import type { CanonicalGroupBinding, CanonicalGroupRoute, CanonicalRoom, CanonicalRoomMember } from './canonical-groups'
 import { $botMeta } from './data'
 import { $groupChatWorkspace } from './group-chat'
-import { $groupMainTabsRev, closeGroupChatMainTab, closeGroupMainViews, groupChatMainTabs, groupOpenOrigin, groupOpenRoute, groupWorkspacePaneId } from './group-panes'
+import { $groupChats, uniqueGroupChatName, updateGroupChat } from './group-chat'
+import { liveGroupChatNames } from './group-membership'
+import {
+  $groupMainTabsRev,
+  closeGroupChatMainTab,
+  closeGroupMainViews,
+  groupChatMainTabs,
+  groupOpenOrigin,
+  groupOpenRoute,
+  groupWorkspacePaneId
+} from './group-panes'
 import { useBots } from './i18n'
 import { rpcMethodMissing } from './rpc-errors'
 import { ID } from './shared'
@@ -29,9 +40,34 @@ export function refreshGatewayGroupRooms(): void {
 
 /** Drop a disbanded room's key and every alias to it, then re-read the sidebar list. */
 export function forgetCanonicalGroup({ connectionId, profile, roomId }: CanonicalGroupBinding): void {
-  $disbandedGatewayRooms.set(new Set($disbandedGatewayRooms.get()).add(canonicalGroupKey({ connectionId, profile }, roomId)))
-  $canonicalGroupBindings.set(Object.fromEntries(Object.entries($canonicalGroupBindings.get()).filter(([, binding]) =>
-    binding.connectionId !== connectionId || binding.profile !== profile || binding.roomId !== roomId)))
+  for (const [name, record] of Object.entries($groupChats.get())) {
+    const owner = record.engine
+
+    if (
+      typeof owner !== 'object' ||
+      owner.connectionId !== connectionId ||
+      owner.profile !== profile ||
+      owner.roomId !== roomId
+    ) {
+      continue
+    }
+    updateGroupChat(name, room => ({ ...room, tombstone: true }), { sync: false })
+    const remaining = { ...$groupChats.get() }
+    delete remaining[name]
+    $groupChats.set(remaining)
+  }
+
+  $disbandedGatewayRooms.set(
+    new Set($disbandedGatewayRooms.get()).add(canonicalGroupKey({ connectionId, profile }, roomId))
+  )
+  $canonicalGroupBindings.set(
+    Object.fromEntries(
+      Object.entries($canonicalGroupBindings.get()).filter(
+        ([, binding]) =>
+          binding.connectionId !== connectionId || binding.profile !== profile || binding.roomId !== roomId
+      )
+    )
+  )
   refreshGatewayGroupRooms()
 }
 
@@ -39,13 +75,60 @@ function canonicalGroupKey(route: CanonicalGroupRoute, roomId: string): string {
   return `canonical:${encodeURIComponent(route.connectionId)}:${encodeURIComponent(route.profile)}:${roomId}`
 }
 
-export function registerCanonicalGroup(route: CanonicalGroupRoute, room: CanonicalRoom): string {
+export function registerCanonicalGroup(
+  route: CanonicalGroupRoute,
+  room: CanonicalRoom,
+  { created = false } = {}
+): string {
+  // A native Rename (or a rename seen on refresh) moves our durable owner record too.
+  const records = $groupChats.get()
+
+  const previous = Object.entries(records).find(([, record]) => {
+    const owner = record.engine
+
+    return (
+      typeof owner === 'object' &&
+      owner.kind === 'gateway' &&
+      owner.connectionId === route.connectionId &&
+      owner.profile === route.profile &&
+      owner.roomId === room.room_id
+    )
+  })
+
+  // A create never adopts a different room by name, including one added while its reply was lost.
+  if (created && !previous) {
+    const name = uniqueGroupChatName(room.name, new Set(liveGroupChatNames()))
+    updateGroupChat(
+      name,
+      record => ({
+        ...record,
+        roomId: room.room_id,
+        engine: { kind: 'gateway', connectionId: route.connectionId, profile: route.profile, roomId: room.room_id }
+      }),
+      { sync: false }
+    )
+  }
+
+  if (previous && previous[0] !== room.name && !records[room.name]) {
+    const renamed = { ...records, [room.name]: previous[1] }
+    delete renamed[previous[0]]
+    $groupChats.set(renamed)
+    updateGroupChat(room.name, record => record, { sync: false })
+  }
+
   const key = canonicalGroupKey(route, room.room_id)
   const current = $canonicalGroupBindings.get()[key]
 
   // The roster re-lists on a poll: an unchanged room must not wake every binding reader.
-  if (current?.connectionId !== route.connectionId || current.profile !== route.profile || current.roomName !== room.name) {
-    $canonicalGroupBindings.set({ ...$canonicalGroupBindings.get(), [key]: { ...route, roomId: room.room_id, roomName: room.name } })
+  if (
+    current?.connectionId !== route.connectionId ||
+    current.profile !== route.profile ||
+    current.roomName !== room.name
+  ) {
+    $canonicalGroupBindings.set({
+      ...$canonicalGroupBindings.get(),
+      [key]: { ...route, roomId: room.room_id, roomName: room.name }
+    })
   }
 
   return key
@@ -184,6 +267,12 @@ function canonicalGroupViews({ connectionId, profile, roomId }: CanonicalGroupBi
   return views
 }
 
+/** Close every view of a confirmed disbanded room. */
+export function endCanonicalGroup(binding: CanonicalGroupBinding): void {
+  canonicalGroupViews(binding).forEach(closeGroupChatMainTab)
+  forgetCanonicalGroup(binding)
+}
+
 /** One gateway Group Chat as the roster lists it: its exact authority binding and
  *  the `canonical:` key the open path takes. */
 export interface GatewayGroupRoom {
@@ -210,7 +299,9 @@ async function listGatewayGroupRooms(route: CanonicalGroupRoute): Promise<Gatewa
   try {
     rooms = await listCanonicalRooms(route)
   } catch (error) {
-    if (rpcMethodMissing(error)) {return []}
+    if (rpcMethodMissing(error)) {
+      return []
+    }
     throw error
   }
 
@@ -229,7 +320,9 @@ async function listGatewayGroupRooms(route: CanonicalGroupRoute): Promise<Gatewa
   const hidden = $disbandedGatewayRooms.get()
   const kept = [...hidden].filter(key => !key.startsWith(prefix) || keys.has(key))
 
-  if (kept.length !== hidden.size) {$disbandedGatewayRooms.set(new Set(kept))}
+  if (kept.length !== hidden.size) {
+    $disbandedGatewayRooms.set(new Set(kept))
+  }
 
   return listed
 }
@@ -260,7 +353,9 @@ export function useGatewayGroupRooms(): GatewayGroupRoom[] {
 
   // A create or disband here re-reads now; a failed re-read keeps the last good list.
   useEffect(() => {
-    if (revision && host.state.gateway.get() === 'open') {void refetch()}
+    if (revision && host.state.gateway.get() === 'open') {
+      void refetch()
+    }
   }, [revision, refetch])
 
   return useMemo(
@@ -271,17 +366,25 @@ export function useGatewayGroupRooms(): GatewayGroupRoom[] {
 
 /** Disband on the room's own gateway, then retire it everywhere this window shows it.
  *  A refusal rejects before anything is dropped, so the row stays and the confirm shows why. */
-export async function disbandGatewayGroupRoom(room: GatewayGroupRoom, doneMessage: string): Promise<void> {
-  await canonicalGroupRequest(room.binding, 'groups.disband', { room_id: room.binding.roomId, cancel_id: randomUuid() })
+export async function disbandGatewayGroupRoom(
+  room: GatewayGroupRoom,
+  doneMessage: string,
+  labels: CanonicalGroupMessages
+): Promise<void> {
+  if (!(await disbandCanonicalGroup(room.binding, labels))) {
+    throw new Error(labels.disbandUnconfirmed)
+  }
   // Collect before forgetting: the bindings are the only record of which views alias this room.
-  canonicalGroupViews(room.binding).add(room.key).forEach(group => {
-    closeGroupMainViews(group, room.binding)
-    const opened = groupOpenRoute(group)
+  canonicalGroupViews(room.binding)
+    .add(room.key)
+    .forEach(group => {
+      closeGroupMainViews(group, room.binding)
+      const opened = groupOpenRoute(group)
 
-    if (!opened || (opened.connectionId === room.binding.connectionId && opened.profile === room.binding.profile)) {
-      closeGroupChatMainTab(group)
-    }
-  })
+      if (!opened || (opened.connectionId === room.binding.connectionId && opened.profile === room.binding.profile)) {
+        closeGroupChatMainTab(group)
+      }
+    })
   forgetCanonicalGroup(room.binding)
   host.notify({ kind: 'success', message: doneMessage })
 }
@@ -318,9 +421,10 @@ export function canonicalGroupMatchesQuery(
 
   return (
     !term ||
-    [room.name, ...room.members.flatMap(member => [nameFor?.(member), member.display_name, member.handle, member.profile])].some(value =>
-      value?.toLocaleLowerCase().includes(term)
-    )
+    [
+      room.name,
+      ...room.members.flatMap(member => [nameFor?.(member), member.display_name, member.handle, member.profile])
+    ].some(value => value?.toLocaleLowerCase().includes(term))
   )
 }
 
@@ -347,11 +451,21 @@ export function useCanonicalGroupSelection() {
 
   const activeBinding =
     activeGroup && connectionId
-      ? canonicalGroupBindingFor(bindings, groupOpenRoute(activeGroup) ?? { connectionId, profile }, activeGroup, groupOpenOrigin(activeGroup))
+      ? canonicalGroupBindingFor(
+          bindings,
+          groupOpenRoute(activeGroup) ?? { connectionId, profile },
+          activeGroup,
+          groupOpenOrigin(activeGroup)
+        )
       : undefined
 
-  return (binding: CanonicalGroupBinding): boolean => Boolean(activeVisible &&
-    activeBinding?.connectionId === binding.connectionId && activeBinding.profile === binding.profile && activeBinding.roomId === binding.roomId)
+  return (binding: CanonicalGroupBinding): boolean =>
+    Boolean(
+      activeVisible &&
+      activeBinding?.connectionId === binding.connectionId &&
+      activeBinding.profile === binding.profile &&
+      activeBinding.roomId === binding.roomId
+    )
 }
 
 export function CanonicalGroupList({
@@ -408,8 +522,11 @@ export function CanonicalGroupList({
     }
   }, [connectionId, profile, gateway, refresh, revision])
 
-  const matchingRooms = rooms.filter(room => canonicalGroupMatchesQuery(room, query,
-    member => canonicalMemberName(member, room.binding, roster, allMeta, connectionId)))
+  const matchingRooms = rooms.filter(room =>
+    canonicalGroupMatchesQuery(room, query, member =>
+      canonicalMemberName(member, room.binding, roster, allMeta, connectionId)
+    )
+  )
 
   if (hidden) {
     return null

@@ -7,7 +7,7 @@ import { build } from 'esbuild'
 import { resolveElectronBinary } from './electron-binary'
 import { _electron, expect, test } from './test'
 
-test('messages-below reads stay bounded with real content-visibility groups', async ({}, testInfo) => {
+test('messages-below reads stay bounded with real content-visibility groups', async ({ browserName: _browserName }, testInfo) => {
   const temporary = mkdtempSync(path.join(tmpdir(), 'hermes-messages-below-'))
   const main = path.join(temporary, 'main.cjs')
   writeFileSync(
@@ -28,6 +28,7 @@ app.whenReady().then(() => {
     globalName: 'MessagesBelow',
     write: false
   })
+
   const app = await _electron.launch({
     executablePath: resolveElectronBinary([path.resolve('.'), path.resolve('../..')]),
     args: ['--no-sandbox', main]
@@ -37,6 +38,7 @@ app.whenReady().then(() => {
     const page = await app.firstWindow()
     await page.setContent('<div id="viewport" style="height:600px;overflow:auto"><div id="content"></div></div>')
     await page.addScriptTag({ content: bundle.outputFiles[0].text })
+
     const results = await page.evaluate(async () => {
       const count = 512
       const viewport = document.getElementById('viewport')!
@@ -64,10 +66,12 @@ app.whenReady().then(() => {
           ) => { read: () => { count: number; settled: boolean } }
         }
       }).MessagesBelow
+
       const reader = api.createMessagesBelowReader(viewport, content)
       const original = Element.prototype.getBoundingClientRect
       let outer = 0
       let inner = 0
+
       Element.prototype.getBoundingClientRect = function () {
         if (this.getAttribute('data-slot') === 'aui_message-group') {
           outer++
@@ -117,6 +121,7 @@ app.whenReady().then(() => {
 
             if (groupRect.top >= bottom) {
               reference += messages.length
+
               continue
             }
 

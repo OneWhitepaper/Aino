@@ -49,6 +49,8 @@ Agent imports use the existing official `agent-importers` plugin: install it wit
 
 Detailed runtime references live in this fork's [manual](website/docs/getting-started/quickstart.md), [configuration guide](website/docs/user-guide/configuration.md), [provider guide](website/docs/integrations/providers.md) and [developer architecture](website/docs/developer-guide/architecture.md). These inherited references can retain Hermes command, module and API names. They are not instructions to replace Aino with the upstream distribution.
 
+The source installer uses PM for Python 3.14, Node.js, npm, pnpm, ripgrep, FFmpeg and Python dependencies. If Git is absent, it stages verified Git for Windows in the runtime tool store without replacing system Git. See [installation methods](website/docs/getting-started/installation.md) for packaging and update ownership.
+
 ## Open source and attribution
 
 This repository remains public. Aino is an independent product based on [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research. Original copyright and contributor attribution remain in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). Third-party providers, libraries and hosted services retain their own names, licenses and terms.

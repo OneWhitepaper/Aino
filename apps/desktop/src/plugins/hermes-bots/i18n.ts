@@ -34,6 +34,12 @@ import { useMemo } from 'react'
 
 import { CANONICAL_GROUP_LOCALES } from './canonical-group-locales'
 import { CROSS_GATEWAY_GROUP_LOCALES } from './cross-gateway-locales'
+import { GROUP_CHAT_LOCALES } from './group-chat-locales'
+import { GROUP_SURFACE_AR } from './group-surface-ar'
+import { GROUP_SURFACE_DE } from './group-surface-de'
+import { GROUP_SURFACE_ES } from './group-surface-es'
+import { GROUP_SURFACE_FR } from './group-surface-fr'
+import { GROUP_SURFACE_RU } from './group-surface-ru'
 import { bind, type Bound } from './i18n-bind'
 import { en as legacyEn } from './i18n-en'
 import { ja as legacyJa } from './i18n-ja'
@@ -41,14 +47,46 @@ import type { BotsMessages as UpstreamBotsMessages } from './i18n-messages'
 import type { BotsMessages as LegacyBotsMessages } from './i18n-types'
 import { zh as legacyZh } from './i18n-zh'
 import { zhHant as legacyZhHant } from './i18n-zhHant'
+import { ROSTER_CHROME } from './roster-chrome-locales'
 import { getPluginCtx } from './shared'
 
-type BotsMessages = LegacyBotsMessages & Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'>
+type BotsMessages = LegacyBotsMessages &
+  Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'> & {
+    group: UpstreamBotsMessages['group']
+    roster: UpstreamBotsMessages['roster']
+  }
 
-const en: BotsMessages = { ...legacyEn, canonical: CANONICAL_GROUP_LOCALES.en, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en }
-const ja: BotsMessages = { ...legacyJa, canonical: CANONICAL_GROUP_LOCALES.ja, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja }
-const zh: BotsMessages = { ...legacyZh, canonical: CANONICAL_GROUP_LOCALES.zh, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh }
-const zhHant: BotsMessages = { ...legacyZhHant, canonical: CANONICAL_GROUP_LOCALES['zh-hant'], crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant'] }
+const en: BotsMessages = {
+  ...legacyEn,
+  group: { ...legacyEn.group, ...GROUP_CHAT_LOCALES['en'] },
+  roster: { ...ROSTER_CHROME['en'], ...legacyEn.roster },
+  canonical: CANONICAL_GROUP_LOCALES.en,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en
+}
+
+const ja: BotsMessages = {
+  ...legacyJa,
+  group: { ...legacyJa.group, ...GROUP_CHAT_LOCALES['ja'] },
+  roster: { ...ROSTER_CHROME['ja'], ...legacyJa.roster },
+  canonical: CANONICAL_GROUP_LOCALES.ja,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja
+}
+
+const zh: BotsMessages = {
+  ...legacyZh,
+  group: { ...legacyZh.group, ...GROUP_CHAT_LOCALES['zh'] },
+  roster: { ...ROSTER_CHROME['zh'], ...legacyZh.roster },
+  canonical: CANONICAL_GROUP_LOCALES.zh,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh
+}
+
+const zhHant: BotsMessages = {
+  ...legacyZhHant,
+  group: { ...legacyZhHant.group, ...GROUP_CHAT_LOCALES['zh-hant'] },
+  roster: { ...ROSTER_CHROME['zh-hant'], ...legacyZhHant.roster },
+  canonical: CANONICAL_GROUP_LOCALES['zh-hant'],
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant']
+}
 
 /** Registered via `ctx.i18n.register` at plugin load (disposer tracked). */
 export const BOTS_LOCALES: PluginLocaleBundles = {
@@ -57,18 +95,22 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   zh,
   'zh-hant': zhHant,
   ar: {
+    ...GROUP_SURFACE_AR,
     canonical: CANONICAL_GROUP_LOCALES.ar,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ar,
     bot: {
+      ...GROUP_SURFACE_AR.bot,
       openModelUnavailableMessage:
         'لا يتوفر نموذج قابل للاستخدام لهذا الروبوت. اختر نموذجًا متاحًا في إعدادات النموذج ثم أعد المحاولة.',
       openModelSettingsSourceMismatch: 'انتقل إلى اتصال هذا الروبوت في إعدادات الاتصال، ثم افتح إعدادات النموذج مجددًا.'
     }
   },
   ru: {
+    ...GROUP_SURFACE_RU,
     canonical: CANONICAL_GROUP_LOCALES.ru,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ru,
     bot: {
+      ...GROUP_SURFACE_RU.bot,
       openModelUnavailableMessage:
         'У этого бота нет доступной модели. Выберите доступную модель в его настройках и повторите попытку.',
       openModelSettingsSourceMismatch:
@@ -76,9 +118,11 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     }
   },
   fr: {
+    ...GROUP_SURFACE_FR,
     canonical: CANONICAL_GROUP_LOCALES.fr,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.fr,
     bot: {
+      ...GROUP_SURFACE_FR.bot,
       openModelUnavailableMessage:
         'Ce bot n’a aucun modèle utilisable. Choisissez un modèle disponible dans ses paramètres de modèle, puis réessayez.',
       openModelSettingsSourceMismatch:
@@ -86,9 +130,11 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     }
   },
   de: {
+    ...GROUP_SURFACE_DE,
     canonical: CANONICAL_GROUP_LOCALES.de,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.de,
     bot: {
+      ...GROUP_SURFACE_DE.bot,
       openModelUnavailableMessage:
         'Für diesen Bot ist kein nutzbares Modell verfügbar. Wähle in seinen Modelleinstellungen ein verfügbares Modell und versuche es erneut.',
       openModelSettingsSourceMismatch:
@@ -96,9 +142,11 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     }
   },
   es: {
+    ...GROUP_SURFACE_ES,
     canonical: CANONICAL_GROUP_LOCALES.es,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.es,
     bot: {
+      ...GROUP_SURFACE_ES.bot,
       openModelUnavailableMessage:
         'Este bot no tiene un modelo disponible. Elige un modelo disponible en su configuración y vuelve a intentarlo.',
       openModelSettingsSourceMismatch:

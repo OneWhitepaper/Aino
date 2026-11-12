@@ -41,12 +41,19 @@ export function classifyGroupMention(token: string, members: GroupMember[]): Gro
 }
 
 interface MentionLabels {
-  allMembers: string
-  you: string
+  allMembers?: string
+  you?: string
+  mentionBot?: string
+  mentionEveryone?: string
+  mentionUser?: string
 }
 
 /** Split one text node into prose and recognized mention spans. */
-export function renderGroupMentionText(text: string, members: GroupMember[], labels: MentionLabels = CANONICAL_GROUP_LOCALES.en): ReactNode {
+export function renderGroupMentionText(
+  text: string,
+  members: GroupMember[],
+  labels: MentionLabels = CANONICAL_GROUP_LOCALES.en
+): ReactNode {
   const parts: ReactNode[] = []
   let last = 0
 
@@ -60,17 +67,31 @@ export function renderGroupMentionText(text: string, members: GroupMember[], lab
     const start = match.index ?? 0
 
     // E-mail and URL tokens are content, even when their suffix is a member's handle.
-    if (start > 0 && /[\p{L}\p{N}_./@:\\-]/u.test(text[start - 1])) {continue}
+    if (start > 0 && /[\p{L}\p{N}_./@:\\-]/u.test(text[start - 1])) {
+      continue
+    }
     const targets = kind === 'agent' ? parseGroupChatMentions(match[0], members).mentioned : undefined
     const member = targets?.size === 1 ? members.find(candidate => targets.has(groupMemberKey(candidate))) : undefined
-    const label = kind === 'broadcast' ? labels.allMembers : kind === 'human' ? labels.you : member ? displayName(member) : match[1]
+    const label =
+      kind === 'broadcast'
+        ? (labels.allMembers ?? CANONICAL_GROUP_LOCALES.en.allMembers)
+        : kind === 'human'
+          ? (labels.you ?? CANONICAL_GROUP_LOCALES.en.you)
+          : member
+            ? displayName(member)
+            : match[1]
 
     if (start > last) {
       parts.push(text.slice(last, start))
     }
 
     parts.push(
-      <span className="aino-group-mention ref font-medium" data-ref={kind} key={`${start}:${match[0]}`}>
+      <span
+        className="aino-group-mention ref font-medium"
+        data-ref={kind}
+        key={`${start}:${match[0]}`}
+        title={labels[({ agent: 'mentionBot', broadcast: 'mentionEveryone', human: 'mentionUser' } as const)[kind]]}
+      >
         @{label}
       </span>
     )
@@ -89,7 +110,9 @@ export function renderGroupMentionText(text: string, members: GroupMember[], lab
 }
 
 function mapTextChildren(children: ReactNode, members: GroupMember[], labels?: MentionLabels): ReactNode {
-  return Children.map(children, child => (typeof child === 'string' ? renderGroupMentionText(child, members, labels) : child))
+  return Children.map(children, child =>
+    typeof child === 'string' ? renderGroupMentionText(child, members, labels) : child
+  )
 }
 
 /** `decorateText` hook for the shell's `MessageTextContent`: the same
@@ -106,8 +129,12 @@ export function groupMentionText(members: GroupMember[], labels?: MentionLabels)
  *  mention inside a backtick span is left literal on purpose. */
 export function groupMentionComponents(members: GroupMember[], labels?: MentionLabels) {
   return {
-    li: ({ children, ...props }: ComponentProps<'li'>) => <li {...props}>{mapTextChildren(children, members, labels)}</li>,
+    li: ({ children, ...props }: ComponentProps<'li'>) => (
+      <li {...props}>{mapTextChildren(children, members, labels)}</li>
+    ),
     p: ({ children, ...props }: ComponentProps<'p'>) => <p {...props}>{mapTextChildren(children, members, labels)}</p>,
-    td: ({ children, ...props }: ComponentProps<'td'>) => <td {...props}>{mapTextChildren(children, members, labels)}</td>
+    td: ({ children, ...props }: ComponentProps<'td'>) => (
+      <td {...props}>{mapTextChildren(children, members, labels)}</td>
+    )
   }
 }

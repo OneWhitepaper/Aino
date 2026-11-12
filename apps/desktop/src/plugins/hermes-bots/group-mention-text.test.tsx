@@ -4,18 +4,31 @@
  * so a token is styled exactly when routing would honour it.
  */
 
+import { render, screen } from '@testing-library/react'
+import { useMemo } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { classifyGroupMention, renderGroupMentionText } from './group-mention-text'
+import { GROUP_CHAT_LOCALES } from './group-chat-locales'
+import {
+  classifyGroupMention,
+  groupMentionComponents,
+  groupMentionText,
+  renderGroupMentionText
+} from './group-mention-text'
 import { addressedGroupMentionText, readableGroupMentionSearch } from './group-message-mentions'
+import { useBots } from './i18n'
+import { translateBotsIn } from './i18n-test-helper'
 import type { GroupMember } from './types'
+
+const selectedLocale = vi.hoisted(() => ({ value: 'en' }))
 
 vi.mock('@hermes/plugin-sdk', async () => {
   const { atom } = await import('nanostores')
 
   return {
     atom,
+    usePluginI18n: () => translateBotsIn(selectedLocale.value),
     host: {
       request: vi.fn(),
       state: { connectionId: { get: () => 'local' }, profile: { get: () => 'default' } }
@@ -45,14 +58,16 @@ describe('group mention rendering', () => {
 
   it('names recognized mentions and leaves source addresses outside the rendered prose', () => {
     const text = '@planner compare the options, then @user picks; mail ops@example.com — @everyone review'
-    const html = renderToStaticMarkup(<>{renderGroupMentionText(text, members)}</>)
+    const html = renderToStaticMarkup(<>{renderGroupMentionText(text, members, GROUP_CHAT_LOCALES.en)}</>)
 
     expect(html).toContain('data-ref="agent"')
     expect(html).toContain('data-ref="human"')
     expect(html).toContain('data-ref="broadcast"')
     // `@example.com` is not a room identity — no span around it.
     expect(html).not.toMatch(/data-ref="[^"]*"[^>]*>@example/)
-    expect(html.replace(/<[^>]+>/g, '')).toBe('@Planner compare the options, then @You picks; mail ops@example.com — @Everyone review')
+    expect(html.replace(/<[^>]+>/g, '')).toBe(
+      '@Planner compare the options, then @You picks; mail ops@example.com — @Everyone review'
+    )
   })
 
   it('uses a member display title without ever treating a matching email suffix as a mention', () => {
@@ -60,18 +75,24 @@ describe('group mention rendering', () => {
     const source = '@u6d4b-u8bd5 看一下 ops@u6d4b-u8bd5'
     const html = renderToStaticMarkup(<>{renderGroupMentionText(source, seats)}</>)
     expect(html.replace(/<[^>]+>/g, '')).toBe('@测试助手 看一下 ops@u6d4b-u8bd5')
-    expect((html.match(/data-ref="agent"/g) ?? [])).toHaveLength(1)
+    expect(html.match(/data-ref="agent"/g) ?? []).toHaveLength(1)
     expect(source).toBe('@u6d4b-u8bd5 看一下 ops@u6d4b-u8bd5')
   })
 
   it('decorates only direct Markdown prose nodes with exact immutable addresses', () => {
     const decorate = addressedGroupMentionText([{ handle: 'u6d4b-u8bd5', label: '测试助手' }])
 
-    const children = ['@u6d4b-u8bd5 ', <code key="code">@u6d4b-u8bd5</code>,
-      <a href="https://example.com/@u6d4b-u8bd5" key="link">@u6d4b-u8bd5</a>, ' @u6d4b-u8bd5-extra']
+    const children = [
+      '@u6d4b-u8bd5 ',
+      <code key="code">@u6d4b-u8bd5</code>,
+      <a href="https://example.com/@u6d4b-u8bd5" key="link">
+        @u6d4b-u8bd5
+      </a>,
+      ' @u6d4b-u8bd5-extra'
+    ]
 
     const html = renderToStaticMarkup(<>{decorate(children)}</>)
-    expect((html.match(/data-ref="agent"/g) ?? [])).toHaveLength(1)
+    expect(html.match(/data-ref="agent"/g) ?? []).toHaveLength(1)
     expect(html).toContain('<code>@u6d4b-u8bd5</code>')
     expect(html).toContain('href="https://example.com/@u6d4b-u8bd5"')
     expect(html).toContain('@u6d4b-u8bd5-extra')
@@ -80,6 +101,39 @@ describe('group mention rendering', () => {
   it('uses the same readable search projection while preserving fenced code and inline literals', () => {
     const identities = [{ handle: 'u6d4b-u8bd5', label: '测试助手' }]
     const text = '@u6d4b-u8bd5\n\n```text\n@u6d4b-u8bd5\n```\n\n`@u6d4b-u8bd5` [@u6d4b-u8bd5](https://example.com)'
-    expect(readableGroupMentionSearch(text, identities)).toBe('@测试助手\n\n```text\n@u6d4b-u8bd5\n```\n\n`@u6d4b-u8bd5` [@u6d4b-u8bd5](https://example.com)')
+    expect(readableGroupMentionSearch(text, identities)).toBe(
+      '@测试助手\n\n```text\n@u6d4b-u8bd5\n```\n\n`@u6d4b-u8bd5` [@u6d4b-u8bd5](https://example.com)'
+    )
   })
+})
+
+function TranslatedMentions() {
+  const b = useBots()
+  const decorate = useMemo(() => groupMentionText(members, b.group), [b.group])
+  const { p: Paragraph } = useMemo(() => groupMentionComponents(members, b.group), [b.group])
+
+  return (
+    <>
+      <div>{decorate('@planner @everyone @user')}</div>
+      <Paragraph>@planner @everyone @user</Paragraph>
+    </>
+  )
+}
+
+it('updates mention tooltips in both transcript renderers when the locale changes', () => {
+  const view = render(<TranslatedMentions />)
+
+  expect(screen.getAllByTitle('Bot in this group chat')).toHaveLength(2)
+  selectedLocale.value = 'ja'
+  view.rerender(<TranslatedMentions />)
+
+  for (const title of [
+    'このグループチャットのボット',
+    'グループチャットの全員',
+    'あなた — グループチャットは人による対応を待っています'
+  ]) {
+    expect(screen.getAllByTitle(title)).toHaveLength(2)
+  }
+
+  expect(screen.queryByTitle('Bot in this group chat')).toBeNull()
 })

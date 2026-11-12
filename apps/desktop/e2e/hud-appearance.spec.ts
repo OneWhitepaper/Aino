@@ -1,6 +1,5 @@
-import { expect, test } from './test'
-
 import { type MockBackendFixture, setupMockBackend, waitForAppReady } from './fixtures'
+import { expect, test } from './test'
 
 interface HudWindow extends Window {
   hermesDesktop: {

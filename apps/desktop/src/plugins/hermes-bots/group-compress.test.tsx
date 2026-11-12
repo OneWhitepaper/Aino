@@ -28,7 +28,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
     CopyButton: () => null,
     ToggleRow: () => null,
     ConfirmDialog: () => null,
-    Dialog: ({ children, open }: { children?: ReactNode; open?: boolean }) => open ? <>{children}</> : null,
+    Dialog: ({ children, open }: { children?: ReactNode; open?: boolean }) => (open ? <>{children}</> : null),
     DialogContent: Passthrough,
     DialogDescription: Passthrough,
     DialogFooter: Passthrough,
@@ -116,10 +116,14 @@ it('the room settings dialog offers Compress history per member and reports the 
   const { $groupChats } = await import('./group-chat')
   const { GroupChatWorkspace } = await import('./group-chat-view')
   const mason = await seedMemberSession('mason', 'Group: room-1 · t1')
-  $groupChats.set({ Build: { log: [], roomId: 'room-1', sessions: { 'thread:t1::mason': mason }, watermarks: {} } })
+  $groupChats.set({
+    Build: { engine: 'desktop', log: [], roomId: 'room-1', sessions: { 'thread:t1::mason': mason }, watermarks: {} }
+  })
   const members = [{ name: 'mason' }, { name: 'critic' }] as never
 
-  const { findByRole, getByLabelText, getByRole, queryByLabelText } = render(<GroupChatWorkspace group="Build" members={members} />)
+  const { findByRole, getByLabelText, getByRole, queryByLabelText } = render(
+    <GroupChatWorkspace group="Build" members={members} />
+  )
   // The same named management entrance remains the door to the retained repair.
   const groupInfo = await findByRole('button', { name: 'Group info' })
   expect(queryByLabelText('Compress history: Mason')).toBeNull()
@@ -137,12 +141,18 @@ it('the room settings dialog offers Compress history per member and reports the 
 it('labels the per-member repair with that connection current readable name', async () => {
   Element.prototype.scrollIntoView = vi.fn()
   const { $botMeta } = await import('./data')
+  const { $groupChats } = await import('./group-chat')
+  $groupChats.set({ Repair: { engine: 'desktop', log: [], watermarks: {} } })
   const { GroupChatWorkspace } = await import('./group-chat-view')
   const profile = 'u6d4b-u8bd5'
   $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
   const members = [{ name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }]
   const view = render(<GroupChatWorkspace group="Repair" members={members} />)
-  fireEvent.pointerDown(await view.findByRole('button', { name: 'Group info' }), { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  fireEvent.pointerDown(await view.findByRole('button', { name: 'Group info' }), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse'
+  })
   fireEvent.click(view.getByRole('menuitem', { name: 'Group settings' }))
 
   expect(view.getByRole('button', { name: 'Compress history: 工作室测试助手' })).toBeTruthy()

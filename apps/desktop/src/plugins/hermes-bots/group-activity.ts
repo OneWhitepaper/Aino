@@ -10,6 +10,7 @@
 import { atom } from '@hermes/plugin-sdk'
 
 import { $groupChats, groupSpeakerLabel } from './group-chat'
+import { groupReasonText } from './group-reason-text'
 import { botsText } from './i18n'
 import type { GroupActivityEvent, GroupActivityKind } from './types'
 
@@ -142,6 +143,11 @@ export function groupFailureDetail(message: unknown): string {
 export function groupActivityLabel(event: GroupActivityEntry, group?: null | string) {
   const kind = event?.kind
   const labels = botsText().group
+
+  if (event?.member === 'You' && (kind === 'queued' || kind === 'stopped')) {
+    return kind === 'queued' ? labels.activityUserQueued : labels.activityUserStopped
+  }
+
   const base = GROUP_ACTIVITY_LABELS[kind]?.(labels) || kind || labels.activityDidSomething
 
   if (kind === 'cancelled' || kind === 'settled' || kind === 'capped') {
@@ -152,10 +158,12 @@ export function groupActivityLabel(event: GroupActivityEntry, group?: null | str
   const reason = kind === 'failed' ? String(event?.reason || '').trim() : ''
 
   if (kind === 'failed' && reason === GROUP_SLOT_WAIT_REASON) {
-    return `${who} couldn't start — too many bots running`
+    return `${who} ${labels.activitySlotWait}`
   }
 
-  return `${labels.activityActor(who, base)}${reason ? ` — ${reason}` : ''}`
+  const detail = groupReasonText(reason, botsText().canonical)
+
+  return `${labels.activityActor(who, base)}${detail ? ` — ${detail}` : ''}`
 }
 
 const GROUP_ACTIVITY_LABELS: Record<GroupActivityKind, (labels: ReturnType<typeof botsText>['group']) => string> = {

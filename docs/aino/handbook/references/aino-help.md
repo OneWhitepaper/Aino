@@ -38,6 +38,10 @@ third-party login or server availability still requires the appropriate live ser
 | Plugins and skills | `extensions-and-safety.md` | `handbook/references/desktop-plugins.md`, `handbook/references/cli-reference.md` |
 | Approval, secrets, external actions | `extensions-and-safety.md` | `handbook/references/security-privacy.md` |
 | Cron, gateway, messaging | `scheduling-and-gateway.md` | `handbook/references/background-systems.md`, `handbook/references/webhooks.md` |
+| Browser sign-in import and saved-login fill | `settings.md`, `files-and-panels.md` | `handbook/references/runtime-0231-additions.md` (browser/vault) |
+| Members on another gateway and uncertain Stop | `conversations-and-collaboration.md` | `handbook/references/runtime-0231-additions.md` (groups) |
+| Plugin RPC, hooks, dynamic environment | `extensions-and-safety.md` | `handbook/references/runtime-0231-additions.md` (plugins) |
+| Read a stored or delegated transcript without running it | `files-and-panels.md` | `handbook/references/runtime-0231-additions.md` (stored reads) |
 | Failure or recovery | `troubleshooting.md` | `handbook/references/troubleshooting.md`, `handbook/references/windows-quirks.md` |
 | Old cached persona/prompt | `prompt-refresh.md` | Current `hermes sessions refresh-prompts --help` |
 | Audit facts against source | `feature-map.md` | Exact named source file in the repository |

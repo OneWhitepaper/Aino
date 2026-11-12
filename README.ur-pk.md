@@ -38,6 +38,11 @@ Settings → About میں نصب شدہ ورژن اور اپ ڈیٹس دیکھی
 
 دوسرے ایجنٹس سے درآمد کے لیے پہلے `hermes plugins install agent-importers` چلائیں، پھر `hermes import-agent <source> --dry-run` سے پیش نظارہ دیکھیں۔ [درآمد کی رہنمائی](website/docs/user-guide/import-from-other-agents.md) ملاحظہ کریں۔
 
+سورس انسٹالر Python 3.14، Node.js، npm، pnpm، ripgrep، FFmpeg اور Python کی
+ڈیپینڈینسیز کے لیے PM استعمال کرتا ہے۔ اگر Git موجود نہ ہو تو Git for Windows
+کا تصدیق شدہ آرکائیو رن ٹائم کے ٹول اسٹور میں نصب کرتا ہے۔ سسٹم کا Git تبدیل نہیں
+ہوتا۔ MSIX/App Installer ایک الگ پیکیج ہے۔
+
 ## اوپن سورس اور اعتراف
 
 یہ GitHub ریپوزٹری عوامی رہے گی۔ Aino، Nous Research کے [Hermes Agent](https://github.com/NousResearch/hermes-agent) پر مبنی ہے۔ اصل حقوق اور لائسنس کے نوٹس [LICENSE](LICENSE) اور [NOTICE.md](NOTICE.md) میں محفوظ ہیں۔ بیرونی فراہم کنندگان اور اجزا کے حقیقی نام اور لائسنس برقرار ہیں۔

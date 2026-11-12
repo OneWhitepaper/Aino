@@ -147,7 +147,7 @@ describe('BOTS_LOCALES', () => {
     const zhByPath = Object.fromEntries(leafEntries(zh))
     const description = zhByPath['group.disbandDescription'] as (group: string) => string
 
-    expect(description('研究组')).toBe('这会从机器人中移除“研究组”并清空共享房间日志。机器人及其各自的聊天会保留。')
+    expect(description('研究组')).toBe('这会从机器人中移除“研究组”并清空共享群聊日志。机器人及其各自的聊天会保留。')
   })
 
   it('provides localized labels for the Bot Mode palette action', () => {

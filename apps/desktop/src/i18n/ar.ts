@@ -23,6 +23,11 @@ import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
 
 const arBaseOverrides = {
+  gatewayGroupOpen: {
+    opening: "جارٍ فتح محادثة المجموعة…",
+    lookupFailed: "تعذّر العثور على هذه المجموعة على البوابة. حاول مجددًا.",
+    missing: "لم تعد محادثة المجموعة هذه موجودة."
+  },
   notificationCenter: notificationCenterCopy['ar'],
   platformModels: {
     permanent: 'بلا انتهاء',

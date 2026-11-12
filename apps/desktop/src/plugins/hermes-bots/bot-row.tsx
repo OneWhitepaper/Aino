@@ -640,7 +640,7 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={() => onOpen(group)}>{b.group.openGroupChat}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => onOpen(group)}>{b.canonical.openGroup}</ContextMenuItem>
         <ContextMenuSeparator />
         {/* Same affordance as a bot row's pin; pinned rooms lead the roster
             band, and the flag lives on the room record. */}
@@ -649,14 +649,11 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
             const pinned = toggleGroupChatPinned(group)
 
             if (pinned !== null) {
-              host.notify({
-                kind: 'info',
-                message: pinned ? b.bot.pinnedToast(group) : b.bot.unpinnedToast(group)
-              })
+              host.notify({ kind: 'info', message: pinned ? b.group.groupPinned(group) : b.group.groupUnpinned(group) })
             }
           }}
         >
-          {room.pinned ? b.bot.unpin : b.bot.pinToTop}
+          {room.pinned ? b.group.unpinGroup : b.group.pinGroup}
         </ContextMenuItem>
         {/* Filing — the same submenu a bot row gets, driving the room-record
             assignment instead of profile meta. */}
@@ -696,7 +693,7 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
             })
           }
         >
-          {b.group.deleteAction}
+          {b.group.disbandAction}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

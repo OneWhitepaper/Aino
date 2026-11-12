@@ -4,6 +4,7 @@ import { type FC, useState } from 'react'
 import { MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
 import { messageContentText } from '@/components/assistant-ui/thread/content'
 import { MessageTimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
+import { UserMessageText } from '@/components/assistant-ui/thread/user-message-text'
 import { SCAFFOLD_GLYPH_CLASS, SCAFFOLD_LABEL_CLASS, ScaffoldRow } from '@/components/chat/scaffold-row'
 import { Codicon } from '@/components/ui/codicon'
 import { LogView } from '@/components/ui/log-view'
@@ -66,6 +67,53 @@ export const BackgroundResult: FC<BackgroundResultProps> = ({ text, report, proc
   )
 }
 
+/** A safety-refused turn kept for display: the user's own message rendered
+ *  greyed and non-interactive (no edit, no actions), with a short notice that
+ *  the model's safety filter refused it. Right-aligned like the prompt it was,
+ *  but a dashed muted card — never the blue user bubble, never a reply. */
+const ContentRefusedNote: FC<{ notice: string; userText: string }> = ({ notice, userText }) => (
+  <MessagePrimitive.Root
+    className="flex w-full min-w-0 max-w-full flex-col items-stretch gap-1 self-end pb-(--conversation-turn-gap)"
+    data-role="system"
+    data-slot="aui_content-refused"
+  >
+    <div className="ml-auto flex min-w-0 max-w-full flex-col gap-1.5 rounded-xl border border-dashed border-(--ui-stroke-tertiary) px-3 py-2 text-left opacity-70">
+      {userText && <UserMessageText className="wrap-anywhere text-(--ui-text-tertiary)" text={userText} />}
+      <span className="flex items-center gap-1.5 text-[0.6875rem] leading-5 text-muted-foreground/70">
+        <Codicon className="shrink-0 text-muted-foreground/60" name="shield" size="0.75rem" />
+        <span className="wrap-anywhere">{notice}</span>
+      </span>
+    </div>
+    <MessageTimelineTimestamp className="self-end pr-1.5" />
+  </MessagePrimitive.Root>
+)
+
+function ModelSwitchNote({ modelSwitch }: { modelSwitch: ModelSwitchDisplayMetadata }) {
+  const { t } = useI18n()
+  const { model, previous_model: previousModel } = modelSwitch
+  const label = model
+    ? previousModel
+      ? t.assistant.thread.modelChangedFrom(previousModel, model)
+      : t.assistant.thread.modelChangedTo(model)
+    : t.assistant.thread.modelChanged
+  return (
+    <MessagePrimitive.Root
+      className="flex w-full min-w-0 items-center gap-3 self-center py-2 text-xs leading-5 text-muted-foreground"
+      data-role="system"
+      data-slot="aui_system-message-root"
+    >
+      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
+      <span className="flex min-w-0 max-w-[85%] items-center gap-2">
+        <Codicon className="shrink-0" name="package" size="0.875rem" />
+        <span className="min-w-0 wrap-anywhere">
+          {label} <MessageTimelineTimestamp className="ml-1.5" />
+        </span>
+      </span>
+      <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
+    </MessagePrimitive.Root>
+  )
+}
+
 export const SystemMessage: FC = () => {
   const { t, locale } = useI18n()
   const sourceText = useAuiState(s => messageContentText(s.message.content))
@@ -75,35 +123,22 @@ export const SystemMessage: FC = () => {
   const processResult = useAuiState(s => s.message.metadata.custom?.asyncResultKind === 'process')
   const text = localizedFailedTurnNotice(locale, sourceText, failedTurnNotice)
 
+  const contentRefused = useAuiState(s => s.message.metadata.custom?.contentRefused as undefined | { notice?: string })
+
+  // A safety-refused turn, kept for display only: the user's own message, greyed
+  // and non-interactive, with a short notice. Not a user bubble, not a reply.
+  if (contentRefused) {
+    return (
+      <ContentRefusedNote notice={contentRefused.notice ?? t.assistant.thread.contentRefusedNotice} userText={text} />
+    )
+  }
+
   if (!text) {
     return null
   }
 
   if (modelSwitch) {
-    const { model, previous_model: previousModel } = modelSwitch
-
-    const label = model
-      ? previousModel
-        ? t.assistant.thread.modelChangedFrom(previousModel, model)
-        : t.assistant.thread.modelChangedTo(model)
-      : t.assistant.thread.modelChanged
-
-    return (
-      <MessagePrimitive.Root
-        className="flex w-full min-w-0 items-center gap-3 self-center py-2 text-xs leading-5 text-muted-foreground"
-        data-role="system"
-        data-slot="aui_system-message-root"
-      >
-        <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
-        <span className="flex min-w-0 max-w-[85%] items-center gap-2">
-          <Codicon className="shrink-0" name="package" size="0.875rem" />
-          <span className="min-w-0 wrap-anywhere">
-            {label} <MessageTimelineTimestamp className="ml-1.5" />
-          </span>
-        </span>
-        <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
-      </MessagePrimitive.Root>
-    )
+    return <ModelSwitchNote modelSwitch={modelSwitch} />
   }
 
   if (processResult || (typeof asyncResult === 'string' && asyncResult)) {
