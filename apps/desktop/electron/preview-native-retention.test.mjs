@@ -41,6 +41,22 @@ const watchdog = setTimeout(() => {
   app.exit(1)
 }, 45_000)
 
+const readState = guest => guest.executeJavaScript(`JSON.stringify({ nonce, draft:document.querySelector('#draft').value,
+  scroll:scrollY, count:history.length, hash:location.hash, state:history.state, cookie:document.cookie })`)
+
+async function assertRetainedState(guest, expected, originalScroll) {
+  const { scroll: actualScroll, ...actualState } = JSON.parse(await readState(guest))
+  const { scroll: _expectedScroll, ...expectedState } = JSON.parse(expected)
+  assert.deepEqual(actualState, expectedState)
+  const pixelRatio = await guest.executeJavaScript('devicePixelRatio')
+  assert.ok(Number.isFinite(pixelRatio) && pixelRatio > 0)
+  const errorPixels = Math.abs(actualScroll - originalScroll) * pixelRatio
+  // Chromium quantizes CSS scroll offsets when zoom reaches the compositor.
+  // Compare against the original baseline so successive handoffs cannot drift.
+  assert.ok(errorPixels <= 1, `Retained scroll moved ${errorPixels} device pixels (${originalScroll} -> ${actualScroll}, ratio ${pixelRatio})`)
+  return { expected: originalScroll, actual: actualScroll, pixelRatio, errorPixels }
+}
+
 async function run() {
   const bundle = join(runtimeDir, 'preview-service.mjs')
   await build({
@@ -92,8 +108,6 @@ async function run() {
   const invoke = (name, owner, ...args) => handlers.get(`hermes:preview-native:${name}`)({ sender: owner.webContents }, ...args)
   const bounds = { x: 20, y: 70, width: 800, height: 600 }
   const request = { tabId: 'retained-tab', partition: 'persist:hermes-preview', url, bounds }
-  const readState = guest => guest.executeJavaScript(`JSON.stringify({ nonce, draft:document.querySelector('#draft').value,
-    scroll:scrollY, count:history.length, hash:location.hash, state:history.state, cookie:document.cookie })`)
   const evidence = []
   const installRetiredOverlay = guest => guest.executeJavaScript(`(() => {
     window.__hermesAnnotateSession=99;
@@ -117,7 +131,12 @@ async function run() {
     await invoke('command', source, current.token, 'setPageZoom', [1.15])
     const originalId = guest.id
     let retained = await readState(guest)
+    const originalScroll = JSON.parse(retained).scroll
     const originalRequests = pageRequests
+    await guest.executeJavaScript('scrollBy(0,10);true')
+    await assert.rejects(assertRetainedState(guest, retained, originalScroll), /Retained scroll moved/)
+    await guest.executeJavaScript(`scrollTo(0,${originalScroll});true`)
+    await assertRetainedState(guest, retained, originalScroll)
 
     for (let round = 1; round <= 3; round++) {
       const popup = new BrowserWindow({ show: false, width: 1000, height: 760, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } })
@@ -130,7 +149,7 @@ async function run() {
       current = invoke('mount', popup, request)
       assert.equal(current.webContentsId, originalId)
       assert.equal(current.zoom, 1.15)
-      assert.equal(await readState(guest), retained)
+      const popupScroll = await assertRetainedState(guest, retained, originalScroll)
       await assertRetired(popup, guest, round * 2 - 1)
       assert.equal(pageRequests, originalRequests)
       assert.throws(() => beginPreviewGuestActivity(source.webContents, guest, () => () => {}), /does not belong/)
@@ -150,11 +169,11 @@ async function run() {
       await closed
       current = invoke('mount', source, request)
       assert.equal(current.webContentsId, originalId)
-      assert.equal(await readState(guest), retained)
+      const restoredScroll = await assertRetainedState(guest, retained, originalScroll)
       assert.equal(pageRequests, originalRequests)
       assert.equal(guest.isDestroyed(), false)
       await assertRetired(source, guest, round * 2)
-      evidence.push({ round, webContentsId: guest.id, state: JSON.parse(retained), pageRequests, zoom: guest.getZoomFactor(), annotationTeardowns: round * 2 })
+      evidence.push({ round, webContentsId: guest.id, state: JSON.parse(retained), pageRequests, zoom: guest.getZoomFactor(), popupScroll, restoredScroll, annotationTeardowns: round * 2 })
     }
 
     const downloadPath = join(runtimeDir, 'retention.txt')
@@ -171,9 +190,9 @@ async function run() {
     current = invoke('mount', source, request)
     assert.equal(current.ready, true, 'a completed attachment download must keep its original document ready')
     assert.equal(current.webContentsId, originalId)
-    assert.equal(await readState(guest), retained)
+    const downloadScroll = await assertRetainedState(guest, retained, originalScroll)
     assert.equal(readFileSync(downloadPath, 'utf8'), 'Disposable retained-page download')
-    evidence.push({ downloadCompleted: true, readyAfterDownload: current.ready, webContentsId: guest.id })
+    evidence.push({ downloadCompleted: true, readyAfterDownload: current.ready, webContentsId: guest.id, downloadScroll })
     assert.equal(views.length, 1)
     const destroyed = once(guest, 'destroyed')
     invoke('release', source, current.token)
