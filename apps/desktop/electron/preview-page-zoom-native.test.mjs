@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,9 +10,10 @@ import { app, BrowserWindow, dialog, WebContentsView } from 'electron'
 import { build } from 'esbuild'
 
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
 
 failNativeFixtureWithoutDialog(app)
-const runtime = mkdtempSync(join(tmpdir(), 'aino-page-zoom-'))
+const runtime = nativeFixtureRuntime()
 const output = process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-page-zoom-proof-'))
 mkdirSync(output, { recursive: true })
 app.setPath('userData', runtime)
@@ -137,6 +138,5 @@ async function run() {
 
 app.whenReady().then(run).then(() => {
   clearTimeout(watchdog)
-  rmSync(runtime, { recursive: true, force: true })
   app.exit(0)
 }).catch(error => {console.error(error); app.exit(1)})

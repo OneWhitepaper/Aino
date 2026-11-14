@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,10 +12,12 @@ import { build } from 'esbuild'
 import { createServer as createViteServer } from 'vite'
 
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
+import { traceFixtureApproval } from './preview-native-approval-evidence.mjs'
 
 failNativeFixtureWithoutDialog(app)
 
-const runtimeDir = mkdtempSync(join(tmpdir(), 'aino-preview-agent-native-'))
+const runtimeDir = nativeFixtureRuntime()
 const evidenceDir = process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-preview-agent-proof-'))
 mkdirSync(evidenceDir, { recursive: true })
 app.setPath('userData', runtimeDir)
@@ -24,7 +26,6 @@ process.env.HERMES_HOME = join(runtimeDir, 'home')
 process.env.HERMES_RUNTIME_DIR = join(runtimeDir, 'runtime')
 const watchdog = setTimeout(() => {
   console.error('Native browser agent fixture exceeded 120 seconds')
-  rmSync(runtimeDir, { recursive: true, force: true })
   app.exit(1)
 }, 120_000)
 
@@ -295,14 +296,26 @@ async function run() {
     console.log('PASS semantic native double-click dispatches click details 1/2 and a trusted dblclick')
 
     await page(`(() => { const style=document.createElement('style');style.textContent='#danger:hover{opacity:.75;transform:scale(1.05)}';document.head.append(style) })()`)
-    await start({ kind: 'click', selector: '#danger' })
-    await waitApproval()
-    assert.equal(await page('dangerHits'), 0)
-    assert((await host('previewNativeFixture.pending()')).details.some(item => item.value === 'Delete record'))
-    await approve()
-    const approvedSensitive = await finish()
-    assert.equal(approvedSensitive.success, true, JSON.stringify(approvedSensitive))
-    assert.equal(await page('dangerHits'), 1)
+    const sensitiveTrace = traceFixtureApproval(guest, evidenceDir)
+    try {
+      await sensitiveTrace.observe('before')
+      await start({ kind: 'click', selector: '#danger' })
+      await waitApproval()
+      await sensitiveTrace.observe('pending')
+      assert.equal(await page('dangerHits'), 0)
+      assert((await host('previewNativeFixture.pending()')).details.some(item => item.value === 'Delete record'))
+      await approve()
+      await sensitiveTrace.observe('accepted')
+      const approvedSensitive = await finish()
+      await sensitiveTrace.observe('finished')
+      assert.equal(approvedSensitive.success, true, JSON.stringify(approvedSensitive))
+      assert.equal(await page('dangerHits'), 1)
+    } catch (error) {
+      sensitiveTrace.write(error)
+      throw error
+    } finally {
+      sensitiveTrace.stop()
+    }
     console.log('PASS sensitive target hover styling settles before one-action approval and trusted click')
 
     guest.debugger.on('message', (_event, method, params, sessionId) => {
@@ -452,12 +465,10 @@ app
   .then(run)
   .then(() => {
     clearTimeout(watchdog)
-    rmSync(runtimeDir, { recursive: true, force: true })
     app.exit(0)
   })
   .catch(error => {
     console.error(error)
     clearTimeout(watchdog)
-    rmSync(runtimeDir, { recursive: true, force: true })
     app.exit(1)
   })

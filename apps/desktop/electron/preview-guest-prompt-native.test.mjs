@@ -9,6 +9,7 @@ import { app, BrowserWindow, dialog, WebContentsView } from 'electron'
 import { build } from 'esbuild'
 
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
 import { waitForNativePreviewDialog } from './preview-native-fixture-wait.mjs'
 
 failNativeFixtureWithoutDialog(app)
@@ -27,7 +28,7 @@ function assertUnattended() {
   assert.equal(unattended.message_box_calls, 0, 'the Aino dialog adapter must not call an OS message box')
 }
 
-const runtime = mkdtempSync(join(tmpdir(), 'aino-frame-prompt-'))
+const runtime = nativeFixtureRuntime()
 const evidence = resolve(process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-frame-prompt-proof-')))
 mkdirSync(evidence, { recursive: true })
 rmSync(join(evidence, 'frame-prompt-receipts.json'), { force: true })
@@ -137,6 +138,5 @@ async function run() {
 }
 app.whenReady().then(run).then(() => {
   clearTimeout(watchdog)
-  rmSync(runtime, { recursive: true, force: true })
   app.exit(0)
 }, error => { clearTimeout(watchdog); console.error(error); app.exit(1) })

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +9,7 @@ import { app, BrowserWindow, dialog, session, WebContentsView } from 'electron'
 import { build } from 'esbuild'
 
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
 
 failNativeFixtureWithoutDialog(app)
 
@@ -26,7 +27,7 @@ function assertUnattended() {
   assert.equal(unattended.message_box_calls, 0, 'the native fixture must not call an OS message box')
 }
 
-const temporary = mkdtempSync(join(tmpdir(), 'aino-preview-approval-'))
+const temporary = nativeFixtureRuntime()
 const proof = process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-preview-approval-proof-'))
 mkdirSync(proof, { recursive: true })
 app.commandLine.appendSwitch('site-per-process')
@@ -154,11 +155,14 @@ async function run() {
   console.log('Native approval proof: ' + proof)
 }
 
-app.whenReady().then(run).then(() => app.exit(0), error => { console.error(error); app.exit(1) }).finally(() => {
+app.whenReady().then(run).finally(async () => {
   clearTimeout(watchdog)
-  for (const server of servers) server.close()
-  host?.destroy(); other?.destroy()
-  hidden?.webContents.close()
+  if (host && !host.isDestroyed()) host.destroy()
+  if (other && !other.isDestroyed()) other.destroy()
+  if (hidden && !hidden.webContents.isDestroyed()) hidden.webContents.close()
+  for (const server of servers) {
+    server.closeAllConnections()
+    await new Promise(resolve => server.close(resolve))
+  }
   assertUnattended()
-  rmSync(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
-})
+}).then(() => app.exit(0), error => { console.error(error); app.exit(1) })

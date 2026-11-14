@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +11,7 @@ import { build } from 'esbuild'
 
 // Runs the production service with real native views; no debugger or emulated DOM.
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
 
 failNativeFixtureWithoutDialog(app)
 
@@ -28,7 +29,7 @@ function assertUnattended() {
   assert.equal(unattended.message_box_calls, 0, 'the native fixture must not call an OS message box')
 }
 
-const runtimeDir = mkdtempSync(join(tmpdir(), 'aino-preview-retention-'))
+const runtimeDir = nativeFixtureRuntime()
 const evidenceDir = process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-preview-retention-proof-'))
 mkdirSync(evidenceDir, { recursive: true })
 app.setPath('userData', runtimeDir)
@@ -192,7 +193,6 @@ async function run() {
 
 app.whenReady().then(run).then(() => {
   clearTimeout(watchdog)
-  rmSync(runtimeDir, { recursive: true, force: true })
   app.exit(0)
 }, error => {
   console.error(error)

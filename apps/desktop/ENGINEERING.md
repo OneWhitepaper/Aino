@@ -313,10 +313,15 @@ retain the system dialog and report `dialog_control: system`; automated input
 stops for manual completion. Pending dialogs are presented in arrival order, and
 navigation, owner changes and disposal settle each callback at most once.
 
-Run `pnpm exec electron electron/preview-agent-native-fixture` from `apps/desktop` with a graphical session. This disposable fixture imports the production controller, semantic engine, toolbar status and confirmation UI, and uses actual sandboxed Electron webviews and owner-checked capture/input. It checks PNG/viewport coordinates at 100% and 125% zoom, forms, Shadow DOM, same-origin and cross-origin frames, canvas, drag, SPA/document navigation, takeover and cross-window capture isolation. It uses temporary user data and runtime directories, and prints the proof-image directory. Renderer/Python transport tests separately cover cancellation, multiwindow ownership, image-result adaptation and confirmation deadlines; no model credentials are needed for these contract checks.
+Run `pnpm run test:preview-native /absolute/proof-directory preview-agent-native.test.mjs` from `apps/desktop` with a graphical session. This disposable fixture imports the production controller, semantic engine, toolbar status and confirmation UI, and uses actual sandboxed Electron webviews and owner-checked capture/input. It checks PNG/viewport coordinates at 100% and 125% zoom, forms, Shadow DOM, same-origin and cross-origin frames, canvas, drag, SPA/document navigation, takeover and cross-window capture isolation. It uses temporary user data and runtime directories, and prints the proof-image directory. Renderer/Python transport tests separately cover cancellation, multiwindow ownership, image-result adaptation and confirmation deadlines; no model credentials are needed for these contract checks.
 
 `pnpm run test:preview-native /absolute/proof-directory` runs the native fixtures
-sequentially with the locked Electron executable on the current host. Every fixture
+sequentially with the locked Electron executable on the current host. Its parent
+process creates an isolated runtime for each fixture and
+removes it only after Electron closes. Windows file-handle cleanup retries are
+bounded, and a cleanup failure fails the receipt. To debug one fixture, append
+its filename, for example `preview-page-zoom-native.test.mjs`; invoke fixtures
+through this runner so active Chromium data is never removed inside Electron. Every fixture
 uses a disposable user-data/runtime directory; its log, screenshots and structured
 receipts go under the supplied proof directory. A missing fixture, startup failure
 or timeout fails the run. `.github/workflows/e2e-browser-native.yml` exposes the same

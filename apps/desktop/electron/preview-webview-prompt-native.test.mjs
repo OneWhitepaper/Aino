@@ -9,9 +9,10 @@ import { app, BrowserWindow, dialog, session } from 'electron'
 import { build } from 'esbuild'
 
 import { failNativeFixtureWithoutDialog } from './preview-native-fixture-errors.mjs'
+import { nativeFixtureRuntime } from './preview-native-fixture-runtime.mjs'
 
 failNativeFixtureWithoutDialog(app)
-const runtime = mkdtempSync(join(tmpdir(), 'aino-webview-prompt-'))
+const runtime = nativeFixtureRuntime()
 const evidence = resolve(process.argv[2] || mkdtempSync(join(tmpdir(), 'aino-webview-prompt-proof-')))
 mkdirSync(evidence, { recursive: true })
 rmSync(join(evidence, 'webview-prompt-receipts.json'), { force: true })
@@ -156,4 +157,12 @@ async function run() {
     await new Promise(resolve => server.close(resolve))
   }
 }
-app.whenReady().then(run).then(() => { clearTimeout(watchdog); rmSync(runtime, { recursive: true, force: true }); app.exit(0) }, error => { clearTimeout(watchdog); console.error(error); app.exit(1) })
+
+app.whenReady().then(run).then(() => {
+  clearTimeout(watchdog)
+  app.exit(0)
+}, error => {
+  clearTimeout(watchdog)
+  console.error(error)
+  app.exit(1)
+})
