@@ -60,8 +60,13 @@ import {
   unifiedToolGroup
 } from './tool-panel-policy'
 import { $maximizedToolGroup } from './tool-panel-view'
-import { rememberWorkspacePane, watchWorkspaceActivePanes, workspaceActivePane,
-  workspaceAvailablePaneIds, workspaceSessionAnchor, workspaceShownPaneIds
+import {
+  rememberWorkspacePane,
+  watchWorkspaceActivePanes,
+  workspaceActivePane,
+  workspaceAvailablePaneIds,
+  workspaceSessionAnchor,
+  workspaceShownPaneIds
 } from './workspace-presentation'
 
 // v2: v1 trees were saved against placeholder panes with index-order zone
@@ -714,7 +719,8 @@ export const $newSessionTabAction = atom<(() => void) | null>(null)
 /** Keyboard slots index the same scoped, registered candidates as the header. */
 export function shownPanesInGroup(group: { panes: readonly string[] }): string[] {
   return workspaceAvailablePaneIds(
-    group.panes, $hiddenTreePanes.get(),
+    group.panes,
+    $hiddenTreePanes.get(),
     Boolean(typeof window !== 'undefined' && window.matchMedia?.(SIDEBAR_COLLAPSE_MEDIA_QUERY).matches)
   )
 }
@@ -1792,7 +1798,8 @@ export function isPaneVisible(paneId: string): boolean {
   return Boolean(
     group &&
       !group.minimized &&
-      workspaceActivePane(group, workspaceShownPaneIds(group.panes.filter(id => !$hiddenTreePanes.get().has(id)))) === paneId &&
+    workspaceActivePane(group, workspaceShownPaneIds(group.panes.filter(id => !$hiddenTreePanes.get().has(id)))) ===
+      paneId &&
       !(side && $collapsedTreeSides.get().has(side))
   )
 }
@@ -1820,8 +1827,13 @@ export function isTreeSideVisible(side: TreeSide): boolean {
 const paneVisibleCache = new Map<string, ReadableAtom<boolean>>()
 
 const paneVisibleStores = [
-  $layoutTree, $dismissedPanes, $hiddenTreePanes, $collapsedTreeSides,
-  $workspaceMode, $workspaceOwnerKey, $registryVersion
+  $layoutTree,
+  $dismissedPanes,
+  $hiddenTreePanes,
+  $collapsedTreeSides,
+  $workspaceMode,
+  $workspaceOwnerKey,
+  $registryVersion
 ]
 
 /** Reactive `isPaneVisible` for chrome that renders an on/off affordance

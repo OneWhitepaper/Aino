@@ -19,10 +19,12 @@ it('does not relabel a same-account chat as foreign while a relogin refreshes it
   let snapshot = platformSnapshot('user-a', 1)
   const pending = deferred<{ user_id: string; platform_origin: string }>()
   const owner = { user_id: 'user-a', platform_origin: 'https://aino.test' }
+
   const lookup = vi
     .fn()
     .mockResolvedValueOnce(owner)
     .mockImplementationOnce(() => pending.promise)
+
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
     value: {

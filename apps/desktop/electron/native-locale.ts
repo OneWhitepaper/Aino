@@ -155,7 +155,8 @@ const COPY: Record<NativeLocale, NativeLocaleCopy> = {
       title: appName => `${appName} couldn’t start the desktop UI`,
       defaultDescription: 'The desktop renderer failed to load.',
       repeatedFailureDescription: 'The desktop renderer failed to load repeatedly after the update.',
-      incompleteDescription: count => `The desktop renderer bundle is incomplete after the last update (${count} missing file(s)).`,
+      incompleteDescription: count =>
+        `The desktop renderer bundle is incomplete after the last update (${count} missing file(s)).`,
       missingAssets: (total, shown) =>
         `The renderer bundle is missing ${total} module file(s) (first ${shown} shown) — the last update replaced the app while its files were locked.`,
       repairWith: 'Repair with:',
@@ -407,7 +408,8 @@ const COPY: Record<NativeLocale, NativeLocaleCopy> = {
       title: appName => `${appName} デスクトップ UI を起動できませんでした`,
       defaultDescription: 'デスクトップ renderer の読み込みに失敗しました。',
       repeatedFailureDescription: '更新後、デスクトップ renderer の読み込みに繰り返し失敗しました。',
-      incompleteDescription: count => `前回の更新後、デスクトップ renderer バンドルが不完全です（不足ファイル ${count} 個）。`,
+      incompleteDescription: count =>
+        `前回の更新後、デスクトップ renderer バンドルが不完全です（不足ファイル ${count} 個）。`,
       missingAssets: (total, shown) =>
         `renderer バンドルにモジュールファイルが ${total} 個ありません（先頭 ${shown} 個を表示）— 前回の更新時にファイルがロックされていました。`,
       repairWith: '修復方法：',
@@ -491,7 +493,8 @@ const COPY: Record<NativeLocale, NativeLocaleCopy> = {
       title: appName => `تعذر تشغيل واجهة سطح المكتب في ${appName}`,
       defaultDescription: 'تعذر تحميل واجهة سطح المكتب.',
       repeatedFailureDescription: 'تعذر تحميل واجهة سطح المكتب بشكل متكرر بعد التحديث.',
-      incompleteDescription: count => `حزمة واجهة سطح المكتب غير مكتملة بعد التحديث الأخير (الملفات المفقودة: ${count}).`,
+      incompleteDescription: count =>
+        `حزمة واجهة سطح المكتب غير مكتملة بعد التحديث الأخير (الملفات المفقودة: ${count}).`,
       missingAssets: (total, shown) =>
         `تفتقد حزمة الواجهة ${total} من ملفات الوحدات (يُعرض أول ${shown}) — استبدل التحديث الأخير التطبيق بينما كانت ملفاته مقفلة.`,
       repairWith: 'طريقة الإصلاح:',

@@ -474,15 +474,15 @@ export const zhHantChrome = {
   },
 
   rightSidebar: {
-    terminalReconnectSame: "終端連線已中斷。按 Enter 重新連線到原來的 Shell。",
-    terminalExpired: "終端已過期或結束。按 Enter 建立新的 Shell。",
-    terminalSuperseded: "終端已在其他視窗開啟。按 Enter 將它切回此視窗。",
-    terminalDenied: "無權存取終端。請檢查登入狀態和設定群組，再按 Enter 重試。",
-    terminalCapacity: "終端數量已達上限。關閉其他終端後按 Enter 重試。",
-    terminalSignedOut: "Aino 登入已失效。請在此瀏覽器重新登入，再按 Enter 連線終端。",
-    terminalReconnecting: "終端連線已中斷，正在重新連線到原來的 Shell…",
-    terminalStartRetry: (error: string) => "終端啟動失敗：" + error + "。按 Enter 重試。",
-    terminalCloseFailed: "無法關閉終端",
+    terminalReconnectSame: '終端連線已中斷。按 Enter 重新連線到原來的 Shell。',
+    terminalExpired: '終端已過期或結束。按 Enter 建立新的 Shell。',
+    terminalSuperseded: '終端已在其他視窗開啟。按 Enter 將它切回此視窗。',
+    terminalDenied: '無權存取終端。請檢查登入狀態和設定群組，再按 Enter 重試。',
+    terminalCapacity: '終端數量已達上限。關閉其他終端後按 Enter 重試。',
+    terminalSignedOut: 'Aino 登入已失效。請在此瀏覽器重新登入，再按 Enter 連線終端。',
+    terminalReconnecting: '終端連線已中斷，正在重新連線到原來的 Shell…',
+    terminalStartRetry: (error: string) => '終端啟動失敗：' + error + '。按 Enter 重試。',
+    terminalCloseFailed: '無法關閉終端',
     terminalDropUnquotable: (shell, paths) => `無法在 ${shell} 中安全地輸入這些名稱：${paths}`,
     terminalReadOnly: '唯讀輸出',
     terminalReadOnlyHelp:
@@ -529,17 +529,13 @@ export const zhHantChrome = {
     terminalCloseOthers: '關閉其他',
     terminalCloseAll: '全部關閉',
     addToChat: '新增至聊天',
-    terminalStartFailed: error => `終端機啟動失敗：${error}`
-  ,
-terminalNewOn: '新增終端機於…',
-terminalGatewayRemoved: '已移除的閘道',
-terminalGatewayRemovedBody:
-      '此終端機所在的閘道已被移除，無法重新開啟。請關閉此分頁。',
-terminalGatewayNoShellBody:
-      '此閘道不提供 Shell 存取，此終端機無法重新開啟。請關閉此分頁。',
-terminalDisconnectedBody:
-      '終端機已中斷連線。按 Enter 啟動新的 shell；捲動記錄會保留。'
-},
+    terminalStartFailed: error => `終端機啟動失敗：${error}`,
+    terminalNewOn: '新增終端機於…',
+    terminalGatewayRemoved: '已移除的閘道',
+    terminalGatewayRemovedBody: '此終端機所在的閘道已被移除，無法重新開啟。請關閉此分頁。',
+    terminalGatewayNoShellBody: '此閘道不提供 Shell 存取，此終端機無法重新開啟。請關閉此分頁。',
+    terminalDisconnectedBody: '終端機已中斷連線。按 Enter 啟動新的 shell；捲動記錄會保留。'
+  },
 
   zones: {
     switchConversation: '切換對話',

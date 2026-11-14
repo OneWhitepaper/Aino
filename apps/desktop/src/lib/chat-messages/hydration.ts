@@ -215,9 +215,7 @@ function isMachineNotice(displayKind: SessionMessage['display_kind']): boolean {
 
 function typedNoticeMetadata(message: SessionMessage): Pick<ChatMessage, 'modelSwitch' | 'failedTurnNotice'> {
   return {
-    ...(message.display_kind === 'model_switch'
-      ? { modelSwitch: modelSwitchMetadata(message.display_metadata) }
-      : {}),
+    ...(message.display_kind === 'model_switch' ? { modelSwitch: modelSwitchMetadata(message.display_metadata) } : {}),
     ...(message.display_kind === 'failed_turn' ? { failedTurnNotice: true as const } : {})
   }
 }
@@ -279,9 +277,7 @@ function contentRefusedNotice(metadata: SessionMessage['display_metadata']): str
 // The spreadable contentRefused field for a hydrated row: present only on a
 // retained safety-refused turn, carrying its notice when the backend supplied
 // one. Extracted so toChatMessages keeps its complexity within the ratchet.
-function contentRefusedField(
-  message: SessionMessage
-): { contentRefused: { notice?: string } } | Record<string, never> {
+function contentRefusedField(message: SessionMessage): { contentRefused: { notice?: string } } | Record<string, never> {
   if (message.display_kind !== CONTENT_REFUSED_DISPLAY_KIND) {
     return {}
   }

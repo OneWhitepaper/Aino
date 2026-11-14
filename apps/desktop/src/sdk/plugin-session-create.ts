@@ -72,6 +72,7 @@ async function resolvePluginActiveRoute(route: PluginSessionCreateRoute): Promis
 
   const routes = await getProfileRoutes([route.profile, route.targetProfile])
   const sourceRoutes = routes.filter(candidate => candidate.connectionId === route.connectionId)
+
   const active = sourceRoutes.find(
     candidate => candidate.profile === route.profile && candidate.targetProfile === route.targetProfile
   )
@@ -198,8 +199,10 @@ async function requestPluginRuntimeReadiness<T>(
   spawnPriority?: SpawnPriority
 ): Promise<T> {
   const assertAccount = pluginAccountFence()
+
   const targetProfile =
     typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : route.targetProfile
+
   const release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
 
   try {
@@ -386,6 +389,7 @@ export async function requestPluginSession<T>(
       resolved.platform.ownerUserId,
       resolved.platform.platformOrigin
     )
+
     assertAccount()
     const owner = route.connectionId ? { connectionId: route.connectionId, profile: route.profile } : route.profile
 

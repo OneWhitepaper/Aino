@@ -46,8 +46,7 @@ it('keeps preview options within the conversation and owner while preserving the
   setModelPreset('provider', 'model-b', { effort: 'ultra' })
 
   const request = vi.fn(
-    async () =>
-      ({ providers: [{ slug: 'provider', name: 'Provider', models: ['model-a', 'model-b'] }] }) as never
+    async () => ({ providers: [{ slug: 'provider', name: 'Provider', models: ['model-a', 'model-b'] }] }) as never
   )
 
   const client = new QueryClient()
@@ -94,8 +93,7 @@ it('does not reuse another runtime conversation preset for the same model', asyn
   $selectedStoredSessionId.set('stored-a')
 
   const request = vi.fn(
-    async () =>
-      ({ providers: [{ slug: 'provider', name: 'Provider', models: ['model-a', 'model-b'] }] }) as never
+    async () => ({ providers: [{ slug: 'provider', name: 'Provider', models: ['model-a', 'model-b'] }] }) as never
   )
 
   const client = new QueryClient()
@@ -161,10 +159,7 @@ it('applies active draft reasoning locally without replacing the global preferen
 
   await waitFor(() => expect(result.current.modelOptions.data).toBeTruthy())
   await act(async () =>
-    result.current.controller.setOptions(
-      { effort: 'high' },
-      { provider: 'provider', model: 'model-a', isActive: true }
-    )
+    result.current.controller.setOptions({ effort: 'high' }, { provider: 'provider', model: 'model-a', isActive: true })
   )
 
   expect($currentReasoningEffort.get()).toBe('high')

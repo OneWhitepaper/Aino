@@ -666,7 +666,12 @@ describe('added-by-you rows', () => {
     mocked.deleteLocalModel.mockRejectedValueOnce(new Error('Model file is locked')).mockResolvedValue({ ok: true })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter><I18nProvider><LocalModelsSettings /><ConfirmHost /></I18nProvider></MemoryRouter>
+        <MemoryRouter>
+          <I18nProvider>
+            <LocalModelsSettings />
+            <ConfirmHost />
+          </I18nProvider>
+        </MemoryRouter>
       </QueryClientProvider>
     )
 

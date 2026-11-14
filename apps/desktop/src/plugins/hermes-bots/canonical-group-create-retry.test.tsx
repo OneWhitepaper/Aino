@@ -83,10 +83,12 @@ function loseFirstReply() {
 
 const box = (face: Element | null | undefined) =>
   face?.closest('label')?.querySelector('button[role="checkbox"]') as HTMLButtonElement
+
 const submit = () =>
   act(async () => {
     fireEvent.click(screen.getByRole('button', { name: /^New group chat/ }))
   })
+
 const creates = () => request.mock.calls.filter(call => call[1] === 'groups.create').map(call => call[2])
 
 async function draft(roster: RosterRow[], faces: (base: HTMLElement) => Element[], name = 'Team') {
@@ -99,6 +101,7 @@ async function draft(roster: RosterRow[], faces: (base: HTMLElement) => Element[
   if (name) {
     fireEvent.change(screen.getByRole('textbox', { name: 'Group name' }), { target: { value: name } })
   }
+
   await waitFor(() =>
     expect((screen.getByRole('button', { name: /^New group chat/ }) as HTMLButtonElement).disabled).toBe(false)
   )
@@ -159,10 +162,12 @@ it.each([
 
 it('a retry after a lost reply reuses the room when a mirrored room took its generated name', async () => {
   const rooms = loseFirstReply()
+
   const { onCreated } = await draft([here, beta], base => [
     base.querySelector('[data-bot-face="default"]')!,
     base.querySelector('[data-bot-face="beta"]')!
   ])
+
   // Another Desktop's room called "Team" arrives through sync: a fresh name would now be "Team 2".
   updateGroupChat('Team', room => ({ ...room, members: [here, beta] }), { sync: false })
   await submit()
@@ -175,9 +180,11 @@ it('a retry after a lost reply reuses the room when a mirrored room took its gen
 it('invites every Bot of another computer at once, so a slow computer holds up no other', async () => {
   const STUDIO = peerGroupCapabilities('install:b27c0000000000000000000000000000')
   let release!: () => void
+
   const slow = new Promise<void>(resolve => {
     release = resolve
   })
+
   const { create } = strictGroupCreation()
   answerGroupRequests(request, {
     local: (method, params) =>
@@ -203,6 +210,7 @@ it('invites every Bot of another computer at once, so a slow computer holds up n
           : undefined
   })
   const onCreated = vi.fn()
+
   const view = render(
     <CreateGroupChatDialog
       onClose={vi.fn()}
@@ -211,6 +219,7 @@ it('invites every Bot of another computer at once, so a slow computer holds up n
       roster={[here, mini, peerRosterRow('studio', 'Studio')]}
     />
   )
+
   await waitFor(() => expect(request.mock.calls.filter(call => call[1] === 'groups.capabilities')).toHaveLength(3))
   await act(async () => {})
   view.baseElement.querySelectorAll('[data-bot-face="default"]').forEach(face => fireEvent.click(box(face)))
@@ -219,8 +228,10 @@ it('invites every Bot of another computer at once, so a slow computer holds up n
     expect((screen.getByRole('button', { name: 'New group chat (3)' }) as HTMLButtonElement).disabled).toBe(false)
   )
   await submit()
+
   const registered = () =>
     request.mock.calls.filter(call => call[1] === 'groups.peer.register').map(call => call[2].member_id)
+
   // The Mac Mini has not answered its invitation yet; the Studio's Bot joins anyway.
   await waitFor(() => expect(registered()).toEqual(['hermes-studio']))
   await act(async () => {

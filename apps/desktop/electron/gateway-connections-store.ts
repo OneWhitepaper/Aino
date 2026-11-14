@@ -270,7 +270,9 @@ export function plainSecrets(
     if (value) {
       const encoded = encode ? encode(value) : { encoding: 'plain', value }
 
-      if (!encoded) {throw new Error('Secure token storage returned no payload')}
+      if (!encoded) {
+        throw new Error('Secure token storage returned no payload')
+      }
 
       return encoded
     }
@@ -654,7 +656,9 @@ export function createGatewayConnectionsStore(deps: GatewayConnectionsStoreDeps)
   const encodeTokenSet = (set: NativeTokenSet): NativeTokenSet | SecretEnvelope => {
     const encoded = deps.encodeSecret?.(JSON.stringify(set))
 
-    if (deps.encodeSecret && !encoded) {throw new Error('Secure token storage returned no payload')}
+    if (deps.encodeSecret && !encoded) {
+      throw new Error('Secure token storage returned no payload')
+    }
 
     return encoded && encoded.encoding !== 'plain' ? encoded : set
   }
@@ -753,7 +757,9 @@ export function createGatewayConnectionsStore(deps: GatewayConnectionsStoreDeps)
         const next = emptyTokens(read.doc)
 
         if (importLegacyTokens(legacyTokens, merged, next, encodeTokenSet)) {
-          if (deps.secretStorage) {next.secretStorage = deps.secretStorage()}
+          if (deps.secretStorage) {
+            next.secretStorage = deps.secretStorage()
+          }
           next.revision += 1
           replaceDoc(tokensFile, next, read.corrupt, tokensOurs)
         }
@@ -917,7 +923,9 @@ export function createGatewayConnectionsStore(deps: GatewayConnectionsStoreDeps)
             }
           }
 
-          if (deps.secretStorage) {doc.secretStorage = deps.secretStorage()}
+          if (deps.secretStorage) {
+            doc.secretStorage = deps.secretStorage()
+          }
           doc.revision += 1
           replaceDoc(tokensFile, doc, corrupt, stillOurs)
         })

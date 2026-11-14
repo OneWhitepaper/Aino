@@ -98,12 +98,14 @@ export function SubagentPanel() {
   const anchored = selection?.sourceKey === sourceKey ? selection : null
   const inspection = anchored?.inspection
 
-  const session = inspection ? {
-    ...foreground,
-    ...inspection,
-    cwd: '',
-    scope: resolveToolSessionScope(inspection.owner)
-  } : foreground
+  const session = inspection
+    ? {
+        ...foreground,
+        ...inspection,
+        cwd: '',
+        scope: resolveToolSessionScope(inspection.owner)
+      }
+    : foreground
 
   const content = useSummaryContent(session)
   const live = useSessionSlice($subagentsBySession, session.runtimeId)
@@ -143,9 +145,13 @@ export function SubagentPanel() {
           <header className="subagent-panel-header">
             <Button
               aria-label={t.common.back}
-              onClick={() => $subagentPanelSelection.set(inspection && anchored
-                ? { ...anchored, taskId: undefined, row: undefined, toolCallId: undefined }
-                : null)}
+              onClick={() =>
+                $subagentPanelSelection.set(
+                  inspection && anchored
+                    ? { ...anchored, taskId: undefined, row: undefined, toolCallId: undefined }
+                    : null
+                )
+              }
               size="icon-sm"
               variant="ghost"
             >

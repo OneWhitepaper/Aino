@@ -9,19 +9,33 @@ import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { useGatewayActivationEpoch } from '@/store/gateway-activation-epoch'
 import { $notificationEpoch } from '@/store/notifications'
 import { sessionOwnerIsKnown } from '@/store/session-owner-resolution'
-import { profileScopeForSessionOwner, requestForSessionProfile, type SessionOwnerScope } from '@/store/session-request-router'
+import {
+  profileScopeForSessionOwner,
+  requestForSessionProfile,
+  type SessionOwnerScope
+} from '@/store/session-request-router'
 import type { SessionMessage } from '@/types/hermes'
 
-const unavailableOwner = async <T>(): Promise<T> => { throw new Error('Subagent owner is unavailable') }
+const unavailableOwner = async <T>(): Promise<T> => {
+  throw new Error('Subagent owner is unavailable')
+}
 
 function canonicalMessages(pages: readonly StoredTranscriptResult[] = []): SessionMessage[] {
   // A reset after a cursor replaces every page held before that response.
-  const current = pages.slice(Math.max(0, pages.findLastIndex(page => page.reset)))
-  const rows = current.toReversed().flatMap(page => page.available ? page.rows : [])
+  const current = pages.slice(
+    Math.max(
+      0,
+      pages.findLastIndex(page => page.reset)
+    )
+  )
+  const rows = current.toReversed().flatMap(page => (page.available ? page.rows : []))
 
-  return rows.filter(row => row.row_kind === 'message').map(row => ({
-    ...row, content: row.content ?? row.text ?? ''
-  })) as SessionMessage[]
+  return rows
+    .filter(row => row.row_kind === 'message')
+    .map(row => ({
+      ...row,
+      content: row.content ?? row.text ?? ''
+    })) as SessionMessage[]
 }
 
 function childReadInterval(visible: boolean, row: DelegateRow, pages: readonly StoredTranscriptResult[] = []) {
@@ -66,7 +80,9 @@ export function useSubagentTranscriptSource({ row, parentRuntimeId, owner, live,
   const key = [accountEpoch, activation, owner] as const
 
   const checkAccount = () => {
-    if (accountEpoch !== $notificationEpoch.get()) { throw new Error('Subagent account changed') }
+    if (accountEpoch !== $notificationEpoch.get()) {
+      throw new Error('Subagent account changed')
+    }
   }
 
   const request = async <T>(method: string, params: Record<string, unknown>, signal: AbortSignal) => {
@@ -86,7 +102,9 @@ export function useSubagentTranscriptSource({ row, parentRuntimeId, owner, live,
 
         return description.capabilities?.includes('session-transcript-v1') === true
       } catch (error) {
-        if (isMissingRpcMethod(error)) { return false }
+        if (isMissingRpcMethod(error)) {
+          return false
+        }
         throw error
       }
     },
@@ -102,11 +120,19 @@ export function useSubagentTranscriptSource({ row, parentRuntimeId, owner, live,
     queryKey: ['subagent-panel-transcript', ...key, parentRuntimeId, childId],
     enabled: visible && ownerKnown && Boolean(parentRuntimeId) && capability.data === true,
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => request<StoredTranscriptResult>('session.transcript', {
-      session_id: parentRuntimeId, subagent_id: childId, order: 'latest', limit: 120,
-      ...(scope ? { profile: typeof scope === 'string' ? scope : scope.profile } : {}),
-      ...(pageParam ? { cursor: pageParam } : {})
-    }, signal),
+    queryFn: ({ pageParam, signal }) =>
+      request<StoredTranscriptResult>(
+        'session.transcript',
+        {
+          session_id: parentRuntimeId,
+          subagent_id: childId,
+          order: 'latest',
+          limit: 120,
+          ...(scope ? { profile: typeof scope === 'string' ? scope : scope.profile } : {}),
+          ...(pageParam ? { cursor: pageParam } : {})
+        },
+        signal
+      ),
     getNextPageParam: last => last.next_cursor ?? undefined,
     refetchInterval: query => childReadInterval(visible, row, query.state.data?.pages),
     refetchOnWindowFocus: false,
@@ -137,15 +163,19 @@ export function useSubagentTranscriptSource({ row, parentRuntimeId, owner, live,
   const native = capability.data === true
   const query = native ? canonical : legacy
 
-  const messages = useMemo(() => native ? canonicalMessages(canonical.data?.pages) : legacy.data?.messages ?? [],
-    [native, legacy.data, canonical.data])
+  const messages = useMemo(
+    () => (native ? canonicalMessages(canonical.data?.pages) : (legacy.data?.messages ?? [])),
+    [native, legacy.data, canonical.data]
+  )
 
   return {
-    messages, ownerKnown, useLiveTail,
+    messages,
+    ownerKnown,
+    useLiveTail,
     awaitingOutput: native && childAwaitingOutput(row, canonical.data?.pages),
     unavailable: capability.isSuccess && (native ? !parentRuntimeId : !row.sessionId && !useLiveTail),
     ...transcriptReadState(capability, query, useLiveTail),
-    retry: () => capability.isError ? capability.refetch() : query.refetch(),
+    retry: () => (capability.isError ? capability.refetch() : query.refetch()),
     hasEarlier: native && canonical.hasNextPage,
     fetchingEarlier: canonical.isFetchingNextPage,
     loadEarlier: () => canonical.fetchNextPage()

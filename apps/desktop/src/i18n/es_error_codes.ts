@@ -5,16 +5,16 @@ type ThreadCopy = Translations['assistant']['thread']
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const esErrorCodes: Partial<ThreadCopy['errorCodes']> = {
   managed_billing_unavailable: {
-    title: "Estado del plan no disponible",
-    body: "Consulta la suscripción y su vencimiento en Mi cuenta. Cuando recuperes el acceso, vuelve a enviar el mensaje o elige un modelo disponible."
+    title: 'Estado del plan no disponible',
+    body: 'Consulta la suscripción y su vencimiento en Mi cuenta. Cuando recuperes el acceso, vuelve a enviar el mensaje o elige un modelo disponible.'
   },
   managed_subscription_expired: {
-    title: "Tu plan ha vencido",
-    body: "Renueva la suscripción en Mi cuenta y vuelve a enviar el mensaje, o elige un modelo disponible."
+    title: 'Tu plan ha vencido',
+    body: 'Renueva la suscripción en Mi cuenta y vuelve a enviar el mensaje, o elige un modelo disponible.'
   },
   managed_model_access_denied: {
-    title: "Tu cuenta no puede usar este modelo",
-    body: "Tu plan o cuenta actual no permite usar este modelo. Consulta Mi cuenta o elige un modelo disponible."
+    title: 'Tu cuenta no puede usar este modelo',
+    body: 'Tu plan o cuenta actual no permite usar este modelo. Consulta Mi cuenta o elige un modelo disponible.'
   },
   cron_session_read_only: {
     title: 'Este chat pertenece a una tarea programada',

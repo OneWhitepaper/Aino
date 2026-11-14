@@ -2,7 +2,12 @@ import { host } from '@hermes/plugin-sdk'
 import { type Dispatch, type RefObject, type SetStateAction, useEffect, useRef, useState } from 'react'
 
 import type { GroupChatRoom } from './group-chat'
-import { groupComposerDraftKey, groupComposerDraftSnapshot, migrateGroupComposerDraft, updateGroupComposerDraft } from './group-panes'
+import {
+  groupComposerDraftKey,
+  groupComposerDraftSnapshot,
+  migrateGroupComposerDraft,
+  updateGroupComposerDraft
+} from './group-panes'
 import type { GroupComposerDraft, GroupDraftSetter } from './group-panes'
 import type { Attachment } from './types'
 
@@ -52,13 +57,30 @@ export function useLegacyGroupComposer(group: string, room: GroupChatRoom) {
       pendingAttachments: typeof value === 'function' ? value(current.pendingAttachments || {}) : value
     }))
 
-  return { composerKey, composerKeyRef, composerDraft, setComposerDraft, updateComposerDraft,
-    draft: composerDraft.main || '', replyDrafts, replyThread, pendingImages, setDraft, setReplyDrafts, setReplyThread, setPendingImages }
+  return {
+    composerKey,
+    composerKeyRef,
+    composerDraft,
+    setComposerDraft,
+    updateComposerDraft,
+    draft: composerDraft.main || '',
+    replyDrafts,
+    replyThread,
+    pendingImages,
+    setDraft,
+    setReplyDrafts,
+    setReplyThread,
+    setPendingImages
+  }
 }
 
 /** Accept only browser annotations addressed to this room and this renderer. */
-export function useLegacyGroupBrowserHandoff(group: string, composerKey: string,
-  composerKeyRef: RefObject<string>, setComposerDraft: Dispatch<SetStateAction<GroupComposerDraft>>) {
+export function useLegacyGroupBrowserHandoff(
+  group: string,
+  composerKey: string,
+  composerKeyRef: RefObject<string>,
+  setComposerDraft: Dispatch<SetStateAction<GroupComposerDraft>>
+) {
   // Browser Comment Mode can live in its own Electron pop-out on another
   // monitor. The ordinary composer bus is window-local and this room uses its
   // own New Thread composer anyway, so accept only batches explicitly pinned to
@@ -176,5 +198,4 @@ export function useLegacyGroupBrowserHandoff(group: string, composerKey: string,
       channel?.close()
     }
   }, [composerKey, group])
-
 }

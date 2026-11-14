@@ -341,9 +341,11 @@ function CanonicalRoomView({
     syncCanonicalGroupName(binding, snapshot.room.name)
     setState(snapshot)
     const driver = snapshot.driver_status
+
     if (driver && !driver.working && !driver.counts?.stopping && !driver.pending_actions?.length) {
       setNotice(current => (current === 'stopped' ? '' : current))
     }
+
     setReadError('')
   }
 
@@ -894,6 +896,7 @@ function CanonicalRoomView({
         event_id: randomUuid(),
         name
       })
+
       registerCanonicalGroup(binding, room)
     }).catch(() => undefined)
 

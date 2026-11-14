@@ -2859,6 +2859,7 @@ export function useSessionActions({
         if (removalEpoch !== $notificationEpoch.get()) {
           return
         }
+
         finishSessionDeletion({
           storedSessionId,
           removedIds,

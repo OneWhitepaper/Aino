@@ -164,15 +164,29 @@ export class RemoteSessionCookieStore {
 
     return {
       isCurrent,
-      assertCurrent: () => { if (!isCurrent()) { throw new NativeAuthChangedError() } },
-      record: (url, cookies) => { if (isCurrent()) { this.record(partition, url, cookies) } },
+      assertCurrent: () => {
+        if (!isCurrent()) {
+          throw new NativeAuthChangedError()
+        }
+      },
+      record: (url, cookies) => {
+        if (isCurrent()) {
+          this.record(partition, url, cookies)
+        }
+      },
       captureFromJar: async (url, read) => {
         const cookies = await read()
 
-        if (isCurrent()) { this.recordFromJar(partition, url, cookies) }
+        if (isCurrent()) {
+          this.recordFromJar(partition, url, cookies)
+        }
       },
-      cookieHeaderFor: url => isCurrent() ? this.cookieHeaderFor(partition, url) : null,
-      clear: url => { if (isCurrent()) { this.clear(partition, url) } }
+      cookieHeaderFor: url => (isCurrent() ? this.cookieHeaderFor(partition, url) : null),
+      clear: url => {
+        if (isCurrent()) {
+          this.clear(partition, url)
+        }
+      }
     }
   }
 
@@ -231,11 +245,7 @@ export class RemoteSessionCookieStore {
   }
 
   /** Seed the mirror from a session jar read (`sess.cookies.get({url})` results). */
-  recordFromJar(
-    partition: string,
-    url: string,
-    cookies: JarCookie[] | null | undefined
-  ): void {
+  recordFromJar(partition: string, url: string, cookies: JarCookie[] | null | undefined): void {
     const origin = originKeyFor(url)
 
     if (!partition || !origin || !Array.isArray(cookies)) {

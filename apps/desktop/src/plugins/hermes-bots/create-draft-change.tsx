@@ -83,6 +83,7 @@ export function useDraftBaseChange({ capture, afterReset, labels }: DraftBaseCha
           if (!pending) {
             return
           }
+
           await pending.snapshot.remove()
           afterReset()
           pending.apply()

@@ -58,7 +58,9 @@ export function createPortalSession({
     return {
       session: getOauthSession(),
       assertCurrent: () => {
-        if (generation !== expectedGeneration) { throw new NativeAuthChangedError() }
+        if (generation !== expectedGeneration) {
+          throw new NativeAuthChangedError()
+        }
       }
     }
   }
@@ -264,7 +266,9 @@ export function createPortalSession({
 
     scope.assertCurrent()
 
-    if (portalAccessRenewal) { return portalAccessRenewal }
+    if (portalAccessRenewal) {
+      return portalAccessRenewal
+    }
 
     const renewal = (async () => {
       const previous = await readAccessCookies(scope)
@@ -288,7 +292,9 @@ export function createPortalSession({
 
       return ok
     })().finally(() => {
-      if (portalAccessRenewal === renewal) { portalAccessRenewal = null }
+      if (portalAccessRenewal === renewal) {
+        portalAccessRenewal = null
+      }
     })
 
     portalAccessRenewal = renewal
@@ -328,7 +334,13 @@ export function createPortalSession({
   }
 
   return {
-    hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow,
-    retire: () => { generation += 1; portalAccessRenewal = null }
+    hasLivePortalSession,
+    hasPortalAccessToken,
+    renewPortalAccessSilently,
+    openPortalLoginWindow,
+    retire: () => {
+      generation += 1
+      portalAccessRenewal = null
+    }
   }
 }

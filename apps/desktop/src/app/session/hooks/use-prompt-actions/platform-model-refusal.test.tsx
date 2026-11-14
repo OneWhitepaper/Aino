@@ -45,7 +45,7 @@ it('keeps an unavailable-model draft and offers model selection before deliverin
   window.localStorage.removeItem('hermes.desktop.composerQueue.v1')
   $composerDraft.set('Keep this unsent draft')
   publishSessionState(RUNTIME_SESSION_ID, { ...createClientSessionState(), provider: 'aino' })
-  const wireRequest = vi.fn(async () => ({} as never))
+  const wireRequest = vi.fn(async () => ({}) as never)
 
   const requestGateway = async <T,>(method: string, params?: Record<string, unknown>): Promise<T> => {
     await preparePlatformSessionRequest('default', method, params ?? {}, wireRequest)
@@ -55,7 +55,11 @@ it('keeps an unavailable-model draft and offers model selection before deliverin
 
   let handle: HarnessHandle | null = null
   await actRender(
-    <Harness onReady={value => (handle = value)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+    <Harness
+      onReady={value => (handle = value)}
+      refreshSessions={async () => undefined}
+      requestGateway={requestGateway}
+    />
   )
 
   expect(await handle!.submitText('Keep this unsent draft')).toBe(false)

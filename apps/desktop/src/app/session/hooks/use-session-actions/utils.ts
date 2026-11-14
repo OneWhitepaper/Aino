@@ -717,7 +717,10 @@ export function preserveLocalPendingTurnMessages(
       continue
     }
 
-    if (isOptimisticUser && optimisticUserAlreadyRepresented(message, liveOptimisticUsers, contentRefusedCounterparts)) {
+    if (
+      isOptimisticUser &&
+      optimisticUserAlreadyRepresented(message, liveOptimisticUsers, contentRefusedCounterparts)
+    ) {
       continue
     }
 

@@ -1938,9 +1938,9 @@ function accountGatewayConnectionsStore() {
     readV1Config: () => readDesktopConnectionConfig(),
     decrypt: secret => decryptDesktopSecret(secret),
     log: message => rememberLog(message),
-    encodeSecret: value => gatewaySecretEncryptionOverride === false
-      ? { encoding: 'plain', value } : encryptDesktopSecret(value),
-    secretStorage: () => (gatewaySecretEncryptionOverride ?? secretStoragePolicy().on) ? 'safeStorage' : 'plain'
+    encodeSecret: value =>
+      gatewaySecretEncryptionOverride === false ? { encoding: 'plain', value } : encryptDesktopSecret(value),
+    secretStorage: () => ((gatewaySecretEncryptionOverride ?? secretStoragePolicy().on) ? 'safeStorage' : 'plain')
   })
 }
 
@@ -6563,7 +6563,11 @@ async function hasLiveOauthSession(baseUrl) {
 
 const clearRemovedOauthJars = createRemovedConnectionCookieCleaner({
   sessionFor: partition =>
-    partition === OAUTH_SESSION_PARTITION ? getOauthSession() : app.isReady() ? session.fromPartition(accountPartition(partition)) : null,
+    partition === OAUTH_SESSION_PARTITION
+      ? getOauthSession()
+      : app.isReady()
+        ? session.fromPartition(accountPartition(partition))
+        : null,
   clearMirror: (partition, url) => remoteSessionCookies.clear(accountPartition(partition), url),
   v1RemoteUrl: () => readDesktopConnectionConfig()?.remote?.url,
   sharedUrls: () => [resolvePortalBaseUrl(), ...connectionConfigUrls(readDesktopConnectionConfig())]
@@ -7269,7 +7273,11 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
   // Shared gateway registry; even an empty store carries the explicit policy.
   const registry = readDesktopConnectionsRegistry()
 
-  if (registry.connections?.some(blockNeedsRewrite) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
+  if (
+    registry.connections?.some(blockNeedsRewrite) ||
+    secretStoragePolicy().on ||
+    gatewaySecretEncryptionOverride !== null
+  ) {
     touched = true
     writeDesktopConnectionsRegistry({ ...registry, connections: registry.connections.map(rewriteBlock) })
   }
@@ -7289,7 +7297,11 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
   if (store && typeof store === 'object' && !Array.isArray(store)) {
     const entries = Object.entries(store)
 
-    if (entries.some(([, v]) => shouldRewrite(v)) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
+    if (
+      entries.some(([, v]) => shouldRewrite(v)) ||
+      secretStoragePolicy().on ||
+      gatewaySecretEncryptionOverride !== null
+    ) {
       touched = true
       io.writeStoreText(JSON.stringify(Object.fromEntries(entries.map(([k, v]) => [k, reencode(v)]))))
     }
@@ -7382,10 +7394,14 @@ function applySecretStorageEncryption(on: boolean) {
 
       try {
         rewriteAllStoredSecrets(needsDecrypt, (secret: any) => {
-          if (!needsDecrypt(secret)) {return secret}
+          if (!needsDecrypt(secret)) {
+            return secret
+          }
           const plaintext = decryptDesktopSecret(secret)
 
-          if (!plaintext) {throw new Error('A saved credential could not be decrypted; encryption remains enabled.')}
+          if (!plaintext) {
+            throw new Error('A saved credential could not be decrypted; encryption remains enabled.')
+          }
 
           return { encoding: 'plain', value: plaintext }
         })

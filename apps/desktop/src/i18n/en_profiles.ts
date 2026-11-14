@@ -1,7 +1,8 @@
 import type { Translations } from './types'
 
 export const enProfiles: Translations['profiles'] = {
-  exportNeedsHost: name => `The browser cannot save a profile archive. On the Aino host, run: hermes profile export ${name}`,
+  exportNeedsHost: name =>
+    `The browser cannot save a profile archive. On the Aino host, run: hermes profile export ${name}`,
   notServedHere: 'Not served here',
   workspaceListTitle: 'My workspaces',
   previewHint: 'Select a card to view settings without switching workspaces.',

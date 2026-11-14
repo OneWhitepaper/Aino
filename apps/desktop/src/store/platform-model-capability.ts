@@ -31,11 +31,13 @@ export function createPlatformSignInRecovery(): () => Promise<void> {
       throw new PlatformSelectionError('platform_account_changed')
     }
 
-    if (!(await actions.logout({
-      userId: expected.account.id,
-      mode: expected.mode,
-      revision: expected.revision
-    }))) {
+    if (
+      !(await actions.logout({
+        userId: expected.account.id,
+        mode: expected.mode,
+        revision: expected.revision
+      }))
+    ) {
       throw new Error(
         translateNow('settings.account.platformError', actions.state.get().error?.code ?? 'platform_error')
       )

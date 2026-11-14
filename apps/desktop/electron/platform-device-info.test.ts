@@ -52,6 +52,7 @@ async function rig(restored = false, nativeInfo: () => PlatformDeviceInfo | Prom
     for await (const chunk of req) {
       raw += chunk
     }
+
     const body = raw ? JSON.parse(raw) : undefined
     const path = req.url || ''
     seen.push({ method: req.method!, path, body, authorization: req.headers.authorization })
@@ -157,10 +158,12 @@ async function rig(restored = false, nativeInfo: () => PlatformDeviceInfo | Prom
     })
 
   const auth = createAuth()
+
   const owner = () => ({
     expected_user_id: auth.snapshot().account?.id || '17',
     expected_generation: auth.generation()
   })
+
   const metadata = () => seen.filter(request => request.path.endsWith('/info'))
 
   return {
@@ -275,9 +278,11 @@ it('updates a computer display name without creating another device authorizatio
 
 it('returns current device rows before a cold native version probe resolves', async () => {
   let release!: (value: PlatformDeviceInfo) => void
+
   const pending = new Promise<PlatformDeviceInfo>(resolve => {
     release = resolve
   })
+
   const f = await rig(true, () => pending)
   await f.auth.initialize()
   let completed = false
@@ -306,9 +311,11 @@ it('returns current device rows before a cold native version probe resolves', as
 
 it('does not send a retired account metadata intent when a native probe resolves after account switching', async () => {
   let release!: (value: PlatformDeviceInfo) => void
+
   const pending = new Promise<PlatformDeviceInfo>(resolve => {
     release = resolve
   })
+
   const f = await rig(true, () => pending)
   await f.auth.initialize()
   await f.auth.logout()

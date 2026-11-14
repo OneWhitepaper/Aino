@@ -8,13 +8,7 @@ interface PageLoaderProps extends Omit<ComponentProps<'div'>, 'children'> {
   label?: string
 }
 
-export function PageLoader({
-  'aria-label': ariaLabel,
-  className,
-  label,
-  role = 'status',
-  ...props
-}: PageLoaderProps) {
+export function PageLoader({ 'aria-label': ariaLabel, className, label, role = 'status', ...props }: PageLoaderProps) {
   const { t } = useI18n()
   const resolvedLabel = label ?? t.common.loading
 

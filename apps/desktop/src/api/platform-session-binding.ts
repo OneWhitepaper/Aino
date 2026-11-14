@@ -295,6 +295,7 @@ async function prepareConversationSelection(
     explicit_only: true,
     include_session_info: true
   })
+
   assertAccount()
 
   validateConfiguredConversationModel(selected, options)
@@ -361,12 +362,14 @@ async function requireConfiguredSessionModel(
   if (!state.storedSessionId || !$botChatSessionIds.get().has(state.storedSessionId)) {
     return
   }
+
   const account = catalog.account.get()
   const scope = profileScopeForSessionOwner(owner)
 
   if (!scope) {
     throw new PlatformSelectionError('unsupported_gateway')
   }
+
   const profile = typeof scope === 'string' ? scope : scope.profile || 'default'
   const connectionId = typeof scope === 'object' ? (scope.connectionId ?? undefined) : undefined
   const row = (await getSession(state.storedSessionId, scope)) as CanonicalModelRow
@@ -378,6 +381,7 @@ async function requireConfiguredSessionModel(
   if (!unselectedCanonicalModelRow(row, state.storedSessionId, { connectionId, profile })) {
     return
   }
+
   const configured = await getGlobalModelInfo(scope)
 
   if (!samePlatformAccount(account, catalog.account.get())) {

@@ -59,6 +59,7 @@ afterEach(() => {
   window.hermesDesktop = originalDesktop
   vi.unstubAllGlobals()
 })
+
 // What gateway/session_group_controls.py answers for groups.send.
 const receipt = (params: { event_id?: string }) => ({
   event: {},
@@ -79,6 +80,7 @@ const frame = (message: string, code: number, data?: Record<string, unknown>) =>
 
 const MAYBE = 'This message may already have been sent. Retry sends the same message; it will not be posted twice.'
 const REFUSED = 'The gateway refused this message. Edit it and send again.'
+
 const FINISHED_ELSEWHERE =
   'Another Desktop window already finished with this message. Check the conversation before sending it again.'
 
@@ -132,6 +134,7 @@ function nativeJournal(beforeMutation?: (call: number, entry: string | null) => 
 
 const sentIds = () =>
   request.mock.calls.filter(call => call[1] === 'groups.send').map(call => call[2].event_id as string)
+
 const editor = (scope: HTMLElement) => within(scope).getByRole('textbox') as HTMLTextAreaElement
 
 async function openRoom(binding: { connectionId: string; profile: string; roomId: string }) {
@@ -376,12 +379,15 @@ it('does not dispatch a Send still preparing when Stop is pressed, and keeps its
   const binding = { connectionId: 'local', profile: 'team', roomId: 'stop-while-preparing' }
   let entered!: () => void
   let release!: () => void
+
   const preparing = new Promise<void>(resolve => {
     entered = resolve
   })
+
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
+
   nativeJournal(async call => {
     if (call === 1) {
       entered()
@@ -551,6 +557,7 @@ it('names the Bot behind each pending action and shows what an approval would al
   const guarded = screen
     .getByText('Guard Bot is asking for approval. You decide.')
     .closest('[data-task-id]') as HTMLElement
+
   expect(within(guarded).getByText('Approve running pwd')).toBeTruthy()
   expect(within(guarded).queryByText(/plugin approval rule/)).toBeNull()
   expect(within(guarded).queryByText('Action details are unavailable. Check again before allowing this.')).toBeNull()
@@ -638,6 +645,7 @@ it.each(['attempts', 'payload', 'event_id', 'binding'] as const)(
     if (change === 'binding') {
       changed.binding.profile = 'other-owner'
     }
+
     journal[Object.keys(journal)[0]] = changed
     fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
     await within(dialog).findByText(ABANDON_CHANGED)

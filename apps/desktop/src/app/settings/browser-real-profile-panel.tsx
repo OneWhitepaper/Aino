@@ -89,10 +89,12 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
 
   const reimport = useCallback(async () => {
     const version = revision.current
+
     const isCurrent = () =>
       revision.current === version &&
       $activeConnectionId.get() === connectionId &&
       $activeGatewayProfile.get() === activeProfile
+
     setBusy(true)
 
     try {
