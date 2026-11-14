@@ -139,13 +139,7 @@ function disclosureFor(setting: string): string | undefined {
     return 'terminal'
   }
 
-  if (
-    [
-      SETTING_IDS.appearance.appActions,
-      SETTING_IDS.appearance.composerPopout,
-      SETTING_IDS.appearance.minimizeToTray
-    ].includes(setting)
-  ) {
+  if ([SETTING_IDS.appearance.composerPopout, SETTING_IDS.appearance.minimizeToTray].includes(setting)) {
     return 'window'
   }
 

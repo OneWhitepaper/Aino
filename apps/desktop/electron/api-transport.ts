@@ -37,6 +37,18 @@ import https from 'node:https'
 
 import { PRODUCT_NAME } from './product-identity'
 
+// Clamp paths and failure detail before persisting a REST failure to desktop.log.
+export function formatApiRequestFailure(
+  request: { method?: string; path?: string } | null | undefined,
+  error: unknown
+): string {
+  const method = String(request?.method ?? 'GET').toUpperCase()
+  const path = String(request?.path ?? '(no path)').slice(0, 500)
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
+
+  return `[hermes:api ${method} ${path}] ${detail}`.slice(0, 6000)
+}
+
 // JSON pool: many small concurrent calls (session lists, config, prompts).
 const HTTP_JSON_AGENT = new http.Agent({ keepAlive: true, maxSockets: 50 })
 const HTTPS_JSON_AGENT = new https.Agent({ keepAlive: true, maxSockets: 50 })

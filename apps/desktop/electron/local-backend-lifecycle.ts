@@ -123,7 +123,9 @@ export function createLocalBackendLifecycle<Child>(
   return {
     signal: controller.signal,
     drain: async () => {
-      while (starts.size || recycles.size) { await Promise.allSettled([...starts.keys(), ...recycles.values()]) }
+      while (starts.size || recycles.size) {
+        await Promise.allSettled([...starts.keys(), ...recycles.values()])
+      }
     },
     assertCanStart: (): void => controller.signal.throwIfAborted(),
     hasPending: (): boolean =>

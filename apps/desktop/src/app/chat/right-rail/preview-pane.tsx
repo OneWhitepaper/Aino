@@ -3,7 +3,7 @@
 import './preview-mind'
 
 import { useStore } from '@nanostores/react'
-import type { ComponentProps, PointerEvent as ReactPointerEvent } from 'react'
+import type { ComponentProps, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { requestComposerAttachImages, requestComposerFocus, requestComposerInsert } from '@/app/chat/composer/focus'
@@ -41,7 +41,6 @@ import {
   commitBrowserTabLocation,
   failPreviewServerRestart,
   noteBrowserPage,
-  popOutBrowserTab,
   type PreviewRenderMode,
   previewTabOwnerProfile,
   type PreviewTarget,
@@ -49,7 +48,7 @@ import {
 } from '@/store/preview'
 import { currentSessionId } from '@/store/preview-ownership'
 import { $selectedStoredSessionId, knownSessionProfile, ownerLookupSessionRows } from '@/store/session'
-import { canOpenBrowserWindow, isBrowserWindow } from '@/store/windows'
+import { isBrowserWindow } from '@/store/windows'
 
 import { previewPartitionForProfile } from '../../../../electron/preview-guest-throttle'
 
@@ -64,7 +63,7 @@ import {
   waitAnnotateEvent
 } from './preview-annotate-host'
 import { ArtifactPreview } from './preview-artifact'
-import { externalOpenerFor, PreviewBrowserBar } from './preview-browser-bar'
+import { PreviewBrowserBar, previewBrowserWindowActions } from './preview-browser-bar'
 import { mountBrowserPreviewFrame, type PreviewNavigationSurface } from './preview-browser-frame'
 import { PreviewBrowserFrameHint } from './preview-browser-frame-hint'
 import {
@@ -72,6 +71,7 @@ import {
   compactUrl,
   formatLogLine,
   isNearConsoleBottom,
+  previewConsoleInset,
   PreviewConsolePanel
 } from './preview-console'
 import { type ConsoleEntry } from './preview-console-state'
@@ -81,13 +81,16 @@ import { LocalFilePreview, PreviewEmptyState, PreviewModeSwitcher } from './prev
 import { canRenderHtmlPreview, FilePreviewActions } from './preview-file-actions'
 import { usePreviewGuestOffscreen } from './preview-guest-offscreen'
 import { type PreviewInputEvent } from './preview-input'
+import { connectNativePreviewSurface, createPreviewGuestSurface } from './preview-native-surface'
 import { PREVIEW_BROWSER_ATTR, registerPreviewNav } from './preview-nav'
+import { type PreviewZoomGuest, usePreviewPageZoom } from './preview-page-zoom'
 import { registerPreviewPageReader } from './preview-reader'
 import { watchPreviewDocumentLifecycle } from './preview-script-runner'
 import { RealProfileConsentDialog } from './real-profile-consent-dialog'
 
 type PreviewWebview = HTMLElement &
-  PreviewNavigationSurface & {
+  PreviewNavigationSurface &
+  PreviewZoomGuest & {
     canGoBack?: () => boolean
     canGoForward?: () => boolean
     closeDevTools?: () => void
@@ -303,6 +306,68 @@ function previewPartitionForTab(sessionId: null | string | undefined, tabId?: nu
   return previewPartitionForProfile(sessionProfile ?? previewTabOwnerProfile(tabId))
 }
 
+/** Transfers restore the current page, including its latest SPA route. */
+function usePersistBrowserLocation(
+  tabId: string | undefined,
+  kind: PreviewTarget['kind'],
+  liveUrlRef: RefObject<string>
+) {
+  useEffect(() => {
+    if (kind !== 'url' || !tabId) {
+      return
+    }
+
+    const persist = () => {
+      const page = $browserPages.get()[tabId]
+      commitBrowserTabLocation(tabId, page?.url || liveUrlRef.current, page?.title)
+    }
+
+    window.addEventListener('pagehide', persist)
+
+    return () => {
+      window.removeEventListener('pagehide', persist)
+      persist()
+    }
+  }, [tabId, kind, liveUrlRef])
+}
+
+interface PreviewAddressHeaderProps {
+  currentUrl: string
+  isRemoteHtmlTarget: boolean
+  previewLabel: string
+  target: PreviewTarget
+}
+
+function PreviewAddressHeader({ currentUrl, isRemoteHtmlTarget, previewLabel, target }: PreviewAddressHeaderProps) {
+  const { t } = useI18n()
+  const copy = t.preview.web
+
+  return (
+    <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
+      <div className="min-w-0 flex-1">
+        <Tip label={copy.openTarget(currentUrl)}>
+          <a
+            className="pointer-events-auto inline max-w-full truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
+            href={isRemoteHtmlTarget ? undefined : currentUrl}
+            onClick={event => {
+              if (isRemoteHtmlTarget) {
+                event.preventDefault()
+                void openPreviewTargetInBrowser(target).catch(error =>
+                  notifyError(new Error(localizedPreviewError(t, error)), t.preview.unavailable)
+                )
+              }
+            }}
+            rel="noreferrer"
+            target={isRemoteHtmlTarget ? undefined : '_blank'}
+          >
+            {previewLabel || copy.fallbackTitle}
+          </a>
+        </Tip>
+      </div>
+    </div>
+  )
+}
+
 export function PreviewPane({
   embedded = false,
   onClose,
@@ -325,6 +390,7 @@ export function PreviewPane({
   const navigationRef = useRef<PreviewNavigationSurface | null>(null)
   const previewContentRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<PreviewWebview | null>(null)
+  const { browserBarProps, syncPageZoom } = usePreviewPageZoom(webviewRef)
   const noteGuestReady = usePreviewGuestOffscreen(webviewRef, tabId)
   const previewServerRestart = useStore($previewServerRestart)
   const consoleHeight = useStore(consoleState.$height)
@@ -338,7 +404,7 @@ export function PreviewPane({
   // the live address through this mirror instead of a stale closure.
   const targetUrlRef = useRef(target.url)
   targetUrlRef.current = target.url
-  const ownerSessionIdRef = useRef(sessionId)  // tab owner, read by the guest effect to resolve its partition
+  const ownerSessionIdRef = useRef(sessionId) // tab owner, read by the guest effect to resolve its partition
   ownerSessionIdRef.current = sessionId
   const [devtoolsOpen, setDevtoolsOpen] = useState(false)
   const [history, setHistory] = useState({ back: false, forward: false })
@@ -373,26 +439,7 @@ export function PreviewPane({
     }
   }
 
-  // Hand the live address to storage when this guest is about to go away
-  // (pop-out, dock-back, tab close). The other renderer builds from
-  // `target.url`; without this it would reopen the tab's original page.
-  useEffect(() => {
-    if (target.kind !== 'url' || !tabId) {
-      return
-    }
-
-    const persist = () => {
-      const page = $browserPages.get()[tabId]
-      commitBrowserTabLocation(tabId, page?.url || liveUrlRef.current, page?.title)
-    }
-
-    window.addEventListener('pagehide', persist)
-
-    return () => {
-      window.removeEventListener('pagehide', persist)
-      persist()
-    }
-  }, [tabId, target.kind])
+  usePersistBrowserLocation(tabId, target.kind, liveUrlRef)
 
   const isRemoteHtml = isRemoteHtmlTarget && renderMode !== 'source' && Boolean(target.dataUrl)
 
@@ -861,6 +908,7 @@ export function PreviewPane({
     }
 
     const lifetime = new AbortController()
+
     const unregister = registerPreviewPageReader(tabId, async () => {
       const webview = webviewRef.current
 
@@ -885,7 +933,7 @@ export function PreviewPane({
     }
   }, [tabId, usesWebview])
 
-  usePreviewDriveChannels(webviewRef, tabId, usesWebview)
+  usePreviewDriveChannels(webviewRef, tabId, usesWebview, loadError)
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
@@ -1121,11 +1169,14 @@ export function PreviewPane({
       })
     }
 
-    const webview = document.createElement('webview') as PreviewWebview
+    const partition = previewPartitionForTab(ownerSessionIdRef.current, tabId)
+
+    const webview = createPreviewGuestSurface(tabId, partition, initialUrl, target.kind === 'url') as PreviewWebview
+
     // A page with no background of its own shows white, as in a browser and the remote HTML frame below.
     webview.className = 'flex h-full w-full flex-1 bg-white'
     // Per-profile cookie jar so one profile's in-app sign-ins never land in another's jar (#150283 P1-3).
-    webview.setAttribute('partition', previewPartitionForTab(ownerSessionIdRef.current, tabId))
+    webview.setAttribute('partition', partition)
     webview.setAttribute('src', initialUrl)
     webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no,sandbox=yes')
 
@@ -1364,9 +1415,12 @@ export function PreviewPane({
     // #101880: never let a guest reach the native print panel.
     webview.addEventListener('dom-ready', armPrintGuard)
     webview.addEventListener('dom-ready', noteGuestReady)
+    webview.addEventListener('dom-ready', syncPageZoom)
+    webview.addEventListener('page-zoom-changed', syncPageZoom)
     host.appendChild(webview)
     navigationRef.current = webview
     webviewRef.current = webview
+    const disconnectNative = connectNativePreviewSurface(webview)
 
     return () => {
       annotateLoopRef.current?.abort()
@@ -1393,10 +1447,22 @@ export function PreviewPane({
       webview.removeEventListener('page-title-updated', notePage)
       webview.removeEventListener('dom-ready', armPrintGuard)
       webview.removeEventListener('dom-ready', noteGuestReady)
-      webview.remove()
+      webview.removeEventListener('dom-ready', syncPageZoom)
+      webview.removeEventListener('page-zoom-changed', syncPageZoom)
+      disconnectNative ? disconnectNative() : webview.remove()
       setAnnotate(session => (session.mode ? { ...endAnnotateMode(session), stack: emptyAnnotateStack() } : session))
     }
-  }, [appendConsoleEntry, consoleState, copy, isRemoteHtml, isWebPreview, noteGuestReady, tabId, target.kind])
+  }, [
+    appendConsoleEntry,
+    consoleState,
+    copy,
+    isRemoteHtml,
+    isWebPreview,
+    noteGuestReady,
+    syncPageZoom,
+    tabId,
+    target.kind
+  ])
 
   // Steers the LIVE guest when the session opens a new URL (#120265): loadURL
   // keeps the webview instance (JS state, cookies, form data, scroll, refs,
@@ -1404,7 +1470,6 @@ export function PreviewPane({
   // rebuild it. Per-page state (annotate pins, console log, history) resets
   // around the load so nothing bleeds across pages. Skipped when the guest
   // already shows the address (an in-page navigation got there first).
-  // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
     if (!isWebPreview || isRemoteHtml) {
       return
@@ -1464,28 +1529,12 @@ export function PreviewPane({
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {!embedded && (
-          <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
-            <div className="min-w-0 flex-1">
-              <Tip label={copy.openTarget(currentUrl)}>
-                <a
-                  className="pointer-events-auto inline max-w-full truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
-                  href={isRemoteHtmlTarget ? undefined : currentUrl}
-                  onClick={event => {
-                    if (isRemoteHtmlTarget) {
-                      event.preventDefault()
-                      void openPreviewTargetInBrowser(target).catch(error =>
-                        notifyError(new Error(localizedPreviewError(t, error)), t.preview.unavailable)
-                      )
-                    }
-                  }}
-                  rel="noreferrer"
-                  target={isRemoteHtmlTarget ? undefined : '_blank'}
-                >
-                  {previewLabel || copy.fallbackTitle}
-                </a>
-              </Tip>
-            </div>
-          </div>
+          <PreviewAddressHeader
+            currentUrl={currentUrl}
+            isRemoteHtmlTarget={isRemoteHtmlTarget}
+            previewLabel={previewLabel}
+            target={target}
+          />
         )}
 
         {canRenderHtmlFile && renderMode !== 'source' && (
@@ -1513,17 +1562,12 @@ export function PreviewPane({
             onFlushComments={() => void flushComments()}
             onForward={goForward}
             onNavigate={navigateTo}
-            onOpenExternal={externalOpenerFor(currentUrl)}
-            onPopIn={isBrowserWindow() ? () => window.close() : undefined}
-            onPopOut={
-              target.kind !== 'url' || isBrowserWindow() || !tabId || !canOpenBrowserWindow()
-                ? undefined
-                : () => popOutBrowserTab(tabId)
-            }
+            {...previewBrowserWindowActions(currentUrl, target.kind, tabId)}
             onReload={reloadPreview}
             onToggleAnnotate={toggleAnnotate}
             onToggleConsole={() => consoleState.setOpen(open => !open)}
             onToggleDevTools={toggleDevTools}
+            {...browserBarProps}
             tabId={tabId}
             url={currentUrl}
           />
@@ -1543,6 +1587,7 @@ export function PreviewPane({
               (isRemoteHtml || !isWebPreview || loadError) && 'pointer-events-none opacity-0'
             )}
             ref={hostRef}
+            style={previewConsoleInset(consoleOpen, consoleHeight)}
           />
           {isRemoteHtml && (
             <PreviewDocumentFrame

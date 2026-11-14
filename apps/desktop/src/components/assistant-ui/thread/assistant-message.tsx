@@ -20,7 +20,7 @@ import { useComposerScope } from '@/app/chat/composer/scope'
 import { useSessionView } from '@/app/chat/session-view'
 import { SETTINGS_ROUTE } from '@/app/routes'
 import { useBillingApi } from '@/app/settings/billing/api'
-import { dispatchedTo } from '@/components/assistant-ui/thread/agent-delivery'
+import { interAgentReplySender } from '@/components/assistant-ui/thread/agent-delivery'
 import { ChangedFilesCard } from '@/components/assistant-ui/thread/changed-files-card'
 import {
   contentHasVisibleText,
@@ -33,13 +33,13 @@ import { ReactionPicker } from '@/components/assistant-ui/thread/message-reactio
 import {
   ResponseMessageIds,
   responseMessageRole,
+  ResponseProcess,
   ResponseProcessParts
 } from '@/components/assistant-ui/thread/response-group'
 import { ResponseLoadingIndicator, TurnActivityIndicator } from '@/components/assistant-ui/thread/status'
 import { threadMessageIndex } from '@/components/assistant-ui/thread/thread-message-index'
 import { MessageTimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { useMessageReactions, useTapbackDoubleClick } from '@/components/assistant-ui/thread/use-message-reactions'
-import { AGENT_MESSAGE_RE } from '@/components/assistant-ui/thread/user-message'
 import { isApprovalActivity, isCurrentTurnMessage } from '@/components/assistant-ui/tool/approval-activity'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
@@ -150,33 +150,9 @@ export const AssistantMessage: FC<AssistantMessageProps> = props => {
   // the teammate's answer and the next assistant message is the report to
   // the human (#114629); folding it hid the substance of the turn behind a
   // "Replied to" row nothing was ever sent through.
-  const interAgentSender = useAuiState(s => {
-    const messages = s.thread.messages
-
-    // Shared id->index map: a per-row scan for its own position was
-    // mounted-rows x transcript-length on every streamed chunk (#126486).
-    for (let j = threadMessageIndex(messages, s.message.id) - 1; j >= 0; j--) {
-      const prev = messages[j] as { content?: unknown; role?: string }
-
-      if (prev.role === 'assistant') {
-        return null
-      }
-
-      if (prev.role === 'user') {
-        const match = AGENT_MESSAGE_RE.exec(messageContentText(prev.content as never).trim())
-
-        if (!match) {
-          return null
-        }
-
-        const sender = (match[1] || match[3] || 'agent').trim()
-
-        return dispatchedTo(messages.slice(0, j), [match[1], match[2], match[3]]) ? null : sender
-      }
-    }
-
-    return null
-  })
+  const interAgentSender = useAuiState(s =>
+    interAgentReplySender(s.thread.messages, threadMessageIndex(s.thread.messages, s.message.id))
+  )
 
   // The collapse gate below needs the LIVE running status, but only an
   // inter-agent reply can ever be collapsed. Dispatching on that first keeps
@@ -316,8 +292,20 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
   // subscription here would re-render this root on every pending flip to feed
   // a value the hook already ignores. Capture it once, off the runtime, with
   // no subscription at all.
-  const [initiallyRunning] = useState(() => messageRuntime.getState().status?.type === 'running')
-  const enterRef = useEnterAnimation(initiallyRunning, `assistant-message:${messageId}`)
+  // Empty waiting rows are already visible feedback, not arriving content.
+  // Sliding them on mount makes tail placeholders bob below system notices.
+  const [animateEntrance] = useState(() => {
+    const message = messageRuntime.getState()
+
+    return (
+      message.status?.type === 'running' &&
+      message.content.some(part =>
+        part.type === 'text' || part.type === 'reasoning' ? part.text.trim().length > 0 : true
+      )
+    )
+  })
+
+  const enterRef = useEnterAnimation(animateEntrance, `assistant-message:${messageId}`)
 
   // Double-click the reply to heart it (iMessage). Undefined while reactions
   // are off, so the root carries no listener at all.
@@ -342,7 +330,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
-          <AssistantIdentity />
+          <ResponseAssistantIdentity />
           <div
             className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
             data-slot="aui_assistant-message-content"
@@ -407,6 +395,13 @@ const StoppedNotice: FC = () => {
       {t.assistant.thread.responseStopped}
     </div>
   )
+}
+
+const ResponseAssistantIdentity: FC = () => {
+  const messageId = useAuiState(s => s.message.id)
+  const { identityMessageId } = useContext(ResponseProcess)
+
+  return !identityMessageId || identityMessageId === messageId ? <AssistantIdentity /> : null
 }
 
 /**

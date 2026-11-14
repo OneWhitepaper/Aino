@@ -5,7 +5,7 @@
    Inset tabs distinguish the active conversation from its persistent siblings. */
 [data-pane-variant='conversation'] {
   background: var(--ui-bg-elevated);
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  border-bottom: 1px solid var(--aino-workbench-divider);
   --pane-tab-strip-bg: transparent;
   --pane-tab-active-bg: var(--ui-bg-quaternary);
 }
@@ -42,7 +42,6 @@
 }
 
 .aino-preview-surface {
-  border-inline: 1px solid var(--ui-stroke-tertiary);
   background: var(--ui-editor-surface-background);
   color: var(--ui-text-primary);
   font-family: var(--dt-font-sans);

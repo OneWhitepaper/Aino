@@ -14,6 +14,7 @@ interface CapturedAnimation {
 const animations: CapturedAnimation[] = []
 let reduced = false
 let visualSize: number | null = null
+let progress = 0
 
 class TestResizeObserver {
   constructor(private callback: ResizeObserverCallback) {}
@@ -27,6 +28,7 @@ class TestResizeObserver {
 beforeEach(() => {
   reduced = false
   visualSize = null
+  progress = 0
   const media = new EventTarget()
   vi.stubGlobal('ResizeObserver', TestResizeObserver)
   vi.stubGlobal('matchMedia', () => ({
@@ -63,7 +65,7 @@ beforeEach(() => {
 
       animations.push(animation)
 
-      return { ...animation, finished }
+      return { ...animation, finished, effect: { getComputedTiming: () => ({ progress }) } }
     }
   })
 })
@@ -122,7 +124,9 @@ it('animates explicit tool open and close while retaining the child and hiding l
   expect(animations).toHaveLength(0)
 
   view.rerender(track({ collapsed: true }))
-  expect(animations[0].frames.map(frame => frame.width)).toEqual(['360px', '0px'])
+  expect(animations[0].frames.map(frame => frame.width)).toEqual(['360px', '360px'])
+  expect(animations[0].frames.map(frame => frame.position)).toEqual(['fixed', 'fixed'])
+  expect(animations[0].frames.map(frame => frame.clipPath)).toEqual(['inset(0 0px 0 0)', 'inset(0 360px 0 0)'])
   expect(animations[0].options.duration).toBe(160)
   expect(host.hasAttribute('data-pane-hidden')).toBe(true)
   expect(host.hasAttribute('inert')).toBe(true)
@@ -133,7 +137,9 @@ it('animates explicit tool open and close while retaining the child and hiding l
   expect(host.dataset.toolTrackMotion).toBeUndefined()
 
   view.rerender(track())
-  expect(animations[1].frames.map(frame => frame.width)).toEqual(['0px', '360px'])
+  expect(animations[1].frames.map(frame => frame.clipPath)).toEqual(['inset(0 360px 0 0)', 'inset(0 0px 0 0)'])
+  // A long transcript's width must settle once, not rewrap on every frame.
+  expect(animations[1].frames.every(frame => frame.width === undefined && frame.flexBasis === undefined)).toBe(true)
   expect(animations[1].options.duration).toBe(220)
   expect(host.hasAttribute('inert')).toBe(false)
   expect(view.container.querySelector('textarea')).toBe(editor)
@@ -235,9 +241,10 @@ it('reverses an interrupted transition from its visible size and releases it on 
   const view = render(track())
   view.rerender(track({ collapsed: true }))
   visualSize = 140
+  progress = 220 / 360
   view.rerender(track())
   expect(animations[0].cancel).toHaveBeenCalledOnce()
-  expect(animations[1].frames[0].width).toBe('140px')
+  expect(Number.parseFloat(String(animations[1].frames[0].clipPath).split(' ')[1])).toBeCloseTo(220)
   view.unmount()
   expect(animations[1].cancel).toHaveBeenCalledOnce()
 })

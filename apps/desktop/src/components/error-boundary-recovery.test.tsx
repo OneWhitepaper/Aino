@@ -117,7 +117,12 @@ describe('root crash recovery', () => {
   it('continues the existing upload state across a crash without sending it twice', async () => {
     const f = fixture()
     let finish!: (value: { id: string }) => void
-    f.upload.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    f.upload.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
     act(() => requestSendDiagnostics('pre-crash report'))
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
     await waitFor(() => expect(f.upload).toHaveBeenCalledTimes(1))

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { registry } from '@/contrib/registry'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
-import { $layoutEditMode } from '../../edit-mode'
 import { group } from '../model'
 import { $layoutTree, $narrowViewport, $newSessionTabAction } from '../store'
 
@@ -51,7 +50,6 @@ afterEach(() => {
   $layoutTree.set(null)
   $narrowViewport.set(false)
   $newSessionTabAction.set(null)
-  $layoutEditMode.set(false)
   delete globalThis.document.documentElement.dataset.hermesDesktopHost
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -125,15 +123,6 @@ it('reserves a separate touch row for phone tabs even when the titlebar reports 
   expect(screen.getByRole('button', { name: '1 tab Session 1' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'New session tab' }))
   expect(newTab).toHaveBeenCalledOnce()
-
-  // The edit veil starts below the taller header instead of covering the picker.
-  const zone = header.parentElement!
-  const before = new Set(zone.children)
-  act(() => $layoutEditMode.set(true))
-  const veils = [...zone.children].filter(child => !before.has(child)) as HTMLElement[]
-  expect(veils).toHaveLength(1)
-  expect(veils[0]!.style.top).toBe(header.style.height)
-  act(() => $layoutEditMode.set(false))
 
   act(() => $narrowViewport.set(false))
   expect(header.isConnected).toBe(false)

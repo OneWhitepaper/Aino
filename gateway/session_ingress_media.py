@@ -394,6 +394,8 @@ def _held_media_paths(conn):
             FROM session_admissions WHERE status!='terminal'
             OR json_type(payload_json, '$.api_turn_v1.media') IS NOT NULL""").fetchall()
     held = set()
+    from gateway.session_pause import paused_media_references
+    held.update(reference['path'] for reference in paused_media_references(conn))
     for status, request_id, encoded, text in rows:
         attachments, native, api = json.loads(encoded)
         # API images remain canonical history context after the turn completes.

@@ -1,48 +1,34 @@
 import { compactNumber } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useState } from 'react'
+import { type ComponentProps, type MouseEvent, type ReactNode, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 import { hudTargetSessionId } from '@/app/hud/handoff'
-import titlebarHapticsIcon from '@/assets/aino-home/titlebar-haptics.svg'
-import titlebarHudIcon from '@/assets/aino-home/titlebar-hud.svg'
-import titlebarLayoutIcon from '@/assets/aino-home/titlebar-layout.svg'
-import titlebarRightSidebarIcon from '@/assets/aino-home/titlebar-right-sidebar.svg'
-import titlebarSidebarToggleIcon from '@/assets/aino-home/titlebar-sidebar-toggle.svg'
-import titlebarSwapIcon from '@/assets/aino-home/titlebar-swap.svg'
-import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { NotificationStack } from '@/components/notifications'
-import { toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
-import { $paneVisible, resetLayoutTree, togglePaneVisible } from '@/components/pane-shell/tree/store'
+import { $paneVisible, togglePaneVisible } from '@/components/pane-shell/tree/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SidebarToggleIcon } from '@/components/ui/sidebar-toggle-icon'
 import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { formatModifierToken } from '@/lib/keybinds/combo'
 import { cn } from '@/lib/utils'
 import { recordAction } from '@/store/desktop-metrics'
-import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { canUseHud, toggleHud } from '@/store/hud'
 import { $interfaceMode, shownInMode, type Tiered } from '@/store/interface-mode'
-import { $panesFlipped, togglePanesFlipped } from '@/store/layout'
+import { $panesFlipped } from '@/store/layout'
 import { $unreadSessionCount } from '@/store/session-dot-state'
-import { $titlebarAppActionsSide, TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
+import { TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
 
 import { appViewForPath, hidesFixedTitlebarClusters, isRouteBlockingSurface } from '../routes'
 
 import { SummaryToggle } from './summary-toggle'
-import {
-  TITLEBAR_CHROME_CHANGED_EVENT,
-  TITLEBAR_ICON_BADGE_SCALE,
-  TITLEBAR_LEFT_ICON_SIZE,
-  titlebarButtonClass,
-  titlebarIconSizeCss,
-  titlebarToolClusterClass
-} from './titlebar'
+import { TITLEBAR_CHROME_CHANGED_EVENT, titlebarButtonClass, titlebarToolClusterClass } from './titlebar'
+import { TitlebarHistoryControls } from './titlebar-history-controls'
 import { TitlebarIcon } from './titlebar-icon'
+import { type TitlebarHistoryState, useTitlebarHistory } from './use-titlebar-history'
 import { useTitlebarPanelEdges } from './use-titlebar-panel-edges'
 
 export interface TitlebarTool extends Tiered {
@@ -75,27 +61,6 @@ interface TitlebarControlsProps extends ComponentProps<'div'> {
   tools?: readonly TitlebarTool[]
 }
 
-/**
- * The layout button's glyph. Morphs into its composite reset form — the
- * layout icon wearing a small counter-clockwise arrow badge — while ⌘/Ctrl is
- * held over the button.
- */
-function LayoutGlyph({ modHeld }: { modHeld: boolean }) {
-  return (
-    <>
-      <span className={cn('inline-flex', modHeld && 'group-hover/tool:hidden')}>
-        <AinoDesignIcon className="size-[18px]" src={titlebarLayoutIcon} />
-      </span>
-      <span className={cn('relative hidden', modHeld && 'group-hover/tool:inline-flex')}>
-        <AinoDesignIcon className="size-[18px]" src={titlebarLayoutIcon} />
-        <span className="absolute -bottom-1 -right-1.5 grid place-items-center rounded-full bg-(--ui-bg-chrome) p-px">
-          <TitlebarIcon className="-scale-x-100" name="refresh" size={titlebarIconSizeCss(TITLEBAR_ICON_BADGE_SCALE)} />
-        </span>
-      </span>
-    </>
-  )
-}
-
 /** Overlay count on a titlebar glyph. Hidden when count is 0/undefined. */
 function withCountBadge(icon: ReactNode, count: number | undefined): ReactNode {
   if (!count) {
@@ -114,50 +79,15 @@ function withCountBadge(icon: ReactNode, count: number | undefined): ReactNode {
   )
 }
 
-/** Live ⌘/Ctrl tracking for the layout reset affordance. */
-function useModifierHeld(): boolean {
-  const [held, setHeld] = useState(false)
-
-  useEffect(() => {
-    const sync = (event: KeyboardEvent) => setHeld(event.metaKey || event.ctrlKey)
-    const clear = () => setHeld(false)
-
-    window.addEventListener('keydown', sync)
-    window.addEventListener('keyup', sync)
-    window.addEventListener('blur', clear)
-
-    return () => {
-      window.removeEventListener('keydown', sync)
-      window.removeEventListener('keyup', sync)
-      window.removeEventListener('blur', clear)
-    }
-  }, [])
-
-  return held
-}
-
 export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControlsProps) {
   const { t } = useI18n()
   const location = useLocation()
-  const modHeld = useModifierHeld()
-  const hapticsMuted = useStore($hapticsMuted)
+  const history = useTitlebarHistory()
   const panesFlipped = useStore($panesFlipped)
   const unreadCount = useStore($unreadSessionCount)
   const terminalVisible = useStore($paneVisible('terminal'))
   const unreadBadge = unreadCount > 0 ? unreadCount : undefined
   const unreadHint = unreadBadge ? ` · ${t.titlebar.unreadSessions(unreadBadge)}` : ''
-
-  const toggleHaptics = () => {
-    if (!hapticsMuted) {
-      triggerHaptic('tap')
-    }
-
-    toggleHapticsMuted()
-
-    if (hapticsMuted) {
-      window.requestAnimationFrame(() => triggerHaptic('success'))
-    }
-  }
 
   // `titleBar.*` slot content is mount-scoped — a page's <Contribute> registers
   // only while that surface is up — so a non-empty area means a page is
@@ -180,12 +110,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     ...TITLEBAR_FIXED_TOOLS.sidebar,
     actionId: 'view.toggleSidebar',
     badge: panesFlipped ? undefined : unreadBadge,
-    icon: (
-      <AinoDesignIcon
-        src={titlebarSidebarToggleIcon}
-        style={{ height: TITLEBAR_LEFT_ICON_SIZE, width: TITLEBAR_LEFT_ICON_SIZE }}
-      />
-    ),
+    icon: <SidebarToggleIcon expanded={leftEdge.open} />,
     id: 'sidebar',
     expanded: leftEdge.expanded,
     label: `${leftLabel}${panesFlipped ? '' : unreadHint}`,
@@ -195,28 +120,11 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     }
   }
 
-  const flipTool: TitlebarTool = {
-    ...TITLEBAR_FIXED_TOOLS['flip-panes'],
-    actionId: 'view.flipPanes',
-    icon: (
-      <AinoDesignIcon
-        src={titlebarSwapIcon}
-        style={{ height: TITLEBAR_LEFT_ICON_SIZE, width: TITLEBAR_LEFT_ICON_SIZE }}
-      />
-    ),
-    id: 'flip-panes',
-    label: t.titlebar.swapSidebarSides,
-    onSelect: () => {
-      triggerHaptic('tap')
-      togglePanesFlipped()
-    }
-  }
-
   const rightSidebarTool: TitlebarTool = {
     ...TITLEBAR_FIXED_TOOLS['right-sidebar'],
     actionId: 'view.toggleRightSidebar',
     badge: panesFlipped ? unreadBadge : undefined,
-    icon: <AinoDesignIcon className="size-[18px]" src={titlebarRightSidebarIcon} />,
+    icon: <SidebarToggleIcon expanded={rightEdge.open} side="right" />,
     id: 'right-sidebar',
     expanded: rightEdge.expanded,
     label: `${rightLabel}${panesFlipped ? unreadHint : ''}`,
@@ -227,27 +135,8 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     tour: 'right-pane-toggle'
   }
 
-  // App actions follow the user's titlebar-side preference.
+  // App actions stay together on the right; history and navigation stay left.
   const systemTools: TitlebarTool[] = [
-    {
-      ...TITLEBAR_FIXED_TOOLS.layout,
-      className: 'group/tool',
-      icon: <LayoutGlyph modHeld={modHeld} />,
-      id: 'layout',
-      label: t.titlebar.layoutEditor,
-      onSelect: event => {
-        if (event?.metaKey || event?.ctrlKey) {
-          triggerHaptic('warning')
-          resetLayoutTree()
-
-          return
-        }
-
-        triggerHaptic('open')
-        toggleLayoutEditMode()
-      },
-      title: t.titlebar.layoutEditorTitle(formatModifierToken('mod'))
-    },
     {
       ...TITLEBAR_FIXED_TOOLS.hud,
       // No `title`: TitlebarToolButton passes `title` to TipKeybindLabel as a
@@ -256,25 +145,13 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
       // from the action registry, same as every other tool here.
       actionId: 'view.toggleHud',
       hidden: !canUseHud(),
-      icon: <AinoDesignIcon className="size-[18px]" src={titlebarHudIcon} />,
+      icon: <TitlebarIcon name="hud" />,
       id: 'hud',
       label: t.titlebar.enterHud,
       onSelect: () => {
         triggerHaptic('open')
         toggleHud(hudTargetSessionId())
       }
-    },
-    {
-      ...TITLEBAR_FIXED_TOOLS.haptics,
-      active: hapticsMuted,
-      icon: hapticsMuted ? (
-        <TitlebarIcon name="mute" />
-      ) : (
-        <AinoDesignIcon className="size-[18px]" src={titlebarHapticsIcon} />
-      ),
-      id: 'haptics',
-      label: hapticsMuted ? t.titlebar.unmuteHaptics : t.titlebar.muteHaptics,
-      onSelect: toggleHaptics
     }
   ]
 
@@ -300,7 +177,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
 
   return (
     <TitlebarClusters
-      flipTool={flipTool}
+      history={history}
       leftTools={leftTools}
       pageOwnsTitlebar={pageOwnsTitlebar}
       rightSidebarTool={rightSidebarTool}
@@ -314,10 +191,10 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
 }
 
 interface TitlebarClustersProps {
+  history: TitlebarHistoryState
   leftTools: readonly TitlebarTool[]
   tools: readonly TitlebarTool[]
   sidebarTool: TitlebarTool
-  flipTool: TitlebarTool
   rightSidebarTool: TitlebarTool
   terminalTool: TitlebarTool
   systemTools: readonly TitlebarTool[]
@@ -326,10 +203,10 @@ interface TitlebarClustersProps {
 }
 
 function TitlebarClusters({
+  history,
   leftTools,
   tools,
   sidebarTool,
-  flipTool,
   rightSidebarTool,
   terminalTool,
   systemTools,
@@ -338,7 +215,6 @@ function TitlebarClusters({
 }: TitlebarClustersProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const appActionsSide = useStore($titlebarAppActionsSide)
   const interfaceMode = useStore($interfaceMode)
   // Every cluster respects the same hidden flag and interface-mode tier.
   const shown = shownInMode(interfaceMode)
@@ -357,7 +233,7 @@ function TitlebarClusters({
 
   const leftClusterClass = cn(
     titlebarToolClusterClass,
-    'left-(--titlebar-controls-left) top-(--titlebar-controls-top) translate-y-(--titlebar-controls-y-nudge)'
+    'left-(--titlebar-controls-left) top-(--titlebar-controls-top) gap-1'
   )
 
   // A contributed full page (`extension`) yields the fixed clusters only while
@@ -366,20 +242,18 @@ function TitlebarClusters({
   // the app's controls; an empty claim would leave a bare strip on every plugin
   // route. Contributed `titleBar.tools` items keep rendering here too, so a
   // chrome-owning page never silently drops a registered item.
-  const visibleLeftTools = (
-    pageOwnsChrome
-      ? [...leftTools, ...tools]
-      : appActionsSide === 'left'
-        ? [sidebarTool, flipTool, ...systemTools, ...leftTools]
-        : [sidebarTool, flipTool, ...leftTools]
-  ).filter(visibleTool)
-
-  const visibleSystemTools = appActionsSide === 'right' ? systemTools.filter(visibleTool) : []
+  const visibleLeftTools = (pageOwnsChrome ? [...leftTools, ...tools] : [sidebarTool, ...leftTools]).filter(visibleTool)
+  const visibleSystemTools = systemTools.filter(visibleTool)
   const visiblePaneTools = tools.filter(visibleTool)
   const visibleEndTools = [terminalTool, rightSidebarTool].filter(visibleTool)
 
   return (
     <>
+      {routeOwnsWindow && (
+        <div className={leftClusterClass} data-titlebar-cluster="left">
+          <TitlebarHistoryControls history={history} />
+        </div>
+      )}
       {!routeOwnsWindow && (
         <div
           aria-label={pageOwnsChrome ? undefined : t.shell.windowControls}
@@ -387,6 +261,7 @@ function TitlebarClusters({
           data-slot={pageOwnsChrome ? undefined : 'titlebar-window-controls'}
           data-titlebar-cluster="left"
         >
+          <TitlebarHistoryControls history={history} />
           {visibleLeftTools.map(tool => (
             <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
           ))}
@@ -399,7 +274,7 @@ function TitlebarClusters({
           aria-label={t.shell.paneControls}
           className={cn(
             titlebarToolClusterClass,
-            'right-[calc(var(--titlebar-tools-right)+var(--shell-preview-toolbar-gap,0))] top-[calc(var(--titlebar-controls-top)+var(--right-rail-top-inset,0px))] translate-y-[3.5px] gap-1'
+            'right-[calc(var(--titlebar-tools-right)+var(--shell-preview-toolbar-gap,0))] top-[calc(var(--titlebar-controls-top)+var(--right-rail-top-inset,0px))] gap-1'
           )}
           data-slot="titlebar-pane-controls"
         >
@@ -442,10 +317,7 @@ function TitlebarAppControls({
   return (
     <div
       aria-label={showFixedTools ? t.shell.appControls : undefined}
-      className={cn(
-        titlebarToolClusterClass,
-        'right-(--titlebar-tools-right) top-(--titlebar-controls-top) translate-y-[3.5px] gap-1'
-      )}
+      className={cn(titlebarToolClusterClass, 'right-(--titlebar-tools-right) top-(--titlebar-controls-top) gap-1')}
       data-slot={showFixedTools ? 'titlebar-app-controls' : undefined}
       data-titlebar-cluster="right"
     >
@@ -468,7 +340,7 @@ function TitlebarAppControls({
 
 function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof useNavigate>; tool: TitlebarTool }) {
   // Titlebar actions never show an active background — state reads from the
-  // icon itself (e.g. the mute/unmute glyph). aria-pressed still carries it
+  // icon itself (e.g. the terminal's solid/dashed panel). aria-pressed still carries it
   // for a11y.
   const className = cn(titlebarButtonClass, 'bg-transparent select-none', tool.className)
 

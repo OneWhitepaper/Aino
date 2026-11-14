@@ -99,6 +99,7 @@ afterEach(() => {
   for (const close of [...groupChatMainTabs.values()]) {
     close()
   }
+
   groupChatMainTabs.clear()
   $canonicalGroupBindings.set({})
   localStorage.clear()
@@ -172,15 +173,18 @@ it('opens resolved same-name rooms as separate immutable tabs with matching titl
         ]
       }
     }
+
     throw new Error(`Unexpected RPC: ${method}`)
   })
   const LocalWorkspace = local.render
+
   const view = render(
     <>
       {local.tabTitle?.()}
       <LocalWorkspace />
     </>
   )
+
   await screen.findByText('local reply')
   expect(screen.queryByText('remote reply')).toBeNull()
   expect(request.mock.calls.filter(call => call[1] === 'groups.state').map(call => call[0].connectionId)).toEqual([
@@ -226,6 +230,7 @@ it('freezes an unresolved name lookup to its opener and an old close cannot clea
         ]
       }
     }
+
     throw new Error(`Unexpected RPC: ${method}`)
   })
   openGroupChat('Team', 'name')
@@ -257,6 +262,7 @@ it('freezes an unresolved name lookup to its opener and an old close cannot clea
   for (const [owner] of reads) {
     expect(owner).toMatchObject({ ...route, targetProfile: route.profile })
   }
+
   expect(request.mock.calls.some(call => call[1] === 'groups.create')).toBe(false)
 })
 

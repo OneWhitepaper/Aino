@@ -133,7 +133,12 @@ beforeEach(() => {
         playState: 'running',
         currentTime: 24,
         finished,
-        effect: { target: this, getKeyframes: () => frames, getTiming: () => options },
+        effect: {
+          target: this,
+          getKeyframes: () => frames,
+          getTiming: () => options,
+          getComputedTiming: () => ({ progress: 0.25 })
+        },
         cancel: vi.fn(() => {
           animation.playState = 'idle'
           reject(new Error('cancelled'))
@@ -313,7 +318,7 @@ it('opens a guest at the final viewport width while only the visible clip follow
   const page = guest()
   const opening = trackAnimation()
 
-  expect(opening.frames.map(frame => frame.width)).toEqual(['0px', '480px'])
+  expect(opening.frames.map(frame => frame.clipPath)).toEqual(['inset(0 480px 0 0)', 'inset(0 0px 0 0)'])
   expect(viewportWidth()).toBe('480px')
   expect(page.dataset.visible).toBe('true')
   expect(body.hasAttribute('inert')).toBe(false)
@@ -346,6 +351,27 @@ it('reopens at the current track target instead of a stale kept width', async ()
 
   view.rerender(workspace({ width: 520 }))
   expect(viewportWidth()).toBe('520px')
+  expect(guest()).toBe(page)
+  expect(disconnected).not.toContain(page)
+})
+
+it('closes an interrupted first opening at its final viewport without disconnecting the guest', () => {
+  const view = render(workspace({ collapsed: true }))
+  view.rerender(workspace({ width: 480 }))
+  const page = guest()
+  // The first observer delivery has not caught up with the final open width.
+  host().style.setProperty('--pane-kept-width', '360px')
+  view.rerender(workspace({ width: 480, collapsed: true }))
+  const closing = trackAnimation()
+
+  expect(closing.frames.map(frame => frame.width)).toEqual(['480px', '480px'])
+  expect(closing.frames.map(frame => frame.clipPath)).toEqual(['inset(0 360px 0 0)', 'inset(0 480px 0 0)'])
+  expect(viewportWidth()).toBe('480px')
+  expect(host().style.width).toBe('480px')
+  expect(animations.findLast(probe => probe.target === host())!.frames.map(frame => frame.clipPath)).toEqual([
+    'inset(0 360px 0 0)',
+    'inset(0 480px 0 0)'
+  ])
   expect(guest()).toBe(page)
   expect(disconnected).not.toContain(page)
 })

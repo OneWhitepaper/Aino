@@ -4,6 +4,7 @@ import {
   allPaneIds,
   type DropPosition,
   findGroupOfPane,
+  groupLeafIds,
   type GroupNode,
   insertAtGroup,
   type LayoutNode,
@@ -88,6 +89,29 @@ export function toolDockPosition(
   return data?.toolPanel && data.dock?.pane === 'files' && position === 'center' && anchorData?.placement === 'main'
     ? 'right'
     : position
+}
+
+/** A passive contribution can recreate a tool host, but only explicit reveal may open it. */
+export function foldNewToolPanelGroups(
+  before: LayoutNode,
+  after: LayoutNode,
+  paneFor: (id: string) => Contribution | undefined
+): LayoutNode {
+  const existing = new Set(groupLeafIds(before))
+
+  const fold = (node: LayoutNode): LayoutNode => {
+    if (node.type === 'group') {
+      return !existing.has(node.id) && !node.minimized && isRestoredToolPanelGroup(node, paneFor)
+        ? { ...node, toolPanel: true, minimized: true }
+        : node
+    }
+
+    const children = node.children.map(fold)
+
+    return children.some((child, index) => child !== node.children[index]) ? { ...node, children } : node
+  }
+
+  return fold(after)
 }
 
 /** Restore tool chrome before saved preview contributions finish registering. */

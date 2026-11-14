@@ -16,7 +16,6 @@ import { $sessionListDensity } from '@/store/session-list-density'
 import { $tabStripDefault } from '@/store/tabstrip-prefs'
 import { $textDirection } from '@/store/text-direction'
 import { $hideThreadTimeline } from '@/store/thread-timeline'
-import { $titlebarAppActionsSide } from '@/store/titlebar-app-actions'
 import { $hideCodeDiffs, $toolViewMode } from '@/store/tool-view'
 import { $zoomPercent } from '@/store/zoom'
 
@@ -38,7 +37,6 @@ export function AppearanceLivePreview({ variant }: AppearanceLivePreviewProps) {
   const reasoningCollapsed = useStore($reasoningCollapsedByDefault)
   const direction = useStore($textDirection)
   const hideTimeline = useStore($hideThreadTimeline)
-  const actions = useStore($titlebarAppActionsSide)
   const popout = useStore($composerPopoutGesturesEnabled)
   const backdrop = useStore($backdrop)
   const reactions = useStore($reactionsEnabled)
@@ -50,7 +48,6 @@ export function AppearanceLivePreview({ variant }: AppearanceLivePreviewProps) {
       <div
         className="appearance-preview"
         data-appearance-preview={variant}
-        data-preview-actions={actions}
         data-preview-backdrop={backdrop || undefined}
         data-preview-popout={popout || undefined}
         style={{ '--appearance-preview-text-scale': String(textScale / 100) } as CSSProperties}

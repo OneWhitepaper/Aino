@@ -257,6 +257,7 @@ function rosterEntry(
 
   if (!pin) {
     const profile = member.route?.targetProfile ?? member.targetProfile ?? member.name
+
     // Saved on the gateway and read from any computer: "This device" would be wrong elsewhere.
     const display =
       member.display_name || (mixed && profile === 'default' && base !== 'hermes' ? botLabel(member) : undefined)
@@ -312,6 +313,7 @@ export function canonicalGroupRoster(
     }
 
     const entry = rosterEntry(member, members, pin, mixed)
+
     const keys = [`handle:${entry.handle}`, `id:${entry.member_id}`, ...(pin ? [] : [`profile:${entry.profile}`])].map(
       key => key.toLowerCase()
     )
@@ -521,6 +523,7 @@ export async function actCanonicalGroup(
     discard: 'groups.discard',
     approval: 'groups.approve'
   }
+
   const method = Object.hasOwn(methods, action.kind) ? methods[action.kind] : undefined
 
   if (

@@ -98,6 +98,47 @@ SVG/ref-compatible adapters. Eight compatibility symbols retain their original
 sources where Codicons has no equivalent; brand portraits, provider logos, file
 types and specialized geometry keep their identity.
 
+Window action glyphs share `WindowChromeIcon`: rounded outlines on a 24px
+viewBox at 18px with a 1.65px stroke, inside the existing 24px titlebar controls.
+Bell, HUD, Summary, terminal and both sidebar toggles use this family and one
+vertical alignment. Buttons share the UI text/hover tokens and 6px corners.
+The shared Button owns the titlebar CSS icon size; wrappers do not pin a
+second inline default. Bell, chat and resource glyphs are optically balanced
+against the panel frames' 3–21 drawing bounds. All titlebar controls use
+`--chrome-action-hover`, with immediate hover feedback and a 100ms return.
+The Summary glyph uses two hollow circular markers with aligned short strokes.
+Both sidebar toggles use mirrored split frames. The chevron indicates the next
+action: toward the window edge to collapse an open sidebar, toward the content
+to expand a hidden sidebar. The shared icon follows each existing visibility owner.
+Back and Forward precede the navigation toggle and share its Button geometry.
+They traverse this window's page and conversation history; unavailable directions
+are disabled. New navigation after going back replaces the forward branch, and
+account or connection changes reset the history.
+The native and renderer titlebars share one 43px band. Toolbar centers follow
+the actual macOS traffic-light coordinates, converting DIP to CSS pixels at the
+current window zoom; fullscreen and non-Mac controls retain their centered band.
+Outside the titlebar, the shared glyphs follow the containing Button's icon size.
+Notification and Summary card triggers use the same `titlebar-popover` open
+fill and toolbar tooltip placement. Positional pane toggles keep their existing
+show/hide semantics; the terminal uses solid/dashed panel outlines for its state.
+Native traffic lights and contributed brand icons retain
+their own identities.
+
+Transcript action icons use the shared `ToolIcon` outline family: pencil for
+file changes, rounded terminal for commands, open book for reads, and connected
+nodes for generic integrations. Use 1.65px round-ended strokes on a 24px
+viewBox, scaled by the existing conversation glyph size and fixed glyph cell.
+Ordinary chats, Bot chats and child transcripts share this component. File-type
+icons remain separate from action icons; status, errors and provider logos keep
+their existing meanings. App navigation retains its approved Codicon geometry.
+
+Session action menus share `SessionMenuIcon` across the header, sidebar and tabs:
+16px outlines on a 24px viewBox with 1.75px round-ended strokes. Rename uses a
+pencil, Pin a diagonal pushpin, Unread an eye, Project a folder with an arrow,
+Branch connected nodes, Copy overlapping rounded squares, and New window a
+three-dot frame with a plus. Icons inherit the row text color, including disabled
+and destructive states. Copy keeps its success/error feedback through `CopyButton`.
+
 The main window has one notification bell in the window titlebar, including
 Home, ordinary and Bot conversations, and Settings. Its count reflects the
 existing notification queue. Clicking opens a bounded, right-aligned floating
@@ -156,19 +197,47 @@ that the mockup does not show.
   setting does not grant filesystem/network access or bypass system permissions
   and safety rules. Keep the existing gateway configuration and approval flow.
 
+Ordinary and one-to-one Bot conversations use the same 832px maximum measure
+for message bodies and the composer. Assistant portraits occupy a separate 44px
+left gutter so they never consume the body width. At chat-pane widths of 58rem
+or less, the portrait moves into an identity row above the reply to avoid edge
+clipping. Group conversations retain their independent, wider proportions.
+
+## Messaging connections
+
+Platforms advertising QR onboarding open a compact, centered scan view using the
+shared Dialog, Button and status primitives. The QR, phone confirmation and actual
+connection state are the primary flow; credentials remain on the backend. Existing
+accounts require an explicit Change account action before a new grant is requested.
+Use existing credentials opens the complete manual form, with optional transport and
+access settings behind Advanced. Keep the target bot visible by its readable name.
+Saving authorization and connecting are distinct states; never label a saved grant
+as Connected until the adapter reports it. Apply a connection only to its original
+account, connection and profile. A busy adapter retains its messages and offers retry;
+connecting one platform never restarts the conversation owner.
+The enabled switch stays visible in both QR and manual setup, independently of
+the credential Save action. Waiting for a scan never locks the switch; only
+committing authorization briefly locks it. Disabling cancels a pending pairing
+and waits for any in-flight save before writing the disabled state, so a late
+authorization cannot reverse the choice. Enabling an unconfigured platform keeps
+the QR setup available and waits for credentials before connecting. Disabling a
+saved account retains its credentials; enabling it reuses the existing connection.
+
 ## Group conversations
 
 Group conversations are a named-member desktop chat surface, scoped to the
 contracts in [the group design system](../../docs-local/group-human-redesign/DESIGN.md).
 Robot messages stay on the left and human messages on the right, using existing
-32px avatars, 14px body text, 12px metadata and a 66ch maximum message measure.
+32px avatars, 14px body text, 12px metadata and a 74ch maximum message measure.
 Historical human labels are preserved unless the current user's identity is
-known. Messages and composer share one centered 832px maximum column and the
-same container-aware gutters, which become 16px in narrow panes. Container width owns
-these rules, including when files or group information reduce the available reading area.
+known. The transcript uses a centered 1120px maximum lane, independently of the
+bounded 832px composer. Message bubbles take at most 78% of the desktop lane,
+and narrow panes use the available width. Both retain container-aware gutters,
+which become 16px in narrow panes, including when files or group information
+reduce the available reading area.
 
 A main group has one shell-owned title. Its content begins with a compact
-45px participant toolbar, sharing its height with the adjacent tool tabs:
+participant toolbar, sharing the `--aino-band-row2` height with adjacent tool tabs:
 existing portraits, readable names and state,
 search and group information. Standalone and older in-rail fallback surfaces
 retain their own title and Back; loading and failure gates follow the same
@@ -362,9 +431,11 @@ animation invents streamed reply text or rewrites historical facts.
   arrow with its accessible tooltip. Counts describe messages below the viewport,
   not unread messages. Pending approvals retain their existing direct jump.
 - **Summary is a persistent workspace card.** Its list icon precedes Terminal
-  and the right-sidebar toggle. The titlebar button alone opens and closes it;
-  outside clicks, Escape, conversation switches and opening other panes leave
-  the choice intact. The card belongs to the last interacted visible chat,
+  and the right-sidebar toggle. Opening the tool panel folds Summary; closing
+  that panel opens Summary. While tools remain open, the titlebar button can
+  explicitly reopen Summary. A new conversation starts with Summary closed;
+  background preview refreshes and layout restoration never open either surface.
+  Outside clicks and Escape leave the choice intact. The card belongs to the last interacted visible chat,
   inside its pane, before sibling file, preview, review or terminal panes.
   File and preview focus never moves the card out of that conversation.
   It reserves a right-hand column, recentering the transcript and composer
@@ -428,8 +499,8 @@ animation invents streamed reply text or rewrites historical facts.
   substitute. Shared reads reuse one calculation per session; a five-second
   detail deadline leaves a quiet explanation and an explicit Retry action.
   Category details for a cold session update after its next conversation turn.
-  Diffs, source previews and terminals open beside the summary, without
-  dismissing it. Settings temporarily covers the workspace without resetting
+  Diffs, source previews and terminals stay in the tool panel; Summary can be
+  reopened alongside them. Settings temporarily covers the workspace without resetting
   the summary choice.
   Older saved layouts retire only the former Summary pane.
   This behavior draws on Codex's public
@@ -470,7 +541,7 @@ animation invents streamed reply text or rewrites historical facts.
   type scale, clear primary text, secondary icons and soft selection fills.
   The virtualizer owns row height, and nested names truncate within the pane.
   A strip containing Files uses neutral tabs without an accent underline,
-  retaining the compact track used by minimization and layout editing. Tab
+  retaining the compact track used by tool minimization. Tab
   faces mask filenames beneath the hover close chip, including under Glass;
   primary navigation and other editor strips retain their own geometry.
   Refresh and collapse actions remain discoverable, and the layout sash alone
@@ -905,6 +976,9 @@ blurred backdrop.
 
 ## Form controls
 
+- Text selection uses the shared pale-blue `--ui-selection-background` wash,
+  with stronger coverage in dark mode and the text's own foreground preserved.
+  Conversations, Bot groups and native text fields use the same role.
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
   `Input` / `Textarea` / `SelectTrigger`: 6px corners, 13px normal UI text and
   padding-driven size with a 32px normal / 28px extra-small minimum. New
@@ -969,7 +1043,7 @@ focusing its composer.
   within the chat pane and native/window-tool boundaries; long titles ellipsize and search
   results open below the field without resizing the chat. Do not reserve a
   second header row for a session-only primary group. Mixed pane tabs,
-  secondary chat splits and layout edit mode retain their local strips;
+  secondary chat splits retain their local strips;
   Settings and auxiliary windows never borrow the primary window's header.
 - **Shell boundaries:** titlebar, navigation, tool tab strips and tree sashes use
   one 1px `--ui-stroke-secondary` border at full opacity, aligned to whole pixels.
@@ -1074,8 +1148,9 @@ focusing its composer.
 Top-edge panels extend into the native titlebar band. Their tab strips remain
 inside their own zones so tab drops, focus, and split boundaries use the same
 geometry. Panels without room beside the measured window controls place their
-tabs on a full-width row below the controls. Minimized row groups use vertical
-restore rails, including groups with multiple tabs. Sidebar buttons and shortcuts
+tabs on a full-width row below the controls. Minimized navigation and unified tool
+groups hide their whole track. Other minimized row groups retain vertical restore
+rails, including groups with multiple tabs. Sidebar buttons and shortcuts
 restore minimized or fully hidden side groups without changing the selected tab.
 Lower panels keep local headers. Empty header space moves the window;
 tabs and actions remain no-drag, with native-control space reserved from the
@@ -1086,11 +1161,16 @@ Keep the renderer's startup fallback insets aligned with that position so the
 adjacent toolbar and panel reservations do not jump when native state arrives.
 Windows/Linux retain their previous toolbar startup fallback until native state arrives.
 
-The left cluster shows sidebar, settings, layout editor, and HUD controls. Flip
-and the right-sidebar toggle sit on the right; haptics remain in settings.
-In Simple interface mode only sidebar, settings and the layout editor render,
-and the reserved cluster width shrinks with them (`TITLEBAR_FIXED_TOOLS` is the
-one table both the buttons and the width reservation read).
+The left window-control cluster contains one navigation expand/collapse button.
+Its rounded panel glyph is shared with the right-sidebar and local panel Hide
+controls. Navigation collapses completely, leaving no vertical Sessions/Bot tab
+rail; the titlebar button restores the saved width and current mode. Notification,
+HUD, haptics, summary, terminal and right-sidebar actions stay together on the
+right. The retired app-action side preference is ignored. The layout editor,
+its command-palette/keybind entries and editing overlays are removed; the pane
+tree, pane drag/drop, tool tabs, persistence and layout reset retain their owners.
+Simple interface mode keeps navigation, notifications and haptics, and releases
+space for every hidden tool (`TITLEBAR_FIXED_TOOLS` owns visibility and sizing).
 Holding Cmd (Ctrl off macOS) reveals small slot numbers over the target strip's
 status dots after 400ms, without changing tab widths. Hints follow the same
 binding and hovered/focused-zone resolver as the number shortcuts.
@@ -1209,8 +1289,9 @@ so glass and message-bubble transparency do not reveal scrolling text.
 
 ## Chat typography
 
-Ordinary, Bot and group transcripts and composers share a bounded 832px maximum
-and the same centered column in their actual chat container.
+Ordinary and Bot transcripts and composers share a bounded 832px maximum
+and the same centered column in their actual chat container. Group transcripts
+use the wider lane described above, while their composers retain this bound.
 The transcript measures that outer container, including its scrollbar, so
 scrolling cannot shift its edges away from the composer in narrow panes.
 Opening tools or Summary reduces that container instead of borrowing the window
@@ -1251,7 +1332,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   approval renderer for one feature.
 - Conversation thinking is a compact disclosure row without a full-width
   divider. Reasoning has its own disclosure and never opens as a side effect
-  of expanding a tool group. Adjacent ordinary tool calls share one summary;
+  of expanding a tool group. Adjacent reads, file edits and commands share one
+  default-collapsed behavior summary, including a single call. Repeated work on
+  the same file counts that path once. File names and command
+  lines belong inside the default-collapsed execution log. Each edit keeps its
+  diff and change counts behind its own row disclosure. Preview registration
+  is independent of whether the execution log has been opened;
   reasoning and public progress each end that tool group. Opening a group
   reveals only its flat, same-column tool rows. Command output opens separately
   on the individual row. Public updates and findings stay in chronological order
@@ -1304,7 +1390,7 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   inter-block margin. Process headers group through spacing, without a full-width
   rule; nested thinking/tool headers do not introduce dividers.
   Mockup screenshot pixels must not be
-  copied into CSS sizes without accounting for capture density. Questions, approvals, failures, file edits, generated outputs and
+  copied into CSS sizes without accounting for capture density. Questions, approvals, failures, generated outputs and
   registered tool interfaces retain their own surfaces. The live label follows
   the actual pending tool; model waits belong to the existing tail status row.
   While awaiting approval the process reports completed activity only.
@@ -1374,7 +1460,7 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   blank home surface and while a draft is unsent, including a draft tab promoted
   into the primary group. Sending its first turn reveals the heading; opening
   history shows its title even while the transcript loads. Multi-pane tab strips,
-  secondary splits and layout edit mode retain draft previews and navigation handles.
+  secondary splits retain draft previews and navigation handles.
   Long titles truncate within the left titlebar column, and the session search
   stays centered in the usable titlebar area. `PaneTabLabel` can opt into the
   shared overflow-only tooltip through `overflowLabel` for full title discovery.
@@ -1602,8 +1688,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 - Motion follows state; it never delays state. Selection, drag targets, cancel,
   and pressed feedback paint in the current frame.
 - Tool decks open over 220ms and close over 160ms, retaining the existing pane
-  hosts. Horizontal opening holds native guest viewports at their final width
-  and reveals them through a synchronized edge crop. The slot's shared resize
+  hosts. Horizontal opening commits the final flex layout once and reveals
+  the panel through a crop from its physical window edge; never interpolate
+  width/flex-basis and rewrap the transcript every frame. Closing removes the
+  track from layout immediately and retains its paint at constant viewport
+  bounds until the crop finishes. Native guests share the crop and timing,
+  and hold their final viewport width. The slot's shared resize
   observer follows subsequent resizing without handing the viewport back to
   an animated anchor size. Stable browser and terminal
   hosts never move, remount, or add a second opacity reveal. Inline tool content
@@ -1793,3 +1883,24 @@ dismiss after six seconds while collapsed; failures stay until reviewed or dismi
 Returning to retry prepares the original goal in that conversation's existing draft
 without sending it or pretending to revive a terminated child. Details retain live
 activity, files, model/usage and optional additional instructions.
+
+
+### Browser page fitting and fixed workspace regions
+
+The browser toolbar shows its own page percentage in the existing compact menu
+style. Fit width is the default: ordinary responsive pages stay at 100%; pages
+with measured horizontal overflow shrink to the available panel width, with a
+50% readability floor. The same menu offers actual size and manual zoom. Page
+zoom belongs to the existing WebContents, isolated from other same-origin tabs;
+changing it never reloads the page or rewrites the website's styles. Pop-out and
+dock retain the selected mode and the same page state. Native input, screenshots
+and annotation use that guest's real zoom. A changed scale retires old agent
+observations; automatic fitting yields during an approval.
+
+The navigation and conversation workspace are fixed regions. Dragging empty
+header space cannot pick up a whole region, and Shift cannot merge regions.
+File/tool tabs and dedicated session tabs retain their ordinary reorder and
+split interactions, with drop feedback only on the current valid target. Sash
+resizing, hide/show, maximize, live instances and the current pane-tree state
+remain intact. Retired custom-layout preset records cannot restore the removed
+editor or its arbitrary workspace geometry.

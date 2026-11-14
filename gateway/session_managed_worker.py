@@ -61,6 +61,7 @@ def _bootstrap(authority, ref, row, policy, scope, text=None):
     from gateway.session_ingress import row_turn_author
     from gateway.session_policy import route_launch_key
     from gateway.session_policy_credentials import recover_config_secrets
+    from gateway.session_pause import worker_continuation
     terminal = json.loads(policy.terminal_json)
     if policy.config_secret_ref:
         for path, value in recover_config_secrets(authority, policy).items():
@@ -73,6 +74,7 @@ def _bootstrap(authority, ref, row, policy, scope, text=None):
     request = dict(json.loads(policy.request_json), turn_v1={
         'finite': row['payload'].get('finite', False), 'unattended': row['payload'].get('unattended') is True,
         'yolo': _session_yolo(authority, live.route, policy),
+        **worker_continuation(authority, row),
         **({'surface_v1': row['payload']['surface_v1']} if row['payload'].get('surface_v1') else {}),
         **({'display_v1': row['payload']['display_v1']} if row['payload'].get('display_v1') else {})})
     from gateway.session_worker_construct import construct_inputs
@@ -127,24 +129,26 @@ def worker_turn_scope(frame):
     from gateway.session_finite import finite_turn_scope
     from gateway.session_display import display_turn_scope, restore_display
     from gateway.session_surface import restore_surface, surface_turn_scope
+    from gateway.session_pause import continuation_turn_scope, restore_continuation
     turn = json.loads(frame['policy'].get('request_json') or '{}').get('turn_v1')
     if turn is None:
         yield
         return
-    flags = {k: v for k, v in turn.items() if k not in ('surface_v1', 'display_v1')} if isinstance(turn, dict) else None
+    flags = {k: v for k, v in turn.items() if k not in ('surface_v1', 'display_v1', 'continuation_v1')} if isinstance(turn, dict) else None
     if (flags is None or set(flags) != {'finite', 'unattended', 'yolo'}
             or any(type(v) is not bool for v in flags.values()) or (turn['unattended'] and not turn['finite'])):
         raise ValueError('invalid_managed_worker_bootstrap')
     try:
         surface = restore_surface(turn['surface_v1']) if 'surface_v1' in turn else None
         display = restore_display(turn['display_v1']) if 'display_v1' in turn else None
+        continuation = restore_continuation(turn.get('continuation_v1'))
     except RuntimeStoreError as exc:
         raise ValueError('invalid_managed_worker_bootstrap') from exc
     if turn['yolo']:
         from tools.approval import enable_session_yolo
         enable_session_yolo(frame['route'])
     with finite_turn_scope(turn['finite'], turn['unattended']), surface_turn_scope(surface), \
-            display_turn_scope(frame['scope']['execution_id'], display):
+            display_turn_scope(frame['scope']['execution_id'], display), continuation_turn_scope(continuation):
         yield
 
 
@@ -452,8 +456,11 @@ def _launch_env_only_credentials(home, env):
 
 
 def _interrupted_before_bootstrap(authority, row, cause=None):
+    from agent.turn_failure_copy import UNSTARTED_INTERRUPT_EXIT_REASON
     authority.pending_results[row['admission_id']] = {
-        'result': {'final_response': '', 'interrupted': True, **({'interrupt_message': cause} if cause else {})},
+        'result': {'final_response': '', 'interrupted': True, 'user_interrupted': cause is None,
+                   'turn_exit_reason': UNSTARTED_INTERRUPT_EXIT_REASON,
+                   **({'interrupt_message': cause} if cause else {})},
         'usage': {}}
     return ''
 

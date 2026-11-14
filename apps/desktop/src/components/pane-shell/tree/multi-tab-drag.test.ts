@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { findGroup, findGroupOfPane, group, mergeZonesWithPane, movePanes, reorderPanesInGroup, split } from './model'
+import { findGroup, findGroupOfPane, group, movePanes, reorderPanesInGroup, split } from './model'
 import { $tabSelection, clearTabSelection, selectionFor, selectTabRange, toggleTabSelected } from './tab-selection'
 
 describe('movePanes (multi-tab drag)', () => {
@@ -78,29 +78,6 @@ describe('reorderPanesInGroup (block reorder)', () => {
     const tree = group(['a', 'b'], { active: 'a', id: 'g' })
 
     expect(reorderPanesInGroup(tree, 'g', ['a', 'ghost'], 0)).toBe(tree)
-  })
-})
-
-describe('mergeZonesWithPane with a multi-tab block', () => {
-  it('merges the span into one group led by the block in strip order', () => {
-    const tree = split('row', [
-      group(['a', 'b'], { active: 'a', id: 'left' }),
-      split('column', [group(['x'], { active: 'x', id: 'mid' }), group(['y'], { active: 'y', id: 'right' })])
-    ])
-
-    const next = mergeZonesWithPane(tree, ['mid', 'right'], ['a', 'b'])
-
-    expect(next).toMatchObject({ type: 'group', panes: ['a', 'b', 'x', 'y'] })
-  })
-
-  it('returns null for a non-rectangular span (caller falls back to a single-zone drop)', () => {
-    const tree = split('row', [
-      group(['a', 'b'], { active: 'a', id: 'left' }),
-      group(['x'], { active: 'x', id: 'mid' }),
-      group(['y'], { active: 'y', id: 'right' })
-    ])
-
-    expect(mergeZonesWithPane(tree, ['mid', 'right'], ['a', 'b'])).toBeNull()
   })
 })
 

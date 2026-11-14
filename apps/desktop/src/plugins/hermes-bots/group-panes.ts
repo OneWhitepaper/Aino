@@ -22,8 +22,17 @@ import type { Attachment } from './types'
 // metadata (where another Desktop would see half-typed text or attachment
 // bytes). Current rooms key by immutable roomId; legacy rooms fall back to the
 // display name until they are upgraded.
-export interface CanonicalDraftReply { member?: CanonicalRoomMember; name: string; quote: string; thread?: string }
-export interface CanonicalHeldDraft { text: string; attachments: CanonicalGroupAttachment[]; reply: CanonicalDraftReply | null }
+export interface CanonicalDraftReply {
+  member?: CanonicalRoomMember
+  name: string
+  quote: string
+  thread?: string
+}
+export interface CanonicalHeldDraft {
+  text: string
+  attachments: CanonicalGroupAttachment[]
+  reply: CanonicalDraftReply | null
+}
 export interface GroupComposerDraft {
   canonicalReply?: CanonicalDraftReply | null
   canonicalHeld?: CanonicalHeldDraft | null
@@ -60,7 +69,13 @@ export function groupComposerDraftKey(group: string, room: GroupChatRoom): strin
 }
 
 export function canonicalGroupComposerDraftKey(binding: CanonicalGroupBinding): string {
-  return JSON.stringify(['canonical', $groupComposerDraftEpoch.get(), binding.connectionId, binding.profile, binding.roomId])
+  return JSON.stringify([
+    'canonical',
+    $groupComposerDraftEpoch.get(),
+    binding.connectionId,
+    binding.profile,
+    binding.roomId
+  ])
 }
 
 export function groupComposerDraftSnapshot(key: string): GroupComposerDraft {
@@ -159,8 +174,18 @@ interface GroupOpenContext {
 }
 const groupOpenOrigins = new Map<string, GroupOpenContext>()
 
-export function recordGroupOpenOrigin(group: string, origin: CanonicalGroupOrigin, context: Pick<GroupOpenContext, 'route' | 'paneId' | 'ownerKey'> = {}) {
-  const opened = { origin, ...context, views: groupOpenOrigins.get(group)?.views, ...(context.route ? { route: { ...context.route } } : {}) }
+export function recordGroupOpenOrigin(
+  group: string,
+  origin: CanonicalGroupOrigin,
+  context: Pick<GroupOpenContext, 'route' | 'paneId' | 'ownerKey'> = {}
+) {
+  const opened = {
+    origin,
+    ...context,
+    views: groupOpenOrigins.get(group)?.views,
+    ...(context.route ? { route: { ...context.route } } : {})
+  }
+
   groupOpenOrigins.set(group, opened)
 }
 
@@ -176,7 +201,9 @@ export const groupWorkspacePaneId = (group: string) =>
 /** Include parked same-name views without closing the other source's current selection. */
 export function closeGroupMainViews(group: string, route: CanonicalGroupRoute): void {
   for (const view of [...(groupOpenOrigins.get(group)?.views?.values() ?? [])]) {
-    if (view.route?.connectionId === route.connectionId && view.route.profile === route.profile) {view.close()}
+    if (view.route?.connectionId === route.connectionId && view.route.profile === route.profile) {
+      view.close()
+    }
   }
 }
 
@@ -198,7 +225,9 @@ export function dropGroupMainTab(group: string, expected?: () => void): boolean 
 
   if (expected && views) {
     for (const [id, view] of views) {
-      if (view.close === expected) {views.delete(id)}
+      if (view.close === expected) {
+        views.delete(id)
+      }
     }
   }
 

@@ -1,0 +1,73 @@
+name: Browser native acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/e2e-browser-native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/e2e-browser-native.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Embedded browser (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-latest, ubuntu-24.04]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64
+      - name: Prepare locked Node toolchain
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: node
+      - uses: ./.github/actions/retry
+        with:
+          command: just js-install
+      - name: Prepare locked Electron runtime
+        run: just electron-runtime
+      - name: Configure Linux Electron sandbox
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: |
+          electron_sandbox="$(node -p "require('node:path').join(require('node:path').dirname(require('electron')), 'chrome-sandbox')")"
+          sudo chown root:root "$electron_sandbox"
+          sudo chmod 4755 "$electron_sandbox"
+      - name: Run native acceptance
+        working-directory: apps/desktop
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a --server-args="-screen 0 1280x1024x24" node scripts/test-preview-native.mjs "$RUNNER_TEMP/browser-proof"
+          else
+            node scripts/test-preview-native.mjs "$RUNNER_TEMP/browser-proof"
+          fi
+      - name: Upload native receipts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-native-${{ runner.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/browser-proof
+          retention-days: 14
+          if-no-files-found: error

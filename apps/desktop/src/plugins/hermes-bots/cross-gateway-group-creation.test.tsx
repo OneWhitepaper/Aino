@@ -34,6 +34,7 @@ const { request, notify, openWorkspace } = vi.hoisted(() => ({
   notify: vi.fn(),
   openWorkspace: vi.fn()
 }))
+
 vi.mock('@hermes/plugin-sdk', async importOriginal => {
   const sdk = await importOriginal<typeof HermesSdk>()
   const { en } = await import('@/i18n/en')
@@ -77,12 +78,14 @@ const connectionId = host.state.connectionId as WritableAtom<string | null>
 
 const alpha: RosterRow = { name: 'alpha', connectionId: 'local', connectionLabel: 'This device' }
 const beta: RosterRow = { name: 'beta', connectionId: 'local', connectionLabel: 'This device' }
+
 const remote: RosterRow = {
   name: 'remote',
   connectionId: 'other-box',
   connectionLabel: 'Other box',
   remoteSource: true
 }
+
 const scout: RosterRow = { name: 'scout', connectionId: 'other-box', connectionLabel: 'Other box', remoteSource: true }
 const unreachable: RosterRow = { ...remote, name: 'offline', sourceReachable: false }
 
@@ -191,6 +194,7 @@ it.each(['unchanged', 'reopened after disband', 'disbanded', 'renamed', 'disband
       if (method !== 'groups.create') {
         return normal(route, method, params)
       }
+
       const previous = stored.get(params.room_id)
 
       const reason = previous?.ended
@@ -208,6 +212,7 @@ it.each(['unchanged', 'reopened after disband', 'disbanded', 'renamed', 'disband
       if (reason) {
         throw Object.assign(new Error('invalid_params'), { code: 4001, data: { reason: 'invalid_params' } })
       }
+
       const room = previous ?? { room_id: params.room_id, name: params.name, members: params.members }
       stored.set(params.room_id, room)
 
@@ -219,10 +224,12 @@ it.each(['unchanged', 'reopened after disband', 'disbanded', 'renamed', 'disband
       return { room }
     })
     let { view, onCreated } = await pick([alpha, beta], ['alpha', 'beta'])
+
     const submit = () =>
       act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'New group chat (2)' }))
       })
+
     await submit()
     expect(onCreated).not.toHaveBeenCalled()
     screen.getByText(CANONICAL_GROUP_LOCALES.en.createUncertain)
@@ -336,6 +343,7 @@ it("a room's Desktop engine rides room sync, so another Desktop keeps driving it
     roomId: 'r1',
     watermarks: {}
   }
+
   const published = groupChatSyncSnapshot({ Mixed: room })
   const merged = mergeGroupChatSyncSnapshots({ version: 3, rooms: {} }, published)
 

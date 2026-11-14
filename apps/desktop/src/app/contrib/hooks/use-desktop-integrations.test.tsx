@@ -184,16 +184,14 @@ describe('useDesktopIntegrations', () => {
 
   it('never connects a retired cloud-sync bridge exposed by an older preload', () => {
     const cloudSync = {
-      status: vi
-        .fn()
-        .mockResolvedValue({
-          state: 'disabled',
-          pending: 0,
-          error: null,
-          revision: 0,
-          changed_session_ids: [],
-          changed_profile_ids: []
-        }),
+      status: vi.fn().mockResolvedValue({
+        state: 'disabled',
+        pending: 0,
+        error: null,
+        revision: 0,
+        changed_session_ids: [],
+        changed_profile_ids: []
+      }),
       retry: vi.fn(),
       onChanged: vi.fn(() => () => {})
     }

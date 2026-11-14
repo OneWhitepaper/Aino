@@ -1,13 +1,11 @@
-import { Codicon } from '@/components/ui/codicon'
+import { WindowChromeIcon } from '@/components/ui/window-chrome-icon'
 import { cn } from '@/lib/utils'
-
-import { titlebarIconSizeCss } from './titlebar'
 
 /** Titlebar-cluster glyph — sized by the shared titlebar contract. */
 export function TitlebarIcon({
   className,
   name,
-  size = titlebarIconSizeCss(),
+  size,
   spinning
 }: {
   className?: string
@@ -15,5 +13,5 @@ export function TitlebarIcon({
   size?: number | string
   spinning?: boolean
 }) {
-  return <Codicon className={cn('leading-none', className)} name={name} size={size} spinning={spinning} />
+  return <WindowChromeIcon className={cn('leading-none', className)} name={name} size={size} spinning={spinning} />
 }

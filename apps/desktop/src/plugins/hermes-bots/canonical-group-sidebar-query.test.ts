@@ -32,7 +32,12 @@ it('finds groups by their current name and member labels without requiring optio
 
 it('finds encoded members by the same current name shown in their room without borrowing another connection', () => {
   const profile = 'u6d4b-u8bd5'
-  const room = { name: 'Collaboration', members: [{ member_id: 'seat-one', profile, handle: profile, display_name: profile }] }
+
+  const room = {
+    name: 'Collaboration',
+    members: [{ member_id: 'seat-one', profile, handle: profile, display_name: profile }]
+  }
+
   const binding = { connectionId: 'studio', profile: 'default', roomId: 'room-one' }
 
   const roster = [

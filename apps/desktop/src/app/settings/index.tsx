@@ -409,9 +409,7 @@ export function SettingsView({
           ) : undefined
         }
         importFile={
-          activeView === 'config:advanced' && pendingImport?.owner === importOwner
-            ? pendingImport.file
-            : undefined
+          activeView === 'config:advanced' && pendingImport?.owner === importOwner ? pendingImport.file : undefined
         }
         importInputRef={importInputRef}
         onConfigSaved={onConfigSaved}

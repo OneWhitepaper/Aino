@@ -14,11 +14,19 @@ export async function openPlatformGateway(wsUrl: string, headers: Record<string,
       const native = parsed.searchParams.has('native_dial')
       const ticket = native ? parsed.searchParams.get('ticket') : null
 
-      if (native && !ticket) {throw new Error('Native gateway requires a fresh private ticket')}
+      if (native && !ticket) {
+        throw new Error('Native gateway requires a fresh private ticket')
+      }
 
-      if (ticket) {parsed.searchParams.delete('ticket')}
+      if (ticket) {
+        parsed.searchParams.delete('ticket')
+      }
 
-      return new WebSocket(parsed.toString(), native ? [CANONICAL_GATEWAY_PROTOCOL, `hermes-gateway-ticket.${ticket}`] : undefined, { headers })
+      return new WebSocket(
+        parsed.toString(),
+        native ? [CANONICAL_GATEWAY_PROTOCOL, `hermes-gateway-ticket.${ticket}`] : undefined,
+        { headers }
+      )
     }
   })
 

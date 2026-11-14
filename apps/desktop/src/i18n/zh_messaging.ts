@@ -1,6 +1,8 @@
+import { messagingOnboarding } from './messaging-onboarding'
 import type { Translations } from './types'
 
 export const zhMessaging = {
+  qrSetup: messagingOnboarding['zh'],
   directory: {
     statusFilters: '细分连接状态',
     title: '消息平台',
@@ -108,7 +110,8 @@ export const zhMessaging = {
   relayLink: {
     title: 'Team Gateway',
     badge: '无需机器人令牌',
-    intro: (platform: string) => `${platform} 通过共享的 Hermes 机器人连接到此智能体。关联你的 ${platform} 账号，然后给机器人发消息即可与智能体对话。`,
+    intro: (platform: string) =>
+      `${platform} 通过共享的 Hermes 机器人连接到此智能体。关联你的 ${platform} 账号，然后给机器人发消息即可与智能体对话。`,
     link: (platform: string) => `关联 ${platform}`,
     linkAnother: (platform: string) => `关联另一个 ${platform} 账号`,
     linkedAccounts: '已关联账号',
@@ -126,10 +129,12 @@ export const zhMessaging = {
     refused: (platform: string) => `${platform} 拒绝了关联。请获取新代码后重试。`,
     qrAlt: (platform: string) => `共享 ${platform} 机器人的二维码`,
     managed: '由 Team Gateway 管理',
-    managedNote: (platform: string) => `此实例的消息由 Team Gateway 承载，因此网关每次启动都会关闭 ${platform} 的直连。若要与中继同时使用，请在网关环境中设置 GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true（直连会使实例无法缩容到零，并可能重复投递消息）。`,
+    managedNote: (platform: string) =>
+      `此实例的消息由 Team Gateway 承载，因此网关每次启动都会关闭 ${platform} 的直连。若要与中继同时使用，请在网关环境中设置 GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true（直连会使实例无法缩容到零，并可能重复投递消息）。`,
     managedIntro: '此代理的账号在 Nous Portal 中关联。',
     openPortal: '在 Nous Portal 中关联账号',
-    noNewAccount: (platform: string) => `该代码已失效，且没有出现新账号。如果你的 ${platform} 账号不在列表中，请获取新代码后重试。`
+    noNewAccount: (platform: string) =>
+      `该代码已失效，且没有出现新账号。如果你的 ${platform} 账号不在列表中，请获取新代码后重试。`
   },
   telegramQr: {
     title: '选择连接 Telegram 机器人的方式',
@@ -152,7 +157,7 @@ export const zhMessaging = {
     userIdPlaceholder: 'Telegram 用户 ID',
     add: '添加',
     numericOnly: '允许的 Telegram 用户 ID 必须是数字。',
-    saveAndRestart: '保存并重启',
+    saveAndRestart: '保存并连接',
     applying: '正在保存…',
     pairingExpired: 'Telegram 配对已过期。请重新开始二维码设置。',
     stillWaiting: detail => `仍在等待 Telegram。出错后重试：${detail}`,

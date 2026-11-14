@@ -7,7 +7,8 @@
   --aino-radius-menu: 0.75rem;
   --aino-radius-card: 0.875rem;
   --aino-radius-composer: 1.25rem;
-  --aino-tool-strip-height: 45px;
+  --aino-tool-strip-height: var(--aino-band-row2);
+  --aino-workbench-divider: var(--ui-stroke-secondary);
   --aino-text-caption: 0.75rem;
   --aino-text-label: 0.8125rem;
   --aino-text-ui: 0.8125rem;

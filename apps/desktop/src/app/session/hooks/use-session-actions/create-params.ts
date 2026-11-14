@@ -153,7 +153,10 @@ export async function desktopSessionCreateParams(
 
   if (selection.provider === 'aino') {
     platformAuthority = await capturePlatformCreateAuthority(
-      platformOwner, platformOrigin, generation, includeComposerSelection === true
+      platformOwner,
+      platformOrigin,
+      generation,
+      includeComposerSelection === true
     )
     platformOwner = platformAuthority.owner.user_id
     platformOrigin = platformAuthority.owner.platform_origin

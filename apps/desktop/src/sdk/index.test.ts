@@ -366,13 +366,11 @@ describe('host.composer draft facade', () => {
 describe('host.sessions session-list mutations', () => {
   beforeEach(async () => {
     const layout = await import('@/store/layout')
-    const color = await import('@/store/session-color')
     const session = await import('@/store/session')
 
     layout.$pinnedSessionIds.set([])
     layout.$sidebarSessionOrderIds.set([])
     layout.$sidebarSessionOrderManual.set(false)
-    color.$sessionColorOverrides.set({})
     session.$sessions.set([])
   })
 
@@ -441,15 +439,5 @@ describe('host.sessions session-list mutations', () => {
     host.sessions.reorderPinned(['p2', 'p1-tip'])
 
     expect($pinnedSessionIds.get()).toEqual(['p2', 'p1', 'unloaded'])
-  })
-
-  it('setColor writes the durable-keyed colour override and clears with null', async () => {
-    const { $sessionColorOverrides } = await import('@/store/session-color')
-
-    host.sessions.setColor('row-1', '#ff8800')
-    expect($sessionColorOverrides.get()).toEqual({ 'row-1': '#ff8800' })
-
-    host.sessions.setColor('row-1', null)
-    expect($sessionColorOverrides.get()).toEqual({})
   })
 })

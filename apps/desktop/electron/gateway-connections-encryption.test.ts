@@ -10,7 +10,9 @@ import { loadNativeTokenSet, persistNativeTokenSet } from './native-token-store'
 
 const roots: string[] = []
 afterEach(() => {
-  for (const root of roots.splice(0)) {fs.rmSync(root, { force: true, recursive: true })}
+  for (const root of roots.splice(0)) {
+    fs.rmSync(root, { force: true, recursive: true })
+  }
 })
 
 it('keeps explicit keychain encryption across shared-store import, restart and opt-out', () => {

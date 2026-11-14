@@ -146,7 +146,11 @@ export async function connectPrimaryRemote<State extends object>(
 ) {
   options.signal?.throwIfAborted()
   options.assertCurrentAttempt()
-  await options.advanceBootProgress('backend.remote', `Connecting to remote ${PRODUCT_NAME} backend at ${remote.baseUrl}`, 24)
+  await options.advanceBootProgress(
+    'backend.remote',
+    `Connecting to remote ${PRODUCT_NAME} backend at ${remote.baseUrl}`,
+    24
+  )
   await options.waitForRemote(remote)
   options.signal?.throwIfAborted()
   options.assertCurrentAttempt()

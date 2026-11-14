@@ -51,12 +51,18 @@ it('keeps edit counts without code in either display mode and restores disclosur
       </ThreadRuntime>
     )
 
-    await waitFor(() => expect(container.querySelector('[data-tool-row][data-file-edit]')).not.toBeNull())
+    const runToggle = container.querySelector('[data-tool-summary] button[aria-expanded]')!
+    expect(runToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-tool-row]')).toBeNull()
+    fireEvent.click(runToggle)
+    await waitFor(() => expect(container.querySelector('[data-tool-row]')).not.toBeNull())
     const row = container.querySelector('[data-tool-row]')!
+    expect(row.hasAttribute('data-tool-open')).toBe(false)
     // An explicitly open historical row must not override the preference.
     const toggle = row.querySelector('button[aria-expanded]')!
     fireEvent.click(toggle)
-    fireEvent.click(toggle)
+    await waitFor(() => expect(row.hasAttribute('data-tool-open')).toBe(true))
+    expect(row.textContent).toContain('afterEdit')
 
     for (const mode of ['product', 'technical'] as const) {
       act(() => {

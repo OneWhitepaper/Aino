@@ -1040,10 +1040,6 @@ def _tour_request(sid: str, payload: dict) -> str:
     return answer or _TOUR_BRIDGE_UNAVAILABLE
 
 
-_PREVIEW_ACTION_TIMEOUT_S = 45
-# Until a session's client has proven it answers preview.act at all, hold it to a
-# deadline a working renderer cannot miss (same ladder as the tour probe).
-_PREVIEW_ACTION_PROBE_TIMEOUT_S = 10
 # An unanswered probe condemns the bridge only until the cooldown expires: the
 # renderer may attach late (app launched after the turn started). One caller at
 # a time re-probes; concurrent siblings fail fast instead of stacking waits.
@@ -1066,13 +1062,16 @@ def _preview_action_request(sid: str, payload: dict) -> str:
     """Bridge the drive_preview / annotate_preview callback onto a ``preview.act`` server request
     without paying for a client that cannot answer: against an older app (or a session no window
     hosts, #94272 / #119333) nobody answers ``preview.act`` and each action would block the full
-    deadline, stacking per turn exactly like the tour timeouts (#89620). First action per session
-    gets the short probe deadline; unanswered → bridge marked unavailable for that session with a
-    cooldown-gated reprobe; once answered, the full deadline. The verdict lives on the session
+    deadline, stacking per turn exactly like the tour timeouts (#89620). Read-only probes get the
+    short deadline; input actions allow time for human confirmation even before the first answer.
+    Unanswered → bridge marked unavailable for that session with a cooldown-gated reprobe;
+    once answered, the full deadline. The verdict lives on the session
     record, so a new session re-probes. Interrupt ≠ timeout: a cancelled wait (Stop, session close)
     returns without poisoning the state, because ``send()``'s None conflates the two and only the
     cooldown-reprobe token distinguishes an in-flight probe — so state flips only through it.
     """
+    from tools.desktop_ui import preview_action_timeout
+
     with _sessions_lock:
         session = _sessions.get(sid)
         if session is None:
@@ -1089,8 +1088,7 @@ def _preview_action_request(sid: str, payload: dict) -> str:
                 _preview_action_reprobe[sid] = object()
                 session["preview_action_bridge_retry_at"] = now + _PREVIEW_ACTION_REPROBE_COOLDOWN_S
     try:
-        answer = _ask("preview.act", sid, dict(payload),
-                      timeout=_PREVIEW_ACTION_TIMEOUT_S if state == "answered" else _PREVIEW_ACTION_PROBE_TIMEOUT_S)
+        answer = _ask("preview.act", sid, dict(payload), timeout=preview_action_timeout(payload, state))
     finally:
         if state == "unanswered":
             with _preview_action_reprobe_lock:

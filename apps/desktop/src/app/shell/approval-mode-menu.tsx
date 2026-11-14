@@ -4,11 +4,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect } from 'react'
 
 import type { StatusbarItem } from '@/app/shell/statusbar-controls'
-import {
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
 import { AlertCircle, ShieldLock, Terminal } from '@/lib/icons'
 import {

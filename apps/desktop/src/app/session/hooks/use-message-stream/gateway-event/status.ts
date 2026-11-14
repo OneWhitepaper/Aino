@@ -221,8 +221,11 @@ function handleAgentNotification(ctx: GatewayEventContext): void {
 
   reportPlatformCredentialRejection(notice?.code, notice?.owner_user_id, notice?.managed_credential_version)
 
-  showAgentNotice(notice, { connectionId: event.connectionId ?? null,
-    profile: event.profile ?? deps.activeGatewayProfile, sessionId: event.session_id || null })
+  showAgentNotice(notice, {
+    connectionId: event.connectionId ?? null,
+    profile: event.profile ?? deps.activeGatewayProfile,
+    sessionId: event.session_id || null
+  })
 
   // The urgent pair (access paused / restored) also breaks through as a
   // native OS notification when Hermes is backgrounded; dispatch is gated
@@ -238,7 +241,8 @@ function clearAgentNotification(ctx: GatewayEventContext): void {
   const { event, deps } = ctx
 
   clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key, {
-    connectionId: event.connectionId ?? null, profile: event.profile ?? deps.activeGatewayProfile
+    connectionId: event.connectionId ?? null,
+    profile: event.profile ?? deps.activeGatewayProfile
   })
 }
 

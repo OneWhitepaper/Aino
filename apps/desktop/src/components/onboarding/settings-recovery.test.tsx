@@ -17,10 +17,16 @@ beforeEach(() => {
   clearNotifications()
   $routeRequest.set(null)
   $desktopOnboarding.set({
-    configured: false, flow: { status: 'idle' }, mode: 'oauth',
-    providers: [makeOAuthProvider('nous', 'Nous Portal')], reason: null,
-    requested: false, firstRunSkipped: false, manual: false,
-    localEndpoint: false, freeTierReady: false
+    configured: false,
+    flow: { status: 'idle' },
+    mode: 'oauth',
+    providers: [makeOAuthProvider('nous', 'Nous Portal')],
+    reason: null,
+    requested: false,
+    firstRunSkipped: false,
+    manual: false,
+    localEndpoint: false,
+    freeTierReady: false
   })
 })
 
@@ -56,7 +62,9 @@ it('offers settings recovery at a credential failure without opening the legacy 
 
   expect(notice?.action?.label).toBe('打开设置')
   expect(notice?.message).not.toContain('OPENAI_API_KEY')
-  await act(async () => { await notice?.action?.onClick() })
+  await act(async () => {
+    await notice?.action?.onClick()
+  })
   expect(new URLSearchParams($routeRequest.get()?.path.split('?')[1]).get('tab')).toBe('config:model')
 })
 

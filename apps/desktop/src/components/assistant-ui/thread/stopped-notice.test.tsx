@@ -4,7 +4,13 @@ import { afterEach, expect, test } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
 
-import { assistantMessage, stubThreadEnvironment, stubThreadViewportSize, ThreadRuntime, userMessage } from '../test-utils'
+import {
+  assistantMessage,
+  stubThreadEnvironment,
+  stubThreadViewportSize,
+  ThreadRuntime,
+  userMessage
+} from '../test-utils'
 
 import { Thread } from '.'
 

@@ -2,28 +2,38 @@ import { getGlobalModelInfo } from '@/hermes'
 import { availablePlatformDefault } from '@/lib/model-default'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { samePlatformAccount } from '@/store/platform-model-owner'
-import { platformModelCatalog, PlatformSelectionError, readPlatformDefault, writePlatformDefault } from '@/store/platform-models'
+import {
+  platformModelCatalog,
+  PlatformSelectionError,
+  readPlatformDefault,
+  writePlatformDefault
+} from '@/store/platform-models'
 
 import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 
 import type { PluginSessionCreateRoute } from './plugin-session-create'
 
 async function clonedPlatformDefault(
-  source: ReturnType<typeof platformDefaultScope>, saved: string | null,
+  source: ReturnType<typeof platformDefaultScope>,
+  saved: string | null,
   catalog: ReturnType<typeof platformModelCatalog>
 ): Promise<string | null> {
   const configured = await getGlobalModelInfo(source.route)
 
   // A retained preference behind a third-party pin is not the active default.
-  if (configured.model || configured.provider) { return null }
+  if (configured.model || configured.provider) {
+    return null
+  }
 
-  if (saved) { return saved }
+  if (saved) {
+    return saved
+  }
 
   // Freeze the API's current default when the source has no local preference.
   await catalog.load()
   const state = catalog.state.get()
 
-  return state.phase === 'ready' ? availablePlatformDefault(state.models, null)?.id ?? null : null
+  return state.phase === 'ready' ? (availablePlatformDefault(state.models, null)?.id ?? null) : null
 }
 
 /** Cloning a profile copies its runtime config on the server. Its Aino preference
@@ -43,10 +53,16 @@ export async function requestPluginProfileCreate<T>(
 
   await catalog.owner.load()
 
-  if (!samePlatformAccount(catalog.account.get(), account)) { throw new PlatformSelectionError('platform_account_changed') }
+  if (!samePlatformAccount(catalog.account.get(), account)) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
   const owner = catalog.owner.state.get().owner
 
-  if (!owner || owner.user_id !== account.account.id) { return send() }
+  if (!owner || owner.user_id !== account.account.id) {
+    return send()
+  }
+
   const connection = route.connectionId ? { connectionId: route.connectionId } : {}
   const destination = platformDefaultScope({ ...connection, profile: name })
   const cloneFrom = typeof params.clone_from === 'string' ? params.clone_from.trim() : ''
@@ -60,7 +76,10 @@ export async function requestPluginProfileCreate<T>(
     preferred = await clonedPlatformDefault(source, saved, catalog)
   }
 
-  if (!samePlatformAccount(catalog.account.get(), account)) { throw new PlatformSelectionError('platform_account_changed') }
+  if (!samePlatformAccount(catalog.account.get(), account)) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
   const result = await send()
   const created = result as { ok?: boolean; name?: string } | null
 

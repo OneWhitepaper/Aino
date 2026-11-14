@@ -38,6 +38,7 @@ it('shows the current configured avatar and name, a real queue count and one Sto
     ],
     counts: { succeeded: 900 }
   }
+
   const onStop = vi.fn()
   render(
     <CanonicalGroupWorkingLine
@@ -67,6 +68,7 @@ it('keeps stopping distinct from replying and disables a second Stop while it se
       { member_id: 'a', status: 'running' }
     ]
   }
+
   render(
     <CanonicalGroupWorkingLine
       binding={binding}
@@ -90,6 +92,7 @@ it('announces a pending approval without pretending the member is generating a r
       { kind: 'approval', member_id: 'a', task_id: 'task', execution_generation: 2, request_id: 'approval' }
     ]
   }
+
   render(
     <CanonicalGroupWorkingLine
       binding={binding}
@@ -111,6 +114,7 @@ it('does not treat a queue-only member, unknown status or terminal task as reply
       { member_id: 'c', status: 'future-status' }
     ]
   }
+
   expect([...canonicalMemberPhases(driver)]).toEqual([['b', 'queued']])
   render(
     <CanonicalGroupWorkingLine
@@ -136,6 +140,7 @@ it('retains honest generic activity for older gateways and disappears only when 
       phases={new Map()}
     />
   )
+
   expect(screen.getByRole('status').textContent).toContain(labels.groupWorking)
   rerender(
     <CanonicalGroupWorkingLine
@@ -175,6 +180,7 @@ it('uses a readable fallback for an unavailable roster member and keeps approval
       phases={canonicalMemberPhases(driver)}
     />
   )
+
   expect(screen.getByRole('status').textContent).toContain(`${labels.memberGeneric} · ${labels.memberApproval}`)
   expect(screen.getByRole('status').textContent).not.toContain('mem_internal-identifier')
   expect(container.querySelector('.aino-group-round-status')?.getAttribute('data-phase')).toBe('approval')

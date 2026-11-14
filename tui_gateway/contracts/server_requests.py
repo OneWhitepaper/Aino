@@ -292,6 +292,18 @@ class PreviewActRequestParams(ServerRequestParams):
     amount: int | None = None
     max: int | None = None
     allow_shortcut: bool | None = None
+    tab_id: str | None = None
+    observation_id: str | None = None
+    coordinate: list[float] | None = None
+    to_coordinate: list[float] | None = None
+    sensitive: bool | None = None
+    dialog_id: str | None = None
+    accept: bool | None = None
+    prompt_text: str | None = None
+    paths: list[str] | None = None
+    download_id: str | None = None
+    download_path: str | None = None
+    chooser_id: str | None = None
     vault: PreviewVaultOperation | None = None
 
 

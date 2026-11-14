@@ -17,6 +17,7 @@ import { arSettings } from './ar_settings'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
@@ -24,9 +25,9 @@ import { workspacePage } from './workspace-page'
 
 const arBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "جارٍ فتح محادثة المجموعة…",
-    lookupFailed: "تعذّر العثور على هذه المجموعة على البوابة. حاول مجددًا.",
-    missing: "لم تعد محادثة المجموعة هذه موجودة."
+    opening: 'جارٍ فتح محادثة المجموعة…',
+    lookupFailed: 'تعذّر العثور على هذه المجموعة على البوابة. حاول مجددًا.',
+    missing: 'لم تعد محادثة المجموعة هذه موجودة.'
   },
   notificationCenter: notificationCenterCopy['ar'],
   platformModels: {
@@ -161,7 +162,7 @@ const arBaseOverrides = {
   skills: arCapabilities.skills,
   agents: arCapabilities.agents,
   commandCenter: arCommandCenter.commandCenter,
-  messaging: { ...arCommandCenter.messaging, directory: messagingDirectory['ar'] },
+  messaging: { ...arCommandCenter.messaging, directory: messagingDirectory['ar'], qrSetup: messagingOnboarding['ar'] },
   profiles: arCommandCenter.profiles,
   modelAssignment: arSettings.modelAssignment,
   cron: arCommandCenter.cron,
@@ -172,6 +173,9 @@ const arBaseOverrides = {
   composer: {
     ...arChat.composer,
     redirect: 'إعادة توجيه التشغيل الحالي',
+    pauseTask: 'إيقاف المهمة مؤقتًا',
+    pausingTask: 'جارٍ إيقاف المهمة مؤقتًا…',
+    continuingTask: 'جارٍ متابعة المهمة…',
     queueLostNote: 'فُقد الدور أثناء إعادة التشغيل',
     restoreImageDraft: 'استعادة مسودة الصورة',
     queueCancelFailed: 'تعذّر إزالة الدور المنتظر',

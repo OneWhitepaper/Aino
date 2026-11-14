@@ -170,20 +170,35 @@ test('cookie recovery cannot clear, log in or replay after its account scope ret
     const scope = store.scope('persist:oauth-account-alpha')
     const events: string[] = []
     let finishLogin!: () => void
-    const login = new Promise<void>(resolve => { finishLogin = resolve })
 
-    if (!duringLogin) { store.retire() }
-
-    const pending = retryCookie401WithLogin(GATE_401(), {}, {
-      assertCurrent: scope.assertCurrent,
-      clearCookies: () => { events.push('clear') },
-      login: () => { events.push('login');
-
- return login },
-      retry: async () => { events.push('retry');
-
- return 'wrong-account' }
+    const login = new Promise<void>(resolve => {
+      finishLogin = resolve
     })
+
+    if (!duringLogin) {
+      store.retire()
+    }
+
+    const pending = retryCookie401WithLogin(
+      GATE_401(),
+      {},
+      {
+        assertCurrent: scope.assertCurrent,
+        clearCookies: () => {
+          events.push('clear')
+        },
+        login: () => {
+          events.push('login')
+
+          return login
+        },
+        retry: async () => {
+          events.push('retry')
+
+          return 'wrong-account'
+        }
+      }
+    )
 
     const rejected = expect(pending).rejects.toBeInstanceOf(NativeAuthChangedError)
     store.retire()
@@ -230,12 +245,16 @@ test('native auth resolution cannot start cookie fallback after its account reti
     const pending = requestWithOauthFallback('https://gw.test', {
       assertCurrent: scope.assertCurrent,
       ensureNativeAccessToken: () => native,
-      requestWithBearer: async () => { calls.push('bearer');
+      requestWithBearer: async () => {
+        calls.push('bearer')
 
- return 'wrong-account' },
-      requestWithCookie: async () => { calls.push('cookie');
+        return 'wrong-account'
+      },
+      requestWithCookie: async () => {
+        calls.push('cookie')
 
- return 'wrong-account' }
+        return 'wrong-account'
+      }
     })
 
     const rejection = expect(pending).rejects.toBeInstanceOf(NativeAuthChangedError)
@@ -244,7 +263,12 @@ test('native auth resolution cannot start cookie fallback after its account reti
     store.retire()
     store.scope('persist:oauth-account-alpha')
 
-    if (rejectNative) { rejectToken(new Error('native unavailable')) } else { resolveNative(null) }
+    if (rejectNative) {
+      rejectToken(new Error('native unavailable'))
+    } else {
+      resolveNative(null)
+    }
+
     await rejection
     expect(calls).toEqual([])
   }

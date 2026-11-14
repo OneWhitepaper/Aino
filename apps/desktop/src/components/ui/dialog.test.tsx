@@ -22,30 +22,33 @@ describe('DialogContent close button', () => {
 })
 
 describe('DialogContent fixed actions', () => {
-  it.each([false, true])('keeps its optional title outside the reading area and preserves accessible description (banner %s)', banner => {
-    render(
-      <Dialog open>
-        <DialogContent
-          banner={banner ? 'Additional information' : undefined}
-          footer={<button>Continue</button>}
-          header={<DialogTitle>Read before continuing</DialogTitle>}
-        >
-          <DialogDescription>{'Long description. '.repeat(100)}</DialogDescription>
-        </DialogContent>
-      </Dialog>
-    )
+  it.each([false, true])(
+    'keeps its optional title outside the reading area and preserves accessible description (banner %s)',
+    banner => {
+      render(
+        <Dialog open>
+          <DialogContent
+            banner={banner ? 'Additional information' : undefined}
+            footer={<button>Continue</button>}
+            header={<DialogTitle>Read before continuing</DialogTitle>}
+          >
+            <DialogDescription>{'Long description. '.repeat(100)}</DialogDescription>
+          </DialogContent>
+        </Dialog>
+      )
 
-    const dialog = screen.getByRole('dialog', { name: 'Read before continuing' })
-    const title = screen.getByRole('heading', { name: 'Read before continuing' })
-    const description = screen.getByText(/Long description\./)
-    const body = description.closest('[data-slot="dialog-body"]')
-    expect(title.closest('[data-slot="dialog-fixed-header"]')).toBeTruthy()
-    expect(title.closest('[data-slot="dialog-body"]')).toBeNull()
-    expect(body).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Continue' }).closest('[data-slot="dialog-body"]')).toBeNull()
-    expect(dialog.getAttribute('aria-labelledby')).toBe(title.id)
-    expect(dialog.getAttribute('aria-describedby')).toBe(description.id)
-  })
+      const dialog = screen.getByRole('dialog', { name: 'Read before continuing' })
+      const title = screen.getByRole('heading', { name: 'Read before continuing' })
+      const description = screen.getByText(/Long description\./)
+      const body = description.closest('[data-slot="dialog-body"]')
+      expect(title.closest('[data-slot="dialog-fixed-header"]')).toBeTruthy()
+      expect(title.closest('[data-slot="dialog-body"]')).toBeNull()
+      expect(body).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Continue' }).closest('[data-slot="dialog-body"]')).toBeNull()
+      expect(dialog.getAttribute('aria-labelledby')).toBe(title.id)
+      expect(dialog.getAttribute('aria-describedby')).toBe(description.id)
+    }
+  )
 
   it('keeps fixed actions associated with their body form', () => {
     const submit = vi.fn(event => event.preventDefault())

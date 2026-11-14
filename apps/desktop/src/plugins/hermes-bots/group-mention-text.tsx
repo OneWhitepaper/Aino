@@ -70,8 +70,10 @@ export function renderGroupMentionText(
     if (start > 0 && /[\p{L}\p{N}_./@:\\-]/u.test(text[start - 1])) {
       continue
     }
+
     const targets = kind === 'agent' ? parseGroupChatMentions(match[0], members).mentioned : undefined
     const member = targets?.size === 1 ? members.find(candidate => targets.has(groupMemberKey(candidate))) : undefined
+
     const label =
       kind === 'broadcast'
         ? (labels.allMembers ?? CANONICAL_GROUP_LOCALES.en.allMembers)

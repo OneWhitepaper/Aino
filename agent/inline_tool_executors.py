@@ -317,6 +317,12 @@ _RAW_INLINE_TOOL_EXECUTORS: dict[str, InlineToolExecutor] = {
         "tools.drive_preview_tool", "drive_preview_tool", "drive_preview_callback",
         ("action", "action", ""), ("ref", "ref"), ("selector", "selector"), ("text", "text"),
         ("key", "key"), ("submit", "submit"), ("amount", "amount"), ("to", "to"), ("limit", "max"),
+        ("full", "full"), ("allow_shortcut", "allow_shortcut"),
+        ("tab_id", "tab_id"), ("observation_id", "observation_id"), ("coordinate", "coordinate"),
+        ("to_coordinate", "to_coordinate"), ("sensitive", "sensitive"),
+        ("dialog_id", "dialog_id"), ("accept", "accept"), ("prompt_text", "prompt_text"), ("paths", "paths"),
+        ("download_id", "download_id"), ("download_path", "download_path"),
+        ("chooser_id", "chooser_id"),
     ),
     "annotate_preview": _callback_tool(
         "tools.annotate_preview_tool", "annotate_preview_tool", "drive_preview_callback",

@@ -3096,19 +3096,10 @@ def _normalize_empty_agent_response(
 
     api_calls = int(agent_result.get("api_calls", 0) or 0)
     if agent_result.get("interrupted"):
-        # Interrupted with api_calls > 0 = deliberately stopped/steered; silence is intentional (queued
-        # messages arrive via the recursive drain). ZERO api_calls = never processed (stale /stop flag).
-        # An interrupted run that did work (api_calls > 0) is the drain of a run the user deliberately
-        # stopped or steered — its silence is intentional, and any queued/interrupting message is delivered
-        # by the recursive drain inside _run_agent before this result is seen. An interrupted run with ZERO
-        # api_calls never processed the user's message at all: it was killed at the top of the tool loop by
-        # an interrupt flag left over from a recent /stop (#44212). Pure silence there swallows a real user
-        # message, so surface it.
-        # api_calls == 0, not failed, not interrupted: the agent never ran for this turn. This is the
-        # post-/stop generation-race pattern where the gateway would otherwise silently drop the turn
-        # (response=0 chars) and the user sees no reply at all. Surface a short retry hint so the message
-        # isn't lost in silence. (#31884)
-        if api_calls == 0:
+        from agent.turn_failure_copy import is_user_interrupted_turn
+        # A zero-call interrupt without a recorded human cause may be a stale Stop flag (#44212).
+        # Keep its warning; an intentional pause is already represented by the surface's controls.
+        if api_calls == 0 and not is_user_interrupted_turn(agent_result):
             return t("gateway.errors.interrupted_before_start")
         return response
     if api_calls > 0:

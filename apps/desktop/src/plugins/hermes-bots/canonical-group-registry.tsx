@@ -51,6 +51,7 @@ export function forgetCanonicalGroup({ connectionId, profile, roomId }: Canonica
     ) {
       continue
     }
+
     updateGroupChat(name, room => ({ ...room, tombstone: true }), { sync: false })
     const remaining = { ...$groupChats.get() }
     delete remaining[name]
@@ -302,6 +303,7 @@ async function listGatewayGroupRooms(route: CanonicalGroupRoute): Promise<Gatewa
     if (rpcMethodMissing(error)) {
       return []
     }
+
     throw error
   }
 
@@ -374,6 +376,7 @@ export async function disbandGatewayGroupRoom(
   if (!(await disbandCanonicalGroup(room.binding, labels))) {
     throw new Error(labels.disbandUnconfirmed)
   }
+
   // Collect before forgetting: the bindings are the only record of which views alias this room.
   canonicalGroupViews(room.binding)
     .add(room.key)

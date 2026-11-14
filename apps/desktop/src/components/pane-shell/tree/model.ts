@@ -159,9 +159,8 @@ export function findParentSplit(node: LayoutNode, childId: string): SplitNode | 
  * dragging the last pane out of a zone closes the zone and its siblings
  * absorb the space (VS Code semantics). Keeping empties as "stable regions"
  * (the original FancyZones rule) let invisible residue accumulate into
- * corrupt-feeling structure (`row([]|[])` eating half a slot); authored
- * empty zones still exist inside the zone editor's own grid model, and an
- * editor-applied tree keeps them until the first structural op.
+ * corrupt-feeling structure (`row([]|[])` eating half a slot). Legacy saved
+ * trees can still contain empty zones until their first structural operation.
  */
 export function normalize(node: LayoutNode): LayoutNode | null {
   if (node.type === 'group') {
@@ -434,90 +433,6 @@ export function movePanes(
 /** Group ids of every leaf under a node, in tree order. */
 export function groupLeafIds(node: LayoutNode): string[] {
   return node.type === 'group' ? [node.id] : node.children.flatMap(groupLeafIds)
-}
-
-function sameSet(ids: string[], set: Set<string>): boolean {
-  return ids.length === set.size && ids.every(id => set.has(id))
-}
-
-/** The node whose complete leaf set equals `set` (a rectangular region in a
- *  guillotine tree is always exactly one subtree), or null. */
-function findCover(node: LayoutNode, set: Set<string>): LayoutNode | null {
-  if (sameSet(groupLeafIds(node), set)) {
-    return node
-  }
-
-  if (node.type === 'split') {
-    for (const child of node.children) {
-      const hit = findCover(child, set)
-
-      if (hit) {
-        return hit
-      }
-    }
-  }
-
-  return null
-}
-
-/**
- * FancyZones span: merge the highlighted zones into ONE group holding the
- * dragged pane block (one pane, or a multi-tab selection in strip order),
- * absorbing any panes that lived in those zones as tabs. Only works when the
- * highlighted set forms a rectangular subtree (it always does for a combined
- * zone range on a guillotine tree); returns null otherwise so the caller can
- * fall back to a single-zone drop.
- */
-export function mergeZonesWithPane(
-  root: LayoutNode,
-  groupIds: string[],
-  paneId: string | readonly string[]
-): LayoutNode | null {
-  const paneIds = typeof paneId === 'string' ? [paneId] : [...paneId]
-  const set = new Set(groupIds)
-
-  if (set.size <= 1 || !findCover(root, set)) {
-    return null
-  }
-
-  // Panes from the merged zones (tree order), minus the dragged block.
-  const panesInSet: string[] = []
-
-  const collect = (n: LayoutNode) => {
-    if (n.type === 'group') {
-      if (set.has(n.id)) {
-        panesInSet.push(...n.panes.filter(p => !paneIds.includes(p)))
-      }
-    } else {
-      n.children.forEach(collect)
-    }
-  }
-
-  collect(root)
-
-  // Any dragged pane living OUTSIDE the merged set is pulled from its origin
-  // first (leaving that origin an empty zone). Inside the set it's absorbed.
-  let working = root
-
-  for (const id of paneIds) {
-    const origin = findGroupOfPane(working, id)
-
-    if (origin && !set.has(origin.id)) {
-      working = removePane(working, id) ?? working
-    }
-  }
-
-  const merged = group([...paneIds, ...panesInSet])
-
-  const replace = (n: LayoutNode): LayoutNode => {
-    if (sameSet(groupLeafIds(n), set)) {
-      return merged
-    }
-
-    return n.type === 'split' ? { ...n, children: n.children.map(replace) } : n
-  }
-
-  return normalize(replace(working))
 }
 
 // ---------------------------------------------------------------------------

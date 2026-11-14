@@ -79,7 +79,10 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
         }
         title={t.settings.model.model}
       />
-      <p className="default-main-model-connection" data-connected={hasPlatformModelIdentity(catalog.account) || undefined}>
+      <p
+        className="default-main-model-connection"
+        data-connected={hasPlatformModelIdentity(catalog.account) || undefined}
+      >
         {hasPlatformModelIdentity(catalog.account)
           ? t.settings.model.defaultMain.ainoConnected
           : t.platformModels.not_authenticated}

@@ -28,6 +28,20 @@ _emit: Optional[Callable[[str, str, dict], None]] = None
 # never painted (#80678).
 _SESSION_SCOPED_EVENTS: frozenset[str] = frozenset({"message.reaction"})
 
+# Renderer confirmation can outlive page reads, including the first request in a session.
+PREVIEW_ACTION_TIMEOUT_S = 120
+PREVIEW_ACTION_PROBE_TIMEOUT_S = 10
+_PREVIEW_CONFIRMABLE_ACTIONS = frozenset(("click", "double_click", "hover", "type", "press", "drag",
+                                        "dialog_respond", "upload_files"))
+
+
+def preview_action_timeout(payload: dict, bridge_state: str | None) -> int:
+    """Allow human review for input; only unproven observation requests use a short probe."""
+    if (bridge_state == "answered" or payload.get("action") in _PREVIEW_CONFIRMABLE_ACTIONS
+            or (payload.get("action") == "downloads_status" and payload.get("download_path"))):
+        return PREVIEW_ACTION_TIMEOUT_S
+    return PREVIEW_ACTION_PROBE_TIMEOUT_S
+
 
 def set_emitter(fn: Optional[Callable[[str, str, dict], None]]) -> None:
     """Install (or clear) the renderer-event sink. Called by the desktop gateway."""

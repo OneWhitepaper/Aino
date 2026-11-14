@@ -185,7 +185,9 @@ export function PetTab({ image, onImage }: PetTabProps) {
 
   return (
     <div className="grid w-full gap-2">
-      <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.avatar.pickPet}</div>
+      <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+        {b.avatar.pickPet}
+      </div>
       <Input
         className="h-7 text-xs"
         onChange={event => {

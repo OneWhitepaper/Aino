@@ -12,6 +12,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tip } from '@/components/ui/tooltip'
+import { WindowChromeIcon } from '@/components/ui/window-chrome-icon'
 import { useI18n } from '@/i18n'
 import { AlertCircle, AlertTriangle, CheckCircle2, type IconComponent, Info } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -280,13 +281,13 @@ function NotificationToolbar({
           <PopoverTrigger asChild>
             <Button
               aria-label={triggerLabel}
-              className={cn('relative bg-transparent select-none', triggerClassName)}
+              className={cn('relative select-none', triggerClassName)}
               ref={trigger}
               size="icon-titlebar"
               type="button"
-              variant="ghost"
+              variant="titlebar-popover"
             >
-              <Codicon name="bell" size="1.125rem" />
+              <WindowChromeIcon name="bell" />
               {pendingCount > 0 && (
                 <span className="pointer-events-none absolute -top-2 -right-1.5">
                   <Badge aria-hidden size="overlay" variant="solid">

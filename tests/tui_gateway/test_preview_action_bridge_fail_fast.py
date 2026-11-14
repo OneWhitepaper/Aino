@@ -20,6 +20,7 @@ import json
 import pytest
 
 from hermes_cli.product_identity import PRODUCT_NAME
+from tools import desktop_ui
 from tui_gateway import server
 
 
@@ -57,8 +58,8 @@ def test_first_action_is_probed_on_a_short_deadline(session, bridge):
     server._preview_action_request("s1", {"action": "elements"})
 
     assert bridge.calls[0]["event"] == "preview.act"
-    assert bridge.calls[0]["timeout"] == server._PREVIEW_ACTION_PROBE_TIMEOUT_S
-    assert server._PREVIEW_ACTION_PROBE_TIMEOUT_S < server._PREVIEW_ACTION_TIMEOUT_S
+    assert bridge.calls[0]["timeout"] == desktop_ui.PREVIEW_ACTION_PROBE_TIMEOUT_S
+    assert desktop_ui.PREVIEW_ACTION_PROBE_TIMEOUT_S < desktop_ui.PREVIEW_ACTION_TIMEOUT_S
 
 
 def test_a_client_that_answers_gets_the_full_deadline_back(session, bridge):
@@ -68,7 +69,7 @@ def test_a_client_that_answers_gets_the_full_deadline_back(session, bridge):
     server._preview_action_request("s1", {"action": "elements"})
     server._preview_action_request("s1", {"action": "click", "ref": "btn-sign-in"})
 
-    assert bridge.calls[1]["timeout"] == server._PREVIEW_ACTION_TIMEOUT_S
+    assert bridge.calls[1]["timeout"] == desktop_ui.PREVIEW_ACTION_TIMEOUT_S
 
 
 def test_unanswered_probe_returns_an_actionable_error(session, bridge):
@@ -100,11 +101,11 @@ def test_cooldown_expiry_reprobes_once(session, bridge, monkeypatch):
     bridge.answers = [json.dumps({"success": True})]
     assert json.loads(
         server._preview_action_request("s1", {"action": "elements"}))["success"] is True
-    assert bridge.calls[1]["timeout"] == server._PREVIEW_ACTION_PROBE_TIMEOUT_S
+    assert bridge.calls[1]["timeout"] == desktop_ui.PREVIEW_ACTION_PROBE_TIMEOUT_S
 
     # Answered once: the full deadline is back.
     server._preview_action_request("s1", {"action": "click", "ref": "btn"})
-    assert bridge.calls[2]["timeout"] == server._PREVIEW_ACTION_TIMEOUT_S
+    assert bridge.calls[2]["timeout"] == desktop_ui.PREVIEW_ACTION_TIMEOUT_S
 
 
 def test_within_cooldown_a_second_caller_fails_fast(session, bridge):
@@ -164,4 +165,4 @@ def test_a_proven_client_is_not_condemned_by_one_slow_action(session, bridge):
         server._preview_action_request("s1", {"action": "click", "ref": "btn"}))["success"] is False
     assert session["preview_action_bridge"] == "answered"
     server._preview_action_request("s1", {"action": "scroll"})
-    assert bridge.calls[2]["timeout"] == server._PREVIEW_ACTION_TIMEOUT_S
+    assert bridge.calls[2]["timeout"] == desktop_ui.PREVIEW_ACTION_TIMEOUT_S

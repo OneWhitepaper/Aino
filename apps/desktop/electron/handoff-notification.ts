@@ -74,10 +74,12 @@ export function notifyHandoffResult<Window extends HandoffNotificationWindow>(
 
     try {
       const answer = await showMessageBox(window, notice)
+
       if (!result.ok && typeof answer === 'object' && answer !== null && 'response' in answer) {
         if (answer.response === 0) {
           retryUpdate?.()
         }
+
         if (answer.response === 1) {
           revealLog?.()
         }

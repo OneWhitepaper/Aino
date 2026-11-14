@@ -72,7 +72,11 @@ it('stages a model only on confirmation and never saves a second default', async
 
 it('recognizes retained device access without offering management reauthorization while offline', async () => {
   await installCatalog()
-  window.hermesDesktop.platformAccount.status = async () => ({ ...platformSnapshot(), phase: 'offline', model_identity_ready: true })
+  window.hermesDesktop.platformAccount.status = async () => ({
+    ...platformSnapshot(),
+    phase: 'offline',
+    model_identity_ready: true
+  })
   window.hermesDesktop.platformModels.reauthorize = vi.fn()
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   render(

@@ -6,30 +6,26 @@
  *   tree-split.tsx.
  * - `group` -> a ZONE: header strip (tabs when stacked, minimize chevron) +
  *   the active pane's content, resolved from the contribution registry
- *   (`area: 'panes'`). Empty zones exist only in editor-authored trees. See
+ *   (`area: 'panes'`). Empty zones from legacy saved layouts stay hidden. See
  *   tree-group.tsx.
  *
- * Dragging is FancyZones-style (drag-session.ts): the LAYOUT STAYS FIXED and
- * every zone lights up as a whole-region drop target; dropping moves the pane
- * into that zone (joining its tab stack). Structure changes (splitting/merging/
- * resizing zones) belong to the zone editor, not the drag.
+ * Tabs move through drag-session.ts while navigation and the primary workspace
+ * stay fixed. Only the hovered tab destination shows a drop preview. Resizing
+ * belongs to the split sashes; session tabs retain their split gestures.
  *
  * This file owns only the composition: the recursive tree, the narrow-viewport
- * overlays, the edit palette, and the zone editor. The pieces live in sibling
+ * overlays and persistent pane hosts. The pieces live in sibling
  * modules — track-model (sizing), drag-session (drag), tree-split / tree-group
- * (nodes), layout-picker + edit-bar (edit mode), narrow-overlays.
+ * (nodes), narrow-overlays and keep-alive-panes.
  */
 
 import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect } from 'react'
 
-import { useLayoutEditHotkey } from '../../edit-mode'
 import { publishWorkspaceGeometry } from '../../geometry'
 import { $layoutTree, trackActiveTreeGroup } from '../store'
 import { useTabKeyHints } from '../tab-key-hint-state'
-import { ZoneEditor } from '../zone-editor'
 
-import { TreeEditBar } from './edit-bar'
 import { FloatingPanes } from './floating-panes'
 import { KeepAlivePanes } from './keep-alive-panes'
 import { NarrowOverlays } from './narrow-overlays'
@@ -38,7 +34,6 @@ import { TreeNode } from './tree-node'
 export function LayoutTreeRoot({ children, titlebar = false }: { children?: ReactNode; titlebar?: boolean }) {
   const tree = useStore($layoutTree)
 
-  useLayoutEditHotkey(true)
   useTabKeyHints()
   // Track the interacted zone so ⌘W closes the right tab even when nothing is
   // DOM-focused.
@@ -86,8 +81,6 @@ export function LayoutTreeRoot({ children, titlebar = false }: { children?: Reac
         <>
           {/* Non-tiling panes: fixed cards above the tree, outside every zone. */}
           <FloatingPanes />
-          <TreeEditBar />
-          <ZoneEditor />
           {children}
         </>
       )}

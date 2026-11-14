@@ -24,6 +24,75 @@ interface TrackSnapshot {
   sizeKey: string
 }
 
+interface TrackAnimation {
+  animation: Animation
+  from: number
+  to: number
+  release: () => void
+}
+
+function visibleSize(current: TrackAnimation): number {
+  const progress = current.animation.effect?.getComputedTiming().progress ?? 0
+
+  return current.from + (current.to - current.from) * progress
+}
+
+function startSize(
+  element: HTMLElement,
+  current: TrackAnimation | null,
+  horizontal: boolean,
+  paintOnly: boolean,
+  before: TrackSnapshot,
+  lastSize: number
+): number {
+  if (!current) {
+    return before.collapsed ? 0 : lastSize
+  }
+
+  if (paintOnly) {
+    return visibleSize(current)
+  }
+
+  const rect = element.getBoundingClientRect()
+
+  return horizontal ? rect.width : rect.height
+}
+
+function horizontalPaintFrames(
+  from: number,
+  to: number,
+  rect: DOMRect,
+  exiting: boolean,
+  clipLeft: boolean
+): Keyframe[] {
+  const viewport = rect.width
+
+  const bounds: Keyframe = exiting
+    ? {
+        display: 'flex',
+        position: 'fixed',
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${viewport}px`,
+        height: `${rect.height}px`,
+        minWidth: '0px',
+        maxWidth: 'none',
+        minHeight: '0px',
+        maxHeight: 'none'
+      }
+    : {}
+
+  return [from, to].map(size => {
+    const inset = Math.max(0, viewport - size)
+
+    return {
+      ...bounds,
+      overflow: 'hidden',
+      clipPath: clipLeft ? `inset(0 0 0 ${inset}px)` : `inset(0 ${inset}px 0 0)`
+    }
+  })
+}
+
 function sameTrackScope(before: TrackSnapshot | null, snapshot: TrackSnapshot): boolean {
   return before?.scope === snapshot.scope && before.horizontal === snapshot.horizontal
 }
@@ -48,7 +117,7 @@ function canAnimateTrack(
 
 /** Animate only explicit tool visibility edges, never sash-driven resizing.
  * The authoritative layout and guest visibility settle immediately; WAAPI
- * temporarily retains only this existing track's geometry while it clears.
+ * crops the existing horizontal track without rewrapping chat every frame.
  * Native guest hosts stay connected in their original keep-alive layer. */
 export function ToolTrackMotion({
   children,
@@ -63,7 +132,8 @@ export function ToolTrackMotion({
   const ref = useRef<HTMLDivElement>(null)
   const previous = useRef<TrackSnapshot | null>(null)
   const lastSize = useRef(0)
-  const active = useRef<{ animation: Animation; release: () => void } | null>(null)
+  const lastRect = useRef<DOMRect | null>(null)
+  const active = useRef<TrackAnimation | null>(null)
   const sizeKey = JSON.stringify(style)
 
   const cancel = useCallback(() => {
@@ -72,6 +142,9 @@ export function ToolTrackMotion({
     current?.release()
     current?.animation.cancel()
     ref.current?.removeAttribute('data-tool-track-motion')
+    ref.current?.removeAttribute('data-tool-track-from')
+    ref.current?.removeAttribute('data-tool-track-to')
+    ref.current?.removeAttribute('data-tool-track-clip-left')
   }, [])
 
   const rememberSize = useCallback(
@@ -85,12 +158,33 @@ export function ToolTrackMotion({
 
       if (size && size > 0) {
         lastSize.current = size
+        lastRect.current = ref.current?.getBoundingClientRect() ?? null
       }
     },
     [enabled, horizontal]
   )
 
   useResizeObserver(rememberSize, ref)
+
+  const rememberNatural = (size: number, rect: DOMRect) => {
+    if (size > 0) {
+      lastSize.current = size
+      lastRect.current = rect
+    }
+  }
+
+  const updateStableTrack = (element: HTMLElement, before: TrackSnapshot | null, snapshot: TrackSnapshot) => {
+    const sameScope = sameTrackScope(before, snapshot)
+    const changed = before?.sizeKey !== snapshot.sizeKey
+
+    if (!sameScope || !enabled || changed) {
+      cancel()
+    }
+
+    if (enabled && !collapsed && !active.current && (!before || !sameScope || changed)) {
+      lastRect.current = element.getBoundingClientRect()
+    }
+  }
 
   useLayoutEffect(() => {
     const focused = ref.current?.ownerDocument.activeElement
@@ -113,28 +207,24 @@ export function ToolTrackMotion({
     }
 
     const edge = before && (before.collapsed !== collapsed || before.minimized !== minimized)
-    const sameScope = sameTrackScope(before, snapshot)
 
     // Unrelated renders leave an animation alone. A size edit during the
     // same open state is user resizing, so it must take over immediately.
     if (!edge) {
-      if (!sameScope || !enabled || before?.sizeKey !== sizeKey) {
-        cancel()
-      }
+      updateStableTrack(element, before, snapshot)
 
       return
     }
 
-    const current = active.current ? element.getBoundingClientRect() : null
-    const from = current ? (horizontal ? current.width : current.height) : before.collapsed ? 0 : lastSize.current
+    const paintOnly = horizontal && !before.minimized && !minimized
+    const from = startSize(element, active.current, horizontal, paintOnly, before, lastSize.current)
+
     cancel()
     const natural = element.getBoundingClientRect()
     const to = collapsed ? 0 : horizontal ? natural.width : natural.height
 
     if (!canAnimateTrack(element, before, snapshot, from, to)) {
-      if (to > 0) {
-        lastSize.current = to
-      }
+      rememberNatural(to, natural)
 
       return
     }
@@ -142,9 +232,7 @@ export function ToolTrackMotion({
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
 
     if (reduce.matches) {
-      if (to > 0) {
-        lastSize.current = to
-      }
+      rememberNatural(to, natural)
 
       return
     }
@@ -160,7 +248,19 @@ export function ToolTrackMotion({
         : { height: `${size}px`, minHeight: '0px', maxHeight: 'none' })
     })
 
-    const animation = element.animate([frame(from), frame(to)], {
+    // The final flex layout is already committed. Only the outgoing paint
+    // stays above it on close; its constant bounds never resize the transcript.
+    const paintRect = collapsed ? lastRect.current : natural
+    const clipLeft = !!paintRect && paintRect.left + paintRect.width / 2 > window.innerWidth / 2
+
+    rememberNatural(to, natural)
+
+    const frames =
+      paintOnly && paintRect
+        ? horizontalPaintFrames(from, to, paintRect, collapsed, clipLeft)
+        : [frame(from), frame(to)]
+
+    const animation = element.animate(frames, {
       duration: to > from ? 220 : 160,
       easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
       fill: 'both'
@@ -178,26 +278,39 @@ export function ToolTrackMotion({
       }
     }
 
-    window.addEventListener('resize', cancel)
+    const onResize = () => {
+      cancel()
+
+      if (!collapsed) {
+        lastRect.current = element.getBoundingClientRect()
+      }
+    }
+
+    window.addEventListener('resize', onResize)
     document.addEventListener('pointerdown', onPointerDown, true)
     reduce.addEventListener('change', onReduce)
 
     const release = () => {
-      window.removeEventListener('resize', cancel)
+      window.removeEventListener('resize', onResize)
       document.removeEventListener('pointerdown', onPointerDown, true)
       reduce.removeEventListener('change', onReduce)
     }
 
-    active.current = { animation, release }
+    active.current = { animation, from, to, release }
     element.dataset.toolTrackMotion = to > from ? 'opening' : 'closing'
+
+    if (paintOnly && paintRect) {
+      element.dataset.toolTrackFrom = String(from)
+      element.dataset.toolTrackTo = String(to)
+      element.dataset.toolTrackClipLeft = String(clipLeft)
+    }
+
     void animation.finished.then(
       () => {
         if (active.current?.animation === animation) {
           cancel()
 
-          if (to > 0) {
-            lastSize.current = to
-          }
+          rememberNatural(to, natural)
         }
       },
       () => undefined

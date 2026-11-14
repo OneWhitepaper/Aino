@@ -29,6 +29,7 @@ export function getMessagingPlatforms(profile?: null | string): Promise<Messagin
  *  credentials right away — no gateway restart is needed for the change to take effect. */
 export interface MessagingPlatformUpdateResponse {
   hot_served?: boolean
+  needs_activation?: boolean
   ok: boolean
   platform: string
 }
@@ -42,7 +43,7 @@ export function updateMessagingPlatform(
     ...profileScoped(profile),
     path: `/api/messaging/platforms/${encodeURIComponent(platformId)}`,
     method: 'PUT',
-    body
+    body: { ...body, apply_live: true }
   })
 }
 
@@ -131,7 +132,7 @@ export function applyTelegramOnboarding(
     ...scope,
     path: `/api/messaging/telegram/onboarding/${encodeURIComponent(pairingId)}/apply`,
     method: 'POST',
-    body: { allowed_user_ids: allowedUserIds, profile: scope.profile }
+    body: { allowed_user_ids: allowedUserIds, profile: scope.profile, apply_live: true }
   })
 }
 

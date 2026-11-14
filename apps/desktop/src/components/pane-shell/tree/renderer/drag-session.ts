@@ -10,10 +10,8 @@
  * drags never ride it, so no snap-back animation, no hostile-library
  * armor, and Esc aborts synchronously.
  *
- * Pane drags use the FancyZones engine (zones-engine.ts, ported verbatim):
- * sensitivity-radius hit testing, HighlightedZones state machine, Shift =
- * select-many (combined zone range), ClosestCenter primary on drop. The
- * LAYOUT STAYS FIXED and every zone lights up as a whole-region drop target;
+ * Tab drags use the existing zone hit testing and closest-center target.
+ * Navigation and the primary workspace stay fixed; a drop affects one target.
  * NOTHING moves until release (tab reorder included — the strip shows an
  * insertion divider, not a live shuffle). Over a zone's TAB STRIP the drop
  * stacks at the divider's slot; elsewhere the radial position picks
@@ -30,15 +28,18 @@
 
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
+import { registry } from '@/contrib/registry'
 import { createDragGhost, type DragGhost } from '@/lib/drag-ghost'
 import { ESCAPE_PRIORITY, pushEscapeLayer } from '@/lib/escape-layers'
 import { guardGuestPointers } from '@/lib/guest-pointer-guard'
 import { reorderCommitHaptic, reorderStepHaptic } from '@/lib/reorder'
 
-import type { DropPosition } from '../model'
-import { $dropHint, $treeDragging, type DropHint, mergeTreeZones, moveTreePanes, reorderTreePanes } from '../store'
+import { type DropPosition, findGroup } from '../model'
+import { $dropHint, $layoutTree, $treeDragging, type DropHint, moveTreePanes, reorderTreePanes } from '../store'
 import { clearTabSelection } from '../tab-selection'
 import { type EngineZone, HighlightedZones, primaryZone, type ZoneRect } from '../zones-engine'
+
+import { acceptsPaneTabDrop, paneTabCanMove } from './track-model'
 
 const DRAG_THRESHOLD_PX = 4
 
@@ -274,8 +275,7 @@ export function startDragSession(e: ReactPointerEvent<HTMLElement>, spec: DragSe
     // Webview/iframe guests hit-test in their own process — dragging a tab
     // across the in-app browser would go silent without this.
     releaseGuests = guardGuestPointers()
-    // While dragging, Esc belongs to the drag ALONE — lower layers (edit
-    // mode, overlays) must not also fire on the same press.
+    // While dragging, Esc belongs to this gesture, before background overlays.
     releaseEscapeLayer = pushEscapeLayer(ESCAPE_PRIORITY.drag)
 
     if (spec.ghost) {
@@ -409,12 +409,11 @@ const TEAR_OFF_SLACK_PX = 18
  * divider at it, NOTHING moves until release (placement-on-release, like every
  * other drop); tearing away from the strip converts the drag into a zone move.
  * Zone mode: zones light up, the target's tab strip stacks at its divider slot,
- * Shift extends the highlight range, release drops into the ClosestCenter
- * primary zone. Esc aborts either mode.
+ * Release drops into the closest-center target. Esc aborts either mode.
  *
  * `ghostLabel` opts into the pointer-following chip (`@/lib/drag-ghost`) — the
  * same "what am I holding" affordance sessions use. The in-strip dim only
- * marks a tab; a header/edit-body drag or a torn-off tab has no held source
+ * marks a tab; a torn-off tab has no held source
  * near the pointer, so the chip carries the pane title along with it.
  */
 export function startPaneDrag(
@@ -432,12 +431,22 @@ export function startPaneDrag(
     return
   }
 
+  const paneFor = (id: string) => registry.getArea('panes').find(pane => pane.id === id)
+
+  if (!paneTabCanMove(paneFor(paneId))) {
+    onTap?.()
+
+    return
+  }
+
   e.preventDefault()
   e.stopPropagation()
 
   // The moving block: the selection when the pressed tab rides one, else just
   // the pressed tab. Order is strip order (selectionFor guarantees it).
-  const moving: readonly string[] = selection && selection.length > 1 ? selection : [paneId]
+  const moving: readonly string[] = (selection && selection.length > 1 ? selection : [paneId]).filter(id =>
+    paneTabCanMove(paneFor(id))
+  )
 
   const highlighted = new HighlightedZones()
   let zones: EngineZone[] = []
@@ -462,8 +471,14 @@ export function startPaneDrag(
   const enterZoneMode = () => {
     mode = 'zone'
     // The layout never restructures mid-drag, so zone/strip rects are stable.
-    zones = snapshotZones()
-    strips = snapshotStrips()
+    const tree = $layoutTree.get()
+    zones = snapshotZones().filter(zone => {
+      const node = tree && findGroup(tree, zone.id)
+
+      return node && acceptsPaneTabDrop(node, paneFor)
+    })
+    const eligible = new Set(zones.map(zone => zone.id))
+    strips = snapshotStrips().filter(strip => eligible.has(strip.groupId))
     $treeDragging.set(paneId)
     markSource()
   }
@@ -500,7 +515,7 @@ export function startPaneDrag(
       }
     },
 
-    resolveMove(x, y, shift) {
+    resolveMove(x, y) {
       if (mode === 'reorder') {
         if (withinStrip(x, y)) {
           return {
@@ -518,7 +533,7 @@ export function startPaneDrag(
 
       // A strip is an exact target. Resolve it before the fuzzy zone engine:
       // near a panel seam, proximity can otherwise pick the neighboring sidebar.
-      const hitStrip = !shift && strips.find(strip => rectContains(strip.rect, x, y))
+      const hitStrip = strips.find(strip => rectContains(strip.rect, x, y))
 
       if (hitStrip) {
         return {
@@ -535,30 +550,25 @@ export function startPaneDrag(
       const hoveredStrip = strips.find(s => rectContains(s.rect, x, y))
       const stripZone = hoveredStrip ? zones.find(z => z.id === hoveredStrip.groupId) : null
 
-      // Projected headers retain their zone's targeting and Shift-span
-      // semantics even though their visible rectangle is above the body.
+      // Projected headers retain their zone's targeting even though their
+      // visible rectangle is above the body.
       const point =
         stripZone && !rectContains(stripZone.rect, x, y)
           ? { x: (stripZone.rect.left + stripZone.rect.right) / 2, y: (stripZone.rect.top + stripZone.rect.bottom) / 2 }
           : { x, y }
 
-      highlighted.update(zones, point, shift)
+      highlighted.update(zones, point, false)
       let groupIds = [...highlighted.zones()]
 
-      // Spanning multiple zones is EXPLICIT (Shift). Without it, the seam-
-      // proximity capture (sensitivity radius grabs both neighbors near a
-      // shared edge) collapses to the primary zone — otherwise a drop near a
-      // seam silently merges zones the user never asked to merge.
-      if (!shift && groupIds.length > 1) {
+      // A seam can capture two neighbors; a tab drop always chooses one.
+      if (groupIds.length > 1) {
         const collapsed = primaryZone(zones, groupIds, point)
         groupIds = collapsed ? [collapsed] : []
       }
 
       const groupId = groupIds.length > 0 ? (primaryZone(zones, groupIds, point) ?? undefined) : undefined
 
-      // Over the target's TAB STRIP the drop stacks at the divider's slot;
-      // sub-positions only make sense for a single-zone drop (a Shift-span
-      // always merges, pos ignored).
+      // Over the target's tab strip the drop stacks at the divider's slot.
       const strip =
         groupIds.length === 1 && groupId ? strips.find(s => s.groupId === groupId && rectContains(s.rect, x, y)) : null
 
@@ -598,17 +608,10 @@ export function startPaneDrag(
       }
 
       if (mode === 'zone') {
-        // Drop what the hint SHOWS — the overlay and the commit share one
-        // truth (the raw highlight set can hold both seam neighbors; the hint
-        // already collapsed that to the primary unless Shift made the span
-        // explicit).
+        // Drop into the same single target the preview names.
         const targets = hint?.groupIds ?? []
 
-        if (targets.length > 1) {
-          // Shift-span: merge the highlighted zones, dropping the block across them.
-          mergeTreeZones([...targets], moving, hint?.groupId ?? null)
-          spendSelection()
-        } else if (hint?.groupId) {
+        if (targets.length === 1 && hint?.groupId) {
           // strip = stack at the divider slot; center = join the stack;
           // an edge = split the zone and land there. The whole selection
           // rides — the pressed tab fronts at the destination.

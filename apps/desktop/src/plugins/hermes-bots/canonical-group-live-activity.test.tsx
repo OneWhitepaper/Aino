@@ -128,6 +128,7 @@ it('uses queued, stopping and exact pending approval ahead of an activity', () =
     execution_generation: 2,
     request_id: 'approval'
   }
+
   const { rerender } = render(
     <WorkingLine
       driver={{
@@ -137,6 +138,7 @@ it('uses queued, stopping and exact pending approval ahead of an activity', () =
       }}
     />
   )
+
   expect(screen.getByRole('status').textContent).toContain(`Reviewer · ${CANONICAL_GROUP_LOCALES.en.memberQueued}`)
   rerender(
     <WorkingLine

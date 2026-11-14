@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
 
-import {
-  isMessagingSource,
-  sessionSourceLabel,
-  sessionSourceSearchTerms
-} from './session-source'
+import { isMessagingSource, sessionSourceLabel, sessionSourceSearchTerms } from './session-source'
 
 afterEach(() => {
   setRuntimeI18nLocale('en')

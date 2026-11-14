@@ -49,6 +49,18 @@ describe('avatar image generation', () => {
 
     await expect(generateAvatarImage('researcher')).rejects.toThrow('头像生成失败')
   })
+
+  it('gives a custom description the same long generation deadline', async () => {
+    const { generateAvatarFromPrompt, IMAGE_GENERATE_TIMEOUT_MS } = await import('./avatar-image')
+    hostMock.request.mockResolvedValue({ success: true, image: 'https://fixture.invalid/avatar.png' })
+
+    await expect(generateAvatarFromPrompt('a small fox')).resolves.toBe('https://fixture.invalid/avatar.png')
+    expect(hostMock.request).toHaveBeenCalledWith(
+      'image.generate',
+      { prompt: 'a small fox', aspect_ratio: 'square' },
+      IMAGE_GENERATE_TIMEOUT_MS
+    )
+  })
 })
 
 describe('device image picker', () => {

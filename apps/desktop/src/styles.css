@@ -4,7 +4,7 @@
 @import 'katex/dist/katex.min.css';
 @import '@vscode/codicons/dist/codicon.css';
 
-/* Titlebar clusters: 24×24 hit targets, 13.9px glyphs. codicon.css is
+/* Titlebar clusters: 24×24 hit targets, 18px glyphs. codicon.css is
    unlayered (`font: 16px/1`); Tailwind utilities in @layer lose that fight. */
 .titlebar-icon-button .codicon[class*='codicon-'] {
   font-size: var(--titlebar-icon-size);
@@ -417,7 +417,7 @@
     --ui-chat-bubble-opaque-background: var(--ui-bg-editor);
     --ui-inline-code-background: color-mix(in srgb, #141414 5%, transparent);
     --ui-inline-code-foreground: color-mix(in srgb, #141414 88%, transparent);
-    --ui-selection-background: var(--dt-primary);
+    --ui-selection-background: color-mix(in srgb, var(--ui-blue) 18%, transparent);
 
     --dt-background: var(--ui-bg-chrome);
     --dt-foreground: var(--ui-text-primary);
@@ -624,7 +624,7 @@
 
     --ui-inline-code-background: color-mix(in srgb, #ffffff 7%, transparent);
     --ui-inline-code-foreground: color-mix(in srgb, #ffffff 88%, transparent);
-    --ui-selection-background: var(--dt-primary);
+    --ui-selection-background: color-mix(in srgb, var(--ui-blue) 32%, transparent);
     /* A dark card sits ABOVE the chrome (#161618 over #0d0d0e), so an inline
        widget wearing the raw card fill reads as a lit panel. Take it down a
        touch — still clearly a surface, no longer the brightest thing in the
@@ -838,7 +838,7 @@
 
   *::selection {
     background: var(--ui-selection-background);
-    color: var(--dt-primary-foreground);
+    color: currentColor;
   }
 }
 
@@ -2109,7 +2109,7 @@ body.guest-pointer-lock :is(webview, iframe) {
 }
 
 [data-zone-tabstrip]:has([data-tree-tab='sessions']) > [role='tablist'] > [data-tree-tab='hermes-bots:pane'] {
-  /* Bot keeps the same minimum as Sessions in guest/edit-mode strips while
+  /* Bot keeps the same minimum as Sessions in shared tab strips while
      the label can still grow to its localized content. */
   width: max-content;
   min-width: 3.5rem;
@@ -2203,7 +2203,10 @@ body.guest-pointer-lock :is(webview, iframe) {
   content: '';
 }
 
-[data-titlebar-rail='left']::before {
+[data-contrib-shell]:not(:has([data-settings-workspace])) > [data-titlebar-rail='left']::before {
+  /* Border-box draws inward, so extend the painter to meet the sash outside the rail. */
+  box-sizing: border-box;
+  width: calc(var(--titlebar-rail-width) + 1px);
   border-right: 1px solid var(--aino-navigation-edge);
 }
 
@@ -2250,8 +2253,9 @@ body.guest-pointer-lock :is(webview, iframe) {
   translate: none;
 }
 
-[data-contrib-shell] [data-tree-split] [data-sash-axis='x'][data-navigation-boundary='start'] > span:first-child {
-  left: 1px;
+[data-contrib-shell] [data-tree-split] [data-sash-axis='x'][data-navigation-boundary] > span:nth-child(2) {
+  /* Center the highlight on the same boundary as the titlebar continuation. */
+  left: 0;
 }
 
 /* Home and live conversations share one continuous header boundary. Its rail
@@ -2264,6 +2268,14 @@ body.guest-pointer-lock :is(webview, iframe) {
    session title cannot move search or live collaboration off the chat axis. */
 [data-titlebar-slot='titleBar.center'] > [data-session-search-shell] {
   width: min(20rem, 100%);
+}
+
+/* Search keeps its center while long titles yield space in a narrow chat pane. */
+[data-slot='app-titlebar']:has([data-session-search-shell]):not(:has(.collaboration-capsule-anchor:not([hidden])))
+  [data-titlebar-content]
+  > :is([data-titlebar-slot='titleBar.left'], [data-titlebar-slot='titleBar.right']) {
+  max-width: max(0px, calc(50% - 10rem - 0.75rem));
+  overflow: hidden;
 }
 
 [data-session-search-shell] input {
@@ -2289,19 +2301,6 @@ body.guest-pointer-lock :is(webview, iframe) {
 
 [data-window-session-title] [data-current-session-title] > span {
   text-overflow: ellipsis;
-}
-
-body:not(:has([data-settings-workspace])):has([data-chat-surface][data-home-layout])
-  :is([data-slot='titlebar-window-controls'], [data-slot='titlebar-app-controls'])
-  button,
-body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversation-layout])
-  :is([data-slot='titlebar-window-controls'], [data-slot='titlebar-app-controls'])
-  button {
-  color: var(--aino-landing-muted) !important;
-}
-
-[data-slot='titlebar-window-controls'] > button:nth-child(2) [data-aino-design-icon] {
-  translate: -3px 0;
 }
 
 [data-slot='aui_intro'] p:last-child {

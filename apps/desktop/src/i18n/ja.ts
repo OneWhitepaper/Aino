@@ -34,6 +34,7 @@ import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
 import { jaUpdateChannel } from './ja_update_channel'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
@@ -282,9 +283,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const jaBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "グループチャットを開いています…",
-    lookupFailed: "ゲートウェイでこのグループを検索できませんでした。もう一度お試しください。",
-    missing: "このグループチャットはもう存在しません。"
+    opening: 'グループチャットを開いています…',
+    lookupFailed: 'ゲートウェイでこのグループを検索できませんでした。もう一度お試しください。',
+    missing: 'このグループチャットはもう存在しません。'
   },
   notificationCenter: notificationCenterCopy['ja'],
   appearancePage: appearancePage.ja,
@@ -796,11 +797,6 @@ const jaBaseOverrides = {
       tabStripAuto: '自動',
       tabStripAlways: '常に表示',
       tabStripNever: '表示しない',
-      appActionsTitle: 'アプリ操作',
-      appActionsDesc:
-        '設定・レイアウト・HUD をタイトルバーの左右どちらに置くか。右にするとタブ用のスペースが左に残ります。',
-      appActionsLeft: '左',
-      appActionsRight: '右',
       terminalFontTitle: 'ターミナルフォント',
       terminalFontDesc:
         'Desktop のターミナルで使用するインストール済みフォントを選びます。Nerd Font は Powerlevel10k とシェルアイコンを表示できます。空欄では内蔵の JetBrains Mono を使用します。',
@@ -1425,12 +1421,14 @@ const jaBaseOverrides = {
         enabledTitle: '実プロファイルブラウジング：オン',
         enabledMessage: '新しいセッションは既定ブラウザプロファイルのスナップショットでブラウジングします。',
         disabledTitle: '実プロファイルブラウジング：オフ',
-        disabledMessage: 'プロファイルのスナップショットは削除され、アプリ内ブラウザもそのログインから外れます。新しいセッションはクリーンなブラウザを使用します。',
+        disabledMessage:
+          'プロファイルのスナップショットは削除され、アプリ内ブラウザもそのログインから外れます。新しいセッションはクリーンなブラウザを使用します。',
         failedSave: '実プロファイル設定を保存できませんでした',
         reimportSignins: 'ログイン情報を再インポート',
         signinsImportedTitle: 'アプリ内ブラウザのログイン',
         signinsImported: count => `ブラウザプロファイルの Cookie ${count} 件でアプリ内ブラウザにログインしました。`,
-        signinsRemote: 'このバックエンドは別のマシンで動作しているため、そのブラウザプロファイルはアプリ内ブラウザにインポートされません。',
+        signinsRemote:
+          'このバックエンドは別のマシンで動作しているため、そのブラウザプロファイルはアプリ内ブラウザにインポートされません。',
         signinsFailed: 'アプリ内ブラウザにログイン情報をインポートできませんでした',
         prompt: {
           title: 'サイトにログインしたまま利用',
@@ -1854,6 +1852,7 @@ const jaBaseOverrides = {
 
   messaging: {
     directory: messagingDirectory['ja'],
+    qrSetup: messagingOnboarding['ja'],
     search: 'メッセージングを検索...',
     statusFilter: {
       all: 'すべて',
@@ -1937,7 +1936,7 @@ const jaBaseOverrides = {
       userIdPlaceholder: 'Telegram ユーザー ID',
       add: '追加',
       numericOnly: 'Telegram ユーザー ID は数字で入力してください。',
-      saveAndRestart: '保存して再起動',
+      saveAndRestart: '保存して接続',
       applying: '保存中…',
       pairingExpired: 'Telegram のペアリングが期限切れです。新しい QR セットアップを開始してください。',
       stillWaiting: detail => `Telegram を待機中。エラー後に再試行: ${detail}`,
@@ -2610,6 +2609,9 @@ const jaBaseOverrides = {
     openDirective: '開く',
     queueMessage: 'メッセージをキューに入れる',
     redirect: '現在の実行をリダイレクト',
+    pauseTask: 'タスクを一時停止',
+    pausingTask: 'タスクを一時停止中…',
+    continuingTask: 'タスクを再開中…',
     stop: '停止',
     send: '送信',
     speaking: '話しています',
@@ -3604,29 +3606,6 @@ const jaBaseOverrides = {
     pluginDisabled: pluginId => `プラグイン「${pluginId}」を無効化しました`,
     pluginDisabledBody: 'スキルとツール → プラグイン で再有効化するとペインが戻ります。',
     missingPane: paneId => `ペインが見つかりません: ${paneId}`,
-    editTitle: 'レイアウト',
-    editHint: 'レイアウトを選ぶか、ペインをゾーン間へドラッグ。',
-    reset: 'リセット',
-    templates: 'テンプレート',
-    custom: 'カスタム',
-    newGridLayout: '新しいグリッドレイアウト',
-    saveCurrentAs: '現在の配置をテンプレートとして保存',
-    nameLayoutPlaceholder: 'レイアウト名を入力…',
-    deletePreset: name => `${name} を削除`,
-    zoneEditorTitle: 'ゾーンエディター',
-    editorHintPre: 'クリックで分割 · ',
-    editorHintPost: ' で線の向きを反転 · ゾーンをまたいでドラッグで結合 · 共有辺をドラッグでリサイズ',
-    templateColumns: '列',
-    templateRows: '行',
-    templateGrid: 'グリッド',
-    templatePriority: '優先',
-    zoneTag: index => `ゾーン ${index}`,
-    mergeZones: count => `${count} 個のゾーンを結合`,
-    customZoneName: count => `カスタム ${count} ゾーン`,
-    layoutNamePlaceholder: fallback => `レイアウト名（${fallback}）`,
-    saveApply: '保存して適用',
-    notExpressible: 'この配置は互いに噛み合っています（風車型）— 入れ子の分割では表現できません',
-    zoneCount: count => `${count} ゾーン`,
     tabCount: count => `${count} 個のタブ`,
     tabActions: title => `${title} の操作`
   },

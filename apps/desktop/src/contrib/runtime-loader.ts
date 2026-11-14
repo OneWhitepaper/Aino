@@ -420,9 +420,7 @@ export async function loadRuntimePlugin(
           deadline = setTimeout(
             () =>
               reject(
-                new Error(
-                  `import timed out after ${IMPORT_TIMEOUT_MS / 1000}s — module evaluation never settled`
-                )
+                new Error(`import timed out after ${IMPORT_TIMEOUT_MS / 1000}s — module evaluation never settled`)
               ),
             IMPORT_TIMEOUT_MS
           )
@@ -516,8 +514,7 @@ export async function loadRuntimePlugin(
       try {
         result = trackGatewayEventDisposers(
           dispose => disposers.push(dispose),
-          () =>
-            plugin.register(createPluginContext(plugin.id, dispose => disposers.push(dispose), capabilities))
+          () => plugin.register(createPluginContext(plugin.id, dispose => disposers.push(dispose), capabilities))
         )
       } catch (error) {
         failRegistration(error)
@@ -538,10 +535,7 @@ export async function loadRuntimePlugin(
       }
     }
 
-    publishPlugin(
-      { ...record, status: 'disabled' },
-      { activate, deactivate: () => unloadRuntimePlugin(plugin.id) }
-    )
+    publishPlugin({ ...record, status: 'disabled' }, { activate, deactivate: () => unloadRuntimePlugin(plugin.id) })
 
     // A disabled plugin still inventories (settings shows it, toggle
     // reactivates via the handle above) — it just never registers. A root-level
@@ -856,10 +850,7 @@ async function resolveDiskPluginEntry(
 /** Bind (or, on a manual reload, re-bind) the hot-reload watch for one entry.
  *  An atomic directory replacement leaves the old watch attached to the
  *  unlinked inode, so a forced reload must drop it and watch the current file. */
-async function watchDiskPluginFile(
-  desktop: NonNullable<Window['hermesDesktop']>,
-  record: DiskPlugin
-): Promise<void> {
+async function watchDiskPluginFile(desktop: NonNullable<Window['hermesDesktop']>, record: DiskPlugin): Promise<void> {
   if (record.watchId) {
     void desktop.stopPreviewFileWatch(record.watchId)
     record.watchId = null
@@ -880,10 +871,7 @@ async function watchDiskPluginFile(
 /** Watch a linked dev package's SOURCE `plugin.js`. Without it the developer
  *  edits their checkout while the app keeps running the copy in
  *  `desktop-plugins/` — the copy is only refreshed on Rescan or restart. */
-async function watchDiskPluginSource(
-  desktop: NonNullable<Window['hermesDesktop']>,
-  record: DiskPlugin
-): Promise<void> {
+async function watchDiskPluginSource(desktop: NonNullable<Window['hermesDesktop']>, record: DiskPlugin): Promise<void> {
   if (!record.sourceFile || record.sourceWatchId) {
     return
   }

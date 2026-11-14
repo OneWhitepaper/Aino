@@ -91,6 +91,7 @@ export function useStickToBottom() {
       if (el.scrollTop < lastTop || nearBottom) {
         pinned.current = nearBottom
       }
+
       lastTop = el.scrollTop
     }
 
@@ -98,6 +99,7 @@ export function useStickToBottom() {
       if (pinned.current) {
         el.scrollTop = el.scrollHeight
       }
+
       lastTop = el.scrollTop
     }
 

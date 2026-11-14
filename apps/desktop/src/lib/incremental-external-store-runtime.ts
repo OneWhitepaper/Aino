@@ -124,6 +124,27 @@ export function syncRepositoryIncrementally(
   return repository.getMessages()
 }
 
+interface OptimisticPlaceholder {
+  parentId: string | null
+  message: ThreadMessage
+}
+
+function optimisticAssistantPlaceholder(
+  parentId: string | null,
+  previous: OptimisticPlaceholder | undefined,
+  wasRunning: boolean | undefined
+): ThreadMessage {
+  // A system notice may remain at the tail while earlier work streams.
+  // Replacing its wait on every delta remounts the status and replays entry motion.
+  if (parentId !== null && wasRunning && previous?.parentId === parentId) {
+    return previous.message
+  }
+
+  return fromThreadMessageLike({ role: 'assistant', content: [], metadata: { isOptimistic: true } }, generateId(), {
+    type: 'running'
+  })
+}
+
 class IncrementalExternalStoreThreadRuntimeCore extends ExternalStoreThreadRuntimeCore {
   override __internal_setAdapter(store: ExternalStoreAdapter): void {
     if (!store.messageRepository) {
@@ -205,7 +226,10 @@ class IncrementalExternalStoreThreadRuntimeCore extends ExternalStoreThreadRunti
       return
     }
 
+    let previousOptimistic: OptimisticPlaceholder | undefined
+
     if (self._assistantOptimisticId) {
+      previousOptimistic = this.repository.getMessage(self._assistantOptimisticId)
       this.repository.deleteMessage(self._assistantOptimisticId)
       self._assistantOptimisticId = null
     }
@@ -223,14 +247,11 @@ class IncrementalExternalStoreThreadRuntimeCore extends ExternalStoreThreadRunti
     // metadata.isOptimistic keeps this placeholder ephemeral: core evicts
     // off-branch optimistic messages on head moves and omits them from export().
     if (hasUpcomingMessage(isRunning, messages)) {
-      const optimisticId = generateId()
-      this.repository.addOrUpdateMessage(
-        messages.at(-1)?.id ?? null,
-        fromThreadMessageLike({ role: 'assistant', content: [], metadata: { isOptimistic: true } }, optimisticId, {
-          type: 'running'
-        })
-      )
-      self._assistantOptimisticId = optimisticId
+      const parentId = messages.at(-1)?.id ?? null
+      const placeholder = optimisticAssistantPlaceholder(parentId, previousOptimistic, oldStore?.isRunning)
+
+      this.repository.addOrUpdateMessage(parentId, placeholder)
+      self._assistantOptimisticId = placeholder.id
     }
 
     this.repository.resetHead(self._assistantOptimisticId ?? messages.at(-1)?.id ?? null)

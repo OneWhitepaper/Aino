@@ -5,12 +5,7 @@ import { capabilityScoped } from '@/api/client'
 import { Loader } from '@/components/ui/loader'
 import { getOfficialSkills, type ProfileScope, profileScopeKey } from '@/hermes'
 import { useI18n } from '@/i18n'
-import {
-  HUB_SOURCES_KEY,
-  installHubSkill,
-  notifyHubActionFailed,
-  OFFICIAL_SKILLS_KEY
-} from '@/store/hub-actions'
+import { HUB_SOURCES_KEY, installHubSkill, notifyHubActionFailed, OFFICIAL_SKILLS_KEY } from '@/store/hub-actions'
 import { notify } from '@/store/notifications'
 import type { SkillHubSourcesResponse, SkillInfo } from '@/types/hermes'
 
@@ -56,9 +51,7 @@ function ScopedSkillCatalog({
   // "Try …" nudges from the user's own skills: search reads categories, not just names.
   const searchHints = useMemo(
     () =>
-      skills.length
-        ? skillSearchTerms(skills).map(term => t.common.tryHint(catalogDisplayLabel(term, t)))
-        : undefined,
+      skills.length ? skillSearchTerms(skills).map(term => t.common.tryHint(catalogDisplayLabel(term, t))) : undefined,
     [skills, t]
   )
 
@@ -220,9 +213,7 @@ function ScopedSkillCatalog({
     // membership here is NOT installation — isInstalled owns that decision.
     const entries = [
       ...localEntries,
-      ...officialEntries.filter(
-        entry => !installedByIdentifier.has(entry.identifier) && !skillsByName.has(entry.name)
-      )
+      ...officialEntries.filter(entry => !installedByIdentifier.has(entry.identifier) && !skillsByName.has(entry.name))
     ]
 
     return { entries, skillsById, skillsByName, installedIdentifiers, matchInstalled, officialFor }
@@ -243,9 +234,7 @@ function ScopedSkillCatalog({
 
       const optional = catalog.officialFor(entry)
 
-      return catalog.installedIdentifiers.has(
-        optional?.identifier ?? entry.installIdentifier ?? entry.identifier
-      )
+      return catalog.installedIdentifiers.has(optional?.identifier ?? entry.installIdentifier ?? entry.identifier)
     },
     [catalog]
   )
@@ -258,27 +247,18 @@ function ScopedSkillCatalog({
   // id is the installed row's) stay visible.
   const isSuperseded = useCallback(
     (entry: CatalogEntry) =>
-      entry.source !== 'official' &&
-      !entry.id.startsWith('installed:') &&
-      catalog.skillsByName.has(entry.name),
+      entry.source !== 'official' && !entry.id.startsWith('installed:') && catalog.skillsByName.has(entry.name),
     [catalog]
   )
 
-  const installIdentifier = (entry: CatalogEntry) =>
-    catalog.officialFor(entry)?.identifier ?? entry.installIdentifier
+  const installIdentifier = (entry: CatalogEntry) => catalog.officialFor(entry)?.identifier ?? entry.installIdentifier
 
   const identityPending = hasHubSkills && (hubPending || Boolean(hubError))
 
   const install = (entry: CatalogEntry) => {
     const identifier = installIdentifier(entry)
 
-    if (
-      installedPending ||
-      identityPending ||
-      !identifier ||
-      isInstalled(entry) ||
-      pending.current.has(identifier)
-    ) {
+    if (installedPending || identityPending || !identifier || isInstalled(entry) || pending.current.has(identifier)) {
       return
     }
 

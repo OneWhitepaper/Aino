@@ -43,4 +43,36 @@ describe('CopyButton i18n', () => {
 
     await expect(writeClipboardText('hello')).rejects.toThrow('剪贴板功能不可用')
   })
+
+  it.each(['button', 'tool-row'] as const)(
+    'preserves custom icons and copied feedback in %s controls',
+    async appearance => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText }
+      })
+
+      render(
+        <I18nProvider configClient={null} initialLocale="en">
+          <CopyButton
+            appearance={appearance}
+            idleIcon={
+              <svg aria-label="Custom copy icon" role="img">
+                <rect height="12" width="12" x="4" y="4" />
+              </svg>
+            }
+            text="session-id"
+          />
+        </I18nProvider>
+      )
+
+      expect(screen.getByRole('img', { name: 'Custom copy icon' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('session-id'))
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy()
+      expect(screen.queryByRole('img', { name: 'Custom copy icon' })).toBeNull()
+    }
+  )
 })

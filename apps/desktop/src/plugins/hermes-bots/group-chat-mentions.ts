@@ -214,9 +214,7 @@ export function unresolvedGroupMentions(
   for (const match of raw.matchAll(/[@＠]/gu)) {
     const start = match.index
 
-    if (
-      ignored.some(range => start >= range.start && start < range.end)
-    ) {
+    if (ignored.some(range => start >= range.start && start < range.end)) {
       continue
     }
 

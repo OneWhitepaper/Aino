@@ -4,7 +4,10 @@ import path from 'node:path'
 
 import { ipcMain } from 'electron'
 import { expect, test, vi } from 'vitest'
-vi.mock('electron', () => ({ app: {}, ipcMain: { handle: vi.fn(), on: vi.fn(), removeListener: vi.fn(), off: vi.fn() } }))
+vi.mock('electron', () => ({
+  app: {},
+  ipcMain: { handle: vi.fn(), on: vi.fn(), removeListener: vi.fn(), off: vi.fn() }
+}))
 import { createAccountWorkspaceIpc } from './account-workspace'
 import { preparedJournal, registerPreparedSubmissions } from './prepared-submissions'
 
@@ -14,7 +17,14 @@ test('acknowledged journal mutations survive reopening with exact payload and or
   try {
     const origin = 'http://localhost:5174'
     const key = JSON.stringify(['remote', 'profile-a', 'stored-a'])
-    const entry = { id: 'id-a', text: 'Ω 👩🏽‍💻 e\u0301\n  []', attachments: [{ id: 'asset', path: '/tmp/Ω' }], params: { session_id: 'live-a' } }
+
+    const entry = {
+      id: 'id-a',
+      text: 'Ω 👩🏽‍💻 e\u0301\n  []',
+      attachments: [{ id: 'asset', path: '/tmp/Ω' }],
+      params: { session_id: 'live-a' }
+    }
+
     preparedJournal(dir, origin).update(key, entry)
     preparedJournal(dir, origin).update('other-profile', { id: 'id-b' })
     expect(preparedJournal(dir, origin).read()[key]).toEqual(entry)
@@ -52,20 +62,35 @@ test('a retired account window cannot abandon an identical intent copied into th
   const accountB = path.join(dir, 'account-b')
   const binding = { connectionId: 'local', profile: 'bot-a', roomId: 'room-a' }
   const key = JSON.stringify(['canonical-group-send-v1', binding.connectionId, binding.profile, binding.roomId])
-  const entry = { binding, params: { room_id: binding.roomId, event_id: 'same-event', payload: { text: 'same text' } }, attempts: 1 }
+
+  const entry = {
+    binding,
+    params: { room_id: binding.roomId, event_id: 'same-event', payload: { text: 'same text' } },
+    attempts: 1
+  }
+
   const original = { handle: ipcMain.handle, on: ipcMain.on, removeListener: ipcMain.removeListener, off: ipcMain.off }
   const handlers = new Map<string, Parameters<typeof ipcMain.handle>[1]>()
   let activeSender = 1
   let accountDir = accountA
 
   try {
-    vi.mocked(ipcMain.handle).mockImplementation((channel, listener) => { handlers.set(channel, listener) })
-    createAccountWorkspaceIpc(ipcMain, senderId => senderId === activeSender, () => true)
+    vi.mocked(ipcMain.handle).mockImplementation((channel, listener) => {
+      handlers.set(channel, listener)
+    })
+    createAccountWorkspaceIpc(
+      ipcMain,
+      senderId => senderId === activeSender,
+      () => true
+    )
     registerPreparedSubmissions(() => accountDir)
     preparedJournal(accountA, origin).update(key, entry)
     preparedJournal(accountB, origin).update(key, entry)
     const abandon = handlers.get('hermes:prepared-submissions:compare-and-set')!
-    const event = (id: number) => ({ sender: { id }, senderFrame: { url: `${origin}/` } } as Electron.IpcMainInvokeEvent)
+
+    const event = (id: number) =>
+      ({ sender: { id }, senderFrame: { url: `${origin}/` } }) as Electron.IpcMainInvokeEvent
+
     activeSender = 2
     accountDir = accountB
 

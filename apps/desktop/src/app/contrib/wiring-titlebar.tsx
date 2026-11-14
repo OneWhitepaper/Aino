@@ -5,8 +5,9 @@ import { useLocation } from 'react-router'
 import { Contribute } from '@/contrib/react/contribute'
 import { $interfaceMode, shownInMode } from '@/store/interface-mode'
 import { $connection } from '@/store/session'
-import { $titlebarAppActionsSide, titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
+import { titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
 import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows'
+import { $zoomPercent } from '@/store/zoom'
 
 import { CollaborationCapsule } from '../agents/collaboration-capsule'
 import { appViewForPath } from '../routes'
@@ -14,7 +15,6 @@ import { useWindowControlsOverlayWidth } from '../shell/hooks/use-window-control
 import {
   TITLEBAR_CHROME_CHANGED_EVENT,
   titlebarControlsPosition,
-  titlebarControlsYNudge,
   titlebarToolsRightCss,
   titlebarToolsWidthCss,
   TOUCH_TITLEBAR_HEIGHT
@@ -56,8 +56,14 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const leftTitlebarTools = useTitlebarToolContributions('left')
   const rightTitlebarTools = useTitlebarToolContributions('right')
   const connection = useStore($connection)
+  const zoomPercent = useStore($zoomPercent)
+  const zoomFactor = window.hermesDesktop?.zoom?.factor?.() ?? zoomPercent / 100
 
-  const controlsPos = titlebarControlsPosition(connection?.windowButtonPosition, Boolean(connection?.isFullscreen))
+  const controlsPos = titlebarControlsPosition(
+    connection?.windowButtonPosition,
+    Boolean(connection?.isFullscreen),
+    zoomFactor
+  )
 
   const controlsVars = useTitlebarControlsVars(controlsPos)
   // Windows/WSLg reserve native min/max/close on the right (AppShell parity:
@@ -77,12 +83,11 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   // renderer paints its own min/max/close (main decides via customWindowControls).
   const customWindowControls = connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
 
-  const appActionsSide = useStore($titlebarAppActionsSide)
   const interfaceMode = useStore($interfaceMode)
   const shownTool = shownInMode(interfaceMode)
   const paneToolCount = rightTitlebarTools.filter(tool => !tool.hidden && shownTool(tool)).length
   const leftExtraCount = leftTitlebarTools.filter(tool => !tool.hidden && shownTool(tool)).length
-  const clusters = titlebarAppActionsClusterCounts(appActionsSide, leftExtraCount, 0, interfaceMode)
+  const clusters = titlebarAppActionsClusterCounts(leftExtraCount, 0, interfaceMode)
   const systemToolsWidth = titlebarToolsWidthCss(clusters.right)
 
   const titlebarToolsWidth =
@@ -102,7 +107,6 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
         {
           ...controlsVars,
           '--titlebar-controls-width': leftToolsWidth,
-          '--titlebar-controls-y-nudge': titlebarControlsYNudge(titlebarChrome),
           '--titlebar-tools-right': titlebarToolsRight,
           '--titlebar-tools-width': titlebarToolsWidth,
           '--shell-preview-toolbar-gap': systemToolsWidth

@@ -20,21 +20,27 @@ const disabled = {
 
 test('disabled legacy sync capabilities remain denied to a retired account window', async () => {
   const handlers = new Map<string, (...args: any[]) => any>()
+
   const native = Object.assign(new EventEmitter(), {
     handle: (name: string, handler: (...args: any[]) => any) => handlers.set(name, handler)
   })
+
   let allowed = true
+
   const fenced = createAccountWorkspaceIpc(
     native,
     () => allowed,
     () => true
   )
+
   const sender = { id: 1, mainFrame: { url: 'https://desktop.invalid/' } }
   const event = { sender, senderFrame: sender.mainFrame }
+
   const win = {
     isDestroyed: () => false,
     webContents: { isDestroyed: () => false, mainFrame: sender.mainFrame, send: vi.fn() }
   }
+
   const controller = registerPlatformIpc({
     ipc: fenced.ipc,
     auth: { subscribe: () => () => {} } as any,
@@ -54,6 +60,7 @@ test('disabled legacy sync capabilities remain denied to a retired account windo
 
 test('legacy sync status and repeated retries never request cloud data for a signed-in account', async () => {
   const requests: string[] = []
+
   const server = http.createServer((request, response) => {
     requests.push(`${request.method} ${request.url}`)
     response.writeHead(200, { 'content-type': 'application/json' })
@@ -62,6 +69,7 @@ test('legacy sync status and repeated retries never request cloud data for a sig
 
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
   const auth = createPlatformAuth({
     client: createPlatformClient({ origin, allowInsecureLoopback: true }),
     now: Date.now,
@@ -71,12 +79,15 @@ test('legacy sync status and repeated retries never request cloud data for a sig
       clear: async () => {}
     }
   })
+
   const handlers = new Map<string, (...args: any[]) => any>()
   const sender = { mainFrame: { url: 'https://desktop.invalid/' } }
+
   const win = {
     isDestroyed: () => false,
     webContents: { isDestroyed: () => false, mainFrame: sender.mainFrame, send: vi.fn() }
   }
+
   const controller = registerPlatformIpc({
     ipc: {
       handle: (name, handler) => {

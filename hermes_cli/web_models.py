@@ -59,6 +59,7 @@ class CustomEndpointUpdate(BaseModel):
     model_details: Optional[list[CustomEndpointModelDetail]] = None
 
 class MessagingPlatformUpdate(BaseModel):
+    apply_live: bool = False
     enabled: Optional[bool] = None
     env: dict[str, str] = {}
     clear_env: list[str] = []
@@ -69,6 +70,7 @@ class TelegramOnboardingStart(BaseModel):
     bot_name: Optional[str] = None
 
 class TelegramOnboardingApply(BaseModel):
+    apply_live: bool = False
     allowed_user_ids: list[str]
     profile: Optional[str] = None
 

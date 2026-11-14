@@ -49,6 +49,7 @@ it('silently adopts a bot schedule beside the active file in the existing tool t
   const result = tree.$layoutTree.get()!
   expect(model.findGroupOfPane(result, 'hermes-bots:routines')?.id).toBe('tools')
   expect(model.findGroup(result, 'tools')?.active).toBe('preview-tile:soul')
+  expect(model.findGroup(result, 'tools')?.minimized).toBeFalsy()
   expect(model.findGroup(result, 'bot-chat')).toBe(chat)
 })
 
@@ -130,4 +131,5 @@ it('opens a separate tool host after every tool tab was closed instead of stacki
   const schedule = model.findGroupOfPane(result, 'hermes-bots:routines')!
   expect(schedule.id).not.toBe('bot-chat')
   expect(schedule.panes).toEqual(['hermes-bots:routines'])
+  expect(schedule.minimized).toBe(true)
 })

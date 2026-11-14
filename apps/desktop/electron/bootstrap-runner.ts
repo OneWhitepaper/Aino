@@ -305,8 +305,7 @@ async function downloadInstallScriptFromApi(ref, destPath) {
   const scriptName = installScriptName()
 
   const url =
-    `https://api.github.com/repos/${REPOSITORY_PATH}/contents/scripts/${scriptName}` +
-    `?ref=${encodeURIComponent(ref)}`
+    `https://api.github.com/repos/${REPOSITORY_PATH}/contents/scripts/${scriptName}` + `?ref=${encodeURIComponent(ref)}`
 
   const payload = JSON.parse(
     await downloadText(url, {
@@ -329,10 +328,7 @@ async function downloadInstallScriptFromApi(ref, destPath) {
 async function downloadInstallScript(
   ref,
   destPath,
-  {
-    _downloadRaw = downloadInstallScriptRaw,
-    _downloadApi = downloadInstallScriptFromApi
-  } = {}
+  { _downloadRaw = downloadInstallScriptRaw, _downloadApi = downloadInstallScriptFromApi } = {}
 ) {
   try {
     return await _downloadRaw(ref, destPath)

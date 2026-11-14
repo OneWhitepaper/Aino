@@ -7,18 +7,12 @@ describe('splitRunItems', () => {
     expect(splitRunItems(['read_file', 'search_files', 'terminal'])).toEqual([{ end: 2, kind: 'run', start: 0 }])
   })
 
-  it('keeps a card at the point in the turn where it happened', () => {
-    // Read, edit, read has to stay in that order — a summary, the diff, then a
-    // second summary — rather than sorting the diffs to one end.
-    expect(splitRunItems(['read_file', 'patch', 'read_file', 'terminal'])).toEqual([
-      { end: 0, kind: 'run', start: 0 },
-      { index: 1, kind: 'card' },
-      { end: 3, kind: 'run', start: 2 }
-    ])
+  it('includes file edits in their chronological run', () => {
+    expect(splitRunItems(['read_file', 'patch', 'read_file', 'terminal'])).toEqual([{ end: 3, kind: 'run', start: 0 }])
   })
 
   it('does not let adjacent cards merge into a run', () => {
-    expect(splitRunItems(['patch', 'write_file'])).toEqual([
+    expect(splitRunItems(['clarify', 'image_generate'])).toEqual([
       { index: 0, kind: 'card' },
       { index: 1, kind: 'card' }
     ])

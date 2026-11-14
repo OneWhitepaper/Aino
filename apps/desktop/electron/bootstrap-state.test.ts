@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { bootstrapSnapshot } from './bootstrap-state'
+import { bootstrapSnapshot, clampBootProgress } from './bootstrap-state'
 import { type InstallStamp } from './install-stamp'
 
 function stamp(payload: InstallStamp['payload']): InstallStamp {
@@ -21,6 +21,10 @@ function stamp(payload: InstallStamp['payload']): InstallStamp {
     tag: null
   }
 }
+
+test('boot progress remains a finite percentage before publishing', () => {
+  expect([-10, 55.6, 120, NaN, Infinity].map(clampBootProgress)).toEqual([0, 56, 100, 0, 0])
+})
 
 test.each(['bundled', 'bootstrap', 'light'] as const)(
   'bootstrap state retains the %s artifact fact across failure and reset',

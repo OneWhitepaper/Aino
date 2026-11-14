@@ -407,12 +407,12 @@ export const arChat = {
     dangerousCommand: 'أمر خطير'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "بيئة التشغيل المحلية غير متاحة",
-    localRuntimeUnavailableDesktop: "أكمل الإعداد في الإعدادات ← الموفّرون ← النماذج المحلية.",
-    localRuntimeUnavailableWebapp: "أعدّ النماذج المحلية في Aino Desktop أو اختر نموذجًا مستضافًا في هذا المتصفح.",
-    openLocalModels: "فتح النماذج المحلية",
-    serviceAuthorizationTitle: "تفويض الخدمات",
-    serviceAuthorizationDescription: "سجّل الدخول بحساب الخدمة الخارجية نفسها. هذه التفويضات مستقلة عن حساب Aino.",
+    localRuntimeUnavailableTitle: 'بيئة التشغيل المحلية غير متاحة',
+    localRuntimeUnavailableDesktop: 'أكمل الإعداد في الإعدادات ← الموفّرون ← النماذج المحلية.',
+    localRuntimeUnavailableWebapp: 'أعدّ النماذج المحلية في Aino Desktop أو اختر نموذجًا مستضافًا في هذا المتصفح.',
+    openLocalModels: 'فتح النماذج المحلية',
+    serviceAuthorizationTitle: 'تفويض الخدمات',
+    serviceAuthorizationDescription: 'سجّل الدخول بحساب الخدمة الخارجية نفسها. هذه التفويضات مستقلة عن حساب Aino.',
     audioReadFailed: 'فشلت قراءة الصوت',
     sessionUnavailable: 'الجلسة غير متاحة',
     createSessionFailed: 'فشل إنشاء الجلسة',

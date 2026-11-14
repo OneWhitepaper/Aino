@@ -189,6 +189,7 @@ export async function archiveStoredSession(
     if (!evicted) {
       evict()
     }
+
     finishSessionArchive(storedSessionId, archived, archivedIds, profile || undefined, context)
     offerArchiveUndo(storedSessionId, archived, capturedOwner, wasPinned ? archivedPinId : undefined, lifetime, context)
   } catch (error) {
@@ -263,6 +264,7 @@ function offerArchiveUndo(
         if (!lifetime.current()) {
           throw new Error(removalCopy.unavailable)
         }
+
         await restoreArchivedSession(storedSessionId, copy, {
           row: archived,
           owner,

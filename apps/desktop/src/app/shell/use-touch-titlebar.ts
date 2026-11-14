@@ -3,7 +3,7 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import { hostHas } from '@/lib/host-capabilities'
 import { TOUCH_POINTER_QUERY } from '@/lib/touch-interaction'
 
-/** Browser touch chrome needs a 44px band, not Electron's compact 34px band. */
+/** Browser touch chrome retains its 44px targets alongside the desktop band. */
 export function useTouchTitlebar(): boolean {
   const touch = useMediaQuery(TOUCH_POINTER_QUERY)
 

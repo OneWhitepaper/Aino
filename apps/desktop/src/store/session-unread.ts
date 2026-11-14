@@ -26,7 +26,7 @@ import { isBrowserWindow, isSecondaryWindow } from './windows'
  *
  * Two persisted records, both bucketed BY PROFILE and then keyed by the
  * DURABLE lineage id (sessionPinId) so state survives auto-compression's
- * session-id rotation — same durable-id rule as `$sessionColorOverrides`:
+ * session-id rotation:
  *
  *  1. SEEN WATERMARKS — the message_count last acknowledged for a session
  *     (set when the user opens it, kept current while it stays selected, and

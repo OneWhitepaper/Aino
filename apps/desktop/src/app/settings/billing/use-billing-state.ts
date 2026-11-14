@@ -446,9 +446,7 @@ function plansCapable(
 function creditsPerMonthDisplay(monthlyCredits: null | string, copy: BillingCopy): string | undefined {
   const credits = Number((monthlyCredits ?? '').replace(/,/g, ''))
 
-  return Number.isFinite(credits) && credits > 0
-    ? copy.usage.creditsPerMonth(formatMoney(credits))
-    : undefined
+  return Number.isFinite(credits) && credits > 0 ? copy.usage.creditsPerMonth(formatMoney(credits)) : undefined
 }
 
 /**
@@ -801,9 +799,7 @@ function deriveUsageRows(
               value: clamp01(remainingFraction)
             }
           : undefined,
-      caption: copy.usage.resets(
-        formatBillingDate(current?.cycle_ends_at ?? usage?.renews_at)
-      ),
+      caption: copy.usage.resets(formatBillingDate(current?.cycle_ends_at ?? usage?.renews_at)),
       id: 'subscription_credits',
       title: copy.usage.subscriptionCredits,
       value: subscriptionValue
@@ -859,10 +855,7 @@ function deriveUsageRows(
  * server says they pay (`credits_pay`: Keep going on credits is on AND a top-up balance is left; with
  * the setting on and $0 the next request is refused too); otherwise the other included models still work.
  */
-function deriveWindowRows(
-  planUsage: PlanUsage,
-  b: Translations['settings']['billing']
-): BillingUsageRowView[] {
+function deriveWindowRows(planUsage: PlanUsage, b: Translations['settings']['billing']): BillingUsageRowView[] {
   const copy = b.state.usage.window
   const words = { day: copy.today, month: copy.month, top_tier: copy.topTier, week: copy.week }
 

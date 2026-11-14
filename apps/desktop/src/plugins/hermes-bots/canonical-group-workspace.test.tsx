@@ -66,6 +66,7 @@ afterEach(() => {
   window.hermesDesktop = originalDesktop
   vi.unstubAllGlobals()
 })
+
 // What gateway/session_group_controls.py answers for groups.send.
 const receipt = (params: { event_id?: string }) => ({
   event: {},
@@ -357,9 +358,11 @@ const roomReads =
 
 it('answers model requests while a group is hidden without reloading its transcript', async () => {
   const members = [{ member_id: 'm1', profile: 'helper', handle: 'helper', display_name: 'Helper' }]
+
   const pending = [
     { request_id: 'request-1', session_id: 'private-group-session', member_id: 'm1', profile: 'helper', action: 'list' }
   ]
+
   request.mockImplementation(async (_route, method) =>
     method === 'groups.state'
       ? { room: { name: 'Room', members }, model_requests: pending, driver_status: { working: true } }
@@ -444,9 +447,11 @@ it('describes only a send restored from the journal as restored, never an ordina
           })
         : {})
   )
+
   const view = render(
     <CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'ordinary' }} />
   )
+
   await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false))
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -528,10 +533,12 @@ it('leaves the in-panel room after a disband even though no tab supplies onBack'
     async (_route, method) =>
       roomReads()(method) ?? (method === 'groups.disband' ? { tombstone: { room_id: 'panel', disbanded_at: 1 } } : {})
   )
+
   const group = registerCanonicalGroup(
     { connectionId: 'local', profile: 'default' },
     { room_id: 'panel', name: 'Room', members: [] }
   )
+
   $groupChatWorkspace.set(group)
   render(<GroupChatWorkspace group={group} members={[]} origin="key" />)
   fireEvent.click(await screen.findByRole('button', { name: 'Group info' }))
@@ -623,9 +630,11 @@ it('retains two identically named recipients and reports punctuation-adjacent de
   ]
 
   request.mockImplementation(async (_route, method) => roomReads(members)(method) ?? {})
+
   const { container } = render(
     <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'same-name' }} />
   )
+
   const input = screen.getByRole('textbox') as HTMLTextAreaElement
   await waitFor(() => expect(input.disabled).toBe(false))
   fireEvent.change(input, { target: { value: '(@a) hello a@b' } })
@@ -1156,12 +1165,14 @@ it('reads only new log events, and the whole log again when the room authority c
   // The room polls every two seconds; the test moves the clock instead of waiting.
   vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
   const nextPoll = () => act(() => vi.advanceTimersByTimeAsync(2_000))
+
   const message = (seq: number, text: string) => ({
     seq,
     kind: 'message.member',
     actor: { kind: 'member', id: 'ops' },
     payload: { text }
   })
+
   let epoch = 1
   let log = [message(1, 'First reply')]
   request.mockImplementation(async (_route, method, params) =>
@@ -1220,9 +1231,11 @@ it('says what the room waits on beside the live work, never instead of it', asyn
         ? { events: [] }
         : {}
   )
+
   const view = render(
     <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'waiting' }} />
   )
+
   const approvalLink = await screen.findByRole('button', { name: '1 waiting for approval' })
   expect(approvalLink.parentElement?.textContent).toBe('Blocked · 1 waiting for approval · Needs attention: 1')
   expect(screen.getByRole('status').textContent).toContain('Ops')
@@ -1457,10 +1470,12 @@ it('holds the next Send until a Stop still fencing behind the last one has finis
 it('reopens a message the gateway proved unsent as an editable draft, not a restored unconfirmed Send, on plain HTTP', async () => {
   vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
   const binding = { connectionId: 'remote', profile: 'team', roomId: 'refused-reopen' }
+
   const refusedBefore = Object.assign(new Error('refused'), {
     code: 4001,
     data: { reason: 'refused', admitted: false }
   })
+
   request.mockImplementation(async (_route, method) =>
     method === 'groups.state'
       ? { room: { name: 'Room' }, driver_status: { working: true } }

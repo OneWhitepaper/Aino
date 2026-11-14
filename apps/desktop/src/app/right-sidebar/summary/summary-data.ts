@@ -30,8 +30,11 @@ export function summaryEnvironmentState({
 }
 
 function hasMeasuredContext(usage: UsageStats): boolean {
-  return usage.context_source !== 'unknown' && usage.context_used != null &&
+  return (
+    usage.context_source !== 'unknown' &&
+    usage.context_used != null &&
     (usage.context_used > 0 || (usage.context_source === 'provider_usage' && (usage.context_max ?? 0) > 0))
+  )
 }
 
 export function summaryContextUsage(

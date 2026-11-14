@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,7 +53,9 @@ async function renderQr(payload: string): Promise<string> {
 
 export interface TelegramQrSetupProps {
   /** Called after the backend wrote the token + allowlist; receives the restart outcome. */
-  onApplied: (result: TelegramOnboardingApplyResponse) => void
+  onApplied: (result: TelegramOnboardingApplyResponse) => Promise<void> | void
+  onBusyChange?: (busy: boolean) => void
+  onCancelChange?: (cancel: (() => Promise<void> | void) | null) => void
   platform: MessagingPlatformInfo
   /** Request-shaped profile scope (undefined → active profile). */
   scopeProfile: string | undefined
@@ -65,7 +67,13 @@ export interface TelegramQrSetupProps {
  * review the allowlist, and apply. Mirrors the dashboard's Channels flow so
  * the Desktop no longer sends users to @BotFather by hand.
  */
-export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQrSetupProps) {
+export function TelegramQrSetup({
+  onApplied,
+  onBusyChange,
+  onCancelChange,
+  platform,
+  scopeProfile
+}: TelegramQrSetupProps) {
   const { t } = useI18n()
   const q = t.messaging.telegramQr
   const [setup, setSetup] = useState<null | TelegramOnboardingStartResponse>(null)
@@ -79,8 +87,24 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
   const [newAllowedId, setNewAllowedId] = useState('')
   const [error, setError] = useState('')
   const [tick, setTick] = useState(0)
+  const attemptRef = useRef(0)
+  const submissionRef = useRef<Promise<void> | null>(null)
+  const busy = phase === 'applying'
 
-  const reset = () => {
+  const invalidateAttempt = useCallback(() => {
+    attemptRef.current += 1
+  }, [])
+
+  useEffect(() => invalidateAttempt, [invalidateAttempt])
+
+  useEffect(() => {
+    onBusyChange?.(busy)
+
+    return () => onBusyChange?.(false)
+  }, [busy, onBusyChange])
+
+  const reset = useCallback(() => {
+    invalidateAttempt()
     setSetup(null)
     setQrDataUrl('')
     setPhase('idle')
@@ -89,7 +113,27 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
     setDetectedOwnerId(null)
     setNewAllowedId('')
     setError('')
-  }
+  }, [invalidateAttempt])
+
+  const cancel = useCallback(async () => {
+    const pairing = setup
+    reset()
+    await submissionRef.current
+
+    if (pairing) {
+      try {
+        await cancelTelegramOnboarding(pairing.pairing_id, scopeProfile)
+      } catch {
+        // Local cleanup still wins; the backend prunes expired pairings itself.
+      }
+    }
+  }, [reset, scopeProfile, setup])
+
+  useEffect(() => {
+    onCancelChange?.(cancel)
+
+    return () => onCancelChange?.(null)
+  }, [cancel, onCancelChange])
 
   // Poll the pairing until Telegram confirms. A transient fetch error keeps
   // polling with a visible hint; a terminal 410 (or local expiry) resets.
@@ -99,13 +143,14 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
     }
 
     let cancelled = false
+    const attempt = attemptRef.current
     let timer: null | number = null
 
     const poll = async () => {
       try {
         const status = await getTelegramOnboardingStatus(setup.pairing_id, scopeProfile)
 
-        if (cancelled) {
+        if (cancelled || attempt !== attemptRef.current) {
           return
         }
 
@@ -125,7 +170,7 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
         setError('')
         timer = window.setTimeout(() => void poll(), 2000)
       } catch (pollError) {
-        if (cancelled) {
+        if (cancelled || attempt !== attemptRef.current) {
           return
         }
 
@@ -176,6 +221,8 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
   )
 
   const start = async () => {
+    invalidateAttempt()
+    const attempt = attemptRef.current
     setPhase('starting')
     setError('')
     setBotUsername(null)
@@ -187,25 +234,22 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
     try {
       const result = await startTelegramOnboarding(undefined, scopeProfile)
       const dataUrl = await renderQr(result.qr_payload)
+
+      if (attempt !== attemptRef.current) {
+        await cancelTelegramOnboarding(result.pairing_id, scopeProfile).catch(() => undefined)
+
+        return
+      }
+
       setSetup(result)
       setQrDataUrl(dataUrl)
       setPhase('waiting')
     } catch (startError) {
-      setPhase('idle')
-      setError(String(startError))
-    }
-  }
-
-  const cancel = async () => {
-    if (setup) {
-      try {
-        await cancelTelegramOnboarding(setup.pairing_id, scopeProfile)
-      } catch {
-        // Local cleanup still wins; the backend prunes expired pairings itself.
+      if (attempt === attemptRef.current) {
+        setPhase('idle')
+        setError(String(startError))
       }
     }
-
-    reset()
   }
 
   const addAllowedId = () => {
@@ -235,15 +279,35 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
 
     setPhase('applying')
     setError('')
+    const attempt = attemptRef.current
 
-    try {
-      const result = await applyTelegramOnboarding(setup.pairing_id, allowedIds, scopeProfile)
-      reset()
-      setConnectedBot(result.bot_username || botUsername)
-      onApplied(result)
-    } catch (applyError) {
-      setPhase('ready')
-      setError(String(applyError))
+    const pending = (async () => {
+      try {
+        const result = await applyTelegramOnboarding(setup.pairing_id, allowedIds, scopeProfile)
+
+        if (attempt !== attemptRef.current) {
+          return
+        }
+
+        await onApplied(result)
+
+        if (attempt === attemptRef.current) {
+          reset()
+          setConnectedBot(result.bot_username || botUsername)
+        }
+      } catch (applyError) {
+        if (attempt === attemptRef.current) {
+          setPhase('ready')
+          setError(String(applyError))
+        }
+      }
+    })()
+
+    submissionRef.current = pending
+    await pending
+
+    if (submissionRef.current === pending) {
+      submissionRef.current = null
     }
   }
 

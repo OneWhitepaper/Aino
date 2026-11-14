@@ -69,8 +69,7 @@ export function discoverBundledPlugins(): void {
       try {
         trackGatewayEventDisposers(
           dispose => disposers.push(dispose),
-          () =>
-            plugin.register(createPluginContext(plugin.id, dispose => disposers.push(dispose), capabilities))
+          () => plugin.register(createPluginContext(plugin.id, dispose => disposers.push(dispose), capabilities))
         )
         publishPlugin({ ...record, status: 'loaded' })
       } catch (error) {

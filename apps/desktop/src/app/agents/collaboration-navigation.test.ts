@@ -28,7 +28,10 @@ vi.mock('@/plugins/hermes-bots/canonical-group-registry', () => ({ registerCanon
 vi.mock('@/plugins/hermes-bots/group-chat-view', () => ({ openGroupChat: fixture.openRoom }))
 vi.mock('@/components/pane-shell/tree/store', () => ({ revealTreePane: fixture.reveal }))
 vi.mock('../open-session', () => ({ openSession: fixture.open }))
-vi.mock('./subagent-panel', () => ({ openSubagentPanel: fixture.panel, subagentPanelSourceKey: () => 'foreground-anchor' }))
+vi.mock('./subagent-panel', () => ({
+  openSubagentPanel: fixture.panel,
+  subagentPanelSourceKey: () => 'foreground-anchor'
+}))
 vi.mock('@/store/tool-session', () => ({ $toolSession: { get: () => ({ storedId: 'foreground' }) } }))
 vi.mock('../chat/composer/focus', () => ({
   requestComposerInsertAcked: fixture.insert,
@@ -99,22 +102,47 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('collaboration source navigation', () => {
-  it.each([false, true])('opens the exact capsule child in the tool panel without activating any parent (room=%s)', async room => {
-    const child = { ...task, id: 'exact-child', parentRuntimeId: 'member-runtime', storedSessionId: 'member-history',
-      goal: 'Review changes', displayName: 'Review', status: 'failed', stream: [], sessionId: 'child-history' } as unknown as CollaborationTask
+  it.each([false, true])(
+    'opens the exact capsule child in the tool panel without activating any parent (room=%s)',
+    async room => {
+      const child = {
+        ...task,
+        id: 'exact-child',
+        parentRuntimeId: 'member-runtime',
+        storedSessionId: 'member-history',
+        goal: 'Review changes',
+        displayName: 'Review',
+        status: 'failed',
+        stream: [],
+        sessionId: 'child-history'
+      } as unknown as CollaborationTask
 
-    groups.set([group({ tasks: [child], ...(room ? { roomBinding: { connectionId: 'room', profile: 'authority', roomId: 'room-1' } } : {}) })])
-    expect(await openCollaborationTask(child)).toBe(true)
-    expect(fixture.panel).toHaveBeenCalledWith(expect.objectContaining({
-      anchorSourceKey: 'foreground-anchor', taskId: 'exact-child',
-      inspection: { runtimeId: 'member-runtime', storedId: 'member-history', owner },
-      row: expect.objectContaining({ subagentId: 'exact-child', sessionId: 'child-history', goal: 'Review changes', status: 'failed' })
-    }))
-    expect(fixture.open).not.toHaveBeenCalled()
-    expect(fixture.openRoom).not.toHaveBeenCalled()
-    expect(fixture.switchScope).not.toHaveBeenCalled()
-    expect(fixture.insert).not.toHaveBeenCalled()
-  })
+      groups.set([
+        group({
+          tasks: [child],
+          ...(room ? { roomBinding: { connectionId: 'room', profile: 'authority', roomId: 'room-1' } } : {})
+        })
+      ])
+      expect(await openCollaborationTask(child)).toBe(true)
+      expect(fixture.panel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          anchorSourceKey: 'foreground-anchor',
+          taskId: 'exact-child',
+          inspection: { runtimeId: 'member-runtime', storedId: 'member-history', owner },
+          row: expect.objectContaining({
+            subagentId: 'exact-child',
+            sessionId: 'child-history',
+            goal: 'Review changes',
+            status: 'failed'
+          })
+        })
+      )
+      expect(fixture.open).not.toHaveBeenCalled()
+      expect(fixture.openRoom).not.toHaveBeenCalled()
+      expect(fixture.switchScope).not.toHaveBeenCalled()
+      expect(fixture.insert).not.toHaveBeenCalled()
+    }
+  )
 
   it('rejects a capsule entry after its exact source has changed accounts', async () => {
     groups.set([group({ tasks: [{ ...task, owner: { connectionId: 'foreign', profile: 'research' } }] })])

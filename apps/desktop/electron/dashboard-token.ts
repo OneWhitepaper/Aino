@@ -87,7 +87,11 @@ function isForeignBackendToken({ servedToken, spawnToken, childAlive }) {
  * failing loudly on a foreign backend. `childAlive` is a thunk so liveness is
  * sampled after the fetch, not before.
  */
-async function adoptServedDashboardToken(baseUrl, spawnToken, { childAlive, label = `${PRODUCT_NAME} backend`, ...options }) {
+async function adoptServedDashboardToken(
+  baseUrl,
+  spawnToken,
+  { childAlive, label = `${PRODUCT_NAME} backend`, ...options }
+) {
   const servedToken = await resolveServedDashboardToken(baseUrl, spawnToken, options).catch(error => {
     options.rememberLog?.(`[boot] could not read served dashboard token (${label}): ${error.message}`)
 

@@ -1,30 +1,29 @@
 import type { HermesConnection } from '@/global'
 
-export const TITLEBAR_HEIGHT = 43
+import { desktopWindowChrome } from '../../../shared/window-chrome'
+
+export const TITLEBAR_HEIGHT = desktopWindowChrome.titlebarHeight
 /** Browser touch targets retain their native 44px band. */
 export const TOUCH_TITLEBAR_HEIGHT = 44
 /** Permanent native drag target beside a top-edge tab strip. */
 export const TITLEBAR_DRAG_HANDLE_WIDTH = 48
-export const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
+export const MACOS_TRAFFIC_LIGHTS_HEIGHT = desktopWindowChrome.trafficLightHeight
 /** Titlebar tool hit target (both axes). */
 export const TITLEBAR_CONTROL_SIZE = 24
-/** Codicon glyph box in titlebar clusters — optical match to traffic-light row. */
+/** Shared outline glyph box in titlebar clusters. */
 export const TITLEBAR_ICON_SIZE = 18
-/** The two controls beside the compact macOS traffic-light group use 15px Figma glyphs. */
-export const TITLEBAR_LEFT_ICON_SIZE = 15
-export const TITLEBAR_ICON_BADGE_SCALE = 0.65
 export const TITLEBAR_CONTROL_OFFSET_X = 65
 export const TITLEBAR_CONTROL_HEIGHT = TITLEBAR_CONTROL_SIZE
 export const TITLEBAR_CONTROLS_TOP = (TITLEBAR_HEIGHT - TITLEBAR_CONTROL_HEIGHT) / 2
 export const TITLEBAR_TOOL_GAP = 4
 export const TITLEBAR_TOOLS_RIGHT_INSET = 17
 
-/** Inline font-size for titlebar Codicons — beats unlayered codicon.css `font: 16px`. */
+/** Glyph sizing for titlebar icons, including contributed Codicon fallbacks. */
 export function titlebarIconSizeCss(scale = 1): string {
   return `${TITLEBAR_ICON_SIZE * scale}px`
 }
 
-export const TITLEBAR_FALLBACK_WINDOW_BUTTON_X = 15
+export const TITLEBAR_FALLBACK_WINDOW_BUTTON_X = desktopWindowChrome.trafficLightPosition.x
 // Preserve other platforms' first paint until native window state arrives.
 const TITLEBAR_NON_MAC_FALLBACK_WINDOW_BUTTON_X = 24
 // Edge inset used when no left-side native controls take up that space —
@@ -32,29 +31,10 @@ const TITLEBAR_NON_MAC_FALLBACK_WINDOW_BUTTON_X = 24
 // (traffic lights are hidden). Matches the right-cluster's 0.75rem padding.
 export const TITLEBAR_EDGE_INSET = 14
 
-// macOS Tahoe = Darwin 25+. Keep in sync with electron/titlebar-overlay-width.ts.
-export const MACOS_TAHOE_DARWIN_MAJOR = 25
-
-// macOS traffic-light row only: nudge the left toolbar cluster down to sit on
-// the same optical center as the native buttons on pre-Tahoe macOS. null
-// windowButtonPosition means Windows/Linux, macOS fullscreen, or Tahoe.
-export const TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE = '2px'
-
 export interface TitlebarChromeContext {
   darwinMajor?: number
   isFullscreen?: boolean
   windowButtonPosition?: HermesConnection['windowButtonPosition']
-}
-
-export function titlebarControlsYNudge({
-  isFullscreen = false,
-  windowButtonPosition
-}: TitlebarChromeContext = {}): string {
-  if (isFullscreen || windowButtonPosition === null) {
-    return '0px'
-  }
-
-  return TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE
 }
 
 /** Right-cluster inset — WCO width when present; macOS fullscreen matches left edge inset. */
@@ -77,9 +57,9 @@ export function titlebarToolsRightCss(
 // shared <Button size="icon-titlebar"> (used polymorphically via asChild) —
 // Button is the single source of button styling.
 export const titlebarButtonClass =
-  'text-muted-foreground/85 hover:bg-(--ui-control-hover-background) hover:text-foreground'
+  'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-(--ui-text-primary)'
 
-/** Shared flex shell for left/right/pane titlebar tool rows — no gap; 24px buttons abut. */
+/** Shared flex shell for left/right/pane titlebar tool rows. */
 export const titlebarToolClusterClass =
   'fixed z-70 flex flex-row items-center pointer-events-auto select-none [-webkit-app-region:no-drag]'
 
@@ -89,7 +69,7 @@ export function titlebarToolsWidthCss(toolCount: number): string {
 }
 
 export const titlebarHeaderBaseClass =
-  'pointer-events-none relative z-3 flex h-(--titlebar-height) w-full min-w-0 shrink-0 items-center justify-start gap-3 overflow-hidden border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) px-[max(0.75rem,var(--titlebar-content-inset,0rem))] pr-[calc(var(--titlebar-tools-right,0.75rem)+var(--titlebar-tools-width,0px)+0.75rem)]'
+  'pointer-events-none relative z-3 flex h-(--titlebar-height) w-full min-w-0 shrink-0 items-center justify-start gap-3 overflow-hidden border-b border-(--aino-workbench-divider) bg-(--ui-chat-surface-background) px-[max(0.75rem,var(--titlebar-content-inset,0rem))] pr-[calc(var(--titlebar-tools-right,0.75rem)+var(--titlebar-tools-width,0px)+0.75rem)]'
 
 // Title row inside the header — must stay in the flex truncate chain.
 export const titlebarHeaderTitleClass = 'min-w-0 flex-1 overflow-hidden'
@@ -99,7 +79,8 @@ export const titlebarHeaderShadowClass =
 
 export function titlebarControlsPosition(
   windowButtonPosition: HermesConnection['windowButtonPosition'] | undefined,
-  isFullscreen = false
+  isFullscreen = false,
+  zoomFactor = 1
 ) {
   const top = Math.max(0, TITLEBAR_CONTROLS_TOP)
 
@@ -113,9 +94,20 @@ export function titlebarControlsPosition(
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
   const fallbackX = isMac ? TITLEBAR_FALLBACK_WINDOW_BUTTON_X : TITLEBAR_NON_MAC_FALLBACK_WINDOW_BUTTON_X
+  const nativePosition = windowButtonPosition ?? (isMac ? desktopWindowChrome.trafficLightPosition : undefined)
+  const factor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1
+
+  // Electron reports DIP coordinates; page zoom scales renderer CSS pixels.
+  // Center every toolbar cluster on the native lights, without a second nudge.
+  if (nativePosition) {
+    return {
+      left: (nativePosition.x + TITLEBAR_CONTROL_OFFSET_X) / factor,
+      top: Math.max(0, (nativePosition.y + MACOS_TRAFFIC_LIGHTS_HEIGHT / 2) / factor - TITLEBAR_CONTROL_HEIGHT / 2)
+    }
+  }
 
   return {
-    left: (windowButtonPosition?.x ?? fallbackX) + TITLEBAR_CONTROL_OFFSET_X,
+    left: fallbackX + TITLEBAR_CONTROL_OFFSET_X,
     top
   }
 }

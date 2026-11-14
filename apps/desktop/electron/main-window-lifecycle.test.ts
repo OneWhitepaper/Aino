@@ -138,8 +138,13 @@ test('last-chat fallback quits only for a final non-macOS close outside a quit',
 
 test('account re-homing keeps the process alive while replacing its last chat window', () => {
   for (const platform of ['win32', 'linux', 'darwin']) {
-    const input = { platform, isQuittingForHandoff: false, remainingChatWindows: 0, quitInProgress: false,
-      accountRehomeInProgress: true }
+    const input = {
+      platform,
+      isQuittingForHandoff: false,
+      remainingChatWindows: 0,
+      quitInProgress: false,
+      accountRehomeInProgress: true
+    }
 
     assert.equal(shouldQuitOnLastChatClosed(input), false)
     assert.equal(shouldQuitOnLastChatClosed({ ...input, accountRehomeInProgress: false }), platform !== 'darwin')

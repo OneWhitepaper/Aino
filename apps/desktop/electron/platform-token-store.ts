@@ -23,9 +23,18 @@ interface StoredFile {
 }
 
 function validSuspensions(value: unknown) {
-  return value === undefined || (Array.isArray(value) && value.every(device =>
-    device && typeof device.user_id === 'string' && device.user_id.length > 0 && typeof device.device_id === 'string' && device.device_id.length > 0
-  ))
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        device =>
+          device &&
+          typeof device.user_id === 'string' &&
+          device.user_id.length > 0 &&
+          typeof device.device_id === 'string' &&
+          device.device_id.length > 0
+      ))
+  )
 }
 
 function validTokens(value: unknown): value is PlatformTokenSet {
@@ -35,7 +44,9 @@ function validTokens(value: unknown): value is PlatformTokenSet {
 
   const token = value as Record<string, unknown>
 
-  if (!validSuspensions(token.suspendedDevices)) { return false }
+  if (!validSuspensions(token.suspendedDevices)) {
+    return false
+  }
 
   if (token.deviceAccount !== undefined) {
     const account = token.deviceAccount as Record<string, unknown>

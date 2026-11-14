@@ -27,7 +27,9 @@ const requestGateway: RuntimeReadinessRequester = async <T,>(method: string) => 
     'free_tier.status': { available: false }
   }
 
-  if (!(method in responses)) { throw new Error(`Unexpected RPC: ${method}`) }
+  if (!(method in responses)) {
+    throw new Error(`Unexpected RPC: ${method}`)
+  }
 
   return responses[method] as T
 }
@@ -49,9 +51,11 @@ function installPlatform() {
       platformAccount: {
         status: async () => snapshot,
         capabilities: async () => ({}),
-        onChanged: (listener: typeof changed) => { changed = listener;
+        onChanged: (listener: typeof changed) => {
+          changed = listener
 
- return () => {} }
+          return () => {}
+        }
       },
       platformModels: { list, owner }
     }
@@ -60,7 +64,10 @@ function installPlatform() {
   return {
     list,
     owner,
-    publish(next: PlatformAccountSnapshot) { snapshot = next; changed(next) },
+    publish(next: PlatformAccountSnapshot) {
+      snapshot = next
+      changed(next)
+    },
     load: () => platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   }
 }
@@ -88,26 +95,38 @@ it('recognizes a first-install Aino default without configuring a provider or is
 
   const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, scope))
 
-  await waitFor(() => expect(result.current.inferenceStatus).toMatchObject({
-    ready: true, reason: null, source: 'platform_model', model: 'catalog-a'
-  }))
+  await waitFor(() =>
+    expect(result.current.inferenceStatus).toMatchObject({
+      ready: true,
+      reason: null,
+      source: 'platform_model',
+      model: 'catalog-a'
+    })
+  )
   expect(getGlobalModelInfo).toHaveBeenCalledWith({ connectionId: 'local', profile: 'default' })
 })
 
 it.each(['no-default', 'unavailable-default'] as const)(
-  'keeps selectable Aino inference ready without inventing a default: %s', async defaultState => {
+  'keeps selectable Aino inference ready without inventing a default: %s',
+  async defaultState => {
     const platform = installPlatform()
     const selectable = { ...platformModel('selectable'), is_default: false }
-    platform.list.mockResolvedValue(defaultState === 'no-default'
-      ? [selectable]
-      : [{ ...platformModel('unavailable-default'), state: 'quota_exhausted' }, selectable])
+    platform.list.mockResolvedValue(
+      defaultState === 'no-default'
+        ? [selectable]
+        : [{ ...platformModel('unavailable-default'), state: 'quota_exhausted' }, selectable]
+    )
     await platform.load()
 
     const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, scope))
 
-    await waitFor(() => expect(result.current.inferenceStatus).toMatchObject({
-      ready: true, reason: null, source: 'platform_model'
-    }))
+    await waitFor(() =>
+      expect(result.current.inferenceStatus).toMatchObject({
+        ready: true,
+        reason: null,
+        source: 'platform_model'
+      })
+    )
     expect(runtimeReadinessDisplay(result.current.inferenceStatus)).toBe('ready')
     expect(result.current.inferenceStatus?.model).toBeUndefined()
 
@@ -153,22 +172,27 @@ it('requires managed capability evidence for this exact connection and profile',
 })
 
 it.each(['insufficient_balance', 'quota_exhausted', 'unavailable'] as const)(
-  'does not treat login as readiness when the built-in model is %s', async state => {
+  'does not treat login as readiness when the built-in model is %s',
+  async state => {
     const platform = installPlatform()
     platform.list.mockResolvedValue([{ ...platformModel(), state }])
     await platform.load()
     const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, scope))
 
-    await waitFor(() => expect(result.current.inferenceStatus).toMatchObject({
-      ready: false, source: 'platform_model'
-    }))
+    await waitFor(() =>
+      expect(result.current.inferenceStatus).toMatchObject({
+        ready: false,
+        source: 'platform_model'
+      })
+    )
     expect(runtimeReadinessDisplay(result.current.inferenceStatus)).toBe('unavailable')
     expect(result.current.inferenceStatus?.reason).not.toContain(noProvider)
   }
 )
 
 it.each(['catalog-failed', 'owner-mismatch'])(
-  'does not trust a model list without current account authority: %s', async failure => {
+  'does not trust a model list without current account authority: %s',
+  async failure => {
     const platform = installPlatform()
 
     if (failure === 'catalog-failed') {
@@ -191,9 +215,13 @@ it('keeps checking the configured custom default rather than masking its failure
   vi.mocked(getGlobalModelInfo).mockResolvedValue({ model: 'custom-model', provider: 'custom:mine' })
   const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, scope))
 
-  await waitFor(() => expect(result.current.inferenceStatus).toMatchObject({
-    ready: false, source: 'runtime_check', reason: noProvider
-  }))
+  await waitFor(() =>
+    expect(result.current.inferenceStatus).toMatchObject({
+      ready: false,
+      source: 'runtime_check',
+      reason: noProvider
+    })
+  )
 })
 
 it('cannot restore a previous account verdict when a model-info request completes after logout', async () => {

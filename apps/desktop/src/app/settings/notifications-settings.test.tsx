@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { getAudioContext } from '@/lib/audio-context'
 import { playCompletionSound, previewCompletionSound } from '@/lib/completion-sound'
+import { registerHapticTrigger, triggerHaptic } from '@/lib/haptics'
 import { startThinkingSound, stopThinkingSound } from '@/lib/thinking-sound'
 import { playWakeSound } from '@/lib/wake-sound'
 import { $hapticsMuted, setHapticsMuted } from '@/store/haptics'
@@ -35,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   stopThinkingSound()
+  registerHapticTrigger(null)
   setHapticsMuted(false)
   vi.useRealTimers()
 })
@@ -45,7 +47,12 @@ it('offers a persisted mute that silences automatic completion, wake and thinkin
       <NotificationsSettings subpage="sounds" />
     </MemoryRouter>
   )
-  const toggle = screen.getByRole('switch', { name: 'Mute interface sounds' })
+  const toggle = screen.getByRole('switch', { name: 'Mute sounds and haptic feedback' })
+  const haptic = vi.fn()
+  registerHapticTrigger(haptic)
+  triggerHaptic('tap')
+  expect(haptic).toHaveBeenCalledTimes(1)
+  haptic.mockClear()
 
   // Native alert preferences alone do not own the foreground completion cue.
   playCompletionSound()
@@ -54,6 +61,8 @@ it('offers a persisted mute that silences automatic completion, wake and thinkin
   fireEvent.click(toggle)
   expect($hapticsMuted.get()).toBe(true)
   expect(localStorage.getItem('hermes.desktop.hapticsMuted')).toBe('true')
+  triggerHaptic('tap')
+  expect(haptic).not.toHaveBeenCalled()
 
   playCompletionSound()
   playWakeSound()
@@ -72,7 +81,7 @@ it('offers a persisted mute that silences automatic completion, wake and thinkin
       <NotificationsSettings subpage="sounds" />
     </MemoryRouter>
   )
-  const restoredToggle = screen.getByRole('switch', { name: 'Mute interface sounds' })
+  const restoredToggle = screen.getByRole('switch', { name: 'Mute sounds and haptic feedback' })
   expect(restoredToggle.getAttribute('aria-checked')).toBe('true')
   fireEvent.click(restoredToggle)
   expect(localStorage.getItem('hermes.desktop.hapticsMuted')).toBe('false')

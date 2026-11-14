@@ -76,14 +76,18 @@ describe('messagePaintWeight', () => {
     expect(messagePaintWeight(text)).toBe(4)
   })
 
-  it('charges a diff by size — FileDiffPanel really does mount a row per line', () => {
+  it('prices an unopened edit as a collapsed line while retaining its full storage cost', () => {
     const diff = Array.from({ length: 400 }, (_, i) => `+line ${i}`).join('\n')
+    const patch = [{ type: 'tool-call', toolName: 'patch', args: { path: 'a.ts' }, result: { inline_diff: diff } }]
 
-    const patch = messagePaintWeight([
-      { type: 'tool-call', toolName: 'patch', args: { path: 'a.ts' }, result: { inline_diff: diff } }
-    ])
+    const smallPatch = [
+      { type: 'tool-call', toolName: 'patch', args: { path: 'a.ts' }, result: { inline_diff: '+one line' } }
+    ]
 
-    expect(patch).toBeGreaterThan(5)
+    expect(messagePaintWeight(patch)).toBe(1)
+    expect(messagePaintWeight(patch)).toBe(messagePaintWeight(smallPatch))
+    expect(messageStoreWeight(patch)).toBeGreaterThan(messageStoreWeight(smallPatch))
+    expect(messageStoreWeight(patch)).toBeGreaterThan(5)
   })
 
   it('prices an image card flat, however long its data URL', () => {

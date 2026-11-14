@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SidebarToggleIcon } from '@/components/ui/sidebar-toggle-icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useI18n } from '@/i18n'
-import { PanelLeftIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
@@ -229,8 +229,9 @@ function Sidebar({
 }
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
-  const { state, toggleSidebar } = useSidebar()
+  const { state, isMobile, openMobile, toggleSidebar } = useSidebar()
   const { t } = useI18n()
+  const expanded = isMobile ? openMobile : state === 'expanded'
 
   return (
     <Button
@@ -245,8 +246,8 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       variant="ghost"
       {...props}
     >
-      <PanelLeftIcon />
-      <span className="sr-only">{t.ui.sidebar.toggle(state === 'collapsed')}</span>
+      <SidebarToggleIcon expanded={expanded} />
+      <span className="sr-only">{t.ui.sidebar.toggle(!expanded)}</span>
     </Button>
   )
 }

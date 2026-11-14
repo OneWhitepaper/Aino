@@ -11,22 +11,77 @@ import { bindPlatformModel, reportPlatformCredentialRejection } from './platform
 vi.mock('@/store/gateway', () => ({ requestGatewayForAgent: vi.fn() }))
 
 it('uses the native trusted binding before requesting another renderer session ticket', async () => {
-  const account: PlatformAccountSnapshot = { revision: 7, phase: 'signed_in', account: { id: '17', display_name: 'Fixture', email: '', phone_masked: '' }, mode: 'development', remember_state: 'encrypted', error: null }
-  const bind = vi.fn(async () => ({ ok: true as const, ready: true as const, model_id: 'fixture', billing_source: 'aino' as const, expires_at: null }))
-  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformModels: { nativeDeviceKeys: true, owner: async () => ({ platform_origin: 'https://fixture.test', user_id: '17' }), bind } } })
+  const account: PlatformAccountSnapshot = {
+    revision: 7,
+    phase: 'signed_in',
+    account: { id: '17', display_name: 'Fixture', email: '', phone_masked: '' },
+    mode: 'development',
+    remember_state: 'encrypted',
+    error: null
+  }
+
+  const bind = vi.fn(async () => ({
+    ok: true as const,
+    ready: true as const,
+    model_id: 'fixture',
+    billing_source: 'aino' as const,
+    expires_at: null
+  }))
+
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      platformModels: {
+        nativeDeviceKeys: true,
+        owner: async () => ({ platform_origin: 'https://fixture.test', user_id: '17' }),
+        bind
+      }
+    }
+  })
   const request = vi.fn()
-  expect((await bindPlatformModel({ connection_id: 'local', profile: 'default', session_id: 'session', model_id: 'fixture', expected_account_revision: 7 }, account, request)).ok).toBe(true)
+  expect(
+    (
+      await bindPlatformModel(
+        {
+          connection_id: 'local',
+          profile: 'default',
+          session_id: 'session',
+          model_id: 'fixture',
+          expected_account_revision: 7
+        },
+        account,
+        request
+      )
+    ).ok
+  ).toBe(true)
   expect(bind).toHaveBeenCalledWith(expect.objectContaining({ session_ticket: '' }))
   expect(request).not.toHaveBeenCalled()
 })
 
 it('ignores an old failed turn after reauthorization and a new binding replaced the device key', async () => {
-  const snapshot: PlatformAccountSnapshot = { revision: 5, phase: 'signed_in', account: { id: '17', display_name: 'Fixture', email: '', phone_masked: '' }, mode: 'development', remember_state: 'encrypted', error: null, model_identity_ready: true, model_identity_version: 2 }
+  const snapshot: PlatformAccountSnapshot = {
+    revision: 5,
+    phase: 'signed_in',
+    account: { id: '17', display_name: 'Fixture', email: '', phone_masked: '' },
+    mode: 'development',
+    remember_state: 'encrypted',
+    error: null,
+    model_identity_ready: true,
+    model_identity_version: 2
+  }
+
   const credentialRejected = vi.fn(async () => undefined)
-  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: {
-    platformAccount: { status: async () => snapshot, capabilities: async () => ({}), onChanged: () => () => {} },
-    platformModels: { list: async () => [], owner: async () => ({ user_id: '17', platform_origin: 'https://fixture.test' }), credentialRejected }
-  } })
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      platformAccount: { status: async () => snapshot, capabilities: async () => ({}), onChanged: () => () => {} },
+      platformModels: {
+        list: async () => [],
+        owner: async () => ({ user_id: '17', platform_origin: 'https://fixture.test' }),
+        credentialRejected
+      }
+    }
+  })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   reportPlatformCredentialRejection('managed_credential_revoked', '17', 1)
   reportPlatformCredentialRejection('managed_credential_rejected', '17')
@@ -96,10 +151,12 @@ it('requests the ticket on the session owner route before calling the native bin
   expect(bind).not.toHaveBeenCalled()
 
   logLine.mockClear()
-  vi.mocked(requestGatewayForAgent).mockRejectedValue(new JsonRpcGatewayError('private gateway message', {
-    code: 4403,
-    data: { reason: 'managed_binding_forbidden', session_id: 'private-session' }
-  }))
+  vi.mocked(requestGatewayForAgent).mockRejectedValue(
+    new JsonRpcGatewayError('private gateway message', {
+      code: 4403,
+      data: { reason: 'managed_binding_forbidden', session_id: 'private-session' }
+    })
+  )
   const denied = await bindPlatformModel(input, account)
   expect(denied).toEqual({ ok: false, error: { code: 'gateway_binding_failed' } })
   expect(logLine).toHaveBeenCalledWith('[platform-model-binding] stage=gateway_ticket code=managed_binding_forbidden')

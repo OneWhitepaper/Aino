@@ -161,6 +161,21 @@ interface PaneChrome extends PaneSizing {
 
 export const paneChrome = (c: Contribution | undefined) => (c?.data ?? {}) as PaneChrome
 
+/** Standing navigation and the primary workspace stay in the window frame. */
+export function paneTabCanMove(pane: Contribution | undefined): boolean {
+  const chrome = paneChrome(pane)
+
+  return !chrome.uncloseable && !(chrome.hideOnly && chrome.placement === 'left')
+}
+
+export function acceptsPaneTabDrop(node: GroupNode, paneFor: (id: string) => Contribution | undefined): boolean {
+  return !node.panes.some(id => {
+    const chrome = paneChrome(paneFor(id))
+
+    return chrome.hideOnly && chrome.placement === 'left'
+  })
+}
+
 /** Every tenant of a safe tool-only group moves to the same narrow overlay.
  *  Per-pane collapsible flags alone strand terminal/chooser siblings docked. */
 export function narrowToolPaneIds(
@@ -284,7 +299,7 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
     // panes' declared widths — otherwise the outer track keeps reserving the
     // full sidebar width and the collapsed rail floats in a dead column.
     if (node.minimized) {
-      return isToolPanelGroup(node, ctx.paneFor) ? '0px' : MINIMIZED_TRACK
+      return isToolPanelGroup(node, ctx.paneFor) || isNavigationGroup(node, ctx.paneFor) ? '0px' : MINIMIZED_TRACK
     }
 
     const overrideKey = axis === 'row' ? 'widthOverride' : 'heightOverride'
@@ -347,6 +362,21 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
   return cssMax(sizes) ?? null
 }
 
+/** Standing navigation has one titlebar restore button and leaves no minimized tab rail. */
+export function isNavigationGroup(node: GroupNode, paneFor: TrackContext['paneFor']): boolean {
+  // Saved Bot tabs may precede plugin registration or outlive a disabled plugin.
+  const panes = node.panes.map(paneFor).filter((pane): pane is Contribution => Boolean(pane))
+
+  return (
+    panes.length > 0 &&
+    panes.every(pane => {
+      const chrome = paneChrome(pane)
+
+      return chrome.hideOnly && chrome.placement === 'left'
+    })
+  )
+}
+
 /**
  * True when every pane in the subtree is hidden/narrow-collapsed — the zone
  * renders `display:none` and its siblings absorb the space.
@@ -361,7 +391,11 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
  * collapse and still hand their space to their neighbors.
  */
 export function subtreeGone(node: LayoutNode, ctx: TrackContext): boolean {
-  if (node.type === 'group' && node.minimized && isToolPanelGroup(node, ctx.paneFor)) {
+  if (
+    node.type === 'group' &&
+    node.minimized &&
+    (isToolPanelGroup(node, ctx.paneFor) || isNavigationGroup(node, ctx.paneFor))
+  ) {
     return true
   }
 

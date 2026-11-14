@@ -9,17 +9,48 @@ import type { PlatformModel } from '../../shared/platform-contract'
 import { createBrowserPlatformBridge, openBrowserPlatformGateway } from './browser-platform-account'
 
 const model: PlatformModel = {
-  id: 'text', model: 'text-model', display_name: 'Text', provider_label: 'Aino', purpose: 'chat',
-  api_mode: 'chat_completions', state: 'available', reason_code: null, is_default: true,
-  context_window: 32000, max_output_tokens: 4000,
-  capabilities: { tools: true, vision: true, reasoning: true }, billing_source: 'balance',
-  pricing: { currency: 'USD', unit: 'per_million_tokens', input: '1', output: '2', cache_read: null,
-    cache_write: null, effective_user_rate: '1', detail_available: true, tiers: [], time_pricing: null, group_peak: null }
+  id: 'text',
+  model: 'text-model',
+  display_name: 'Text',
+  provider_label: 'Aino',
+  purpose: 'chat',
+  api_mode: 'chat_completions',
+  state: 'available',
+  reason_code: null,
+  is_default: true,
+  context_window: 32000,
+  max_output_tokens: 4000,
+  capabilities: { tools: true, vision: true, reasoning: true },
+  billing_source: 'balance',
+  pricing: {
+    currency: 'USD',
+    unit: 'per_million_tokens',
+    input: '1',
+    output: '2',
+    cache_read: null,
+    cache_write: null,
+    effective_user_rate: '1',
+    detail_available: true,
+    tiers: [],
+    time_pricing: null,
+    group_peak: null
+  }
 }
 
-const imageModel: PlatformModel = { ...model, id: 'image', model: 'image-model', purpose: 'image',
-  api_mode: 'images_generations', capabilities: { tools: false, vision: true, reasoning: false, image_generation: true,
-    image_quality_options: ['auto', 'high'] } }
+const imageModel: PlatformModel = {
+  ...model,
+  id: 'image',
+  model: 'image-model',
+  purpose: 'image',
+  api_mode: 'images_generations',
+  capabilities: {
+    tools: false,
+    vision: true,
+    reasoning: false,
+    image_generation: true,
+    image_quality_options: ['auto', 'high']
+  }
+}
 
 const disposers: Array<() => void> = []
 afterEach(() => {
@@ -29,7 +60,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function rig(options: { useDefaultConfirm?: boolean; captcha?: boolean; delayCapabilities?: Promise<void>; claim?: number; delayLease?: Promise<void>; profileFails?: boolean; leaseFails?: boolean } = {}) {
+function rig(
+  options: {
+    useDefaultConfirm?: boolean
+    captcha?: boolean
+    delayCapabilities?: Promise<void>
+    claim?: number
+    delayLease?: Promise<void>
+    profileFails?: boolean
+    leaseFails?: boolean
+  } = {}
+) {
   const apiCalls: Array<{ url: string; body: any; headers: any }> = []
   const response = (data: unknown) => new Response(JSON.stringify({ code: 0, message: 'ok', data }))
 
@@ -37,64 +78,129 @@ function rig(options: { useDefaultConfirm?: boolean; captcha?: boolean; delayCap
     const body = init.body ? JSON.parse(init.body) : null
     apiCalls.push({ url, body, headers: init.headers })
 
-    if (url.endsWith('/settings/public')) { await options.delayCapabilities;
+    if (url.endsWith('/settings/public')) {
+      await options.delayCapabilities
 
- return response({ desktop_api_version: 1, phone_code_length: 6,
-      turnstile_enabled: options.captcha === true, turnstile_site_key: options.captcha ? 'site-key' : '' }) }
+      return response({
+        desktop_api_version: 1,
+        phone_code_length: 6,
+        turnstile_enabled: options.captcha === true,
+        turnstile_site_key: options.captcha ? 'site-key' : ''
+      })
+    }
 
-    if (url.endsWith('/auth/login')) { return response({ token_type: 'Bearer', access_token: 'secret-access', refresh_token: 'secret-refresh', expires_in: 3600 }) }
+    if (url.endsWith('/auth/login')) {
+      return response({
+        token_type: 'Bearer',
+        access_token: 'secret-access',
+        refresh_token: 'secret-refresh',
+        expires_in: 3600
+      })
+    }
 
     if (url.endsWith('/user/profile')) {
-      if (options.profileFails) { return response({ id: 'invalid-id' }) }
+      if (options.profileFails) {
+        return response({ id: 'invalid-id' })
+      }
 
       return response({ id: 17, username: 'Test Aino account', email: 'test@example.com', phone_bound: false })
     }
 
-    if (url.endsWith('/desktop/models?include_images=true')) { return response([model, imageModel]) }
+    if (url.endsWith('/desktop/models?include_images=true')) {
+      return response([model, imageModel])
+    }
 
     if (url.endsWith('/desktop/credentials')) {
       await options.delayLease
 
-      if (options.leaseFails) { return new Response(JSON.stringify({ code: 400, reason: 'quota_exhausted', message: 'quota' }), { status: 400 }) }
+      if (options.leaseFails) {
+        return new Response(JSON.stringify({ code: 400, reason: 'quota_exhausted', message: 'quota' }), { status: 400 })
+      }
 
-      return response({ purpose: body.purpose ?? 'chat', model: body.purpose === 'image' ? imageModel : model,
-        credential_id: 'credential', api_key: 'inference-secret', base_url: 'https://api.agentera.com.cn/v1',
-        expires_at: new Date(Date.now() + 300_000).toISOString() })
+      return response({
+        purpose: body.purpose ?? 'chat',
+        model: body.purpose === 'image' ? imageModel : model,
+        credential_id: 'credential',
+        api_key: 'inference-secret',
+        base_url: 'https://api.agentera.com.cn/v1',
+        expires_at: new Date(Date.now() + 300_000).toISOString()
+      })
     }
 
-    if (url.endsWith('/desktop/billing-summary')) { return response({ currency: 'USD', balance: '5', frozen_balance: '1', available_balance: '4',
-      payment_enabled: true, active_subscriptions: [], updated_at: new Date().toISOString() }) }
+    if (url.endsWith('/desktop/billing-summary')) {
+      return response({
+        currency: 'USD',
+        balance: '5',
+        frozen_balance: '1',
+        available_balance: '4',
+        payment_enabled: true,
+        active_subscriptions: [],
+        updated_at: new Date().toISOString()
+      })
+    }
 
-    if (url.endsWith('/auth/logout')) { return response({ success: true }) }
+    if (url.endsWith('/auth/logout')) {
+      return response({ success: true })
+    }
+
     throw new Error(`Unexpected API call ${url}`)
   })
 
-  const gatewayFetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({ ticket: 'one-use-ticket' })))
+  const gatewayFetch = vi.fn(
+    async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(JSON.stringify({ ticket: 'one-use-ticket' }))
+  )
+
   vi.stubGlobal('fetch', gatewayFetch)
 
   const request = vi.fn(async (method: string, params: any) => {
-    if (method === 'session.claim_managed_model') { return { managed_model_binding: options.claim ?? 1, managed_image_binding: 1,
-      managed_model_context_window: true, managed_device_key: 1, binding_revision: 2 } }
+    if (method === 'session.claim_managed_model') {
+      return {
+        managed_model_binding: options.claim ?? 1,
+        managed_image_binding: 1,
+        managed_model_context_window: true,
+        managed_device_key: 1,
+        binding_revision: 2
+      }
+    }
 
     return { bound: true, model_id: params.model_id, binding_revision: params.binding_revision }
   })
 
   const close = vi.fn()
-  const openGateway = vi.fn(async () => ({ request, close, connectionState: 'open' }) as unknown as JsonRpcGatewayClient)
+
+  const openGateway = vi.fn(
+    async () => ({ request, close, connectionState: 'open' }) as unknown as JsonRpcGatewayClient
+  )
+
   const confirmRemote = vi.fn(async () => true)
 
   const adapter = createBrowserPlatformBridge({
     bootstrap: { authRequired: true, basePath: '/hermes', privateSession: false, token: '' },
-    client: createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl: apiFetch }), openGateway, ...(options.useDefaultConfirm ? {} : { confirmRemote })
+    client: createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl: apiFetch }),
+    openGateway,
+    ...(options.useDefaultConfirm ? {} : { confirmRemote })
   })
 
   disposers.push(adapter.dispose)
-  const login = () => adapter.bridge.platformAccount.loginExisting({ email: 'test@example.com', password: 'secret-password', remember: true })
 
-  const bind = async (purpose: 'chat' | 'image' = 'chat', profile = 'secondary') => adapter.bridge.platformModels.bind({
-    connection_id: 'local', profile, session_id: 'session', model_id: purpose === 'image' ? 'image' : 'text',
-    session_ticket: 'session-ticket', expected_account_revision: (await adapter.bridge.platformAccount.status()).revision, purpose
-  })
+  const login = () =>
+    adapter.bridge.platformAccount.loginExisting({
+      email: 'test@example.com',
+      password: 'secret-password',
+      remember: true
+    })
+
+  const bind = async (purpose: 'chat' | 'image' = 'chat', profile = 'secondary') =>
+    adapter.bridge.platformModels.bind({
+      connection_id: 'local',
+      profile,
+      session_id: 'session',
+      model_id: purpose === 'image' ? 'image' : 'text',
+      session_ticket: 'session-ticket',
+      expected_account_revision: (await adapter.bridge.platformAccount.status()).revision,
+      purpose
+    })
 
   return { ...adapter, apiCalls, apiFetch, gatewayFetch, request, close, openGateway, confirmRemote, login, bind }
 }
@@ -105,7 +211,11 @@ describe('browser Aino account and gateway authority', () => {
     await test.login()
     const snapshot = await test.bridge.platformAccount.status()
     const expected = { userId: snapshot.account!.id, mode: snapshot.mode, revision: snapshot.revision }
-    const stale = { ...expected, [field]: field === 'userId' ? 'other-user' : field === 'mode' ? 'development' : expected.revision - 1 }
+
+    const stale = {
+      ...expected,
+      [field]: field === 'userId' ? 'other-user' : field === 'mode' ? 'development' : expected.revision - 1
+    }
 
     await expect(test.bridge.platformAccount.logout(stale)).rejects.toMatchObject({ code: 'platform_account_changed' })
     expect(test.apiCalls.some(call => call.url.endsWith('/auth/logout'))).toBe(false)
@@ -117,9 +227,13 @@ describe('browser Aino account and gateway authority', () => {
     await test.login()
     const snapshot = await test.bridge.platformAccount.status()
 
-    await expect(test.bridge.platformAccount.logout({
-      userId: snapshot.account!.id, mode: snapshot.mode, revision: snapshot.revision
-    })).resolves.toMatchObject({ phase: 'signed_out', account: null })
+    await expect(
+      test.bridge.platformAccount.logout({
+        userId: snapshot.account!.id,
+        mode: snapshot.mode,
+        revision: snapshot.revision
+      })
+    ).resolves.toMatchObject({ phase: 'signed_out', account: null })
     expect(test.apiCalls.filter(call => call.url.endsWith('/auth/logout'))).toHaveLength(1)
   })
 
@@ -136,12 +250,23 @@ describe('browser Aino account and gateway authority', () => {
     const storage = vi.spyOn(Storage.prototype, 'setItem')
     const test = rig()
     expect(test.bridge.accountAdapter).toBe('platform')
-    expect(await test.bridge.platformAccount.status()).toMatchObject({ phase: 'signed_out', mode: 'production', account: null })
+    expect(await test.bridge.platformAccount.status()).toMatchObject({
+      phase: 'signed_out',
+      mode: 'production',
+      account: null
+    })
     await expect(test.bridge.platformModels.list()).rejects.toMatchObject({ code: 'authentication_required' })
-    expect(await test.login()).toMatchObject({ status: 'signed_in', snapshot: { remember_state: 'session_only', account: { id: '17' } } })
+    expect(await test.login()).toMatchObject({
+      status: 'signed_in',
+      snapshot: { remember_state: 'session_only', account: { id: '17' } }
+    })
     expect((await test.bridge.platformModels.list()).map(value => value.purpose)).toEqual(['chat', 'image'])
-    expect(await test.bridge.platformBilling.summary({ expected_user_id: '17' })).toMatchObject({ available_balance: '4' })
-    await expect(test.bridge.platformBilling.summary({ expected_user_id: 'other' })).rejects.toMatchObject({ code: 'platform_account_changed' })
+    expect(await test.bridge.platformBilling.summary({ expected_user_id: '17' })).toMatchObject({
+      available_balance: '4'
+    })
+    await expect(test.bridge.platformBilling.summary({ expected_user_id: 'other' })).rejects.toMatchObject({
+      code: 'platform_account_changed'
+    })
     expect(storage).not.toHaveBeenCalled()
     expect(JSON.stringify(await test.bridge.platformAccount.status())).not.toContain('secret-')
   })
@@ -158,7 +283,13 @@ describe('browser Aino account and gateway authority', () => {
 
   it('does not finish a pending login after the user signs out during the CAPTCHA policy read', async () => {
     let release!: () => void
-    const test = rig({ delayCapabilities: new Promise<void>(resolve => { release = resolve }) })
+
+    const test = rig({
+      delayCapabilities: new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+
     const login = test.login()
     await vi.waitFor(() => expect(test.apiCalls.some(call => call.url.endsWith('/settings/public'))).toBe(true))
     await test.bridge.platformAccount.logout()
@@ -185,7 +316,11 @@ describe('browser Aino account and gateway authority', () => {
       'http://localhost:3000/hermes/api/webapp/socket-ticket?socket=gateway&profile=secondary',
       'http://localhost:3000/hermes/api/webapp/socket-ticket?socket=gateway&profile=other-secondary'
     ])
-    expect(test.request.mock.calls.filter(([method]) => method === 'session.bind_managed_model').map(([, params]) => [params.profile, params.purpose ?? 'chat', params.owner])).toEqual([
+    expect(
+      test.request.mock.calls
+        .filter(([method]) => method === 'session.bind_managed_model')
+        .map(([, params]) => [params.profile, params.purpose ?? 'chat', params.owner])
+    ).toEqual([
       ['secondary', 'chat', { platform_origin: 'https://api.agentera.com.cn', user_id: '17' }],
       ['other-secondary', 'image', { platform_origin: 'https://api.agentera.com.cn', user_id: '17' }]
     ])
@@ -221,7 +356,13 @@ describe('browser Aino account and gateway authority', () => {
 
   it('rejects an account generation change during lease acquisition without sending its key', async () => {
     let release!: () => void
-    const test = rig({ delayLease: new Promise<void>(resolve => { release = resolve }) })
+
+    const test = rig({
+      delayLease: new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+
     await test.login()
     const result = test.bind()
     await vi.waitFor(() => expect(test.apiCalls.some(call => call.url.endsWith('/desktop/credentials'))).toBe(true))
@@ -241,11 +382,26 @@ describe('browser Aino account and gateway authority', () => {
 
   it('moves the gateway ticket into the canonical subprotocol before the socket dial', async () => {
     const calls: unknown[][] = []
-    vi.stubGlobal('WebSocket', class {
-      static OPEN = 1
-      constructor(...args: unknown[]) { calls.push(args); throw new Error('test transport stopped') }
-    })
-    await expect(openBrowserPlatformGateway('wss://host.example/api/ws?native_dial=browser&ticket=private-ticket&profile=secondary')).rejects.toThrow()
-    expect(calls).toEqual([['wss://host.example/api/ws?native_dial=browser&profile=secondary', ['hermes-gateway-v1', 'hermes-gateway-ticket.private-ticket']]])
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        static OPEN = 1
+        constructor(...args: unknown[]) {
+          calls.push(args)
+          throw new Error('test transport stopped')
+        }
+      }
+    )
+    await expect(
+      openBrowserPlatformGateway(
+        'wss://host.example/api/ws?native_dial=browser&ticket=private-ticket&profile=secondary'
+      )
+    ).rejects.toThrow()
+    expect(calls).toEqual([
+      [
+        'wss://host.example/api/ws?native_dial=browser&profile=secondary',
+        ['hermes-gateway-v1', 'hermes-gateway-ticket.private-ticket']
+      ]
+    ])
   })
 })

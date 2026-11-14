@@ -153,7 +153,14 @@ describe('RemoteSessionCookieStore', () => {
     const accountA = store.scope(partitionA)
     accountA.record(gateway, 'hermes_session=private-alpha; Path=/')
     let deliver!: (value: Array<{ name: string; value: string }>) => void
-    const pending = accountA.captureFromJar(gateway, () => new Promise(resolve => { deliver = resolve }))
+
+    const pending = accountA.captureFromJar(
+      gateway,
+      () =>
+        new Promise(resolve => {
+          deliver = resolve
+        })
+    )
 
     store.retire()
     expect(store.cookieHeaderFor(partitionA, gateway)).toBeNull()

@@ -55,7 +55,9 @@ vi.mock('@/app/account/account-context', async () => {
 
   return { useAccountActions: () => ({ state }) }
 })
-vi.mock('@/app/account/account-gate', () => ({ AccountGate: ({ children }: { children: React.ReactNode }) => children }))
+vi.mock('@/app/account/account-gate', () => ({
+  AccountGate: ({ children }: { children: React.ReactNode }) => children
+}))
 vi.mock('@/store/gateway', async importActual => ({
   ...(await importActual<Record<string, unknown>>()),
   activeGatewayConnectionId: () => 'local',
@@ -251,11 +253,19 @@ describe('ContribWiring background queue: independent remote owner', () => {
   })
 })
 
-
-it.each(['secondary', 'hud', 'browser', 'peer'])('releases first-run surfaces in the %s window without a startup request', role => {
-  fixture.windowRole = role
-  $onboardingDecided.set(false)
-  render(<MemoryRouter><QueryClientProvider client={queryClient}><ContribWiring>{null}</ContribWiring></QueryClientProvider></MemoryRouter>)
-  expect($onboardingSurfaceClear.get()).toBe(true)
-  expect(fixture.ambientRequest).not.toHaveBeenCalledWith('onboarding.state', expect.anything(), expect.anything())
-})
+it.each(['secondary', 'hud', 'browser', 'peer'])(
+  'releases first-run surfaces in the %s window without a startup request',
+  role => {
+    fixture.windowRole = role
+    $onboardingDecided.set(false)
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <ContribWiring>{null}</ContribWiring>
+        </QueryClientProvider>
+      </MemoryRouter>
+    )
+    expect($onboardingSurfaceClear.get()).toBe(true)
+    expect(fixture.ambientRequest).not.toHaveBeenCalledWith('onboarding.state', expect.anything(), expect.anything())
+  }
+)

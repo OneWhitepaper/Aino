@@ -52,6 +52,9 @@ vi.mock('./avatar', () => ({
 vi.mock('./avatar-image', () => ({
   $imagenAvailable: { get: () => imageState.value, set: (value: boolean) => (imageState.value = value) },
   generateAvatarImage: vi.fn(),
+  generateAvatarFromPrompt: vi.fn(async () => {
+    throw new Error('头像生成失败')
+  }),
   normalizeAvatarImage: vi.fn(async (value: string) => value),
   pickImageFromDevice: vi.fn(),
   probeImagen: vi.fn()
@@ -107,14 +110,7 @@ describe('avatar generation fallback copy', () => {
     const { AvatarPicker } = await import('./avatar-picker')
 
     render(
-      <AvatarPicker
-        color={null}
-        image={null}
-        onColor={vi.fn()}
-        onImage={vi.fn()}
-        onShape={vi.fn()}
-        shape="circle"
-      />
+      <AvatarPicker color={null} image={null} onColor={vi.fn()} onImage={vi.fn()} onShape={vi.fn()} shape="circle" />
     )
 
     fireEvent.click(screen.getByRole('button', { name: '生成' }))

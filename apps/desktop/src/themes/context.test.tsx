@@ -203,7 +203,6 @@ describe('ThemeProvider highlight preview', () => {
   })
 })
 
-
 describe('Aino boot-failure palette', () => {
   afterEach(cleanup)
 
@@ -211,7 +210,11 @@ describe('Aino boot-failure palette', () => {
     window.localStorage.clear()
     $activeGatewayProfile.set('default')
     modePref.assign('default', 'dark')
-    render(<ThemeProvider><div /></ThemeProvider>)
+    render(
+      <ThemeProvider>
+        <div />
+      </ThemeProvider>
+    )
 
     const snapshot = JSON.parse(window.localStorage.getItem('hermes-boot-palette')!)
     expect(snapshot).toEqual({

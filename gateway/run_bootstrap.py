@@ -352,9 +352,11 @@ async def _start_gateway_start_control_socket(runner):
                 result = {"pending": True, "served_profiles": runner.served_profile_names()}
             return {"multiplex": bool(getattr(runner.config, "multiplex_profiles", False)), **result}
 
+        from gateway.run_messaging_connect import connect_platform_verb
         _control_server = GatewayControlServer(
             verb_handlers={"pause-for-update": _pause_for_update_handler, "identify": _identify_runtime,
                            "rescan-profiles": _rescan_profiles_handler,
+                           "connect-platform": connect_platform_verb(runner, _main_loop),
                            "migrate-profile-identity": migrate_profile_identity_verb(runner),
                            "unserve-profile": unserve_profile_verb(runner),
                            "serve-profile": serve_profile_verb(runner),

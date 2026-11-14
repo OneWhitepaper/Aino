@@ -1,26 +1,11 @@
 /**
- * A named layout preset is GEOMETRY (splits, rails, weights, which zones are
- * open) — not a snapshot of the conversations that happened to be on screen
- * when it was saved.
- *
- * `saveCurrentLayoutAs` clones the LIVE tree, which carries
- * `session-tile:<storedSessionId>`, `preview-tile:*` and `route-tile:*` panes.
- * Those ids are not portable: the layout tree and its presets are GLOBAL
- * (`hermes.desktop.layoutTree.v2` / `hermes.desktop.layoutPresets.v2`), while a
- * session tile belongs to the profile that owns the stored session. Re-applying
- * such a preset remounts the baked-in tiles, which fires `session.resume` /
- * agent init across profiles; the tile WebSocket then drops, the gateway
- * `ws_orphan_reap`s the runtime, and the UI keeps RPCing the dead id (#94260).
- *
- * This is deliberately NOT the same path as persisting the live tree across
- * restarts (preview tiles, #92818 / #93179) — those PRs never touch
- * `saveLayoutPresetTree` / `applyLayoutPreset`, and they do not strip
- * `session-tile:` at all. `applyTree` already ADOPTS the panes that are open
- * right now into the new geometry, so stripping here does not lose tabs: it
- * only stops them arriving from a stored snapshot.
+ * Presets describe layout geometry. A contributed tree must not import live
+ * session, preview or route tiles from another context (#94260). `applyTree`
+ * adopts the tabs already open into the new geometry after this filtering.
+ * Live-tree persistence belongs to its own path and keeps those tabs intact.
  */
 
-import { allPaneIds, type LayoutNode, normalize } from './model'
+import { type LayoutNode, normalize } from './model'
 
 /** Panes that must never ride along in a named layout preset. */
 export const PRESET_EXCLUDED_PANE_PREFIXES = ['session-tile:', 'preview-tile:', 'route-tile:'] as const
@@ -65,17 +50,4 @@ export function stripPresetLivePanes(tree: LayoutNode): LayoutNode | null {
   }
 
   return normalize(walk(tree))
-}
-
-/** The `resting` entries that still name a pane the stripped geometry places.
- *  A resting record for a live tile names nothing on apply (the pane is gone),
- *  and leaving it behind would keep writing tile ids back into the preset. */
-export function stripPresetResting(resting: readonly string[] | undefined, tree: LayoutNode): string[] {
-  if (!resting) {
-    return []
-  }
-
-  const placed = new Set(allPaneIds(tree))
-
-  return resting.filter(paneId => placed.has(paneId))
 }

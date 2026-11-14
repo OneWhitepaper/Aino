@@ -86,10 +86,11 @@
 
 /* This variant belongs only to the unified right-side workspace. */
 [data-pane-variant='tool'] {
-  height: 45px;
-  padding: 5px 5px 6px;
+  box-sizing: border-box;
+  height: var(--aino-band-row2);
+  padding: 6px;
   align-items: center;
-  border-bottom: 1px solid var(--ui-stroke-secondary);
+  border-bottom: 1px solid var(--aino-workbench-divider);
   --pane-tab-active-bg: var(--ui-bg-elevated);
   --pane-tab-strip-bg: transparent;
 }

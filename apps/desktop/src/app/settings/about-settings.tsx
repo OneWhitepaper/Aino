@@ -5,14 +5,7 @@ import { type ReactElement, useEffect, useId } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogTitle,
-  DialogTrigger
-} from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { UpdateStatusCard, VersionHero } from '@/components/update-status'
 import { VersionDetails } from '@/components/version-details'
 import { useI18n } from '@/i18n'
@@ -77,13 +70,15 @@ export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElemen
     <SettingsContent>
       <div className="about-page">
         <VersionHero variant="compact" version={version} />
-        {!cloudOwned.client && <section
-          aria-label={t.settings.about.updates}
-          className="about-update"
-          id={settingElementId(SETTING_IDS.about.updates)}
-        >
-          <UpdateStatusCard target="client" variant="compact" version={version} />
-        </section>}
+        {!cloudOwned.client && (
+          <section
+            aria-label={t.settings.about.updates}
+            className="about-update"
+            id={settingElementId(SETTING_IDS.about.updates)}
+          >
+            <UpdateStatusCard target="client" variant="compact" version={version} />
+          </section>
+        )}
         <div className="about-links">
           <ExternalLink href={WEBSITE_URL} native showExternalIcon>
             {copy.website}
@@ -122,9 +117,7 @@ export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElemen
               {version && (
                 <>
                   <p className="about-installation-version">
-                    {version.appVersion
-                      ? t.updates.version(version.appVersion)
-                      : t.updates.versionUnavailable}
+                    {version.appVersion ? t.updates.version(version.appVersion) : t.updates.versionUnavailable}
                   </p>
                   <details className="about-technical-details">
                     <summary>{copy.technicalDetails}</summary>

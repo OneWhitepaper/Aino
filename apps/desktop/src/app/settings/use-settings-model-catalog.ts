@@ -1,15 +1,13 @@
 import type { ModelOptionProvider } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { replaceEqualDeep, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 
 import { $apiRequestScope } from '@/api/client'
 import { getEnvVars, getGlobalModelOptions } from '@/hermes'
-import type { EnvVarInfo } from '@/types/hermes'
 
 interface SettingsModelCatalog {
   providers: ModelOptionProvider[]
-  envVars: Record<string, EnvVarInfo>
   main: MainModelAssignment | null
   mainRevision: number
 }
@@ -43,25 +41,17 @@ export function useSettingsModelCatalog(profile?: string) {
     queryFn: async (): Promise<SettingsModelCatalog> => {
       const revision = client.getQueryData<SettingsModelCatalog>(key)?.mainRevision ?? 0
 
-      const [models, credentials] = await Promise.allSettled([
-        getGlobalModelOptions({ includeUnconfigured: true }, owner),
-        Promise.resolve().then(() => getEnvVars(owner))
-      ])
-
-      if (models.status === 'rejected') {
-        throw models.reason
-      }
+      const models = await getGlobalModelOptions({ includeUnconfigured: true }, owner)
 
       const current = client.getQueryData<SettingsModelCatalog>(key)
 
       const main =
-        typeof models.value.provider === 'string' && typeof models.value.model === 'string'
-          ? { provider: models.value.provider, model: models.value.model }
+        typeof models.provider === 'string' && typeof models.model === 'string'
+          ? { provider: models.provider, model: models.model }
           : null
 
       return {
-        providers: models.value.providers || [],
-        envVars: credentials.status === 'fulfilled' ? credentials.value : {},
+        providers: models.providers || [],
         // A model applied after this read started owns the summary. The revision lives in
         // this same owner-scoped query so remounts and concurrent observers share the fence.
         main:
@@ -71,12 +61,33 @@ export function useSettingsModelCatalog(profile?: string) {
         mainRevision: current?.mainRevision ?? revision
       }
     },
+    staleTime: 60_000,
+    structuralSharing: (previous: unknown, next: unknown) => {
+      const before = previous as SettingsModelCatalog | undefined
+      const incoming = next as SettingsModelCatalog
+
+      // A config-only read can publish between queryFn's return and the cache commit.
+      return replaceEqualDeep(
+        previous,
+        before && before.mainRevision > incoming.mainRevision
+          ? { ...incoming, main: before.main, mainRevision: before.mainRevision }
+          : incoming
+      )
+    }
+  })
+
+  // Credential hints enrich the provider picker; they never own the saved model's readiness.
+  const credentials = useQuery({
+    queryKey: [...key, 'credentials'],
+    queryFn: () => getEnvVars(owner),
     staleTime: 60_000
   })
 
   const refetchQuery = query.refetch
+  const refetchCredentials = credentials.refetch
 
   const refresh = useCallback(async () => {
+    void refetchCredentials({ cancelRefetch: false })
     const result = await refetchQuery({ cancelRefetch: false })
 
     if (result.error) {
@@ -84,13 +95,12 @@ export function useSettingsModelCatalog(profile?: string) {
     }
 
     return result.data
-  }, [refetchQuery])
+  }, [refetchCredentials, refetchQuery])
 
   const replaceProviders = useCallback(
     (providers: ModelOptionProvider[]) => {
       client.setQueryData<SettingsModelCatalog>(key, previous => ({
         providers,
-        envVars: previous?.envVars ?? {},
         main: previous?.main ?? null,
         mainRevision: previous?.mainRevision ?? 0
       }))
@@ -109,7 +119,6 @@ export function useSettingsModelCatalog(profile?: string) {
 
         return {
           providers: previous?.providers ?? [],
-          envVars: previous?.envVars ?? {},
           main,
           mainRevision: revision + 1
         }
@@ -125,7 +134,7 @@ export function useSettingsModelCatalog(profile?: string) {
 
   return {
     providers: query.data?.providers ?? [],
-    envVars: query.data?.envVars ?? {},
+    envVars: credentials.data ?? {},
     main: query.data?.main ?? null,
     owner,
     key: key.join(':'),

@@ -222,8 +222,7 @@ const patch = (update: Partial<DesktopOnboardingState>) =>
 
 const setFlow = (flow: OnboardingFlow) => patch(flow.status === 'idle' ? { flow } : { flow, reason: null })
 
-const sessionIdFor = (flow: OnboardingFlow) =>
-  'start' in flow && flow.start ? flow.start.session_id : undefined
+const sessionIdFor = (flow: OnboardingFlow) => ('start' in flow && flow.start ? flow.start.session_id : undefined)
 
 // The poll loop itself ends with its flow (see `pollSession`); only the expiry floor is a timer.
 function clearPoll() {
@@ -252,10 +251,7 @@ function schedulePollExpiry(start: DeviceStart, onExpire: () => void) {
   }, ttlMs)
 }
 
-async function checkRuntime(
-  ctx: OnboardingContext,
-  requestedProvider?: string
-): Promise<RuntimeReadinessResult> {
+async function checkRuntime(ctx: OnboardingContext, requestedProvider?: string): Promise<RuntimeReadinessResult> {
   return evaluateRuntimeReadiness(ctx.requestGateway, {
     defaultReason: DEFAULT_ONBOARDING_REASON,
     requestedProvider,
@@ -263,10 +259,7 @@ async function checkRuntime(
   })
 }
 
-function shouldPreserveConfiguredOnFallback(
-  runtime: RuntimeReadinessResult,
-  state: DesktopOnboardingState
-): boolean {
+function shouldPreserveConfiguredOnFallback(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
   // Non-authoritative transport fallback only: NEITHER probe answered, so the
   // round carries no evidence either way and must never be written down as
   // "unconfigured". This used to require an in-memory `configured === true`,
@@ -308,10 +301,7 @@ function isInsideBootRaceWindow(): boolean {
   return lastBootGenerationAt !== null && Date.now() - lastBootGenerationAt < BOOT_RACE_GRACE_MS
 }
 
-function shouldPreserveConfiguredOnBootRace(
-  runtime: RuntimeReadinessResult,
-  state: DesktopOnboardingState
-): boolean {
+function shouldPreserveConfiguredOnBootRace(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
   // The probes ANSWERED this time, but the round ran inside the backend's boot
   // window: the runtime_check resolved a route whose external secret source
   // (BWS) had not hydrated yet and reported ok:false for it. That is a
@@ -339,9 +329,7 @@ const LOCAL_MODELS_ROUTE = '/settings?tab=providers&pview=local'
 const LOCAL_RUNTIME_NOTICE_ID = 'local-runtime-unavailable'
 
 function isLocalRuntimeDown(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
-  return (
-    runtime.source === 'runtime_check' && runtime.errorCode === LOCAL_RUNTIME_UNAVAILABLE && !state.requested
-  )
+  return runtime.source === 'runtime_check' && runtime.errorCode === LOCAL_RUNTIME_UNAVAILABLE && !state.requested
 }
 
 /** True while the verdict is "the local model server is down": a server that is starting or being
@@ -369,9 +357,7 @@ function keepConfiguredWithLocalRuntimeDown(reason: string) {
       : { label: translateNow('desktop.chooseModel'), onClick: () => setModelPickerOpen(true) },
     id: LOCAL_RUNTIME_NOTICE_ID,
     kind: 'warning',
-    message: translateNow(
-      pane ? 'desktop.localRuntimeUnavailableDesktop' : 'desktop.localRuntimeUnavailableWebapp'
-    ),
+    message: translateNow(pane ? 'desktop.localRuntimeUnavailableDesktop' : 'desktop.localRuntimeUnavailableWebapp'),
     title: translateNow('desktop.localRuntimeUnavailableTitle')
   })
 }
@@ -401,8 +387,7 @@ function notifyGatewayTools(tools: string[] | undefined) {
 
   const labels = tools.map(t => GATEWAY_TOOL_LABELS[t] ?? t)
 
-  const list =
-    labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+  const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
 
   notify({
     durationMs: 8000,
@@ -607,11 +592,7 @@ async function completeWithModelConfirm(
 }
 
 // Keep the confirm screen's line about the moving apps current until the move settles or the screen goes.
-async function followSignedInMove(
-  signedIn: OnboardingSignedIn | undefined,
-  generation: number,
-  scope?: ProfileScope
-) {
+async function followSignedInMove(signedIn: OnboardingSignedIn | undefined, generation: number, scope?: ProfileScope) {
   const moving = signedIn?.handoff
 
   if (!signedIn || !moving || !handoffStillMoving(moving)) {
@@ -1108,18 +1089,11 @@ export async function startProviderOAuth(provider: OAuthProvider, ctx: Onboardin
 
 // Long-poll a session-backed device-code flow until it resolves. The loop ends with its flow: a
 // cancel, a newer flow, or the local expiry floor all move the flow off this session's `polling`.
-async function pollSession(
-  provider: OAuthProvider,
-  start: DeviceStart,
-  ctx: OnboardingContext,
-  generation: number
-) {
+async function pollSession(provider: OAuthProvider, start: DeviceStart, ctx: OnboardingContext, generation: number) {
   const live = () => {
     const { flow } = $desktopOnboarding.get()
 
-    return (
-      generation === flowGeneration && flow.status === 'polling' && sessionIdFor(flow) === start.session_id
-    )
+    return generation === flowGeneration && flow.status === 'polling' && sessionIdFor(flow) === start.session_id
   }
 
   try {
@@ -1459,10 +1433,7 @@ export async function saveOnboardingLocalEndpoint(
   }
 
   try {
-    await setMainModelAssignment(
-      { provider: 'custom', model, base_url: resolvedUrl, api_key: key },
-      ctx.scope
-    )
+    await setMainModelAssignment({ provider: 'custom', model, base_url: resolvedUrl, api_key: key }, ctx.scope)
 
     if (generation !== flowGeneration) {
       return { ok: false }
@@ -1578,13 +1549,9 @@ export async function confirmOnboardingModel(ctx: OnboardingContext) {
     // this file's non-blocking gateway calls. The alternative (silently
     // keeping the previous default) is still safer than the bug this fixes.
     try {
-      const res = await setMainModelAssignment(
-        { provider: flow.providerSlug, model: flow.currentModel },
-        undefined,
-        {
-          skipConfirmPrompt: true
-        }
-      )
+      const res = await setMainModelAssignment({ provider: flow.providerSlug, model: flow.currentModel }, undefined, {
+        skipConfirmPrompt: true
+      })
 
       notifyGatewayTools(res.gateway_tools)
     } catch (error) {

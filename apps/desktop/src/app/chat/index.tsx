@@ -14,7 +14,6 @@ import { Backdrop } from '@/components/Backdrop'
 import { COMPOSER_HEART_CONFIG, HeartField } from '@/components/chat/vibe-hearts'
 import { useSetupChatView } from '@/components/onboarding/first-run/assembly'
 import { $introHoldsThread } from '@/components/onboarding/first-run/intro'
-import { IntroCopy } from '@/components/onboarding/first-run/intro-copy'
 import { usePaneGroup, usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { $hoveredTreeGroup, $sessionTileDragging, $sessionTileEdgeHover } from '@/components/pane-shell/tree/store'
 import { PromptOverlays } from '@/components/prompt-overlays'
@@ -76,6 +75,7 @@ import { useHistoryWindow } from './history-window'
 import { type DroppedFile, partitionDroppedFiles } from './hooks/use-composer-actions'
 import { useFileDropZone } from './hooks/use-file-drop-zone'
 import { shouldShowIntro } from './intro-visibility'
+import { PrimaryChatPrompts } from './primary-chat-prompts'
 import { ProfileTag } from './profile-tag'
 import { ResumeExhaustedOverlay } from './resume-exhausted-overlay'
 import { isRouteSessionMismatch } from './route-session-state'
@@ -873,7 +873,7 @@ const ChatViewContent = memo(function ChatViewContent({
               sessionKey={threadKey}
             />
           )}
-          {isPrimary && isMainWindow() && <IntroCopy />}
+          <PrimaryChatPrompts isPrimary={isPrimary} setupChat={setupChat} showChatBar={showChatBar} />
           {resumeExhausted && routedSessionId && (
             <ResumeExhaustedOverlay onRetryResume={onRetryResume} sessionId={routedSessionId} />
           )}

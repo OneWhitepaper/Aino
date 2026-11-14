@@ -171,7 +171,8 @@ export const zhHantCommandCenter = {
     relayLink: {
       title: 'Team Gateway',
       badge: '不需要機器人權杖',
-      intro: (platform: string) => `${platform} 透過共用的 Hermes 機器人連到這個代理。連結你的 ${platform} 帳號，再傳訊息給機器人就能和代理對話。`,
+      intro: (platform: string) =>
+        `${platform} 透過共用的 Hermes 機器人連到這個代理。連結你的 ${platform} 帳號，再傳訊息給機器人就能和代理對話。`,
       link: (platform: string) => `連結 ${platform}`,
       linkAnother: (platform: string) => `連結另一個 ${platform} 帳號`,
       linkedAccounts: '已連結的帳號',
@@ -189,10 +190,12 @@ export const zhHantCommandCenter = {
       refused: (platform: string) => `${platform} 拒絕了連結。請取得新代碼後再試一次。`,
       qrAlt: (platform: string) => `共用 ${platform} 機器人的 QR 碼`,
       managed: '由 Team Gateway 管理',
-      managedNote: (platform: string) => `此執行個體的訊息由 Team Gateway 承載，因此閘道每次啟動都會關閉 ${platform} 的直接連線。若要與中繼同時使用，請在閘道環境中設定 GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true（直接連線會使執行個體無法縮減到零，並可能重複傳遞訊息）。`,
+      managedNote: (platform: string) =>
+        `此執行個體的訊息由 Team Gateway 承載，因此閘道每次啟動都會關閉 ${platform} 的直接連線。若要與中繼同時使用，請在閘道環境中設定 GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true（直接連線會使執行個體無法縮減到零，並可能重複傳遞訊息）。`,
       managedIntro: '此代理的帳號在 Nous Portal 中連結。',
       openPortal: '在 Nous Portal 中連結帳號',
-      noNewAccount: (platform: string) => `此代碼已失效，且沒有出現新帳號。如果你的 ${platform} 帳號不在清單中，請取得新代碼後再試一次。`
+      noNewAccount: (platform: string) =>
+        `此代碼已失效，且沒有出現新帳號。如果你的 ${platform} 帳號不在清單中，請取得新代碼後再試一次。`
     },
     telegramQr: {
       title: '選擇連接 Telegram 機器人的方式',
@@ -215,7 +218,7 @@ export const zhHantCommandCenter = {
       userIdPlaceholder: 'Telegram 使用者 ID',
       add: '新增',
       numericOnly: '允許的 Telegram 使用者 ID 必須是數字。',
-      saveAndRestart: '儲存並重新啟動',
+      saveAndRestart: '儲存並連線',
       applying: '正在儲存…',
       pairingExpired: 'Telegram 配對已到期。請重新開始 QR 設定。',
       stillWaiting: detail => `仍在等待 Telegram。出錯後重試：${detail}`,
@@ -360,9 +363,9 @@ export const zhHantCommandCenter = {
     switchConnectionFailed: name => `無法連線至 ${name}`,
     manageProfiles: '管理設定檔…',
     fleet: {
-      switchDeviceTitle: "切換到此裝置？",
-      switchDeviceDesc: "這會在此電腦開啟新會話。目前的對話會保留在另一個執行服務上。",
-      switchDeviceConfirm: "切換",
+      switchDeviceTitle: '切換到此裝置？',
+      switchDeviceDesc: '這會在此電腦開啟新會話。目前的對話會保留在另一個執行服務上。',
+      switchDeviceConfirm: '切換',
       localDevice: '此裝置（本機後端——若未安裝 Hermes 則會安裝，否則開啟新的工作階段）',
       installDeviceTitle: '在此裝置上安裝 Hermes？',
       installDeviceDesc: '這會在本機安裝 Hermes，然後在這台電腦上開啟新的工作階段。確認之前不會開始安裝。',

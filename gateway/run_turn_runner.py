@@ -897,6 +897,8 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
             else:
                 streaks.pop(ctx.session_key, None)
         # MEDIA paths already in history are excluded from this turn's extraction (compression-safe).
+        from gateway.session_pause import continuation_history
+        agent_history = continuation_history(agent_history)
         return agent_history, observed_group_context, _collect_history_media_paths(agent_history)
 
     def _prepend_pending_note(self, attr: str) -> None:
@@ -1472,6 +1474,7 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
             "usage_limit": result.get("usage_limit"),
             "partial": result.get("partial", False), "completed": result.get("completed"),
             "interrupted": result.get("interrupted", False), "interrupt_message": result.get("interrupt_message"),
+            "user_interrupted": result.get("user_interrupted", False),
             "error": result.get("error"),
             **{key: result[key] for key in _FAILURE_DESCRIPTOR_KEYS if key in result},
             "compression_exhausted": result.get("compression_exhausted", False),

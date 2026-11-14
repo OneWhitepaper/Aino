@@ -91,11 +91,13 @@ const ContentRefusedNote: FC<{ notice: string; userText: string }> = ({ notice, 
 function ModelSwitchNote({ modelSwitch }: { modelSwitch: ModelSwitchDisplayMetadata }) {
   const { t } = useI18n()
   const { model, previous_model: previousModel } = modelSwitch
+
   const label = model
     ? previousModel
       ? t.assistant.thread.modelChangedFrom(previousModel, model)
       : t.assistant.thread.modelChangedTo(model)
     : t.assistant.thread.modelChanged
+
   return (
     <MessagePrimitive.Root
       className="flex w-full min-w-0 items-center gap-3 self-center py-2 text-xs leading-5 text-muted-foreground"

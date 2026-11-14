@@ -2,9 +2,15 @@ import { act, cleanup, render } from '@testing-library/react'
 import { createElement, useEffect } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import { group } from '@/components/pane-shell/tree/model'
+import { findGroupOfPane, group } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
-import { declareDefaultTree, treePanesWithPrefix, watchContributedPanes } from '@/components/pane-shell/tree/store'
+import {
+  $layoutTree,
+  declareDefaultTree,
+  setTreeGroupMinimized,
+  treePanesWithPrefix,
+  watchContributedPanes
+} from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 import { $previewTabs, openPreview } from '@/store/preview'
 import { $selectedStoredSessionId } from '@/store/session'
@@ -100,4 +106,12 @@ it("keeps a hidden session's live Browser body alive and shows the same one on r
   expect(input.value).toBe('unsaved in A')
   expect(disconnected).not.toContain(aGuest)
   expect(mounts.get(aTab)).toBe(1)
+
+  const returnedGroup = findGroupOfPane($layoutTree.get()!, `preview-tile:${aTab}`)!
+  act(() => setTreeGroupMinimized(returnedGroup.id, true))
+  act(() => $selectedStoredSessionId.set('sess-live-b'))
+  act(() => $selectedStoredSessionId.set('sess-live-a'))
+  expect(guestFor(aTab)).toBe(aGuest)
+  expect(aGuest.closest('[inert]')).not.toBeNull()
+  expect(input.value).toBe('unsaved in A')
 })

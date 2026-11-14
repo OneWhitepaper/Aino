@@ -6,7 +6,7 @@ import { readClipboardImagePng } from './clipboard-image'
 import { registerClipboardTextIpc } from './clipboard-ipc'
 import { saveImageFromUrl, writeComposerImage } from './composer-image-files'
 import { writeComposerPaste } from './composer-paste'
-import { capturePreviewContents } from './preview-capture'
+import { captureOwnedPreviewContents } from './preview-capture'
 import { createPreviewTargetResolver } from './preview-file-target'
 import { stopPreviewFileWatch, watchDirectory, watchPreviewFile } from './preview-file-watch'
 import { registerSaveDialogIpc } from './save-text-file'
@@ -118,10 +118,10 @@ export function registerRendererContentIpc(
 
   registerSpellcheckDictionaryIpc(ipcMain, electronWebContents)
 
-  ipcMain.handle('hermes:capturePreview', async (_event, payload) => {
+  ipcMain.handle('hermes:capturePreview', async (event, payload) => {
     const guest = electronWebContents.fromId(Number(payload?.webContentsId))
 
-    return capturePreviewContents(guest, payload?.rect, payload?.viewport)
+    return captureOwnedPreviewContents(event.sender, guest, payload?.rect, payload?.viewport)
   })
 
   ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {

@@ -812,10 +812,13 @@ class GatewayAdapterLifecycleMixin(GatewaySecondaryReconnectMixin):
         # None: removed concurrently since the caller's snapshot. Paused needs /platform resume.
         if info is None or info.get("paused"):
             return
+        platform_config = info["config"]
+        if not platform_config.enabled:
+            self._drop_from_reconnect_queue(platform, "disabled in saved configuration")
+            return
         self._flag_reconnect_needs_attention(platform, info, now)
         if now < info["next_retry"]:
             return  # not time yet
-        platform_config = info["config"]
         attempt = info["attempts"] + 1
         info.pop("retry_now", None)  # this attempt already sees whatever the request was for
         # Empty-token primary configs can never reconnect; drop them so multiplex setups
@@ -845,9 +848,19 @@ class GatewayAdapterLifecycleMixin(GatewaySecondaryReconnectMixin):
                 logger.info("Reconnect %s: no adapter yet, next retry in %ds", platform.value, backoff)
                 return
             carry_inbound_dedup(info.get("predecessor"), adapter)
+            from gateway.run_messaging_connect import prepare_primary_retry_claims
+            if not prepare_primary_retry_claims(self, platform, adapter, info):
+                return
             self._wire_adapter_handlers(adapter)
             # is_reconnect keeps the server-side update queue so offline-period messages are delivered.
             success = await self._connect_adapter_with_timeout(adapter, platform, is_reconnect=True)
+            # Setup can change or disable this platform while its old credentials are dialing.
+            # A stale candidate must not publish over the user's newly saved configuration.
+            current = self._failed_platforms.get(platform)
+            if current is not info or current["config"] is not platform_config or not platform_config.enabled:
+                await _dispose_unused_adapter(adapter)
+                info["credential_claim"] = info["listener_claim"] = None
+                return
             if success:
                 await self._install_reconnected_adapter(platform, adapter)
             elif adapter.has_fatal_error and not adapter.fatal_error_retryable:
@@ -887,6 +900,9 @@ class GatewayAdapterLifecycleMixin(GatewaySecondaryReconnectMixin):
             # A reconnect exception is transient; keep retrying at the cap rather than auto-pausing.
             backoff = self._bump_reconnect_backoff(platform, info, attempt, None, str(e))
             logger.warning("Reconnect %s error: %s, next retry in %ds", platform.value, e, backoff)
+        finally:
+            active = getattr(self, "_primary_profile_name", None) or "default"
+            self._release_secondary_claims(active, platform, adapter)
 
     def _drop_from_reconnect_queue(self, platform, reason: str) -> None:
         logger.warning("Reconnect %s: %s, removing from retry queue", platform.value, reason)
@@ -1271,7 +1287,8 @@ class GatewayAdapterLifecycleMixin(GatewaySecondaryReconnectMixin):
         return lines
 
     async def _start_one_profile_adapters(
-        self, profile_name: str, profile_home: Path, claimed: dict[tuple, str]
+        self, profile_name: str, profile_home: Path, claimed: dict[tuple, str],
+        *, platform_filter: Optional[Platform] = None,
     ) -> int:
         """Create+connect one profile's adapters under its runtime scope."""
         from gateway.run import _platform_has_bot_credential, _profile_runtime_scope
@@ -1286,6 +1303,8 @@ class GatewayAdapterLifecycleMixin(GatewaySecondaryReconnectMixin):
         profile_map = self._profile_adapters.setdefault(profile_name, {})
         connected = 0
         for platform, platform_config in profile_cfg.platforms.items():
+            if platform_filter is not None and platform != platform_filter:
+                continue
             if not platform_config.enabled:
                 continue
             # Runtime re-scan of a served profile (config/.env changed): only platforms that are not

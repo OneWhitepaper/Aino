@@ -124,6 +124,7 @@ it('the room settings dialog offers Compress history per member and reports the 
   const { findByRole, getByLabelText, getByRole, queryByLabelText } = render(
     <GroupChatWorkspace group="Build" members={members} />
   )
+
   // The same named management entrance remains the door to the retained repair.
   const groupInfo = await findByRole('button', { name: 'Group info' })
   expect(queryByLabelText('Compress history: Mason')).toBeNull()

@@ -28,13 +28,17 @@ it('explains an Aino account entitlement refusal without calling it a provider o
   expect(copy.body).not.toMatch(/API 密钥|服务商错误|充值余额/)
 
   const expired = errorCardText(TRANSLATIONS.zh.assistant.thread, {
-    layer: 'billing', code: 'managed_subscription_expired', retryable: false
+    layer: 'billing',
+    code: 'managed_subscription_expired',
+    retryable: false
   })
 
   expect(expired.title).toBe('套餐已到期')
 
   const previous = errorCardText(TRANSLATIONS.zh.assistant.thread, {
-    layer: 'provider', code: 'managed_upstream_auth_failed', retryable: false
+    layer: 'provider',
+    code: 'managed_upstream_auth_failed',
+    retryable: false
   })
 
   expect(previous.title).not.toBe('套餐已到期')

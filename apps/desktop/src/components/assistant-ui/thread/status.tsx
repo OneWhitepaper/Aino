@@ -447,7 +447,7 @@ export const TurnActivityIndicator: FC<{ thinking?: boolean }> = ({ thinking = f
     // and makes bottom-following jump, then jump again after the quiet delay.
     // A tool, user input, compaction or the turn ending hands this row off.
     const seenAt = Date.now()
-    setQuietSince(previous => previous === undefined ? undefined : seenAt)
+    setQuietSince(previous => (previous === undefined ? undefined : seenAt))
     const id = window.setTimeout(() => setQuietSince(seenAt), TURN_QUIET_S * 1000)
 
     return () => window.clearTimeout(id)

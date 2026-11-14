@@ -268,6 +268,8 @@ class AuthorityConnection:
         from gateway.session_images import attach_bytes
         from functools import partial
         handlers['image.attach_bytes'] = partial(attach_bytes, self)
+        from gateway.session_image_generation import generate
+        handlers['image.generate'] = partial(generate, self)
         from gateway.session_complete_path import complete_path
         handlers['complete.path'] = partial(complete_path, self)
         from gateway.session_prune import prune
@@ -832,10 +834,7 @@ class AuthorityConnection:
                 binding_key(self.authority, ref.session_id), managed_state(self.authority, ref.session_id)) is None:
             raise RuntimeStoreError('awaiting_managed_credentials')
         # The interactive WS is the one surface a restart's after-turn wait admits (#139041).
-        from gateway.session_pause import continuation_guard
         receipt = await self.authority.submit(self.actor, request,
-                                              _authorize_write=continuation_guard(
-                                                  ref, self.actor.subject, params.get('continuation_of')),
                                               queue_while_restarting=self._operator is True)
         return asdict(receipt)
 
@@ -908,6 +907,8 @@ class AuthorityConnection:
         from gateway.session_cli_turn import submit_cli_turn_fields
         payload = {'text': params.get('text'), **admit_finite(params, submitter=(self, ref)), **submit_surface_fields(params),
                    **submit_display_fields(params), **submit_cli_turn_fields(params)}
+        if 'continuation_of' in params:
+            payload['continuation_of'] = params['continuation_of']
         if 'attachments' in params:
             payload['attachments'] = params['attachments']
         return Submission(request_id, ref, payload, 'queue')
@@ -997,7 +998,7 @@ class AuthorityConnection:
             # sibling connection that attached it.
             return any(may_settle(connection.authority, connection.actor, session_id, events)
                        for connection in (self, *self._siblings.values()))
-        if not resolve(frame, session_ok=entitled):
+        if not resolve(frame, session_ok=entitled, transport=self.transport):
             import logging
             what = 'a server request this connection may not settle' if asked else 'unknown server request'
             logging.getLogger(__name__).debug('dropping response for %s id=%r', what, frame.get('id'))

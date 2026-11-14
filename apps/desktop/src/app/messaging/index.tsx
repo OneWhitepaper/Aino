@@ -4,6 +4,8 @@ import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { resolveOwnerNow } from '@/api/client'
+import { connectMessagingPlatform, type MessagingOnboardingApplied } from '@/api/messaging-onboarding'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -22,6 +24,7 @@ import { useI18n } from '@/i18n'
 import { localizedMessagingPlatformDescription, localizedMessagingPlatformName } from '@/i18n/messaging-platforms'
 import { AlertTriangle, RefreshCw } from '@/lib/icons'
 import { normalize } from '@/lib/text'
+import { $activeConnectionId } from '@/store/connections'
 import { $changeEventsAvailable, $pairingChangeTick, $platformsChangeTick } from '@/store/live-sync'
 import { notify, notifyError } from '@/store/notifications'
 import { $settingsRequestProfile } from '@/store/settings-scope'
@@ -40,6 +43,10 @@ interface MessagingViewProps extends React.ComponentProps<'section'> {
 }
 
 type EditMap = Record<string, Record<string, string>>
+interface ConnectionNotice {
+  message: string
+  updatedAt?: string | null
+}
 
 function platformMatchesQuery(platform: MessagingPlatformInfo, query: string, locale: string): boolean {
   const q = normalize(query)
@@ -104,6 +111,17 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   // Shared settings "Applies to" scope, request-shaped (undefined → follow
   // the active profile; the API helpers treat null as "target primary").
   const scopeProfile = useStore($settingsRequestProfile)
+  const connectionId = useStore($activeConnectionId)
+  const ownerKey = `${connectionId ?? 'local'}:${scopeProfile ?? ''}`
+  const [manualSetup, setManualSetup] = useState(false)
+  const [setupBusy, setSetupBusy] = useState(false)
+  const setupCancelRef = useRef<(() => Promise<void> | void) | null>(null)
+
+  const registerSetupCancel = useCallback((cancel: (() => Promise<void> | void) | null) => {
+    setupCancelRef.current = cancel
+  }, [])
+
+  const [connectNotices, setConnectNotices] = useState<Record<string, ConnectionNotice | undefined>>({})
   const [platforms, setPlatforms] = useState<MessagingPlatformInfo[] | null>(null)
   // A saved credential/toggle only takes effect on the next gateway start, so a
   // vanishing toast is not enough: the page keeps a banner up until a restart
@@ -154,9 +172,9 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   // AFTER the switch and repaint A's platforms/env snapshot (its redacted
   // Telegram token included) under B until B's own response lands (#96542).
   // A response whose scope is no longer the rendered one is dropped.
-  const scopeRef = useRef(scopeProfile)
+  const scopeRef = useRef(ownerKey)
 
-  scopeRef.current = scopeProfile
+  scopeRef.current = ownerKey
 
   const refreshPlatforms = useCallback(
     async (silent = false) => {
@@ -167,7 +185,7 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
       try {
         const result = await getMessagingPlatforms(scopeProfile)
 
-        if (scopeRef.current === scopeProfile) {
+        if (scopeRef.current === ownerKey) {
           setPlatforms(result.platforms)
         }
       } catch (err) {
@@ -180,7 +198,7 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         }
       }
     },
-    [m, scopeProfile]
+    [m, scopeProfile, ownerKey]
   )
 
   // Latest-callback ref: the deferred post-restart refresh must not capture a
@@ -198,13 +216,13 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
     try {
       const result = await getPairing(scopeProfile)
 
-      if (scopeRef.current === scopeProfile) {
+      if (scopeRef.current === ownerKey) {
         setPairing({ approved: result.approved ?? [], pending: result.pending ?? [] })
       }
     } catch {
       // Leave the last known rows in place rather than blanking them.
     }
-  }, [scopeProfile])
+  }, [scopeProfile, ownerKey])
 
   const refreshAll = useCallback(
     async (silent = false) => {
@@ -228,15 +246,20 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   // scope for the ~1s until the fetch lands (#96542). Setting state during
   // render makes React throw the stale frame away before it reaches the
   // screen.
-  const [prevScope, setPrevScope] = useState(scopeProfile)
+  const [prevScope, setPrevScope] = useState(ownerKey)
 
-  if (prevScope !== scopeProfile) {
-    setPrevScope(scopeProfile)
+  if (prevScope !== ownerKey) {
+    setPrevScope(ownerKey)
     setPlatforms(null)
     setPairing({ approved: [], pending: [] })
     setEdits({})
     setConfirmDiscard(false)
     setPendingRevoke(null)
+    setRestartNeeded(false)
+    setManualSetup(false)
+    setSetupBusy(false)
+    setConnectNotices({})
+    setSaving(null)
   }
 
   const changeEventsAvailable = useStore($changeEventsAvailable)
@@ -296,6 +319,71 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
     return platforms.find(platform => platform.id === selectedId) || null
   }, [platforms, selectedId])
 
+  const [previousSelected, setPreviousSelected] = useState(selectedId)
+
+  if (previousSelected !== selectedId) {
+    setPreviousSelected(selectedId)
+    setManualSetup(false)
+    setSetupBusy(false)
+  }
+
+  async function connectPlatform(platformId: string) {
+    setSaving(`connect:${platformId}`)
+    setConnectNotices(current => ({ ...current, [platformId]: undefined }))
+    const updatedAt = platforms?.find(row => row.id === platformId)?.updated_at
+
+    try {
+      const result = await connectMessagingPlatform(platformId, resolveOwnerNow({ profile: scopeProfile }))
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
+      if (result.needs_restart) {
+        setRestartNeeded(true)
+      }
+
+      if (result.state === 'busy') {
+        setConnectNotices(current => ({ ...current, [platformId]: { message: m.qrSetup.busy, updatedAt } }))
+
+        return
+      }
+
+      if (!result.ok) {
+        throw new Error(result.message || m.states.startup_failed)
+      }
+
+      if (result.hot_served) {
+        setRestartNeeded(false)
+      }
+
+      await refreshPlatforms(true)
+    } catch (error) {
+      if (scopeRef.current === ownerKey) {
+        setConnectNotices(current => ({ ...current, [platformId]: { message: m.states.startup_failed, updatedAt } }))
+        notifyError(error, m.failedUpdate(platformId))
+      }
+    } finally {
+      if (scopeRef.current === ownerKey) {
+        setSaving(null)
+      }
+    }
+  }
+
+  async function handleQrApplied(result: MessagingOnboardingApplied) {
+    if (scopeRef.current !== ownerKey) {
+      return
+    }
+
+    if (result.needs_activation) {
+      await connectPlatform(result.platform)
+    }
+
+    await refreshPlatforms(true)
+  }
+
+  const quickSetup = usesQuickSetup(selected, manualSetup)
+
   const pendingByPlatform = useMemo(() => byPlatform(pairing.pending), [pairing.pending])
   const approvedByPlatform = useMemo(() => byPlatform(pairing.approved), [pairing.approved])
 
@@ -317,11 +405,28 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   )
 
   async function handleToggle(platform: MessagingPlatformInfo, enabled: boolean) {
+    if (messagingWritePending(saving, setupBusy)) {
+      return
+    }
+
     const name = localizedMessagingPlatformName(locale, platform.id, platform.name)
     setSaving(`enabled:${platform.id}`)
 
     try {
+      if (!enabled) {
+        await setupCancelRef.current?.()
+      }
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
       const result = await updateMessagingPlatform(platform.id, { enabled }, scopeProfile)
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
       setPlatforms(
         current =>
           current?.map(row =>
@@ -329,21 +434,45 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
               ? {
                   ...row,
                   enabled,
-                  state: enabled ? (row.configured ? 'pending_restart' : 'not_configured') : 'disabled'
+                  state: enabled
+                    ? row.configured
+                      ? result.needs_activation
+                        ? 'connecting'
+                        : 'pending_restart'
+                      : 'not_configured'
+                    : 'disabled'
                 }
               : row
           ) ?? current
       )
-      settleAfterUpdate(result.hot_served)
+
+      const canActivate = !enabled || platform.configured
+
+      if (canActivate && result.needs_activation) {
+        await connectPlatform(platform.id)
+      } else if (canActivate) {
+        settleAfterUpdate(result.hot_served)
+      }
+
       notify({
         kind: 'success',
         title: enabled ? m.platformEnabled(name) : m.platformDisabled(name),
-        message: result.hot_served ? m.appliedLive : m.restartToApply
+        message: !canActivate
+          ? m.states.not_configured
+          : result.needs_activation
+            ? m.setupUpdated(name)
+            : result.hot_served
+              ? m.appliedLive
+              : m.restartToApply
       })
     } catch (err) {
-      notifyError(err, m.failedUpdate(name))
+      if (scopeRef.current === ownerKey) {
+        notifyError(err, m.failedUpdate(name))
+      }
     } finally {
-      setSaving(null)
+      if (scopeRef.current === ownerKey) {
+        setSaving(null)
+      }
     }
   }
 
@@ -355,23 +484,47 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
       return
     }
 
+    if (platform.onboarding && !platform.configured) {
+      update.enabled = true
+    }
+
     setSaving(`env:${platform.id}`)
 
     try {
       const result = await updateMessagingPlatform(platform.id, update, scopeProfile)
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
       // Refresh before dropping the drafts so list editors re-seed from the saved value, not the old one.
       await refreshPlatforms()
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
       setEdits(current => ({ ...current, [platform.id]: {} }))
-      settleAfterUpdate(result.hot_served)
+
+      if (result.needs_activation) {
+        await connectPlatform(platform.id)
+      } else {
+        settleAfterUpdate(result.hot_served)
+      }
+
       notify({
         kind: 'success',
         title: m.setupSaved(name),
-        message: result.hot_served ? m.connectingLive : m.restartToReconnect
+        message: result.hot_served || result.needs_activation ? m.connectingLive : m.restartToReconnect
       })
     } catch (err) {
-      notifyError(err, m.failedSave(name))
+      if (scopeRef.current === ownerKey) {
+        notifyError(err, m.failedSave(name))
+      }
     } finally {
-      setSaving(null)
+      if (scopeRef.current === ownerKey) {
+        setSaving(null)
+      }
     }
   }
 
@@ -381,6 +534,11 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
 
     try {
       const result = await updateMessagingPlatform(platform.id, { clear_env: [key] }, scopeProfile)
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
       setEdits(current => ({
         ...current,
         [platform.id]: {
@@ -389,12 +547,26 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         }
       }))
       await refreshPlatforms()
-      settleAfterUpdate(result.hot_served)
+
+      if (scopeRef.current !== ownerKey) {
+        return
+      }
+
+      if (result.needs_activation) {
+        await connectPlatform(platform.id)
+      } else {
+        settleAfterUpdate(result.hot_served)
+      }
+
       notify({ kind: 'success', title: m.keyCleared(key), message: m.setupUpdated(name) })
     } catch (err) {
-      notifyError(err, m.failedClear(key))
+      if (scopeRef.current === ownerKey) {
+        notifyError(err, m.failedClear(key))
+      }
     } finally {
-      setSaving(null)
+      if (scopeRef.current === ownerKey) {
+        setSaving(null)
+      }
     }
   }
 
@@ -402,7 +574,21 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   // the gateway. restart_started only means the child spawned; watch its exit
   // so a failed restart lands in the banner instead of a silent "stopped".
   async function handleTelegramApplied(result: TelegramOnboardingApplyResponse) {
+    if (scopeRef.current !== ownerKey) {
+      return
+    }
+
     await refreshPlatforms(true)
+
+    if (scopeRef.current !== ownerKey) {
+      return
+    }
+
+    if (result.needs_activation) {
+      await connectPlatform('telegram')
+
+      return
+    }
 
     if (result.restart_started) {
       const connectedBot = result.bot_username ? `${m.states.connected}: @${result.bot_username}` : null
@@ -538,39 +724,51 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         actions={
           selected && (
             <PlatformActionBar
+              busy={setupBusy}
+              canSave={requiredCredentialsReady(selected, edits[selected.id] || {})}
               hasEdits={hasChanges(platformChanges(selected, edits[selected.id] || {}))}
               onSave={() => void handleSave(selected)}
               onToggle={enabled => void handleToggle(selected, enabled)}
               platform={selected}
               saving={saving}
+              showSave={!quickSetup}
             />
           )
         }
-        busy={Boolean(saving)}
+        busy={messagingWritePending(saving, setupBusy)}
         onClose={closeConfiguration}
         platform={selected}
+        quickSetup={quickSetup}
       >
         {restartNotice}
         {selected && (
           <PlatformDetail
             approved={approvedByPlatform[selected.id] ?? []}
             approving={approving}
+            connectMessage={currentConnectionNotice(selected, connectNotices[selected.id])}
             edits={edits[selected.id] || {}}
-            key={selected.id}
+            key={`${ownerKey}:${selected.id}`}
+            manualSetup={manualSetup}
             onApprove={user => void handleApprove(user)}
             onClear={key => void handleClear(selected, key)}
+            onConnect={() => void connectPlatform(selected.id)}
             onEdit={(key, value) =>
               setEdits(current => ({
                 ...current,
                 [selected.id]: { ...(current[selected.id] || {}), [key]: value }
               }))
             }
+            onManualSetup={setManualSetup}
+            onQrApplied={handleQrApplied}
             onRevoke={setPendingRevoke}
+            onSetupBusyChange={setSetupBusy}
+            onSetupCancelChange={registerSetupCancel}
             onTelegramApplied={result => void handleTelegramApplied(result)}
             pending={pendingByPlatform[selected.id] ?? []}
             platform={selected}
             saving={saving}
             scopeProfile={scopeProfile}
+            setupBusy={setupBusy}
           />
         )}
       </PlatformDialog>
@@ -603,5 +801,30 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         title={m.revokeTitle}
       />
     </MessagingDirectory>
+  )
+}
+
+function messagingWritePending(saving: string | null, setupBusy: boolean): boolean {
+  return Boolean(saving) || setupBusy
+}
+
+function usesQuickSetup(platform: MessagingPlatformInfo | null, manualSetup: boolean): boolean {
+  return Boolean(platform && !manualSetup && (platform.onboarding || platform.id === 'telegram'))
+}
+
+function currentConnectionNotice(platform: MessagingPlatformInfo, notice?: ConnectionNotice): string | undefined {
+  // A busy replacement may still expose the OLD live adapter. Only a newer connected
+  // receipt proves recovery; a refresh of that old adapter must not dismiss the warning.
+  if (platform.state === 'connected' && platform.updated_at && platform.updated_at !== notice?.updatedAt) {
+    return undefined
+  }
+
+  return notice?.message
+}
+
+function requiredCredentialsReady(platform: MessagingPlatformInfo, draft: Record<string, string>): boolean {
+  return (
+    !platform.onboarding ||
+    platform.env_vars.every(field => !field.required || field.is_set || Boolean(draft[field.key]?.trim()))
   )
 }

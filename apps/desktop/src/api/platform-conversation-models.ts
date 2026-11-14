@@ -32,16 +32,24 @@ interface ModelRoute {
   profile: string
 }
 
-const normalized = (value: string) => value.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+const normalized = (value: string) =>
+  value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
 
 function matchingModels(rows: ConversationModelRow[], query: string) {
   const key = normalized(query)
 
-  if (!key) { return [] }
+  if (!key) {
+    return []
+  }
 
   const exact = rows.filter(row => [row.model_id, row.name ?? ''].some(value => normalized(value) === key))
 
-  return exact.length ? exact : rows.filter(row => [row.model_id, row.name ?? ''].some(value => normalized(value).includes(key)))
+  return exact.length
+    ? exact
+    : rows.filter(row => [row.model_id, row.name ?? ''].some(value => normalized(value).includes(key)))
 }
 
 function accountCatalogRows(catalog: ReturnType<typeof platformModelCatalog>, ready: boolean): ConversationModelRow[] {
@@ -49,33 +57,57 @@ function accountCatalogRows(catalog: ReturnType<typeof platformModelCatalog>, re
   const state = catalog.state.get()
   const owner = catalog.owner.state.get().owner
 
-  if (!ready || state.phase !== 'ready' || !hasPlatformModelIdentity(account) || owner?.user_id !== account.account.id) { return [] }
+  if (
+    !ready ||
+    state.phase !== 'ready' ||
+    !hasPlatformModelIdentity(account) ||
+    owner?.user_id !== account.account.id
+  ) {
+    return []
+  }
 
-  return state.models.filter(model => model.state === 'available' && platformModelSupportsPurpose(model, 'chat'))
-    .map(model => ({ model_id: model.id, model_source: 'aino', provider: 'aino', name: model.display_name,
-      owner: { user_id: owner.user_id, platform_origin: owner.platform_origin } }))
+  return state.models
+    .filter(model => model.state === 'available' && platformModelSupportsPurpose(model, 'chat'))
+    .map(model => ({
+      model_id: model.id,
+      model_source: 'aino',
+      provider: 'aino',
+      name: model.display_name,
+      owner: { user_id: owner.user_id, platform_origin: owner.platform_origin }
+    }))
 }
 
 function providerCatalogRows(options: ModelOptionsResult | undefined): ConversationModelRow[] {
-  return (options?.providers ?? []).filter(provider => provider.authenticated === true && provider.slug !== 'aino')
-    .flatMap(provider => (provider.models ?? []).filter(id => !provider.unavailable_models?.includes(id))
-      .map(id => ({ model_id: id, model_source: 'provider' as const, provider: provider.slug, name: id })))
+  return (options?.providers ?? [])
+    .filter(provider => provider.authenticated === true && provider.slug !== 'aino')
+    .flatMap(provider =>
+      (provider.models ?? [])
+        .filter(id => !provider.unavailable_models?.includes(id))
+        .map(id => ({ model_id: id, model_source: 'provider' as const, provider: provider.slug, name: id }))
+    )
 }
 
 function catalogAnswer(rows: ConversationModelRow[], request: ConversationModelRequest): ConversationModelResult {
   let matches = request.provider ? rows.filter(row => row.provider === request.provider) : rows
 
-  if (request.query?.trim()) { matches = matchingModels(matches, request.query.trim()) }
+  if (request.query?.trim()) {
+    matches = matchingModels(matches, request.query.trim())
+  }
 
-  if (request.action === 'list') { return { status: rows.length ? 'available' : 'unavailable', models: matches } }
+  if (request.action === 'list') {
+    return { status: rows.length ? 'available' : 'unavailable', models: matches }
+  }
 
-  if (!request.query?.trim()) { return { status: 'not_found', models: [] } }
+  if (!request.query?.trim()) {
+    return { status: 'not_found', models: [] }
+  }
 
   // A model family never creates a provider. Actual account models have priority.
   const builtIn = request.provider ? [] : matches.filter(row => row.model_source === 'aino')
   const candidates = builtIn.length ? builtIn : matches
 
-  return candidates.length === 1 ? { status: 'selected', selection: candidates[0] }
+  return candidates.length === 1
+    ? { status: 'selected', selection: candidates[0] }
     : { status: candidates.length ? 'ambiguous' : 'not_found', models: candidates }
 }
 
@@ -91,7 +123,8 @@ export async function answerPlatformConversationModelRequest(
   const [native, configured] = await Promise.allSettled([
     catalog.load(),
     requestGatewayForAgent<ModelOptionsResult>(route.connectionId ?? null, route.profile, 'model.options', {
-      explicit_only: true, include_unconfigured: false
+      explicit_only: true,
+      include_unconfigured: false
     })
   ])
 
@@ -99,8 +132,11 @@ export async function answerPlatformConversationModelRequest(
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  return catalogAnswer([
-    ...accountCatalogRows(catalog, native.status === 'fulfilled'),
-    ...providerCatalogRows(configured.status === 'fulfilled' ? configured.value : undefined)
-  ], request)
+  return catalogAnswer(
+    [
+      ...accountCatalogRows(catalog, native.status === 'fulfilled'),
+      ...providerCatalogRows(configured.status === 'fulfilled' ? configured.value : undefined)
+    ],
+    request
+  )
 }

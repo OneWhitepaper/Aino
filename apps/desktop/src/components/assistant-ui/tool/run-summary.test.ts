@@ -28,9 +28,8 @@ const zhCopy: ToolRunCopy = {
   run: { count: count => `${count} 个命令`, past: '已运行', present: '正在运行' }
 }
 
-// A run only ever holds ephemeral activity: reads, searches, commands. File
-// edits and other cards are split out before a run is summarized, so there is
-// no "Edited …" clause to test here — that work shows as its own diff card.
+// The header describes activity categories; file targets and full command lines
+// stay inside the expandable execution log.
 describe('summarizeToolRun', () => {
   it('names browser activity without adding browser calls to the explored-file count', () => {
     const files = [read('a.ts'), read('b.ts')]
@@ -60,7 +59,7 @@ describe('summarizeToolRun', () => {
   it('counts commands rather than naming them once they have run', () => {
     expect(settled([ran('git status')])).toBe('Ran 1 command')
     expect(settled([read('status.ts'), ran('a'), ran('b'), ran('c'), ran('d'), ran('e')])).toBe(
-      'Explored status.ts, ran 5 commands'
+      'Explored 1 file, ran 5 commands'
     )
   })
 
@@ -74,7 +73,7 @@ describe('summarizeToolRun', () => {
     const command = 'npm run typecheck'
     const summary = running([read('a.ts'), tool('terminal', { command })])
 
-    expect(summary).toBe('Explored a.ts, running 1 command')
+    expect(summary).toBe('Explored 1 file, running 1 command')
     expect(summary).not.toContain(command)
   })
 
@@ -83,12 +82,12 @@ describe('summarizeToolRun', () => {
     const pendingCommand = tool('terminal', { command: 'npm run typecheck' })
     const calls = [pendingRead, pendingCommand, ran('echo finished')]
 
-    expect(running(calls)).toBe('Exploring current.ts, running 2 commands')
+    expect(running(calls)).toBe('Exploring 1 file, running 2 commands')
     expect(running([{ ...pendingRead, result: { content: '' } }, ...calls.slice(1)])).toBe(
-      'Explored current.ts, running 2 commands'
+      'Explored 1 file, running 2 commands'
     )
     expect(running([pendingRead, { ...pendingCommand, result: { exit_code: 0 } }, calls[2]])).toBe(
-      'Exploring current.ts, ran 2 commands'
+      'Exploring 1 file, ran 2 commands'
     )
   })
 
@@ -96,7 +95,7 @@ describe('summarizeToolRun', () => {
   // pending. Falling back to past tense there contradicted the ticker still
   // scrolling underneath, so the most recent call carries the present tense.
   it('stays in the present tense between two sequential calls', () => {
-    expect(running([read('a.ts'), ran('x'), ran('y')])).toBe('Explored a.ts, running 2 commands')
+    expect(running([read('a.ts'), ran('x'), ran('y')])).toBe('Explored 1 file, running 2 commands')
   })
 
   // A turn can end — or the agent can simply move on — with a call that never
@@ -130,7 +129,30 @@ describe('summarizeToolRun', () => {
   })
 
   it('gives web searches their own clause after explored files', () => {
-    expect(settled([read('a.ts'), webSearched('x'), webSearched('y')])).toBe('Explored a.ts, searched 2 queries')
+    expect(settled([read('a.ts'), webSearched('x'), webSearched('y')])).toBe('Explored 1 file, searched 2 queries')
+  })
+
+  it('summarizes mixed file changes without exposing targets or commands in the header', () => {
+    const summary = settled([
+      read('config.ts'),
+      tool('patch', { path: '/repo/config.ts' }, { success: true }),
+      ran('pnpm test')
+    ])
+
+    expect(summary).toBe('Edited 1 file, explored 1 file, ran 1 command')
+    expect(summary).not.toContain('config.ts')
+    expect(summary).not.toContain('pnpm test')
+  })
+
+  it('counts repeated edits and reads of one file once without losing unidentified work', () => {
+    const edits = [
+      tool('patch', { path: '/repo/config.ts' }, { success: true }),
+      tool('edit_file', { path: '/repo/config.ts' }, { success: true }),
+      tool('write_file', {}, { path: '/repo/config.ts', success: true })
+    ]
+
+    expect(settled([...edits, read('/repo/source.ts'), read('/repo/source.ts')])).toBe('Edited 1 file, explored 1 file')
+    expect(settled([...edits, tool('patch', {}, { success: true })])).toBe('Edited 2 files')
   })
 
   // One web_extract call fetches up to five URLs, so the page count follows

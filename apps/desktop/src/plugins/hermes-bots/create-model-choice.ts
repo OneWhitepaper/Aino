@@ -29,6 +29,7 @@ function currentChoice(choice: CreatedModelChoice): boolean {
   if (choice.isCurrent()) {
     return true
   }
+
   choice.onStale()
 
   return false
@@ -59,6 +60,7 @@ export async function applyCreatedModelChoice(choice: CreatedModelChoice): Promi
     if (!currentChoice(choice)) {
       return false
     }
+
     throw error
   }
 

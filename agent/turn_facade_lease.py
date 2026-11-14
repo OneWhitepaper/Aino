@@ -462,6 +462,11 @@ def _lease_not_acquired_result(agent, session_id: str, conversation_history, *, 
             **base,
             "interrupted": True,
         }
+        from agent.interrupt_control import USER_INTERRUPT_REASONS
+        from agent.turn_failure_copy import UNSTARTED_INTERRUPT_EXIT_REASON
+        result["turn_exit_reason"] = UNSTARTED_INTERRUPT_EXIT_REASON
+        if getattr(agent, "_tool_interrupt_reason", None) in USER_INTERRUPT_REASONS:
+            result.update(final_response="", user_interrupted=True)
         if hard_interrupted:
             result["_hard_interrupted"] = True
         if getattr(agent, "_interrupt_message", None):

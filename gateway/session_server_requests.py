@@ -22,7 +22,7 @@ _POLL_S = 0.25
 
 
 class _Pending:
-    __slots__ = ("event", "events", "locked", "method", "params", "qids", "replay", "result", "session_id", "value")
+    __slots__ = ("declined", "event", "events", "locked", "method", "params", "qids", "replay", "result", "session_id", "value")
 
     def __init__(self, session_id, qids=None, events=None, method=None, params=None, replay=True):
         self.event = threading.Event()
@@ -35,6 +35,7 @@ class _Pending:
         # The live session's own event stream the request went out on: one per authority (profile) and
         # session mount, so a viewer of another profile's same-named session can never settle it.
         self.events = events
+        self.declined = set()
         self.value = ""
         self.result = None
         # A batch clarify: its question ids and the answers ``clarify.lock`` has locked so far.
@@ -75,15 +76,29 @@ def is_response_frame(frame) -> bool:
             and frame["id"].startswith("srq-") and ("result" in frame or "error" in frame))
 
 
-def resolve(frame, *, session_ok=lambda session_id, events: True) -> bool:
+def _defer_decline(pending, frame, transport):
+    """A non-owning window's refusal is a vote, not the showing window's answer."""
+    from tui_gateway.server_requests import NOT_SHOWN_CODE, answers_requests
+    error = frame.get("error")
+    if transport is None or not isinstance(error, dict) or error.get("code") != NOT_SHOWN_CODE:
+        return False
+    pending.declined.add(transport)
+    clients = (client for client in pending.events.fanout.transports() if answers_requests(client))
+    return any(client not in pending.declined for client in clients)
+
+
+def resolve(frame, *, session_ok=lambda session_id, events: True, transport=None) -> bool:
     """Settle the open request *frame* answers; False when nothing (here) waits for that id.
     ``session_ok(session_id, events)`` lets the caller refuse an answer from a connection not entitled
     to that session: the caller's own authority must own ``events``, the stream the request was sent on
-    (session ids are only unique per profile, and ``_open`` is process-wide)."""
+    (session ids are only unique per profile, and ``_open`` is process-wide). ``transport`` identifies
+    a non-owning window's decline; only unanimous attached, answering viewers settle with no answer."""
     with _lock:
         pending = _open.get(frame["id"])
         if pending is None or not session_ok(pending.session_id, pending.events):
             return False
+        if _defer_decline(pending, frame, transport):
+            return True
         _open.pop(frame["id"], None)
         locked = dict(pending.locked) if pending.qids is not None else None
     result = frame.get("result") if "error" not in frame else None

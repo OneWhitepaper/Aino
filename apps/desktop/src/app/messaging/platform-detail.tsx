@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useState } from 'react'
 
+import type { MessagingOnboardingApplied } from '@/api/messaging-onboarding'
 import { Button } from '@/components/ui/button'
 import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { ErrorBanner } from '@/components/ui/error-state'
@@ -21,6 +22,7 @@ import { credentialPreview } from '../settings/helpers'
 import { ListRow } from '../settings/primitives'
 
 import { AllowlistField } from './allowlist-field'
+import { MessagingQrSetup } from './qr-setup'
 import { RelayLinkSetup } from './relay-link'
 import { TelegramQrSetup } from './telegram-qr-setup'
 
@@ -40,17 +42,29 @@ const FIELD_COPY: Record<string, { advanced?: boolean }> = {
   QQBOT_HOME_CHANNEL: { advanced: true },
   QQBOT_HOME_CHANNEL_NAME: { advanced: true },
   WHATSAPP_ENABLED: { advanced: true },
-  WHATSAPP_MODE: { advanced: true }
+  WHATSAPP_MODE: { advanced: true },
+  WEIXIN_BASE_URL: { advanced: true },
+  WEIXIN_CDN_BASE_URL: { advanced: true },
+  WEIXIN_ALLOWED_USERS: { advanced: true },
+  WEIXIN_ALLOW_ALL_USERS: { advanced: true },
+  WEIXIN_GROUP_ALLOWED_USERS: { advanced: true },
+  WEIXIN_GROUP_POLICY: { advanced: true },
+  QQBOT_ALLOWED_USERS: { advanced: true },
+  QQ_ALLOWED_USERS: { advanced: true },
+  FEISHU_ALLOWED_USERS: { advanced: true },
+  FEISHU_ENCRYPT_KEY: { advanced: true },
+  FEISHU_VERIFICATION_TOKEN: { advanced: true }
 }
 
 function fieldCopy(field: MessagingEnvVarInfo, m: Translations['messaging']) {
   const copy = FIELD_COPY[field.key] || {}
   const localized = m.fieldCopy[field.key] || {}
+  const officialName = ({ QQ_APP_ID: 'App ID', QQ_CLIENT_SECRET: 'App Secret' } as Record<string, string>)[field.key]
 
   return {
-    label: localized.label || field.prompt || field.key,
-    help: localized.help || field.description,
-    placeholder: localized.placeholder || field.prompt,
+    label: localized.label || officialName || field.prompt || field.key,
+    help: localized.help || (officialName ? '' : field.description),
+    placeholder: localized.placeholder || officialName || field.prompt,
     advanced: Boolean(copy.advanced || field.advanced)
   }
 }
@@ -64,9 +78,17 @@ export function PlatformDetail({
   onEdit,
   onRevoke,
   onTelegramApplied,
+  onQrApplied,
+  onSetupBusyChange,
+  onSetupCancelChange,
+  onConnect,
+  connectMessage,
+  manualSetup,
+  onManualSetup,
   pending,
   platform,
   saving,
+  setupBusy,
   scopeProfile
 }: {
   approved: PairingUser[]
@@ -77,9 +99,17 @@ export function PlatformDetail({
   onEdit: (key: string, value: string) => void
   onRevoke: (user: PairingUser) => void
   onTelegramApplied: (result: TelegramOnboardingApplyResponse) => void
+  onQrApplied: (result: MessagingOnboardingApplied) => Promise<void>
+  onSetupBusyChange: (busy: boolean) => void
+  onSetupCancelChange: (cancel: (() => Promise<void> | void) | null) => void
+  onConnect: () => void
+  connectMessage?: string
+  manualSetup: boolean
+  onManualSetup: (value: boolean) => void
   pending: PairingUser[]
   platform: MessagingPlatformInfo
   saving: string | null
+  setupBusy: boolean
   scopeProfile: string | undefined
 }) {
   const { t } = useI18n()
@@ -91,6 +121,11 @@ export function PlatformDetail({
       <PlatformHint platform={platform} />
 
       {platform.error_message && <ErrorBanner>{platform.error_message}</ErrorBanner>}
+      {manualSetup && connectMessage && (
+        <p className="text-sm text-muted-foreground" role="status">
+          {connectMessage}
+        </p>
+      )}
 
       {/* Pending pairing requests. Rendered only when someone is actually
           waiting — an empty-state card here would be permanent chrome on a
@@ -170,13 +205,21 @@ export function PlatformDetail({
       )}
       {!platform.relay_exclusive && (
         <DirectSetupSections
+          connectMessage={connectMessage}
           edits={edits}
+          manualSetup={manualSetup}
           onClear={onClear}
+          onConnect={onConnect}
           onEdit={onEdit}
+          onManualSetup={onManualSetup}
+          onQrApplied={onQrApplied}
+          onSetupBusyChange={onSetupBusyChange}
+          onSetupCancelChange={onSetupCancelChange}
           onTelegramApplied={onTelegramApplied}
           platform={platform}
           saving={saving}
           scopeProfile={scopeProfile}
+          setupBusy={setupBusy}
         />
       )}
     </>
@@ -188,33 +231,94 @@ function DirectSetupSections({
   onClear,
   onEdit,
   onTelegramApplied,
+  onQrApplied,
+  onSetupBusyChange,
+  onSetupCancelChange,
+  onConnect,
+  connectMessage,
+  manualSetup,
+  onManualSetup,
   platform,
   saving,
+  setupBusy,
   scopeProfile
 }: Pick<
   React.ComponentProps<typeof PlatformDetail>,
-  'edits' | 'onClear' | 'onEdit' | 'onTelegramApplied' | 'platform' | 'saving' | 'scopeProfile'
+  | 'edits'
+  | 'onClear'
+  | 'onEdit'
+  | 'onTelegramApplied'
+  | 'onQrApplied'
+  | 'onSetupBusyChange'
+  | 'onSetupCancelChange'
+  | 'onConnect'
+  | 'connectMessage'
+  | 'manualSetup'
+  | 'onManualSetup'
+  | 'platform'
+  | 'saving'
+  | 'setupBusy'
+  | 'scopeProfile'
 >) {
   const { t } = useI18n()
   const m = t.messaging
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const simpleForm = platform.onboarding === true
   const requiredFields = platform.env_vars.filter(field => field.required)
-  const optionalFields = platform.env_vars.filter(field => !field.required && !fieldCopy(field, m).advanced)
-  const advancedFields = platform.env_vars.filter(field => !field.required && fieldCopy(field, m).advanced)
+
+  const optionalFields = platform.env_vars.filter(
+    field => !field.required && !simpleForm && !fieldCopy(field, m).advanced
+  )
+
+  const advancedFields = platform.env_vars.filter(
+    field => !field.required && (simpleForm || fieldCopy(field, m).advanced)
+  )
+
   const hiddenCount = advancedFields.length
+  const quickSetup = platform.onboarding === true || platform.id === 'telegram'
+
+  if (quickSetup && !manualSetup) {
+    return (
+      <>
+        {platform.onboarding ? (
+          <MessagingQrSetup
+            connecting={saving === `connect:${platform.id}`}
+            connectMessage={connectMessage}
+            onApplied={onQrApplied}
+            onBusyChange={onSetupBusyChange}
+            onCancelChange={onSetupCancelChange}
+            onConnect={onConnect}
+            platform={platform}
+            scopeProfile={scopeProfile}
+          />
+        ) : (
+          <TelegramQrSetup
+            onApplied={onTelegramApplied}
+            onBusyChange={onSetupBusyChange}
+            onCancelChange={onSetupCancelChange}
+            platform={platform}
+            scopeProfile={scopeProfile}
+          />
+        )}
+        <Button disabled={setupBusy} onClick={() => onManualSetup(true)} size="sm" variant="text">
+          {m.qrSetup.manual}
+        </Button>
+      </>
+    )
+  }
 
   return (
     <>
-      {platform.id === 'telegram' && (
-        <section>
-          <TelegramQrSetup onApplied={onTelegramApplied} platform={platform} scopeProfile={scopeProfile} />
-        </section>
+      {quickSetup && (
+        <Button onClick={() => onManualSetup(false)} size="sm" variant="text">
+          {m.qrSetup.automatic}
+        </Button>
       )}
 
       <section>
         <SectionTitle>{m.getCredentials}</SectionTitle>
         <p className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-          {introCopy(platform, m)}
+          {platform.onboarding ? m.qrSetup.manualHint : introCopy(platform, m)}
         </p>
         {platform.docs_url && (
           <div className="mt-3">
@@ -315,17 +419,23 @@ function DirectSetupSections({
 }
 
 export function PlatformActionBar({
+  busy = false,
+  canSave = true,
   hasEdits,
   onSave,
   onToggle,
   platform,
-  saving
+  saving,
+  showSave = true
 }: {
+  busy?: boolean
+  canSave?: boolean
   hasEdits: boolean
   onSave: () => void
   onToggle: (enabled: boolean) => void
   platform: MessagingPlatformInfo
   saving: string | null
+  showSave?: boolean
 }) {
   const { locale, t } = useI18n()
   const m = t.messaging
@@ -342,20 +452,22 @@ export function PlatformActionBar({
         <Switch
           aria-label={platform.enabled ? m.disableAria(name) : m.enableAria(name)}
           checked={platform.enabled}
-          disabled={platform.disabled_by_relay || saving === `enabled:${platform.id}`}
+          disabled={platform.disabled_by_relay || Boolean(saving) || busy}
           onCheckedChange={onToggle}
           size="xs"
         />
         {platform.disabled_by_relay ? m.relayLink.managed : platform.enabled ? m.enabled : m.disabled}
       </label>
 
-      <div className="messaging-save-actions ml-auto flex items-center gap-2">
-        {hasEdits && <span className="text-xs text-muted-foreground">{m.unsavedChanges}</span>}
-        <Button disabled={!hasEdits || isSavingEnv} onClick={onSave} size="sm">
-          <Save />
-          {isSavingEnv ? m.saving : m.saveChanges}
-        </Button>
-      </div>
+      {showSave && (
+        <div className="messaging-save-actions ml-auto flex items-center gap-2">
+          {hasEdits && <span className="text-xs text-muted-foreground">{m.unsavedChanges}</span>}
+          <Button disabled={!hasEdits || Boolean(saving) || busy || !canSave} onClick={onSave} size="sm">
+            <Save />
+            {isSavingEnv ? m.saving : platform.onboarding && !platform.configured ? m.qrSetup.reconnect : m.saveChanges}
+          </Button>
+        </div>
+      )}
     </>
   )
 }

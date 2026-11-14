@@ -853,13 +853,14 @@ describe('threads', () => {
   })
 
   it('mints a new thread per composer send and lands replies in it', async () => {
-    const room = await loadRoom({ turn: ({ n }) => n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)' })
+    const room = await loadRoom({ turn: ({ n }) => (n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)') })
     const member: GroupMember[] = [{ name: 'research', title: '' }]
     // Sync orders equal-time messages by their stable IDs, independently of
     // send order. Pin that case instead of depending on millisecond timing.
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
 
-    const ids = vi.spyOn(globalThis.crypto, 'randomUUID')
+    const ids = vi
+      .spyOn(globalThis.crypto, 'randomUUID')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000004')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000003')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')
@@ -1238,10 +1239,19 @@ describe('attachments', () => {
     const { $botMeta } = await import('./data')
     const profile = 'u6d4b-u8bd5'
     $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
-    room.rounds.sendToGroupChat('UploadFail', [{ name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }], 'Review this image', null, [IMG])
+    room.rounds.sendToGroupChat(
+      'UploadFail',
+      [{ name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }],
+      'Review this image',
+      null,
+      [IMG]
+    )
     await settle(room, 'UploadFail')
 
-    expect(room.gateway.host.notifyError).toHaveBeenCalledWith(error, 'Could not attach screenshot.png for 工作室测试助手')
+    expect(room.gateway.host.notifyError).toHaveBeenCalledWith(
+      error,
+      'Could not attach screenshot.png for 工作室测试助手'
+    )
     expect(room.gateway.calls).toHaveLength(1)
     expect(room.gateway.calls[0].profile).toBe(profile)
   })

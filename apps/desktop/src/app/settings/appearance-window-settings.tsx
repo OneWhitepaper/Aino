@@ -19,11 +19,6 @@ import { $fileBrowserOpen, setFileBrowserOpen } from '@/store/layout'
 import { $sessionListDensity, type SessionListDensity, setSessionListDensity } from '@/store/session-list-density'
 import { $tabStripDefault, setTabStripDefault, type TabStripDefault } from '@/store/tabstrip-prefs'
 import {
-  $titlebarAppActionsSide,
-  setTitlebarAppActionsSide,
-  type TitlebarAppActionsSide
-} from '@/store/titlebar-app-actions'
-import {
   $translucency,
   beginTranslucencyPeek,
   endTranslucencyPeek,
@@ -139,7 +134,6 @@ export function AppearanceWindowSettings({ expanded, onToggle }: AppearanceWindo
   const interfaceMode = useStore($interfaceMode)
   const sessionListDensity = useStore($sessionListDensity)
   const tabStripDefault = useStore($tabStripDefault)
-  const titlebarAppActionsSide = useStore($titlebarAppActionsSide)
   const fileBrowserOpen = useStore($fileBrowserOpen)
   const fileBrowserShadowed = useStore($modeShadowed('fileBrowserOpen'))
   const composerPopoutGesturesEnabled = useStore($composerPopoutGesturesEnabled)
@@ -163,11 +157,6 @@ export function AppearanceWindowSettings({ expanded, onToggle }: AppearanceWindo
     { id: 'always', label: a.tabStripAlways },
     { id: 'never', label: a.tabStripNever }
   ] as const satisfies readonly { id: TabStripDefault; label: string }[]
-
-  const appActionsOptions = [
-    { id: 'right', label: a.appActionsRight },
-    { id: 'left', label: a.appActionsLeft }
-  ] as const satisfies readonly { id: TitlebarAppActionsSide; label: string }[]
 
   const withModeNote = (description: string, shadowed: boolean) =>
     shadowed ? `${description} ${t.interfaceMode.sessionNote}` : description
@@ -247,22 +236,6 @@ export function AppearanceWindowSettings({ expanded, onToggle }: AppearanceWindo
           open={expanded.has('window')}
           title={c.windowBehavior}
         >
-          <ListRow
-            action={
-              <AppearanceSelect
-                label={a.appActionsTitle}
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setTitlebarAppActionsSide(id)
-                }}
-                options={appActionsOptions}
-                value={titlebarAppActionsSide}
-              />
-            }
-            description={a.appActionsDesc}
-            id={settingElementId(ids.appActions)}
-            title={a.appActionsTitle}
-          />
           <MinimizeToTraySetting />
           <ToggleRow
             checked={composerPopoutGesturesEnabled}

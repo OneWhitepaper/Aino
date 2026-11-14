@@ -459,7 +459,9 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
   const defaults = createGroupGateway().host
 
   for (const [key, value] of Object.entries(defaults)) {
-    if (!(key in host)) {host[key] = value}
+    if (!(key in host)) {
+      host[key] = value
+    }
   }
 
   const { Textarea } = await import('@/components/ui/textarea')

@@ -21,6 +21,11 @@ export interface PreviewWebCopy {
   reload: string
   address: string
   addressPlaceholder: string
+  pageZoom: string
+  fitWidth: string
+  actualSize: string
+  zoomIn: string
+  zoomOut: string
   blankPageBody: string
   finishedRestarting: (message?: string) => string
   failedRestarting: (message: string) => string

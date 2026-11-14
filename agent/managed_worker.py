@@ -28,7 +28,7 @@ BOOTSTRAP_FIELDS = {'version', 'home', 'scope', 'policy', 'api_key', 'text', 'ro
                     'turn_author', 'safe_mode', 'ignore_user_config'}
 # The bounded run_conversation fields a turn receipt keeps (outcome, exit reason, tokens, cost,
 # model): what the in-process projection commits and ``-z --usage-file`` reads.
-RESULT_FIELDS = ('final_response', 'failed', 'interrupted', 'completed', 'partial', 'error', 'turn_exit_reason',
+RESULT_FIELDS = ('final_response', 'failed', 'interrupted', 'user_interrupted', 'completed', 'partial', 'error', 'turn_exit_reason',
                  'api_calls', 'model', 'provider', 'prompt_tokens', 'completion_tokens', 'total_tokens',
                  'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
                  'estimated_cost_usd', 'cost_status', 'cost_source', 'service_tier', 'failure_reason',

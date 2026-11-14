@@ -1,7 +1,8 @@
 import { GROUP_PEER_LOCALES, type GroupPeerMessages } from './group-peer-locales'
+import { GROUP_PEER_SETUP_LOCALES, type GroupPeerSetupMessages } from './group-peer-setup-locales'
 import { GROUP_REASON_LOCALES, type GroupReasonMessages } from './group-reason-locales'
 
-export interface CanonicalGroupMessages extends GroupReasonMessages, GroupPeerMessages {
+export interface CanonicalGroupMessages extends GroupReasonMessages, GroupPeerMessages, GroupPeerSetupMessages {
   allMembers: string
   pickerLabel: string
   unresolvedMention: string
@@ -164,39 +165,23 @@ export interface CanonicalGroupMessages extends GroupReasonMessages, GroupPeerMe
   groupDriverStopped: string
   groupsUnreachable: string
   earlierMessages: string
-  peerTargetSetup: string
-  peerSetupUpdate: string
-  peerSetupApiServer: string
-  peerSetupRunStorage: string
-  peerSetupRoomKey: string
-  peerSetupApprovals: string
-  peerSetupAddress: string
-  peerSetupBackground: string
-  peerSetupGeneric: string
-  readTimedOut: string
-  /** A new group chat whose bots from other computers did not all join; `{names}` lists them. */
-  createdNotJoined: string
-  peerNotJoinedBadge: string
-  peerOfflineBadge: string
-  peerRejoinBadge: string
-  peerNotJoined: string
-  peerRejoin: string
-  peerAway: string
-  peerRetryFailed: string
 }
 
 export const CANONICAL_GROUP_LOCALES = {
   en: {
-    ...GROUP_REASON_LOCALES["en"],
-    ...GROUP_PEER_LOCALES["en"],
+    ...GROUP_REASON_LOCALES['en'],
+    ...GROUP_PEER_LOCALES['en'],
+    ...GROUP_PEER_SETUP_LOCALES['en'],
     abandonRetry: 'Abandon retry',
-    abandonRetryWarning: 'This message may already have been posted or may arrive later. This only removes the local retry copy; it does not recall or resend the message.',
+    abandonRetryWarning:
+      'This message may already have been posted or may arrive later. This only removes the local retry copy; it does not recall or resend the message.',
     abandonRetryChanged: 'This pending message changed. Close this dialog and review it before trying again.',
     retryAbandoned: 'Retry abandoned. Check the conversation before sending the same message again.',
     allMembers: 'Everyone',
     pickerLabel: 'Choose who to mention',
     unresolvedMention: 'Some mentions are not linked to a member. Choose them from the @ menu before sending.',
-    pastedMentionReset: 'Pasted mentions belong to another group or are no longer available. Choose the members again from the @ menu.',
+    pastedMentionReset:
+      'Pasted mentions belong to another group or are no longer available. Choose the members again from the @ menu.',
     memberGeneric: 'Member',
     manageMembers: 'Manage members',
     manageGroup: 'Manage',
@@ -245,11 +230,15 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: 'Allow once',
     deny: 'Deny',
     discardUnknown: 'Discard turn',
-    discardWarning: 'Side effects may already have occurred. Discarding does not undo them. For a bot on another computer, Discard waits for that computer to confirm the turn has stopped or never started.',
-    discardStopPending: '{name} has not confirmed that its turn has stopped. The turn has been kept. Try Discard again when its computer is answering.',
+    discardWarning:
+      'Side effects may already have occurred. Discarding does not undo them. For a bot on another computer, Discard waits for that computer to confirm the turn has stopped or never started.',
+    discardStopPending:
+      '{name} has not confirmed that its turn has stopped. The turn has been kept. Try Discard again when its computer is answering.',
     retryBusy: '{name} may still be working on this turn. Try again once it has finished.',
-    discardPeerUnreachable: '{name}’s computer isn’t answering. The turn has been kept. Reconnect that computer, then try Discard again.',
-    discardPeerUpdateRequired: 'Hermes on {name}’s computer is too old to confirm that this turn never started. The turn has been kept. Update Hermes on that computer, then try Discard again.',
+    discardPeerUnreachable:
+      '{name}’s computer isn’t answering. The turn has been kept. Reconnect that computer, then try Discard again.',
+    discardPeerUpdateRequired:
+      'Hermes on {name}’s computer is too old to confirm that this turn never started. The turn has been kept. Update Hermes on that computer, then try Discard again.',
     confirmDiscard: 'Confirm discard',
     unconfirmedSend: 'The previous send is unconfirmed. Retry its original text before sending another message.',
     restoredPendingSend: 'An unconfirmed send was restored. Retry it or abandon retry before sending another message.',
@@ -315,12 +304,13 @@ export const CANONICAL_GROUP_LOCALES = {
     assignmentFallback: '{lead} is taking this',
     routedTo: 'Assigned to {names}',
     routedEveryone: 'Assigned to everyone',
-    routedFallback: 'Couldn\'t choose who answers, so everyone will',
+    routedFallback: "Couldn't choose who answers, so everyone will",
     pausedAfter: 'Paused after {count} messages',
     continueDiscussion: 'Continue',
     continued: 'Continued',
     routingAuto: 'Pick who answers automatically',
-    routingAutoHint: 'A quick model call picks who a message is for. @mentions still go straight to the people you name.',
+    routingAutoHint:
+      'A quick model call picks who a message is for. @mentions still go straight to the people you name.',
     statusBlocked: 'Blocked',
     statusApprovals: '{count} waiting for approval',
     statusAttention: 'Needs attention: {count}',
@@ -329,58 +319,54 @@ export const CANONICAL_GROUP_LOCALES = {
     sendRefused: 'The gateway refused this message. Edit it and send again.',
     sendStopped: 'Stopped before sending. Your message is still here.',
     sendMaybe: 'This message may already have been sent. Retry sends the same message; it will not be posted twice.',
-    sendSettledElsewhere: 'Another Desktop window already finished with this message. Check the conversation before sending it again.',
-    journalLoadFailed: 'Saved messages couldn’t be loaded. Sending is paused so that a saved message is never sent twice.',
+    sendSettledElsewhere:
+      'Another Desktop window already finished with this message. Check the conversation before sending it again.',
+    journalLoadFailed:
+      'Saved messages couldn’t be loaded. Sending is paused so that a saved message is never sent twice.',
     journalReload: 'Try loading again',
     approvalAction: 'Action',
     approvalCommand: 'Command',
     approvalDetailsMissing: 'Action details are unavailable. Check again before allowing this.',
     checkingDriver: 'Checking group chats on this connection…',
-    legacyRoom: 'Desktop ran this group chat itself, so it can’t continue on this gateway. Start a new group with the same bots: it keeps working when Desktop is closed. Earlier messages aren’t copied into it.',
+    legacyRoom:
+      'Desktop ran this group chat itself, so it can’t continue on this gateway. Start a new group with the same bots: it keeps working when Desktop is closed. Earlier messages aren’t copied into it.',
     startGatewayGroup: 'Start new group',
     createRefused: 'The gateway couldn’t create this group chat.',
     createGroupSize: 'A group chat hosted on this gateway needs two to six bots.',
     createOtherConnection: 'A group chat hosted on this gateway can only seat bots on this connection.',
-    createDuplicateMember: 'A group chat hosted on this gateway needs bots with different profiles and handles; @all and @everyone are reserved.',
-    createUncertain: 'The gateway didn’t answer, so this group chat may already exist. Try again to open it. It won’t be created twice.',
-    createEnded: 'The gateway refused this group chat, so it may have been changed or removed somewhere else. Try again to start a new one.',
-    legacyRoomElsewhere: 'This group chat can’t continue here: it has bots on other computers, and a group chat hosted on this gateway seats bots from one connection only. Switch to the connection where those bots run and start a group there, or start a new group chat with bots from this connection. Earlier messages aren’t copied into a new group.',
+    createDuplicateMember:
+      'A group chat hosted on this gateway needs bots with different profiles and handles; @all and @everyone are reserved.',
+    createUncertain:
+      'The gateway didn’t answer, so this group chat may already exist. Try again to open it. It won’t be created twice.',
+    createEnded:
+      'The gateway refused this group chat, so it may have been changed or removed somewhere else. Try again to start a new one.',
+    legacyRoomElsewhere:
+      'This group chat can’t continue here: it has bots on other computers, and a group chat hosted on this gateway seats bots from one connection only. Switch to the connection where those bots run and start a group there, or start a new group chat with bots from this connection. Earlier messages aren’t copied into a new group.',
     otherConnections: 'Bots on other connections: {connections}',
-    legacyRoomBlocked: 'Desktop ran this group chat itself, so it can’t continue on this gateway, and these bots can’t form a group chat hosted on this gateway as they are (the reason is below). Start a new group chat and choose its bots. Earlier messages aren’t copied into it.',
-    groupsUnsupported: 'Group chats can’t open here: Hermes on this connection’s computer is too old for them. Update Hermes on that computer and reconnect, then try again. Nothing is lost: earlier messages stay where they are.',
-    groupDriverStopped: 'Group chats can’t open here right now: group chats aren’t running on this connection’s gateway. Restart or update Hermes on that computer, then try again. Nothing is lost: earlier messages stay where they are.',
-    groupsUnreachable: 'Couldn’t reach this connection’s gateway to open this group chat. Check that Hermes is running there and that you’re connected, then try again. Nothing is lost: earlier messages stay where they are.',
-    earlierMessages: 'Earlier messages, read only. They stay on this Desktop and aren’t copied into a new group.',
-    peerTargetSetup: '{connection} can’t host a bot for a group chat on another computer yet. {reason}',
-    peerSetupUpdate: 'Hermes there is too old for it. Update Hermes on that computer, then check again.',
-    peerSetupApiServer: 'Its API server is off. Turn on the API server there (gateway.platforms.api_server), restart Hermes on that computer, then check again.',
-    peerSetupRunStorage: 'Its API server can’t save its run records, so a message could run twice. Make sure Hermes can write to its data folder on that computer, restart Hermes there, then check again.',
-    peerSetupRoomKey: 'Hermes there can’t create the key that protects access to group chats. Make sure Hermes can write to its data folder on that computer, restart Hermes there, then check again.',
-    peerSetupApprovals: 'Command approvals are off there, or its settings can’t be read. Set approvals to manual or smart on that computer (approvals.mode), then check again.',
-    peerSetupAddress: 'It has no address that the computer running this group chat can reach. Set gateway.room_link_url on that computer, restart Hermes there, then check again.',
-    peerSetupBackground: 'Hermes there stops when its Desktop closes. Run its gateway on its own there (hermes gateway run, or install it as a service), then check again.',
-    peerSetupGeneric: 'Update Hermes there, turn on its API server with an address the computer running this group chat can reach (gateway.room_link_url), and keep approvals on.',
-    readTimedOut: 'The gateway didn’t answer in time. It may be waiting for a bot’s computer. Choose Refresh to try again.',
-    createdNotJoined: 'The group chat was created, but {names} hasn’t joined yet. The group chat says why; use Retry there.',
-    peerNotJoinedBadge: 'not joined',
-    peerOfflineBadge: 'offline',
-    peerRejoinBadge: 'access expired',
-    peerNotJoined: '{name} hasn’t joined this group chat yet.',
-    peerRejoin: '{name}’s access to this group chat ended. To invite it again, use Retry from a Desktop connected to its computer.',
-    peerAway: '{name}’s computer could not be reached. The next message to it will try again.',
-    peerRetryFailed: 'We couldn’t reconnect {name}. Check that Hermes is running on its computer, then try again.',
+    legacyRoomBlocked:
+      'Desktop ran this group chat itself, so it can’t continue on this gateway, and these bots can’t form a group chat hosted on this gateway as they are (the reason is below). Start a new group chat and choose its bots. Earlier messages aren’t copied into it.',
+    groupsUnsupported:
+      'Group chats can’t open here: Hermes on this connection’s computer is too old for them. Update Hermes on that computer and reconnect, then try again. Nothing is lost: earlier messages stay where they are.',
+    groupDriverStopped:
+      'Group chats can’t open here right now: group chats aren’t running on this connection’s gateway. Restart or update Hermes on that computer, then try again. Nothing is lost: earlier messages stay where they are.',
+    groupsUnreachable:
+      'Couldn’t reach this connection’s gateway to open this group chat. Check that Hermes is running there and that you’re connected, then try again. Nothing is lost: earlier messages stay where they are.',
+    earlierMessages: 'Earlier messages, read only. They stay on this Desktop and aren’t copied into a new group.'
   },
   ja: {
-    ...GROUP_REASON_LOCALES["ja"],
-    ...GROUP_PEER_LOCALES["ja"],
+    ...GROUP_REASON_LOCALES['ja'],
+    ...GROUP_PEER_LOCALES['ja'],
+    ...GROUP_PEER_SETUP_LOCALES['ja'],
     abandonRetry: '再試行を放棄',
-    abandonRetryWarning: 'このメッセージは既に投稿されているか、後から届く可能性があります。ローカルの再試行用コピーだけを削除します。送信の取り消しや再送信は行いません。',
+    abandonRetryWarning:
+      'このメッセージは既に投稿されているか、後から届く可能性があります。ローカルの再試行用コピーだけを削除します。送信の取り消しや再送信は行いません。',
     abandonRetryChanged: '保留中のメッセージが変更されました。この画面を閉じ、内容を確認してからやり直してください。',
     retryAbandoned: '再試行を放棄しました。同じメッセージを送る前に会話を確認してください。',
     allMembers: '全員',
     pickerLabel: 'メンションするメンバーを選択',
     unresolvedMention: '宛先が未指定のメンションがあります。送信前に @ メニューからメンバーを選んでください。',
-    pastedMentionReset: '貼り付けたメンションは別のグループのものか、利用できません。@ メニューから選び直してください。',
+    pastedMentionReset:
+      '貼り付けたメンションは別のグループのものか、利用できません。@ メニューから選び直してください。',
     memberGeneric: 'メンバー',
     manageMembers: 'メンバーを管理',
     manageGroup: '管理',
@@ -430,14 +416,19 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: '今回のみ許可',
     deny: '拒否',
     discardUnknown: 'ターンを破棄',
-    discardWarning: 'すでに変更が生じている場合があります。破棄しても元には戻りません。別のコンピューターのボットでは、そのコンピューターがターンの停止または未開始を確認するまで待ちます。',
-    discardStopPending: '{name} はターンの停止をまだ確認していません。ターンは保持されています。そのコンピューターが応答するようになったら、もう一度破棄してください。',
+    discardWarning:
+      'すでに変更が生じている場合があります。破棄しても元には戻りません。別のコンピューターのボットでは、そのコンピューターがターンの停止または未開始を確認するまで待ちます。',
+    discardStopPending:
+      '{name} はターンの停止をまだ確認していません。ターンは保持されています。そのコンピューターが応答するようになったら、もう一度破棄してください。',
     retryBusy: '{name} はまだこのターンを実行中の可能性があります。終了してからもう一度お試しください。',
-    discardPeerUnreachable: '{name} のコンピューターが応答していません。ターンは保持されています。そのコンピューターに再接続してから、もう一度破棄してください。',
-    discardPeerUpdateRequired: '{name} のコンピューターの Hermes が古いため、このターンが開始されていないことを確認できません。ターンは保持されています。そのコンピューターで Hermes を更新してから、もう一度破棄してください。',
+    discardPeerUnreachable:
+      '{name} のコンピューターが応答していません。ターンは保持されています。そのコンピューターに再接続してから、もう一度破棄してください。',
+    discardPeerUpdateRequired:
+      '{name} のコンピューターの Hermes が古いため、このターンが開始されていないことを確認できません。ターンは保持されています。そのコンピューターで Hermes を更新してから、もう一度破棄してください。',
     confirmDiscard: '破棄を確定',
     unconfirmedSend: '前回の送信は未確認です。別のメッセージを送信する前に、元のテキストで再試行してください。',
-    restoredPendingSend: '未確認の送信を復元しました。再試行するか再試行を放棄してから、別のメッセージを送信してください。',
+    restoredPendingSend:
+      '未確認の送信を復元しました。再試行するか再試行を放棄してから、別のメッセージを送信してください。',
     groupMessage: 'グループメッセージ',
     attachFiles: 'ファイルを添付',
     removeAttachment: '添付ファイルを削除',
@@ -509,55 +500,52 @@ export const CANONICAL_GROUP_LOCALES = {
     statusBlocked: 'ブロック中',
     statusApprovals: '承認待ち {count} 件',
     statusAttention: '要対応 {count} 件',
-    stopped: '停止を要求しました。確認待ちのターンは表示されたままです。再試行や破棄が表示されていれば、その操作を使えます。',
+    stopped:
+      '停止を要求しました。確認待ちのターンは表示されたままです。再試行や破棄が表示されていれば、その操作を使えます。',
     pendingActionUnconfirmed: 'この操作を確認できませんでした。グループチャットを更新して状態を確認してください。',
     sendRefused: 'ゲートウェイがこのメッセージを拒否しました。編集してからもう一度送信してください。',
     sendStopped: '送信前に停止しました。メッセージはそのまま残っています。',
-    sendMaybe: 'このメッセージは既に送信された可能性があります。再試行しても同じメッセージが二重に投稿されることはありません。',
-    sendSettledElsewhere: 'このメッセージは別の Desktop ウィンドウで処理済みです。もう一度送信する前に会話を確認してください。',
-    journalLoadFailed: '保存済みメッセージを読み込めませんでした。保存済みメッセージを重複して送信しないよう、送信を一時停止しています。',
+    sendMaybe:
+      'このメッセージは既に送信された可能性があります。再試行しても同じメッセージが二重に投稿されることはありません。',
+    sendSettledElsewhere:
+      'このメッセージは別の Desktop ウィンドウで処理済みです。もう一度送信する前に会話を確認してください。',
+    journalLoadFailed:
+      '保存済みメッセージを読み込めませんでした。保存済みメッセージを重複して送信しないよう、送信を一時停止しています。',
     journalReload: 'もう一度読み込む',
     approvalAction: '操作',
     approvalCommand: 'コマンド',
     approvalDetailsMissing: '操作の詳細を表示できません。許可する前に、詳細を更新してください。',
     checkingDriver: 'この接続のグループチャットを確認中…',
-    legacyRoom: 'このグループチャットは Desktop 自身が動かしていたため、このゲートウェイでは続けられません。同じボットで新しいグループを始めると、Desktop を閉じても動き続けます。以前のメッセージは新しいグループにコピーされません。',
+    legacyRoom:
+      'このグループチャットは Desktop 自身が動かしていたため、このゲートウェイでは続けられません。同じボットで新しいグループを始めると、Desktop を閉じても動き続けます。以前のメッセージは新しいグループにコピーされません。',
     startGatewayGroup: '新しいグループを始める',
     createRefused: 'ゲートウェイはこのグループチャットを作成できませんでした。',
     createGroupSize: 'このゲートウェイで運用されるグループチャットには 2〜6 体のボットが必要です。',
-    createOtherConnection: 'このゲートウェイで運用されるグループチャットには、この接続上のボットだけを参加させられます。',
-    createDuplicateMember: 'このゲートウェイで運用されるグループチャットには、プロファイルとハンドルが異なるボットが必要です。@all と @everyone は予約済みです。',
-    createUncertain: 'ゲートウェイから応答がなかったため、このグループチャットはすでに作成されている可能性があります。もう一度試すと開きます。二重に作成されることはありません。',
-    createEnded: 'ゲートウェイがこのグループチャットを拒否しました。別の場所で変更または削除された可能性があります。もう一度試すと新しく作成します。',
-    legacyRoomElsewhere: 'このグループチャットはここでは続けられません。ほかのコンピューター上のボットが含まれていて、このゲートウェイで運用されるグループチャットには 1 つの接続のボットしか参加させられないためです。それらのボットが動いている接続に切り替えてそこでグループを始めるか、この接続のボットで新しいグループチャットを始めてください。以前のメッセージは新しいグループにコピーされません。',
+    createOtherConnection:
+      'このゲートウェイで運用されるグループチャットには、この接続上のボットだけを参加させられます。',
+    createDuplicateMember:
+      'このゲートウェイで運用されるグループチャットには、プロファイルとハンドルが異なるボットが必要です。@all と @everyone は予約済みです。',
+    createUncertain:
+      'ゲートウェイから応答がなかったため、このグループチャットはすでに作成されている可能性があります。もう一度試すと開きます。二重に作成されることはありません。',
+    createEnded:
+      'ゲートウェイがこのグループチャットを拒否しました。別の場所で変更または削除された可能性があります。もう一度試すと新しく作成します。',
+    legacyRoomElsewhere:
+      'このグループチャットはここでは続けられません。ほかのコンピューター上のボットが含まれていて、このゲートウェイで運用されるグループチャットには 1 つの接続のボットしか参加させられないためです。それらのボットが動いている接続に切り替えてそこでグループを始めるか、この接続のボットで新しいグループチャットを始めてください。以前のメッセージは新しいグループにコピーされません。',
     otherConnections: 'ほかの接続上のボット: {connections}',
-    legacyRoomBlocked: 'このグループチャットは Desktop 自身が動かしていたため、このゲートウェイでは続けられません。また、これらのボットはこのままではこのゲートウェイで運用されるグループチャットを作れません（理由は下記）。新しいグループチャットを始めてボットを選んでください。以前のメッセージはコピーされません。',
-    groupsUnsupported: 'ここではグループチャットを開けません。この接続先のコンピューターの Hermes が古く、グループチャットに対応していないためです。そのコンピューターの Hermes を更新して再接続してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
-    groupDriverStopped: 'いまはここでグループチャットを開けません。この接続のゲートウェイでグループチャットが動いていないためです。そのコンピューターの Hermes を再起動または更新してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
-    groupsUnreachable: 'このグループチャットを開くための、この接続のゲートウェイに接続できませんでした。そのコンピューターで Hermes が動いていて、接続されていることを確認してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
-    earlierMessages: '以前のメッセージ（閲覧のみ）。この Desktop に残り、新しいグループにはコピーされません。',
-    peerTargetSetup: '{connection} は、まだほかのコンピューターのグループチャットにボットを参加させられません。{reason}',
-    peerSetupUpdate: 'そこの Hermes が古いためです。そのコンピューターの Hermes を更新してから、もう一度確認してください。',
-    peerSetupApiServer: 'API サーバーがオフになっています。そこで API サーバー（gateway.platforms.api_server）を有効にし、そのコンピューターの Hermes を再起動してから、もう一度確認してください。',
-    peerSetupRunStorage: 'API サーバーが実行記録を保存できないため、メッセージが二重に実行されるおそれがあります。そのコンピューターで Hermes がデータフォルダーに書き込めることを確認し、Hermes を再起動してから、もう一度確認してください。',
-    peerSetupRoomKey: 'そこの Hermes が、グループチャットへのアクセスを保護するキーを作成できません。そのコンピューターで Hermes がデータフォルダーに書き込めることを確認し、Hermes を再起動してから、もう一度確認してください。',
-    peerSetupApprovals: 'そこではコマンドの承認がオフになっているか、設定を読み取れません。そのコンピューターで承認を manual または smart（approvals.mode）に設定してから、もう一度確認してください。',
-    peerSetupAddress: 'このグループチャットを実行するコンピューターから届くアドレスがありません。そのコンピューターで gateway.room_link_url を設定し、Hermes を再起動してから、もう一度確認してください。',
-    peerSetupBackground: 'そこの Hermes は Desktop を閉じると停止します。そこでゲートウェイを単独で実行してから（hermes gateway run、またはサービスとしてインストール）、もう一度確認してください。',
-    peerSetupGeneric: 'そこで Hermes を更新し、このグループチャットを実行するコンピューターから届くアドレス（gateway.room_link_url）で API サーバーを有効にし、承認をオンのままにしてください。',
-    readTimedOut: 'ゲートウェイが時間内に応答しませんでした。ボットのコンピューターの応答を待っている可能性があります。「更新」を選んで再試行してください。',
-    createdNotJoined: 'グループチャットを作成しましたが、{names} はまだ参加していません。理由はグループチャットに表示されます。そこで「再試行」を使ってください。',
-    peerNotJoinedBadge: '未参加',
-    peerOfflineBadge: 'オフライン',
-    peerRejoinBadge: 'アクセス期限切れ',
-    peerNotJoined: '{name} はまだこのグループチャットに参加していません。',
-    peerRejoin: '{name} のこのグループチャットへのアクセス期限が切れました。再招待するには、そのコンピューターに接続された Desktop から「再試行」を選んでください。',
-    peerAway: '{name} のコンピューターに接続できませんでした。次にそのメンバーにメッセージを送ると、もう一度接続を試みます。',
-    peerRetryFailed: '{name} に再接続できませんでした。そのコンピューターで Hermes が起動していることを確認してから、もう一度お試しください。',
+    legacyRoomBlocked:
+      'このグループチャットは Desktop 自身が動かしていたため、このゲートウェイでは続けられません。また、これらのボットはこのままではこのゲートウェイで運用されるグループチャットを作れません（理由は下記）。新しいグループチャットを始めてボットを選んでください。以前のメッセージはコピーされません。',
+    groupsUnsupported:
+      'ここではグループチャットを開けません。この接続先のコンピューターの Hermes が古く、グループチャットに対応していないためです。そのコンピューターの Hermes を更新して再接続してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
+    groupDriverStopped:
+      'いまはここでグループチャットを開けません。この接続のゲートウェイでグループチャットが動いていないためです。そのコンピューターの Hermes を再起動または更新してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
+    groupsUnreachable:
+      'このグループチャットを開くための、この接続のゲートウェイに接続できませんでした。そのコンピューターで Hermes が動いていて、接続されていることを確認してから、もう一度お試しください。何も失われません。以前のメッセージはそのまま残ります。',
+    earlierMessages: '以前のメッセージ（閲覧のみ）。この Desktop に残り、新しいグループにはコピーされません。'
   },
   zh: {
-    ...GROUP_REASON_LOCALES["zh"],
-    ...GROUP_PEER_LOCALES["zh"],
+    ...GROUP_REASON_LOCALES['zh'],
+    ...GROUP_PEER_LOCALES['zh'],
+    ...GROUP_PEER_SETUP_LOCALES['zh'],
     abandonRetry: '放弃重试',
     abandonRetryWarning: '这条消息可能已经发布，也可能稍后到达。此操作只移除本机的重试副本，不会撤回或重新发送消息。',
     abandonRetryChanged: '这条待确认消息已发生变化。请关闭此对话框，检查后再操作。',
@@ -614,11 +602,13 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: '仅允许一次',
     deny: '拒绝',
     discardUnknown: '丢弃回合',
-    discardWarning: '可能已经产生了更改，丢弃不会撤销这些更改。对于其他电脑上的机器人，丢弃会等待该电脑确认回合已停止或从未开始。',
+    discardWarning:
+      '可能已经产生了更改，丢弃不会撤销这些更改。对于其他电脑上的机器人，丢弃会等待该电脑确认回合已停止或从未开始。',
     discardStopPending: '{name} 尚未确认回合已停止。回合已保留。请在其电脑恢复响应后再次尝试丢弃。',
     retryBusy: '{name} 可能仍在处理此回合。请在其完成后重试。',
     discardPeerUnreachable: '{name} 所在的电脑没有响应。回合已保留。请重新连接该电脑，然后再次尝试丢弃。',
-    discardPeerUpdateRequired: '{name} 所在电脑上的 Hermes 版本太旧，无法确认此回合从未开始。回合已保留。请在该电脑上更新 Hermes，然后再次尝试丢弃。',
+    discardPeerUpdateRequired:
+      '{name} 所在电脑上的 Hermes 版本太旧，无法确认此回合从未开始。回合已保留。请在该电脑上更新 Hermes，然后再次尝试丢弃。',
     confirmDiscard: '确认丢弃',
     unconfirmedSend: '上次发送尚未确认。请先重试发送原始文本，再发送其他消息。',
     restoredPendingSend: '已恢复尚未确认的发送。请先重试或放弃重试，再发送其他消息。',
@@ -705,43 +695,33 @@ export const CANONICAL_GROUP_LOCALES = {
     approvalCommand: '命令',
     approvalDetailsMissing: '无法显示操作详情。请先刷新详情，再允许此操作。',
     checkingDriver: '正在检查此连接上的群聊…',
-    legacyRoom: '这个群聊由 Desktop 自己运行，因此无法在此网关上继续。用相同的机器人开始一个新群组：关闭 Desktop 后它仍会继续工作。之前的消息不会复制到新群组。',
+    legacyRoom:
+      '这个群聊由 Desktop 自己运行，因此无法在此网关上继续。用相同的机器人开始一个新群组：关闭 Desktop 后它仍会继续工作。之前的消息不会复制到新群组。',
     startGatewayGroup: '开始新群组',
     createRefused: '网关无法创建此群聊。',
     createGroupSize: '在此网关上托管的群聊需要 2 到 6 个机器人。',
     createOtherConnection: '在此网关上托管的群聊只能加入此连接上的机器人。',
-    createDuplicateMember: '在此网关上托管的群聊中的机器人需要使用不同的配置文件和名称标识；@all 和 @everyone 为保留名称。',
+    createDuplicateMember:
+      '在此网关上托管的群聊中的机器人需要使用不同的配置文件和名称标识；@all 和 @everyone 为保留名称。',
     createUncertain: '网关没有响应，此群聊可能已经创建。请重试以打开它，不会重复创建。',
     createEnded: '网关拒绝了此群聊，它可能已在其他地方被更改或移除。请重试以新建一个。',
-    legacyRoomElsewhere: '这个群聊无法在此继续：它包含其他电脑上的机器人，而在此网关上托管的群聊只能加入同一个连接上的机器人。请切换到这些机器人所在的连接并在那里开始群组，或者用此连接上的机器人开始一个新群聊。之前的消息不会复制到新群组。',
+    legacyRoomElsewhere:
+      '这个群聊无法在此继续：它包含其他电脑上的机器人，而在此网关上托管的群聊只能加入同一个连接上的机器人。请切换到这些机器人所在的连接并在那里开始群组，或者用此连接上的机器人开始一个新群聊。之前的消息不会复制到新群组。',
     otherConnections: '其他连接上的机器人：{connections}',
-    legacyRoomBlocked: '这个群聊由 Desktop 自己运行，因此无法在此网关上继续，而且这些机器人目前无法组成在此网关上托管的群聊（原因见下方）。请开始一个新群聊并选择它的机器人。之前的消息不会复制到新群组。',
-    groupsUnsupported: '无法在此打开群聊：此连接所在电脑上的 Hermes 版本太旧，不支持群聊。请在那台电脑上更新 Hermes 并重新连接，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
-    groupDriverStopped: '暂时无法在此打开群聊：此连接的网关没有运行群聊。请在那台电脑上重启或更新 Hermes，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
-    groupsUnreachable: '无法连接到此连接的网关来打开这个群聊。请确认那台电脑上的 Hermes 正在运行且你已连接，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
-    earlierMessages: '之前的消息（只读）。它们保留在此 Desktop 上，不会复制到新群组。',
-    peerTargetSetup: '{connection} 目前还无法让机器人加入其他电脑上的群聊。{reason}',
-    peerSetupUpdate: '那里的 Hermes 版本太旧。请在那台电脑上更新 Hermes，然后再检查一次。',
-    peerSetupApiServer: '它的 API 服务器未开启。请在那里开启 API 服务器（gateway.platforms.api_server），重启那台电脑上的 Hermes，然后再检查一次。',
-    peerSetupRunStorage: '它的 API 服务器无法保存运行记录，消息可能会被执行两次。请确认 Hermes 能写入那台电脑上的数据文件夹，重启那里的 Hermes，然后再检查一次。',
-    peerSetupRoomKey: '那里的 Hermes 无法创建保护群聊访问的密钥。请确认 Hermes 能写入那台电脑上的数据文件夹，重启那里的 Hermes，然后再检查一次。',
-    peerSetupApprovals: '那里的命令批准已关闭，或无法读取其设置。请在那台电脑上将批准设为 manual 或 smart（approvals.mode），然后再检查一次。',
-    peerSetupAddress: '它没有运行此群聊的电脑可以访问的地址。请在那台电脑上设置 gateway.room_link_url，重启那里的 Hermes，然后再检查一次。',
-    peerSetupBackground: '那里的 Hermes 会在其 Desktop 关闭时停止。请在那里单独运行其网关（hermes gateway run，或将其安装为服务），然后再检查一次。',
-    peerSetupGeneric: '请在那里更新 Hermes，用运行此群聊的电脑可以访问的地址（gateway.room_link_url）开启其 API 服务器，并保持批准开启。',
-    readTimedOut: '网关未及时响应。它可能正在等待某个机器人的电脑响应。请选择“刷新”重试。',
-    createdNotJoined: '群聊已创建，但 {names} 尚未加入。原因显示在群聊中，请在那里使用“重试”。',
-    peerNotJoinedBadge: '未加入',
-    peerOfflineBadge: '离线',
-    peerRejoinBadge: '访问权限已过期',
-    peerNotJoined: '{name} 尚未加入此群聊。',
-    peerRejoin: '{name} 对此群聊的访问权限已过期。要再次邀请它，请在连接到其电脑的 Desktop 中选择重试。',
-    peerAway: '未能连接到 {name} 所在的电脑。下次向它发送消息时会重试。',
-    peerRetryFailed: '未能重新连接 {name}。请确认 Hermes 正在其电脑上运行，然后重试。',
+    legacyRoomBlocked:
+      '这个群聊由 Desktop 自己运行，因此无法在此网关上继续，而且这些机器人目前无法组成在此网关上托管的群聊（原因见下方）。请开始一个新群聊并选择它的机器人。之前的消息不会复制到新群组。',
+    groupsUnsupported:
+      '无法在此打开群聊：此连接所在电脑上的 Hermes 版本太旧，不支持群聊。请在那台电脑上更新 Hermes 并重新连接，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
+    groupDriverStopped:
+      '暂时无法在此打开群聊：此连接的网关没有运行群聊。请在那台电脑上重启或更新 Hermes，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
+    groupsUnreachable:
+      '无法连接到此连接的网关来打开这个群聊。请确认那台电脑上的 Hermes 正在运行且你已连接，然后再试一次。不会丢失任何内容：之前的消息仍保留在原处。',
+    earlierMessages: '之前的消息（只读）。它们保留在此 Desktop 上，不会复制到新群组。'
   },
   'zh-hant': {
-    ...GROUP_REASON_LOCALES["zh-hant"],
-    ...GROUP_PEER_LOCALES["zh-hant"],
+    ...GROUP_REASON_LOCALES['zh-hant'],
+    ...GROUP_PEER_LOCALES['zh-hant'],
+    ...GROUP_PEER_SETUP_LOCALES['zh-hant'],
     abandonRetry: '放棄重試',
     abandonRetryWarning: '這則訊息可能已經張貼，也可能稍後送達。此操作只移除本機的重試副本，不會收回或重新傳送訊息。',
     abandonRetryChanged: '這則待確認訊息已變更。請關閉此對話框，檢查後再操作。',
@@ -798,11 +778,13 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: '僅允許一次',
     deny: '拒絕',
     discardUnknown: '捨棄回合',
-    discardWarning: '可能已經產生了變更，捨棄不會復原這些變更。對於其他電腦上的機器人，捨棄會等待該電腦確認回合已停止或從未開始。',
+    discardWarning:
+      '可能已經產生了變更，捨棄不會復原這些變更。對於其他電腦上的機器人，捨棄會等待該電腦確認回合已停止或從未開始。',
     discardStopPending: '{name} 尚未確認回合已停止。回合已保留。請在其電腦恢復回應後再次嘗試捨棄。',
     retryBusy: '{name} 可能仍在處理此回合。請在完成後再試一次。',
     discardPeerUnreachable: '{name} 所在的電腦沒有回應。回合已保留。請重新連線至該電腦，然後再次嘗試捨棄。',
-    discardPeerUpdateRequired: '{name} 所在電腦上的 Hermes 版本太舊，無法確認此回合從未開始。回合已保留。請在該電腦上更新 Hermes，然後再次嘗試捨棄。',
+    discardPeerUpdateRequired:
+      '{name} 所在電腦上的 Hermes 版本太舊，無法確認此回合從未開始。回合已保留。請在該電腦上更新 Hermes，然後再次嘗試捨棄。',
     confirmDiscard: '確認捨棄',
     unconfirmedSend: '上次傳送尚未確認。請先重試傳送原始文字，再傳送其他訊息。',
     restoredPendingSend: '已還原尚未確認的傳送。請先重試或放棄重試，再傳送其他訊息。',
@@ -889,45 +871,36 @@ export const CANONICAL_GROUP_LOCALES = {
     approvalCommand: '命令',
     approvalDetailsMissing: '無法顯示操作詳細資訊。請先重新整理詳細資訊，再允許此操作。',
     checkingDriver: '正在檢查此連線上的群組聊天…',
-    legacyRoom: '這個群組聊天由 Desktop 自行執行，因此無法在此閘道上繼續。用相同的機器人開始新群組：關閉 Desktop 後它仍會繼續運作。先前的訊息不會複製到新群組。',
+    legacyRoom:
+      '這個群組聊天由 Desktop 自行執行，因此無法在此閘道上繼續。用相同的機器人開始新群組：關閉 Desktop 後它仍會繼續運作。先前的訊息不會複製到新群組。',
     startGatewayGroup: '開始新群組',
     createRefused: '閘道無法建立此群組聊天。',
     createGroupSize: '在此閘道上託管的群組聊天需要 2 到 6 個機器人。',
     createOtherConnection: '在此閘道上託管的群組聊天只能加入此連線上的機器人。',
-    createDuplicateMember: '在此閘道上託管的群組聊天中的機器人需要使用不同的設定檔和代稱；@all 與 @everyone 為保留名稱。',
+    createDuplicateMember:
+      '在此閘道上託管的群組聊天中的機器人需要使用不同的設定檔和代稱；@all 與 @everyone 為保留名稱。',
     createUncertain: '閘道沒有回應，此群組聊天可能已經建立。請再試一次以開啟它，不會重複建立。',
     createEnded: '閘道拒絕了此群組聊天，它可能已在其他地方被變更或移除。請再試一次以建立新的群組聊天。',
-    legacyRoomElsewhere: '這個群組聊天無法在此繼續：它包含其他電腦上的機器人，而在此閘道上託管的群組聊天只能加入同一個連線上的機器人。請切換到這些機器人所在的連線並在那裡開始群組，或用此連線上的機器人開始新的群組聊天。先前的訊息不會複製到新群組。',
+    legacyRoomElsewhere:
+      '這個群組聊天無法在此繼續：它包含其他電腦上的機器人，而在此閘道上託管的群組聊天只能加入同一個連線上的機器人。請切換到這些機器人所在的連線並在那裡開始群組，或用此連線上的機器人開始新的群組聊天。先前的訊息不會複製到新群組。',
     otherConnections: '其他連線上的機器人：{connections}',
-    legacyRoomBlocked: '這個群組聊天由 Desktop 自行執行，因此無法在此閘道上繼續，而且這些機器人目前無法組成在此閘道上託管的群組聊天（原因見下方）。請開始新的群組聊天並選擇它的機器人。先前的訊息不會複製到新群組。',
-    groupsUnsupported: '無法在此開啟群組聊天：此連線所在電腦上的 Hermes 版本太舊，不支援群組聊天。請在那台電腦上更新 Hermes 並重新連線，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
-    groupDriverStopped: '暫時無法在此開啟群組聊天：此連線的閘道沒有執行群組聊天。請在那台電腦上重新啟動或更新 Hermes，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
-    groupsUnreachable: '無法連上此連線的閘道來開啟這個群組聊天。請確認那台電腦上的 Hermes 正在執行且你已連線，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
-    earlierMessages: '先前的訊息（唯讀）。它們會保留在此 Desktop 上，不會複製到新群組。',
-    peerTargetSetup: '{connection} 目前還無法讓機器人加入其他電腦上的群組聊天。{reason}',
-    peerSetupUpdate: '那裡的 Hermes 版本太舊。請在那台電腦上更新 Hermes，然後再檢查一次。',
-    peerSetupApiServer: '它的 API 伺服器未開啟。請在那裡開啟 API 伺服器（gateway.platforms.api_server），重新啟動那台電腦上的 Hermes，然後再檢查一次。',
-    peerSetupRunStorage: '它的 API 伺服器無法儲存執行記錄，訊息可能會被執行兩次。請確認 Hermes 能寫入那台電腦上的資料夾，重新啟動那裡的 Hermes，然後再檢查一次。',
-    peerSetupRoomKey: '那裡的 Hermes 無法建立保護群組聊天存取權的金鑰。請確認 Hermes 能寫入那台電腦上的資料夾，重新啟動那裡的 Hermes，然後再檢查一次。',
-    peerSetupApprovals: '那裡的指令核准已關閉，或無法讀取其設定。請在那台電腦上將核准設為 manual 或 smart（approvals.mode），然後再檢查一次。',
-    peerSetupAddress: '它沒有執行此群組聊天的電腦可以連到的位址。請在那台電腦上設定 gateway.room_link_url，重新啟動那裡的 Hermes，然後再檢查一次。',
-    peerSetupBackground: '那裡的 Hermes 會在其 Desktop 關閉時停止。請在那裡單獨執行其閘道（hermes gateway run，或將其安裝為服務），然後再檢查一次。',
-    peerSetupGeneric: '請在那裡更新 Hermes，以執行此群組聊天的電腦可以連到的位址（gateway.room_link_url）開啟其 API 伺服器，並保持核准開啟。',
-    readTimedOut: '閘道未及時回應。它可能正在等待某個機器人的電腦回應。請選擇「重新整理」重試。',
-    createdNotJoined: '群組聊天已建立，但 {names} 尚未加入。原因會顯示在群組聊天中，請在那裡使用「重試」。',
-    peerNotJoinedBadge: '未加入',
-    peerOfflineBadge: '離線',
-    peerRejoinBadge: '存取權已過期',
-    peerNotJoined: '{name} 尚未加入此群組聊天。',
-    peerRejoin: '{name} 對此群組聊天的存取權已過期。若要再次邀請它，請在連線至其電腦的 Desktop 中選擇重試。',
-    peerAway: '未能連線至 {name} 所在的電腦。下次向它傳送訊息時會再試一次。',
-    peerRetryFailed: '未能重新連線至 {name}。請確認 Hermes 正在其電腦上執行，然後再試一次。',
+    legacyRoomBlocked:
+      '這個群組聊天由 Desktop 自行執行，因此無法在此閘道上繼續，而且這些機器人目前無法組成在此閘道上託管的群組聊天（原因見下方）。請開始新的群組聊天並選擇它的機器人。先前的訊息不會複製到新群組。',
+    groupsUnsupported:
+      '無法在此開啟群組聊天：此連線所在電腦上的 Hermes 版本太舊，不支援群組聊天。請在那台電腦上更新 Hermes 並重新連線，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
+    groupDriverStopped:
+      '暫時無法在此開啟群組聊天：此連線的閘道沒有執行群組聊天。請在那台電腦上重新啟動或更新 Hermes，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
+    groupsUnreachable:
+      '無法連上此連線的閘道來開啟這個群組聊天。請確認那台電腦上的 Hermes 正在執行且你已連線，然後再試一次。不會遺失任何內容：先前的訊息仍保留在原處。',
+    earlierMessages: '先前的訊息（唯讀）。它們會保留在此 Desktop 上，不會複製到新群組。'
   },
   ar: {
-    ...GROUP_REASON_LOCALES["ar"],
-    ...GROUP_PEER_LOCALES["ar"],
+    ...GROUP_REASON_LOCALES['ar'],
+    ...GROUP_PEER_LOCALES['ar'],
+    ...GROUP_PEER_SETUP_LOCALES['ar'],
     abandonRetry: 'التخلي عن إعادة المحاولة',
-    abandonRetryWarning: 'ربما نُشرت هذه الرسالة بالفعل أو قد تصل لاحقًا. يؤدي هذا إلى إزالة النسخة المحلية لإعادة المحاولة فقط، ولا يسحب الرسالة أو يعيد إرسالها.',
+    abandonRetryWarning:
+      'ربما نُشرت هذه الرسالة بالفعل أو قد تصل لاحقًا. يؤدي هذا إلى إزالة النسخة المحلية لإعادة المحاولة فقط، ولا يسحب الرسالة أو يعيد إرسالها.',
     abandonRetryChanged: 'تغيّرت هذه الرسالة المعلّقة. أغلق مربع الحوار وراجعها قبل المحاولة مجددًا.',
     retryAbandoned: 'تم التخلي عن إعادة المحاولة. راجع المحادثة قبل إرسال الرسالة نفسها مجددًا.',
     allMembers: 'الجميع',
@@ -982,11 +955,14 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: 'السماح مرة واحدة',
     deny: 'رفض',
     discardUnknown: 'تجاهل الدور',
-    discardWarning: 'ربما حدثت تغييرات بالفعل. لن يؤدي تجاهل الدور إلى التراجع عنها. بالنسبة لروبوت على جهاز آخر، ينتظر التجاهل تأكيد ذلك الجهاز أن الدور توقف أو لم يبدأ أصلًا.',
+    discardWarning:
+      'ربما حدثت تغييرات بالفعل. لن يؤدي تجاهل الدور إلى التراجع عنها. بالنسبة لروبوت على جهاز آخر، ينتظر التجاهل تأكيد ذلك الجهاز أن الدور توقف أو لم يبدأ أصلًا.',
     discardStopPending: 'لم يؤكد {name} بعد أن دوره توقف. تم الاحتفاظ بالدور. حاول تجاهله مجددًا عندما يستجيب جهازه.',
     retryBusy: 'قد يكون {name} ما زال يعمل على هذا الدور. أعد المحاولة بعد انتهائه.',
-    discardPeerUnreachable: 'جهاز {name} لا يستجيب. تم الاحتفاظ بالدور. أعد الاتصال بذلك الجهاز، ثم حاول تجاهل الدور مجددًا.',
-    discardPeerUpdateRequired: 'إصدار Hermes على جهاز {name} قديم ولا يستطيع تأكيد أن هذا الدور لم يبدأ أصلًا. تم الاحتفاظ بالدور. حدّث Hermes على ذلك الجهاز، ثم حاول تجاهل الدور مجددًا.',
+    discardPeerUnreachable:
+      'جهاز {name} لا يستجيب. تم الاحتفاظ بالدور. أعد الاتصال بذلك الجهاز، ثم حاول تجاهل الدور مجددًا.',
+    discardPeerUpdateRequired:
+      'إصدار Hermes على جهاز {name} قديم ولا يستطيع تأكيد أن هذا الدور لم يبدأ أصلًا. تم الاحتفاظ بالدور. حدّث Hermes على ذلك الجهاز، ثم حاول تجاهل الدور مجددًا.',
     confirmDiscard: 'تأكيد التجاهل',
     unconfirmedSend: 'الإرسال السابق غير مؤكّد. أعد المحاولة بالنص الأصلي قبل إرسال رسالة أخرى.',
     restoredPendingSend: 'تمت استعادة إرسال غير مؤكّد. أعد محاولته أو تخلّ عن إعادة المحاولة قبل إرسال رسالة أخرى.',
@@ -1073,51 +1049,46 @@ export const CANONICAL_GROUP_LOCALES = {
     approvalCommand: 'الأمر',
     approvalDetailsMissing: 'تفاصيل الإجراء غير متاحة. حدّثها قبل السماح بهذا الإجراء.',
     checkingDriver: 'جارٍ التحقق من محادثات المجموعات على هذا الاتصال…',
-    legacyRoom: 'شغّل Desktop محادثة المجموعة هذه بنفسه، لذا لا يمكنها المتابعة على هذه البوابة. ابدأ مجموعة جديدة بالروبوتات نفسها: ستستمر في العمل عند إغلاق Desktop. لن تُنسخ الرسائل السابقة إليها.',
+    legacyRoom:
+      'شغّل Desktop محادثة المجموعة هذه بنفسه، لذا لا يمكنها المتابعة على هذه البوابة. ابدأ مجموعة جديدة بالروبوتات نفسها: ستستمر في العمل عند إغلاق Desktop. لن تُنسخ الرسائل السابقة إليها.',
     startGatewayGroup: 'بدء مجموعة جديدة',
     createRefused: 'تعذّر على البوابة إنشاء محادثة المجموعة هذه.',
     createGroupSize: 'تحتاج محادثة المجموعة المستضافة على هذه البوابة إلى ما بين اثنين وستة روبوتات.',
-    createOtherConnection: 'لا يمكن لمحادثة المجموعة المستضافة على هذه البوابة أن تضم إلا الروبوتات الموجودة على هذا الاتصال.',
-    createDuplicateMember: 'تحتاج محادثة المجموعة المستضافة على هذه البوابة إلى روبوتات بملفات تعريف ومعرّفات مختلفة؛ ‎@all و‎@everyone محجوزان.',
-    createUncertain: 'لم تستجب البوابة، لذا ربما تكون محادثة المجموعة هذه قد أُنشئت بالفعل. أعد المحاولة لفتحها، ولن تُنشأ مرتين.',
-    createEnded: 'رفضت البوابة محادثة المجموعة هذه، فربما تم تغييرها أو إزالتها في مكان آخر. أعد المحاولة لبدء محادثة جديدة.',
-    legacyRoomElsewhere: 'لا يمكن متابعة محادثة المجموعة هذه هنا: فيها روبوتات تعمل على أجهزة كمبيوتر أخرى، ولا تضم محادثة المجموعة المستضافة على هذه البوابة إلا روبوتات من اتصال واحد. انتقل إلى الاتصال الذي تعمل عليه تلك الروبوتات وابدأ مجموعة هناك، أو ابدأ محادثة مجموعة جديدة بروبوتات من هذا الاتصال. لن تُنسخ الرسائل السابقة إلى مجموعة جديدة.',
+    createOtherConnection:
+      'لا يمكن لمحادثة المجموعة المستضافة على هذه البوابة أن تضم إلا الروبوتات الموجودة على هذا الاتصال.',
+    createDuplicateMember:
+      'تحتاج محادثة المجموعة المستضافة على هذه البوابة إلى روبوتات بملفات تعريف ومعرّفات مختلفة؛ ‎@all و‎@everyone محجوزان.',
+    createUncertain:
+      'لم تستجب البوابة، لذا ربما تكون محادثة المجموعة هذه قد أُنشئت بالفعل. أعد المحاولة لفتحها، ولن تُنشأ مرتين.',
+    createEnded:
+      'رفضت البوابة محادثة المجموعة هذه، فربما تم تغييرها أو إزالتها في مكان آخر. أعد المحاولة لبدء محادثة جديدة.',
+    legacyRoomElsewhere:
+      'لا يمكن متابعة محادثة المجموعة هذه هنا: فيها روبوتات تعمل على أجهزة كمبيوتر أخرى، ولا تضم محادثة المجموعة المستضافة على هذه البوابة إلا روبوتات من اتصال واحد. انتقل إلى الاتصال الذي تعمل عليه تلك الروبوتات وابدأ مجموعة هناك، أو ابدأ محادثة مجموعة جديدة بروبوتات من هذا الاتصال. لن تُنسخ الرسائل السابقة إلى مجموعة جديدة.',
     otherConnections: 'روبوتات على اتصالات أخرى: {connections}',
-    legacyRoomBlocked: 'شغّل Desktop محادثة المجموعة هذه بنفسه، لذا لا يمكنها المتابعة على هذه البوابة، ولا تستطيع هذه الروبوتات بدء محادثة مجموعة مستضافة على هذه البوابة كما هي (السبب أدناه). ابدأ محادثة مجموعة جديدة واختر روبوتاتها. لن تُنسخ الرسائل السابقة إليها.',
-    groupsUnsupported: 'لا يمكن فتح محادثات المجموعات هنا: إصدار Hermes على كمبيوتر هذا الاتصال أقدم من أن يدعمها. حدّث Hermes على ذلك الكمبيوتر وأعد الاتصال، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
-    groupDriverStopped: 'لا يمكن فتح محادثات المجموعات هنا الآن: بوابة هذا الاتصال لا تشغّل محادثات المجموعات. أعد تشغيل Hermes على ذلك الكمبيوتر أو حدّثه، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
-    groupsUnreachable: 'تعذّر الوصول إلى بوابة هذا الاتصال لفتح محادثة المجموعة هذه. تأكد من أن Hermes يعمل هناك وأنك متصل، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
-    earlierMessages: 'الرسائل السابقة، للقراءة فقط. تبقى على Desktop هذا ولن تُنسخ إلى مجموعة جديدة.',
-    peerTargetSetup: 'لا يستطيع {connection} بعد استضافة روبوت لمحادثة مجموعة على جهاز آخر. {reason}',
-    peerSetupUpdate: 'إصدار Hermes هناك قديم جدًا. حدّث Hermes على ذلك الجهاز، ثم تحقّق مجددًا.',
-    peerSetupApiServer: 'خادم API الخاص به متوقف. فعّل خادم API هناك (gateway.platforms.api_server)، وأعد تشغيل Hermes على ذلك الجهاز، ثم تحقّق مجددًا.',
-    peerSetupRunStorage: 'لا يستطيع خادم API الخاص به حفظ سجلات التشغيل، لذا قد تُنفَّذ رسالة مرتين. تأكد من أن Hermes يستطيع الكتابة في مجلد بياناته على ذلك الجهاز، وأعد تشغيل Hermes هناك، ثم تحقّق مجددًا.',
-    peerSetupRoomKey: 'لا يستطيع Hermes هناك إنشاء المفتاح الذي يحمي الوصول إلى المحادثات الجماعية. تأكد من أن Hermes يستطيع الكتابة في مجلد بياناته على ذلك الجهاز، وأعد تشغيل Hermes هناك، ثم تحقّق مجددًا.',
-    peerSetupApprovals: 'موافقات الأوامر معطّلة هناك، أو تتعذّر قراءة إعداداته. اضبط الموافقات على manual أو smart على ذلك الجهاز (approvals.mode)، ثم تحقّق مجددًا.',
-    peerSetupAddress: 'ليس له عنوان يستطيع الجهاز الذي يشغّل محادثة المجموعة هذه الوصول إليه. اضبط gateway.room_link_url على ذلك الجهاز، وأعد تشغيل Hermes هناك، ثم تحقّق مجددًا.',
-    peerSetupBackground: 'يتوقف Hermes هناك عند إغلاق Desktop الخاص به. شغّل بوابته وحدها هناك (hermes gateway run، أو ثبّتها كخدمة)، ثم تحقّق مجددًا.',
-    peerSetupGeneric: 'حدّث Hermes هناك، وفعّل خادم API الخاص به بعنوان يستطيع الجهاز الذي يشغّل محادثة المجموعة هذه الوصول إليه (gateway.room_link_url)، وأبقِ الموافقات مفعّلة.',
-    readTimedOut: 'لم تستجب البوابة في الوقت المحدد. ربما تنتظر استجابة جهاز أحد البوتات. اختر «تحديث» لإعادة المحاولة.',
-    createdNotJoined: 'تم إنشاء محادثة المجموعة، لكن {names} لم ينضم بعد. تعرض محادثة المجموعة السبب؛ استخدم إعادة المحاولة هناك.',
-    peerNotJoinedBadge: 'لم ينضم',
-    peerOfflineBadge: 'غير متصل',
-    peerRejoinBadge: 'انتهت صلاحية الوصول',
-    peerNotJoined: 'لم ينضم {name} إلى محادثة المجموعة هذه بعد.',
-    peerRejoin: 'انتهت صلاحية وصول {name} إلى محادثة المجموعة هذه. لدعوته مجددًا، اختر إعادة المحاولة من Desktop متصل بجهازه.',
-    peerAway: 'تعذّر الوصول إلى جهاز {name}. ستحاول الرسالة التالية الموجّهة إليه الاتصال مجددًا.',
-    peerRetryFailed: 'تعذّر إعادة الاتصال بـ {name}. تأكد من تشغيل Hermes على جهازه، ثم حاول مجددًا.',
+    legacyRoomBlocked:
+      'شغّل Desktop محادثة المجموعة هذه بنفسه، لذا لا يمكنها المتابعة على هذه البوابة، ولا تستطيع هذه الروبوتات بدء محادثة مجموعة مستضافة على هذه البوابة كما هي (السبب أدناه). ابدأ محادثة مجموعة جديدة واختر روبوتاتها. لن تُنسخ الرسائل السابقة إليها.',
+    groupsUnsupported:
+      'لا يمكن فتح محادثات المجموعات هنا: إصدار Hermes على كمبيوتر هذا الاتصال أقدم من أن يدعمها. حدّث Hermes على ذلك الكمبيوتر وأعد الاتصال، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
+    groupDriverStopped:
+      'لا يمكن فتح محادثات المجموعات هنا الآن: بوابة هذا الاتصال لا تشغّل محادثات المجموعات. أعد تشغيل Hermes على ذلك الكمبيوتر أو حدّثه، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
+    groupsUnreachable:
+      'تعذّر الوصول إلى بوابة هذا الاتصال لفتح محادثة المجموعة هذه. تأكد من أن Hermes يعمل هناك وأنك متصل، ثم حاول مرة أخرى. لن يضيع شيء: تبقى الرسائل السابقة في مكانها.',
+    earlierMessages: 'الرسائل السابقة، للقراءة فقط. تبقى على Desktop هذا ولن تُنسخ إلى مجموعة جديدة.'
   },
   ru: {
-    ...GROUP_REASON_LOCALES["ru"],
-    ...GROUP_PEER_LOCALES["ru"],
+    ...GROUP_REASON_LOCALES['ru'],
+    ...GROUP_PEER_LOCALES['ru'],
+    ...GROUP_PEER_SETUP_LOCALES['ru'],
     abandonRetry: 'Отказаться от повтора',
-    abandonRetryWarning: 'Сообщение могло уже появиться или может прийти позже. Удаляется только локальная копия для повтора; сообщение не отзывается и не отправляется заново.',
+    abandonRetryWarning:
+      'Сообщение могло уже появиться или может прийти позже. Удаляется только локальная копия для повтора; сообщение не отзывается и не отправляется заново.',
     abandonRetryChanged: 'Ожидающее сообщение изменилось. Закройте это окно и проверьте его перед новой попыткой.',
     retryAbandoned: 'Повтор отменён. Проверьте беседу, прежде чем отправлять то же сообщение снова.',
     allMembers: 'Все участники',
     pickerLabel: 'Кого упомянуть',
     unresolvedMention: 'Некоторые упоминания не связаны с участником. Выберите его в меню @ перед отправкой.',
-    pastedMentionReset: 'Вставленные упоминания относятся к другой группе или больше недоступны. Выберите участников заново в меню @.',
+    pastedMentionReset:
+      'Вставленные упоминания относятся к другой группе или больше недоступны. Выберите участников заново в меню @.',
     memberGeneric: 'Участник',
     manageMembers: 'Управление участниками',
     manageGroup: 'Управление',
@@ -1167,15 +1138,20 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: 'Разрешить один раз',
     deny: 'Отклонить',
     discardUnknown: 'Отбросить ход',
-    discardWarning: 'Изменения уже могли произойти. Отмена хода не отменяет их. Для бота на другом компьютере нужно дождаться подтверждения, что ход остановлен или не начинался.',
-    discardStopPending: '{name} ещё не подтвердил остановку своего хода. Ход сохранён. Попробуйте отменить его снова, когда его компьютер будет отвечать.',
+    discardWarning:
+      'Изменения уже могли произойти. Отмена хода не отменяет их. Для бота на другом компьютере нужно дождаться подтверждения, что ход остановлен или не начинался.',
+    discardStopPending:
+      '{name} ещё не подтвердил остановку своего хода. Ход сохранён. Попробуйте отменить его снова, когда его компьютер будет отвечать.',
     retryBusy: '{name}, возможно, ещё выполняет этот ход. Повторите попытку, когда он завершится.',
-    discardPeerUnreachable: 'Компьютер {name} не отвечает. Ход сохранён. Восстановите подключение к этому компьютеру и попробуйте отменить ход снова.',
-    discardPeerUpdateRequired: 'Версия Hermes на компьютере {name} слишком старая, чтобы подтвердить, что этот ход не начинался. Ход сохранён. Обновите Hermes на этом компьютере и попробуйте отменить ход снова.',
+    discardPeerUnreachable:
+      'Компьютер {name} не отвечает. Ход сохранён. Восстановите подключение к этому компьютеру и попробуйте отменить ход снова.',
+    discardPeerUpdateRequired:
+      'Версия Hermes на компьютере {name} слишком старая, чтобы подтвердить, что этот ход не начинался. Ход сохранён. Обновите Hermes на этом компьютере и попробуйте отменить ход снова.',
     confirmDiscard: 'Подтвердить отмену работы',
     unconfirmedSend:
       'Предыдущая отправка не подтверждена. Повторите её с исходным текстом, прежде чем отправлять другое сообщение.',
-    restoredPendingSend: 'Восстановлена неподтверждённая отправка. Повторите её или откажитесь от повтора, прежде чем отправлять другое сообщение.',
+    restoredPendingSend:
+      'Восстановлена неподтверждённая отправка. Повторите её или откажитесь от повтора, прежде чем отправлять другое сообщение.',
     groupMessage: 'Сообщение группе',
     attachFiles: 'Прикрепить файлы',
     removeAttachment: 'Удалить вложение',
@@ -1232,7 +1208,8 @@ export const CANONICAL_GROUP_LOCALES = {
     routingEveryone: 'Отвечают все',
     routingLead: 'Ведущий: {name}',
     routingEveryoneHint: 'Каждый участник отвечает по очереди, как сейчас.',
-    routingLeadHint: 'Ведущий выбирает, кому передать сообщение; @упоминания и @everyone по-прежнему идут прямо адресатам.',
+    routingLeadHint:
+      'Ведущий выбирает, кому передать сообщение; @упоминания и @everyone по-прежнему идут прямо адресатам.',
     leadBadge: 'Ведущий',
     assignment: '{lead} передал(а) это: {names}',
     assignmentFallback: '{lead} берёт это на себя',
@@ -1243,67 +1220,67 @@ export const CANONICAL_GROUP_LOCALES = {
     continueDiscussion: 'Продолжить',
     continued: 'Продолжено',
     routingAuto: 'Выбирать отвечающих автоматически',
-    routingAutoHint: 'Быстрый вызов модели определяет, кому адресовано сообщение. @упоминания по-прежнему идут прямо тем, кого вы назвали.',
+    routingAutoHint:
+      'Быстрый вызов модели определяет, кому адресовано сообщение. @упоминания по-прежнему идут прямо тем, кого вы назвали.',
     statusBlocked: 'Заблокировано',
     statusApprovals: 'Ждут подтверждения: {count}',
     statusAttention: 'Требуется внимание: {count}',
-    stopped: 'Остановка запрошена. Ходы, ожидающие подтверждения, остаются видимыми; используйте повтор или отмену, если они доступны.',
-    pendingActionUnconfirmed: 'Не удалось подтвердить это действие. Обновите групповой чат, чтобы проверить его состояние.',
+    stopped:
+      'Остановка запрошена. Ходы, ожидающие подтверждения, остаются видимыми; используйте повтор или отмену, если они доступны.',
+    pendingActionUnconfirmed:
+      'Не удалось подтвердить это действие. Обновите групповой чат, чтобы проверить его состояние.',
     sendRefused: 'Шлюз отклонил это сообщение. Измените его и отправьте снова.',
     sendStopped: 'Остановлено до отправки. Ваше сообщение сохранено.',
     sendMaybe: 'Сообщение, возможно, уже отправлено. Повтор отправит то же сообщение, дважды оно не появится.',
-    sendSettledElsewhere: 'Другое окно Desktop уже завершило работу с этим сообщением. Проверьте беседу, прежде чем отправлять его снова.',
-    journalLoadFailed: 'Не удалось загрузить сохранённые сообщения. Отправка приостановлена, чтобы не отправить сохранённое сообщение дважды.',
+    sendSettledElsewhere:
+      'Другое окно Desktop уже завершило работу с этим сообщением. Проверьте беседу, прежде чем отправлять его снова.',
+    journalLoadFailed:
+      'Не удалось загрузить сохранённые сообщения. Отправка приостановлена, чтобы не отправить сохранённое сообщение дважды.',
     journalReload: 'Загрузить ещё раз',
     approvalAction: 'Действие',
     approvalCommand: 'Команда',
     approvalDetailsMissing: 'Подробности действия недоступны. Обновите их перед тем, как разрешить действие.',
     checkingDriver: 'Проверка групповых чатов этого подключения…',
-    legacyRoom: 'Этим групповым чатом управлял сам Desktop, поэтому он не может продолжиться на этом шлюзе. Начните новую группу с теми же ботами: она продолжит работать, когда Desktop закрыт. Прежние сообщения в неё не копируются.',
+    legacyRoom:
+      'Этим групповым чатом управлял сам Desktop, поэтому он не может продолжиться на этом шлюзе. Начните новую группу с теми же ботами: она продолжит работать, когда Desktop закрыт. Прежние сообщения в неё не копируются.',
     startGatewayGroup: 'Начать новую группу',
     createRefused: 'Шлюз не смог создать этот групповой чат.',
     createGroupSize: 'В групповом чате, размещённом на этом шлюзе, должно быть от двух до шести ботов.',
     createOtherConnection: 'В групповой чат, размещённый на этом шлюзе, можно добавить только ботов этого подключения.',
-    createDuplicateMember: 'Для группового чата, размещённого на этом шлюзе, нужны боты с разными профилями и именами; @all и @everyone зарезервированы.',
-    createUncertain: 'Шлюз не ответил, поэтому этот групповой чат, возможно, уже создан. Повторите попытку, чтобы открыть его. Второй чат создан не будет.',
-    createEnded: 'Шлюз отклонил этот групповой чат: возможно, он был изменён или удалён в другом месте. Повторите попытку, чтобы создать новый.',
-    legacyRoomElsewhere: 'Этот групповой чат не может продолжиться здесь: в нём есть боты на других компьютерах, а в групповой чат, размещённый на этом шлюзе, можно добавить ботов только одного подключения. Переключитесь на подключение, где работают эти боты, и начните группу там или начните новый групповой чат с ботами этого подключения. Прежние сообщения в новую группу не копируются.',
+    createDuplicateMember:
+      'Для группового чата, размещённого на этом шлюзе, нужны боты с разными профилями и именами; @all и @everyone зарезервированы.',
+    createUncertain:
+      'Шлюз не ответил, поэтому этот групповой чат, возможно, уже создан. Повторите попытку, чтобы открыть его. Второй чат создан не будет.',
+    createEnded:
+      'Шлюз отклонил этот групповой чат: возможно, он был изменён или удалён в другом месте. Повторите попытку, чтобы создать новый.',
+    legacyRoomElsewhere:
+      'Этот групповой чат не может продолжиться здесь: в нём есть боты на других компьютерах, а в групповой чат, размещённый на этом шлюзе, можно добавить ботов только одного подключения. Переключитесь на подключение, где работают эти боты, и начните группу там или начните новый групповой чат с ботами этого подключения. Прежние сообщения в новую группу не копируются.',
     otherConnections: 'Боты на других подключениях: {connections}',
-    legacyRoomBlocked: 'Этим групповым чатом управлял сам Desktop, поэтому он не может продолжиться на этом шлюзе, а из этих ботов в нынешнем составе нельзя создать групповой чат, размещённый на этом шлюзе (причина ниже). Начните новый групповой чат и выберите для него ботов. Прежние сообщения в него не копируются.',
-    groupsUnsupported: 'Групповые чаты здесь не открываются: Hermes на компьютере этого подключения слишком старый для них. Обновите Hermes на том компьютере, подключитесь заново и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
-    groupDriverStopped: 'Сейчас групповые чаты здесь не открываются: шлюз этого подключения не запустил групповые чаты. Перезапустите или обновите Hermes на том компьютере и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
-    groupsUnreachable: 'Не удалось связаться со шлюзом этого подключения, чтобы открыть этот групповой чат. Убедитесь, что Hermes там запущен и подключение есть, и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
-    earlierMessages: 'Прежние сообщения, только для чтения. Они остаются в этом Desktop и не копируются в новую группу.',
-    peerTargetSetup: '{connection} пока не может предоставить бота групповому чату на другом компьютере. {reason}',
-    peerSetupUpdate: 'Hermes там слишком старый. Обновите Hermes на том компьютере и проверьте снова.',
-    peerSetupApiServer: 'Его API-сервер выключен. Включите там API-сервер (gateway.platforms.api_server), перезапустите Hermes на том компьютере и проверьте снова.',
-    peerSetupRunStorage: 'Его API-сервер не может сохранять записи о запусках, поэтому сообщение может выполниться дважды. Убедитесь, что Hermes может записывать в свою папку данных на том компьютере, перезапустите там Hermes и проверьте снова.',
-    peerSetupRoomKey: 'Hermes там не может создать ключ, защищающий доступ к групповым чатам. Убедитесь, что Hermes может записывать в свою папку данных на том компьютере, перезапустите там Hermes и проверьте снова.',
-    peerSetupApprovals: 'Подтверждения команд там выключены, или его настройки не читаются. Установите подтверждения в manual или smart на том компьютере (approvals.mode) и проверьте снова.',
-    peerSetupAddress: 'У него нет адреса, доступного компьютеру, на котором работает этот групповой чат. Задайте gateway.room_link_url на том компьютере, перезапустите там Hermes и проверьте снова.',
-    peerSetupBackground: 'Hermes там останавливается, когда закрывается его Desktop. Запустите там его шлюз отдельно (hermes gateway run или установите его как службу) и проверьте снова.',
-    peerSetupGeneric: 'Обновите там Hermes, включите его API-сервер с адресом, доступным компьютеру, на котором работает этот групповой чат (gateway.room_link_url), и оставьте подтверждения включёнными.',
-    readTimedOut: 'Шлюз не ответил вовремя. Возможно, он ждёт, пока ответит компьютер бота. Нажмите «Обновить», чтобы повторить попытку.',
-    createdNotJoined: 'Групповой чат создан, но {names} ещё не присоединился. Причина показана в групповом чате; нажмите там «Повторить».',
-    peerNotJoinedBadge: 'не присоединился',
-    peerOfflineBadge: 'не в сети',
-    peerRejoinBadge: 'доступ истёк',
-    peerNotJoined: '{name} ещё не присоединился к этому групповому чату.',
-    peerRejoin: 'Доступ {name} к этому групповому чату истёк. Чтобы пригласить его снова, нажмите «Повторить» в Desktop, подключённом к его компьютеру.',
-    peerAway: 'Не удалось связаться с компьютером {name}. Следующее сообщение ему повторит попытку подключения.',
-    peerRetryFailed: 'Не удалось восстановить подключение к {name}. Убедитесь, что на его компьютере работает Hermes, и попробуйте снова.',
+    legacyRoomBlocked:
+      'Этим групповым чатом управлял сам Desktop, поэтому он не может продолжиться на этом шлюзе, а из этих ботов в нынешнем составе нельзя создать групповой чат, размещённый на этом шлюзе (причина ниже). Начните новый групповой чат и выберите для него ботов. Прежние сообщения в него не копируются.',
+    groupsUnsupported:
+      'Групповые чаты здесь не открываются: Hermes на компьютере этого подключения слишком старый для них. Обновите Hermes на том компьютере, подключитесь заново и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
+    groupDriverStopped:
+      'Сейчас групповые чаты здесь не открываются: шлюз этого подключения не запустил групповые чаты. Перезапустите или обновите Hermes на том компьютере и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
+    groupsUnreachable:
+      'Не удалось связаться со шлюзом этого подключения, чтобы открыть этот групповой чат. Убедитесь, что Hermes там запущен и подключение есть, и повторите попытку. Ничего не потеряно: прежние сообщения остаются на месте.',
+    earlierMessages: 'Прежние сообщения, только для чтения. Они остаются в этом Desktop и не копируются в новую группу.'
   },
   fr: {
-    ...GROUP_REASON_LOCALES["fr"],
-    ...GROUP_PEER_LOCALES["fr"],
+    ...GROUP_REASON_LOCALES['fr'],
+    ...GROUP_PEER_LOCALES['fr'],
+    ...GROUP_PEER_SETUP_LOCALES['fr'],
     abandonRetry: 'Abandonner la nouvelle tentative',
-    abandonRetryWarning: 'Ce message a peut-être déjà été publié ou peut arriver plus tard. Seule la copie locale destinée à une nouvelle tentative sera supprimée ; le message ne sera ni rappelé ni renvoyé.',
+    abandonRetryWarning:
+      'Ce message a peut-être déjà été publié ou peut arriver plus tard. Seule la copie locale destinée à une nouvelle tentative sera supprimée ; le message ne sera ni rappelé ni renvoyé.',
     abandonRetryChanged: 'Ce message en attente a changé. Fermez cette fenêtre et vérifiez-le avant de réessayer.',
     retryAbandoned: 'Nouvelle tentative abandonnée. Vérifiez la conversation avant de renvoyer le même message.',
     allMembers: 'Tous les membres',
     pickerLabel: 'Choisir un membre à mentionner',
-    unresolvedMention: 'Certaines mentions ne sont liées à aucun membre. Choisissez-les dans le menu @ avant d’envoyer.',
-    pastedMentionReset: 'Les mentions collées viennent d’un autre groupe ou ne sont plus disponibles. Sélectionnez à nouveau les membres dans le menu @.',
+    unresolvedMention:
+      'Certaines mentions ne sont liées à aucun membre. Choisissez-les dans le menu @ avant d’envoyer.',
+    pastedMentionReset:
+      'Les mentions collées viennent d’un autre groupe ou ne sont plus disponibles. Sélectionnez à nouveau les membres dans le menu @.',
     memberGeneric: 'Membre',
     manageMembers: 'Gérer les membres',
     manageGroup: 'Gestion',
@@ -1354,15 +1331,20 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: 'Autoriser une fois',
     deny: 'Refuser',
     discardUnknown: 'Abandonner le tour',
-    discardWarning: 'Des changements ont peut-être déjà eu lieu. Abandonner le tour ne les annule pas. Pour un bot sur un autre ordinateur, il faut attendre que cet ordinateur confirme que le tour est arrêté ou n’a jamais démarré.',
-    discardStopPending: '{name} n’a pas encore confirmé l’arrêt de son tour. Le tour a été conservé. Réessayez de l’abandonner lorsque son ordinateur répondra.',
+    discardWarning:
+      'Des changements ont peut-être déjà eu lieu. Abandonner le tour ne les annule pas. Pour un bot sur un autre ordinateur, il faut attendre que cet ordinateur confirme que le tour est arrêté ou n’a jamais démarré.',
+    discardStopPending:
+      '{name} n’a pas encore confirmé l’arrêt de son tour. Le tour a été conservé. Réessayez de l’abandonner lorsque son ordinateur répondra.',
     retryBusy: '{name} travaille peut-être encore sur ce tour. Réessayez une fois qu’il est terminé.',
-    discardPeerUnreachable: 'L’ordinateur de {name} ne répond pas. Le tour a été conservé. Reconnectez cet ordinateur, puis réessayez d’abandonner le tour.',
-    discardPeerUpdateRequired: 'Hermes sur l’ordinateur de {name} est trop ancien pour confirmer que ce tour n’a jamais démarré. Le tour a été conservé. Mettez Hermes à jour sur cet ordinateur, puis réessayez d’abandonner le tour.',
+    discardPeerUnreachable:
+      'L’ordinateur de {name} ne répond pas. Le tour a été conservé. Reconnectez cet ordinateur, puis réessayez d’abandonner le tour.',
+    discardPeerUpdateRequired:
+      'Hermes sur l’ordinateur de {name} est trop ancien pour confirmer que ce tour n’a jamais démarré. Le tour a été conservé. Mettez Hermes à jour sur cet ordinateur, puis réessayez d’abandonner le tour.',
     confirmDiscard: "Confirmer l'abandon",
     unconfirmedSend:
       "L'envoi précédent n'est pas confirmé. Réessayez son texte d'origine avant d'envoyer un autre message.",
-    restoredPendingSend: 'Un envoi non confirmé a été restauré. Réessayez ou abandonnez la nouvelle tentative avant d’envoyer un autre message.',
+    restoredPendingSend:
+      'Un envoi non confirmé a été restauré. Réessayez ou abandonnez la nouvelle tentative avant d’envoyer un autre message.',
     groupMessage: 'Message de groupe',
     attachFiles: 'Joindre des fichiers',
     removeAttachment: 'Retirer la pièce jointe',
@@ -1418,11 +1400,12 @@ export const CANONICAL_GROUP_LOCALES = {
     routingLabel: 'Qui répond à un message qui ne nomme personne',
     routingEveryone: 'Tout le monde répond',
     routingLead: 'Responsable : {name}',
-    routingEveryoneHint: 'Chaque membre a son tour, comme aujourd\'hui.',
-    routingLeadHint: 'Le responsable choisit qui s\'en charge ; les @mentions et @everyone vont toujours directement aux membres visés.',
+    routingEveryoneHint: "Chaque membre a son tour, comme aujourd'hui.",
+    routingLeadHint:
+      "Le responsable choisit qui s'en charge ; les @mentions et @everyone vont toujours directement aux membres visés.",
     leadBadge: 'Responsable',
     assignment: '{lead} a confié ceci à {names}',
-    assignmentFallback: '{lead} s\'en charge',
+    assignmentFallback: "{lead} s'en charge",
     routedTo: 'Attribué à {names}',
     routedEveryone: 'Attribué à tout le monde',
     routedFallback: 'Impossible de choisir qui répond, donc tout le monde répondra',
@@ -1430,67 +1413,71 @@ export const CANONICAL_GROUP_LOCALES = {
     continueDiscussion: 'Continuer',
     continued: 'Reprise',
     routingAuto: 'Choisir automatiquement qui répond',
-    routingAutoHint: 'Un appel rapide au modèle choisit à qui s\'adresse un message. Les @mentions vont toujours directement aux personnes nommées.',
+    routingAutoHint:
+      "Un appel rapide au modèle choisit à qui s'adresse un message. Les @mentions vont toujours directement aux personnes nommées.",
     statusBlocked: 'Bloqué',
     statusApprovals: '{count} en attente d’approbation',
     statusAttention: '{count} à traiter',
-    stopped: 'Arrêt demandé. Les tours en attente de confirmation restent visibles ; utilisez Réessayer ou Ignorer si ces actions sont proposées.',
-    pendingActionUnconfirmed: 'Cette action n’a pas pu être confirmée. Actualisez la discussion pour vérifier son état.',
+    stopped:
+      'Arrêt demandé. Les tours en attente de confirmation restent visibles ; utilisez Réessayer ou Ignorer si ces actions sont proposées.',
+    pendingActionUnconfirmed:
+      'Cette action n’a pas pu être confirmée. Actualisez la discussion pour vérifier son état.',
     sendRefused: 'La passerelle a refusé ce message. Modifiez-le puis renvoyez-le.',
     sendStopped: 'Arrêté avant l’envoi. Votre message est toujours là.',
     sendMaybe: 'Ce message a peut-être déjà été envoyé. Réessayer renvoie le même message, sans le publier deux fois.',
-    sendSettledElsewhere: 'Une autre fenêtre Desktop a déjà traité ce message. Vérifiez la conversation avant de le renvoyer.',
-    journalLoadFailed: 'Impossible de charger les messages enregistrés. L’envoi est suspendu pour éviter d’envoyer deux fois un message enregistré.',
+    sendSettledElsewhere:
+      'Une autre fenêtre Desktop a déjà traité ce message. Vérifiez la conversation avant de le renvoyer.',
+    journalLoadFailed:
+      'Impossible de charger les messages enregistrés. L’envoi est suspendu pour éviter d’envoyer deux fois un message enregistré.',
     journalReload: 'Réessayer le chargement',
     approvalAction: 'Opération',
     approvalCommand: 'Commande',
-    approvalDetailsMissing: 'Les détails de l’action sont indisponibles. Actualisez-les avant d’autoriser cette action.',
+    approvalDetailsMissing:
+      'Les détails de l’action sont indisponibles. Actualisez-les avant d’autoriser cette action.',
     checkingDriver: 'Vérification des discussions de groupe sur cette connexion…',
-    legacyRoom: 'Desktop gérait lui-même cette discussion de groupe, elle ne peut donc pas continuer sur cette passerelle. Démarrez un nouveau groupe avec les mêmes bots : il continue de fonctionner quand Desktop est fermé. Les messages précédents n’y sont pas copiés.',
+    legacyRoom:
+      'Desktop gérait lui-même cette discussion de groupe, elle ne peut donc pas continuer sur cette passerelle. Démarrez un nouveau groupe avec les mêmes bots : il continue de fonctionner quand Desktop est fermé. Les messages précédents n’y sont pas copiés.',
     startGatewayGroup: 'Démarrer un nouveau groupe',
     createRefused: 'La passerelle n’a pas pu créer cette discussion de groupe.',
     createGroupSize: 'Une discussion de groupe hébergée sur cette passerelle nécessite de deux à six bots.',
-    createOtherConnection: 'Une discussion de groupe hébergée sur cette passerelle ne peut accueillir que des bots de cette connexion.',
-    createDuplicateMember: 'Une discussion de groupe hébergée sur cette passerelle nécessite des bots aux profils et identifiants distincts ; @all et @everyone sont réservés.',
-    createUncertain: 'La passerelle n’a pas répondu : cette discussion de groupe existe peut-être déjà. Réessayez pour l’ouvrir. Elle ne sera pas créée deux fois.',
-    createEnded: 'La passerelle a refusé cette discussion de groupe : elle a peut-être été modifiée ou supprimée ailleurs. Réessayez pour en créer une nouvelle.',
-    legacyRoomElsewhere: 'Cette discussion de groupe ne peut pas continuer ici : elle comprend des bots sur d’autres ordinateurs, et une discussion de groupe hébergée sur cette passerelle n’accueille que les bots d’une seule connexion. Passez à la connexion où ces bots fonctionnent et démarrez-y un groupe, ou démarrez une nouvelle discussion de groupe avec des bots de cette connexion. Les messages précédents ne sont pas copiés dans un nouveau groupe.',
+    createOtherConnection:
+      'Une discussion de groupe hébergée sur cette passerelle ne peut accueillir que des bots de cette connexion.',
+    createDuplicateMember:
+      'Une discussion de groupe hébergée sur cette passerelle nécessite des bots aux profils et identifiants distincts ; @all et @everyone sont réservés.',
+    createUncertain:
+      'La passerelle n’a pas répondu : cette discussion de groupe existe peut-être déjà. Réessayez pour l’ouvrir. Elle ne sera pas créée deux fois.',
+    createEnded:
+      'La passerelle a refusé cette discussion de groupe : elle a peut-être été modifiée ou supprimée ailleurs. Réessayez pour en créer une nouvelle.',
+    legacyRoomElsewhere:
+      'Cette discussion de groupe ne peut pas continuer ici : elle comprend des bots sur d’autres ordinateurs, et une discussion de groupe hébergée sur cette passerelle n’accueille que les bots d’une seule connexion. Passez à la connexion où ces bots fonctionnent et démarrez-y un groupe, ou démarrez une nouvelle discussion de groupe avec des bots de cette connexion. Les messages précédents ne sont pas copiés dans un nouveau groupe.',
     otherConnections: 'Bots sur d’autres connexions : {connections}',
-    legacyRoomBlocked: 'Desktop gérait lui-même cette discussion de groupe, elle ne peut donc pas continuer sur cette passerelle, et ces bots ne peuvent pas former une discussion de groupe hébergée sur cette passerelle tels quels (la raison figure ci-dessous). Démarrez une nouvelle discussion de groupe et choisissez ses bots. Les messages précédents n’y sont pas copiés.',
-    groupsUnsupported: 'Les discussions de groupe ne peuvent pas s’ouvrir ici : la version de Hermes sur l’ordinateur de cette connexion est trop ancienne. Mettez Hermes à jour sur cet ordinateur et reconnectez-vous, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
-    groupDriverStopped: 'Les discussions de groupe ne peuvent pas s’ouvrir ici pour le moment : la passerelle de cette connexion n’exécute pas les discussions de groupe. Redémarrez ou mettez à jour Hermes sur cet ordinateur, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
-    groupsUnreachable: 'Impossible de joindre la passerelle de cette connexion pour ouvrir cette discussion de groupe. Vérifiez que Hermes y fonctionne et que vous êtes connecté, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
-    earlierMessages: 'Messages précédents, en lecture seule. Ils restent sur ce Desktop et ne sont pas copiés dans un nouveau groupe.',
-    peerTargetSetup: '{connection} ne peut pas encore accueillir de bot pour une discussion de groupe sur un autre ordinateur. {reason}',
-    peerSetupUpdate: 'La version de Hermes sur cet ordinateur est trop ancienne. Mettez Hermes à jour sur cet ordinateur, puis vérifiez de nouveau.',
-    peerSetupApiServer: 'Son serveur API est désactivé. Activez-y le serveur API (gateway.platforms.api_server), redémarrez Hermes sur cet ordinateur, puis vérifiez de nouveau.',
-    peerSetupRunStorage: 'Son serveur API ne peut pas enregistrer ses exécutions : un message pourrait s’exécuter deux fois. Vérifiez que Hermes peut écrire dans son dossier de données sur cet ordinateur, redémarrez-y Hermes, puis vérifiez de nouveau.',
-    peerSetupRoomKey: 'Hermes ne peut pas y créer la clé qui protège l’accès aux discussions de groupe. Vérifiez que Hermes peut écrire dans son dossier de données sur cet ordinateur, redémarrez-y Hermes, puis vérifiez de nouveau.',
-    peerSetupApprovals: 'Les approbations de commandes y sont désactivées, ou ses réglages sont illisibles. Réglez les approbations sur manual ou smart sur cet ordinateur (approvals.mode), puis vérifiez de nouveau.',
-    peerSetupAddress: 'Il n’a aucune adresse que l’ordinateur qui gère cette discussion de groupe peut joindre. Définissez gateway.room_link_url sur cet ordinateur, redémarrez-y Hermes, puis vérifiez de nouveau.',
-    peerSetupBackground: 'Hermes s’y arrête quand son Desktop se ferme. Lancez-y sa passerelle seule (hermes gateway run, ou installez-la comme service), puis vérifiez de nouveau.',
-    peerSetupGeneric: 'Mettez Hermes à jour là-bas, activez son serveur API avec une adresse que l’ordinateur qui gère cette discussion de groupe peut joindre (gateway.room_link_url), et laissez les approbations activées.',
-    readTimedOut: 'La passerelle n’a pas répondu à temps. Elle attend peut-être l’ordinateur d’un bot. Choisissez Actualiser pour réessayer.',
-    createdNotJoined: 'La discussion de groupe a été créée, mais {names} ne l’a pas encore rejointe. La discussion de groupe indique pourquoi ; utilisez Réessayer depuis celle-ci.',
-    peerNotJoinedBadge: 'pas encore là',
-    peerOfflineBadge: 'hors ligne',
-    peerRejoinBadge: 'accès expiré',
-    peerNotJoined: '{name} n’a pas encore rejoint cette discussion de groupe.',
-    peerRejoin: 'L’accès de {name} à cette discussion de groupe a expiré. Pour l’inviter à nouveau, choisissez Réessayer depuis un Desktop connecté à son ordinateur.',
-    peerAway: 'Impossible de joindre l’ordinateur de {name}. Le prochain message qui lui sera adressé réessaiera.',
-    peerRetryFailed: 'Impossible de reconnecter {name}. Vérifiez que Hermes fonctionne sur son ordinateur, puis réessayez.',
+    legacyRoomBlocked:
+      'Desktop gérait lui-même cette discussion de groupe, elle ne peut donc pas continuer sur cette passerelle, et ces bots ne peuvent pas former une discussion de groupe hébergée sur cette passerelle tels quels (la raison figure ci-dessous). Démarrez une nouvelle discussion de groupe et choisissez ses bots. Les messages précédents n’y sont pas copiés.',
+    groupsUnsupported:
+      'Les discussions de groupe ne peuvent pas s’ouvrir ici : la version de Hermes sur l’ordinateur de cette connexion est trop ancienne. Mettez Hermes à jour sur cet ordinateur et reconnectez-vous, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
+    groupDriverStopped:
+      'Les discussions de groupe ne peuvent pas s’ouvrir ici pour le moment : la passerelle de cette connexion n’exécute pas les discussions de groupe. Redémarrez ou mettez à jour Hermes sur cet ordinateur, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
+    groupsUnreachable:
+      'Impossible de joindre la passerelle de cette connexion pour ouvrir cette discussion de groupe. Vérifiez que Hermes y fonctionne et que vous êtes connecté, puis réessayez. Rien n’est perdu : les messages précédents restent où ils sont.',
+    earlierMessages:
+      'Messages précédents, en lecture seule. Ils restent sur ce Desktop et ne sont pas copiés dans un nouveau groupe.'
   },
   de: {
-    ...GROUP_REASON_LOCALES["de"],
-    ...GROUP_PEER_LOCALES["de"],
+    ...GROUP_REASON_LOCALES['de'],
+    ...GROUP_PEER_LOCALES['de'],
+    ...GROUP_PEER_SETUP_LOCALES['de'],
     abandonRetry: 'Wiederholung aufgeben',
-    abandonRetryWarning: 'Diese Nachricht wurde möglicherweise bereits veröffentlicht oder kommt später an. Nur die lokale Kopie für einen erneuten Versuch wird entfernt; die Nachricht wird weder zurückgerufen noch erneut gesendet.',
-    abandonRetryChanged: 'Diese ausstehende Nachricht wurde geändert. Schließen Sie dieses Dialogfeld und prüfen Sie sie vor einem erneuten Versuch.',
+    abandonRetryWarning:
+      'Diese Nachricht wurde möglicherweise bereits veröffentlicht oder kommt später an. Nur die lokale Kopie für einen erneuten Versuch wird entfernt; die Nachricht wird weder zurückgerufen noch erneut gesendet.',
+    abandonRetryChanged:
+      'Diese ausstehende Nachricht wurde geändert. Schließen Sie dieses Dialogfeld und prüfen Sie sie vor einem erneuten Versuch.',
     retryAbandoned: 'Wiederholung aufgegeben. Prüfen Sie den Verlauf, bevor Sie dieselbe Nachricht erneut senden.',
     allMembers: 'Alle Mitglieder',
     pickerLabel: 'Mitglied erwähnen',
-    unresolvedMention: 'Einige Erwähnungen sind keinem Mitglied zugeordnet. Wähle die Mitglieder vor dem Senden im @-Menü aus.',
-    pastedMentionReset: 'Eingefügte Erwähnungen gehören zu einer anderen Gruppe oder sind nicht mehr verfügbar. Wähle die Mitglieder erneut im @-Menü aus.',
+    unresolvedMention:
+      'Einige Erwähnungen sind keinem Mitglied zugeordnet. Wähle die Mitglieder vor dem Senden im @-Menü aus.',
+    pastedMentionReset:
+      'Eingefügte Erwähnungen gehören zu einer anderen Gruppe oder sind nicht mehr verfügbar. Wähle die Mitglieder erneut im @-Menü aus.',
     memberGeneric: 'Mitglied',
     manageMembers: 'Mitglieder verwalten',
     manageGroup: 'Verwalten',
@@ -1541,15 +1528,20 @@ export const CANONICAL_GROUP_LOCALES = {
     allowOnce: 'Einmal erlauben',
     deny: 'Ablehnen',
     discardUnknown: 'Turn verwerfen',
-    discardWarning: 'Es können bereits Änderungen erfolgt sein. Verwerfen macht sie nicht rückgängig. Bei einem Bot auf einem anderen Computer wird gewartet, bis dieser Computer bestätigt, dass der Turn gestoppt wurde oder nie begonnen hat.',
-    discardStopPending: '{name} hat noch nicht bestätigt, dass der Turn gestoppt wurde. Der Turn bleibt erhalten. Versuchen Sie erneut, ihn zu verwerfen, sobald sein Computer antwortet.',
+    discardWarning:
+      'Es können bereits Änderungen erfolgt sein. Verwerfen macht sie nicht rückgängig. Bei einem Bot auf einem anderen Computer wird gewartet, bis dieser Computer bestätigt, dass der Turn gestoppt wurde oder nie begonnen hat.',
+    discardStopPending:
+      '{name} hat noch nicht bestätigt, dass der Turn gestoppt wurde. Der Turn bleibt erhalten. Versuchen Sie erneut, ihn zu verwerfen, sobald sein Computer antwortet.',
     retryBusy: '{name} arbeitet möglicherweise noch an diesem Zug. Versuchen Sie es erneut, sobald er beendet ist.',
-    discardPeerUnreachable: 'Der Computer von {name} antwortet nicht. Der Turn bleibt erhalten. Stellen Sie die Verbindung zu diesem Computer wieder her und versuchen Sie dann erneut, den Turn zu verwerfen.',
-    discardPeerUpdateRequired: 'Hermes auf dem Computer von {name} ist zu alt, um zu bestätigen, dass dieser Turn nie begonnen hat. Der Turn bleibt erhalten. Aktualisieren Sie Hermes auf diesem Computer und versuchen Sie dann erneut, den Turn zu verwerfen.',
+    discardPeerUnreachable:
+      'Der Computer von {name} antwortet nicht. Der Turn bleibt erhalten. Stellen Sie die Verbindung zu diesem Computer wieder her und versuchen Sie dann erneut, den Turn zu verwerfen.',
+    discardPeerUpdateRequired:
+      'Hermes auf dem Computer von {name} ist zu alt, um zu bestätigen, dass dieser Turn nie begonnen hat. Der Turn bleibt erhalten. Aktualisieren Sie Hermes auf diesem Computer und versuchen Sie dann erneut, den Turn zu verwerfen.',
     confirmDiscard: 'Verwerfen bestätigen',
     unconfirmedSend:
       'Der vorherige Versand ist unbestätigt. Wiederholen Sie seinen ursprünglichen Text, bevor Sie eine weitere Nachricht senden.',
-    restoredPendingSend: 'Ein unbestätigter Versand wurde wiederhergestellt. Versuchen Sie es erneut oder geben Sie die Wiederholung auf, bevor Sie eine weitere Nachricht senden.',
+    restoredPendingSend:
+      'Ein unbestätigter Versand wurde wiederhergestellt. Versuchen Sie es erneut oder geben Sie die Wiederholung auf, bevor Sie eine weitere Nachricht senden.',
     groupMessage: 'Gruppennachricht',
     attachFiles: 'Dateien anhängen',
     removeAttachment: 'Anhang entfernen',
@@ -1606,7 +1598,8 @@ export const CANONICAL_GROUP_LOCALES = {
     routingEveryone: 'Alle antworten',
     routingLead: 'Leitung: {name}',
     routingEveryoneHint: 'Jedes Mitglied ist an der Reihe, wie bisher.',
-    routingLeadHint: 'Die Leitung wählt, wer übernimmt; @Erwähnungen und @everyone gehen weiterhin direkt an diese Mitglieder.',
+    routingLeadHint:
+      'Die Leitung wählt, wer übernimmt; @Erwähnungen und @everyone gehen weiterhin direkt an diese Mitglieder.',
     leadBadge: 'Leitung',
     assignment: '{lead} hat das an {names} gegeben',
     assignmentFallback: '{lead} übernimmt das',
@@ -1617,67 +1610,70 @@ export const CANONICAL_GROUP_LOCALES = {
     continueDiscussion: 'Fortsetzen',
     continued: 'Fortgesetzt',
     routingAuto: 'Automatisch wählen, wer antwortet',
-    routingAutoHint: 'Ein kurzer Modellaufruf wählt, an wen eine Nachricht gerichtet ist. @Erwähnungen gehen weiterhin direkt an die genannten Personen.',
+    routingAutoHint:
+      'Ein kurzer Modellaufruf wählt, an wen eine Nachricht gerichtet ist. @Erwähnungen gehen weiterhin direkt an die genannten Personen.',
     statusBlocked: 'Blockiert',
     statusApprovals: 'Freigabe ausstehend: {count}',
     statusAttention: 'Aufmerksamkeit erforderlich: {count}',
-    stopped: 'Stopp angefordert. Turns, deren Bestätigung aussteht, bleiben sichtbar; nutzen Sie „Erneut versuchen“ oder „Verwerfen“, wenn angeboten.',
-    pendingActionUnconfirmed: 'Diese Aktion konnte nicht bestätigt werden. Aktualisieren Sie den Gruppenchat, um ihren Status zu prüfen.',
+    stopped:
+      'Stopp angefordert. Turns, deren Bestätigung aussteht, bleiben sichtbar; nutzen Sie „Erneut versuchen“ oder „Verwerfen“, wenn angeboten.',
+    pendingActionUnconfirmed:
+      'Diese Aktion konnte nicht bestätigt werden. Aktualisieren Sie den Gruppenchat, um ihren Status zu prüfen.',
     sendRefused: 'Das Gateway hat diese Nachricht abgelehnt. Bearbeiten Sie sie und senden Sie sie erneut.',
     sendStopped: 'Vor dem Senden gestoppt. Ihre Nachricht ist noch da.',
-    sendMaybe: 'Diese Nachricht wurde möglicherweise schon gesendet. Erneut versuchen sendet dieselbe Nachricht, ohne sie doppelt zu posten.',
-    sendSettledElsewhere: 'Ein anderes Desktop-Fenster hat diese Nachricht bereits abgeschlossen. Prüfen Sie die Unterhaltung, bevor Sie sie erneut senden.',
-    journalLoadFailed: 'Gespeicherte Nachrichten konnten nicht geladen werden. Das Senden ist pausiert, damit eine gespeicherte Nachricht nicht doppelt gesendet wird.',
+    sendMaybe:
+      'Diese Nachricht wurde möglicherweise schon gesendet. Erneut versuchen sendet dieselbe Nachricht, ohne sie doppelt zu posten.',
+    sendSettledElsewhere:
+      'Ein anderes Desktop-Fenster hat diese Nachricht bereits abgeschlossen. Prüfen Sie die Unterhaltung, bevor Sie sie erneut senden.',
+    journalLoadFailed:
+      'Gespeicherte Nachrichten konnten nicht geladen werden. Das Senden ist pausiert, damit eine gespeicherte Nachricht nicht doppelt gesendet wird.',
     journalReload: 'Erneut laden',
     approvalAction: 'Aktion',
     approvalCommand: 'Befehl',
-    approvalDetailsMissing: 'Die Aktionsdetails sind nicht verfügbar. Aktualisieren Sie sie, bevor Sie diese Aktion erlauben.',
+    approvalDetailsMissing:
+      'Die Aktionsdetails sind nicht verfügbar. Aktualisieren Sie sie, bevor Sie diese Aktion erlauben.',
     checkingDriver: 'Gruppenchats dieser Verbindung werden geprüft…',
-    legacyRoom: 'Desktop hat diesen Gruppenchat selbst ausgeführt, daher kann er auf diesem Gateway nicht weiterlaufen. Starten Sie eine neue Gruppe mit denselben Bots: Sie arbeitet weiter, wenn Desktop geschlossen ist. Frühere Nachrichten werden nicht in sie kopiert.',
+    legacyRoom:
+      'Desktop hat diesen Gruppenchat selbst ausgeführt, daher kann er auf diesem Gateway nicht weiterlaufen. Starten Sie eine neue Gruppe mit denselben Bots: Sie arbeitet weiter, wenn Desktop geschlossen ist. Frühere Nachrichten werden nicht in sie kopiert.',
     startGatewayGroup: 'Neue Gruppe starten',
     createRefused: 'Das Gateway konnte diesen Gruppenchat nicht erstellen.',
     createGroupSize: 'Ein auf diesem Gateway gehosteter Gruppenchat braucht zwei bis sechs Bots.',
     createOtherConnection: 'Ein auf diesem Gateway gehosteter Gruppenchat kann nur Bots dieser Verbindung aufnehmen.',
-    createDuplicateMember: 'Ein auf diesem Gateway gehosteter Gruppenchat braucht Bots mit unterschiedlichen Profilen und Handles; @all und @everyone sind reserviert.',
-    createUncertain: 'Das Gateway hat nicht geantwortet, daher gibt es diesen Gruppenchat möglicherweise schon. Versuchen Sie es erneut, um ihn zu öffnen. Er wird nicht doppelt erstellt.',
-    createEnded: 'Das Gateway hat diesen Gruppenchat abgelehnt. Er wurde möglicherweise an anderer Stelle geändert oder entfernt. Versuchen Sie es erneut, um einen neuen zu erstellen.',
-    legacyRoomElsewhere: 'Dieser Gruppenchat kann hier nicht weiterlaufen: Er enthält Bots auf anderen Computern, und ein auf diesem Gateway gehosteter Gruppenchat nimmt nur Bots einer einzigen Verbindung auf. Wechseln Sie zu der Verbindung, auf der diese Bots laufen, und starten Sie dort eine Gruppe, oder starten Sie einen neuen Gruppenchat mit Bots dieser Verbindung. Frühere Nachrichten werden nicht in eine neue Gruppe kopiert.',
+    createDuplicateMember:
+      'Ein auf diesem Gateway gehosteter Gruppenchat braucht Bots mit unterschiedlichen Profilen und Handles; @all und @everyone sind reserviert.',
+    createUncertain:
+      'Das Gateway hat nicht geantwortet, daher gibt es diesen Gruppenchat möglicherweise schon. Versuchen Sie es erneut, um ihn zu öffnen. Er wird nicht doppelt erstellt.',
+    createEnded:
+      'Das Gateway hat diesen Gruppenchat abgelehnt. Er wurde möglicherweise an anderer Stelle geändert oder entfernt. Versuchen Sie es erneut, um einen neuen zu erstellen.',
+    legacyRoomElsewhere:
+      'Dieser Gruppenchat kann hier nicht weiterlaufen: Er enthält Bots auf anderen Computern, und ein auf diesem Gateway gehosteter Gruppenchat nimmt nur Bots einer einzigen Verbindung auf. Wechseln Sie zu der Verbindung, auf der diese Bots laufen, und starten Sie dort eine Gruppe, oder starten Sie einen neuen Gruppenchat mit Bots dieser Verbindung. Frühere Nachrichten werden nicht in eine neue Gruppe kopiert.',
     otherConnections: 'Bots auf anderen Verbindungen: {connections}',
-    legacyRoomBlocked: 'Desktop hat diesen Gruppenchat selbst ausgeführt, daher kann er auf diesem Gateway nicht weiterlaufen, und diese Bots können so keinen auf diesem Gateway gehosteten Gruppenchat bilden (den Grund finden Sie unten). Starten Sie einen neuen Gruppenchat und wählen Sie seine Bots. Frühere Nachrichten werden nicht in ihn kopiert.',
-    groupsUnsupported: 'Gruppenchats lassen sich hier nicht öffnen: Hermes auf dem Computer dieser Verbindung ist dafür zu alt. Aktualisieren Sie Hermes auf diesem Computer, verbinden Sie sich neu und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
-    groupDriverStopped: 'Gruppenchats lassen sich hier gerade nicht öffnen: Das Gateway dieser Verbindung führt keine Gruppenchats aus. Starten Sie Hermes auf diesem Computer neu oder aktualisieren Sie es, und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
-    groupsUnreachable: 'Das Gateway dieser Verbindung war nicht erreichbar, um diesen Gruppenchat zu öffnen. Prüfen Sie, ob Hermes dort läuft und Sie verbunden sind, und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
-    earlierMessages: 'Frühere Nachrichten, nur lesbar. Sie bleiben auf diesem Desktop und werden nicht in eine neue Gruppe kopiert.',
-    peerTargetSetup: '{connection} kann noch keinen Bot für einen Gruppenchat auf einem anderen Computer bereitstellen. {reason}',
-    peerSetupUpdate: 'Hermes ist dort zu alt dafür. Aktualisieren Sie Hermes auf diesem Computer und prüfen Sie es dann erneut.',
-    peerSetupApiServer: 'Sein API-Server ist ausgeschaltet. Schalten Sie dort den API-Server ein (gateway.platforms.api_server), starten Sie Hermes auf diesem Computer neu und prüfen Sie es dann erneut.',
-    peerSetupRunStorage: 'Sein API-Server kann keine Ausführungsprotokolle speichern, daher könnte eine Nachricht doppelt ausgeführt werden. Stellen Sie sicher, dass Hermes auf diesem Computer in seinen Datenordner schreiben kann, starten Sie Hermes dort neu und prüfen Sie es dann erneut.',
-    peerSetupRoomKey: 'Hermes kann dort den Schlüssel nicht erstellen, der den Zugriff auf Gruppenchats schützt. Stellen Sie sicher, dass Hermes auf diesem Computer in seinen Datenordner schreiben kann, starten Sie Hermes dort neu und prüfen Sie es dann erneut.',
-    peerSetupApprovals: 'Befehlsfreigaben sind dort ausgeschaltet, oder seine Einstellungen lassen sich nicht lesen. Setzen Sie die Freigaben auf diesem Computer auf manual oder smart (approvals.mode) und prüfen Sie es dann erneut.',
-    peerSetupAddress: 'Dort ist keine Adresse eingerichtet, die der Computer erreichen kann, auf dem dieser Gruppenchat läuft. Legen Sie auf diesem Computer gateway.room_link_url fest, starten Sie Hermes dort neu und prüfen Sie es dann erneut.',
-    peerSetupBackground: 'Hermes stoppt dort, wenn sein Desktop geschlossen wird. Starten Sie dort sein Gateway eigenständig (hermes gateway run oder als Dienst installiert) und prüfen Sie es dann erneut.',
-    peerSetupGeneric: 'Aktualisieren Sie Hermes dort, aktivieren Sie seinen API-Server mit einer Adresse, die der Computer erreichen kann, auf dem dieser Gruppenchat läuft (gateway.room_link_url), und lassen Sie Freigaben eingeschaltet.',
-    readTimedOut: 'Das Gateway hat nicht rechtzeitig geantwortet. Möglicherweise wartet es auf den Computer eines Bots. Wählen Sie „Aktualisieren“, um es erneut zu versuchen.',
-    createdNotJoined: 'Der Gruppenchat wurde erstellt, aber {names} ist noch nicht beigetreten. Der Gruppenchat zeigt den Grund; verwenden Sie dort „Erneut versuchen“.',
-    peerNotJoinedBadge: 'nicht beigetreten',
-    peerOfflineBadge: 'nicht erreichbar',
-    peerRejoinBadge: 'Zugriff abgelaufen',
-    peerNotJoined: '{name} ist diesem Gruppenchat noch nicht beigetreten.',
-    peerRejoin: 'Der Zugriff von {name} auf diesen Gruppenchat ist abgelaufen. Um das Mitglied erneut einzuladen, wählen Sie „Erneut versuchen“ in einem Desktop, der mit seinem Computer verbunden ist.',
-    peerAway: 'Der Computer von {name} konnte nicht erreicht werden. Bei der nächsten Nachricht an dieses Mitglied wird es erneut versucht.',
-    peerRetryFailed: 'Die Verbindung zu {name} konnte nicht wiederhergestellt werden. Prüfen Sie, ob Hermes auf seinem Computer läuft, und versuchen Sie es erneut.',
+    legacyRoomBlocked:
+      'Desktop hat diesen Gruppenchat selbst ausgeführt, daher kann er auf diesem Gateway nicht weiterlaufen, und diese Bots können so keinen auf diesem Gateway gehosteten Gruppenchat bilden (den Grund finden Sie unten). Starten Sie einen neuen Gruppenchat und wählen Sie seine Bots. Frühere Nachrichten werden nicht in ihn kopiert.',
+    groupsUnsupported:
+      'Gruppenchats lassen sich hier nicht öffnen: Hermes auf dem Computer dieser Verbindung ist dafür zu alt. Aktualisieren Sie Hermes auf diesem Computer, verbinden Sie sich neu und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
+    groupDriverStopped:
+      'Gruppenchats lassen sich hier gerade nicht öffnen: Das Gateway dieser Verbindung führt keine Gruppenchats aus. Starten Sie Hermes auf diesem Computer neu oder aktualisieren Sie es, und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
+    groupsUnreachable:
+      'Das Gateway dieser Verbindung war nicht erreichbar, um diesen Gruppenchat zu öffnen. Prüfen Sie, ob Hermes dort läuft und Sie verbunden sind, und versuchen Sie es dann erneut. Nichts geht verloren: Frühere Nachrichten bleiben, wo sie sind.',
+    earlierMessages:
+      'Frühere Nachrichten, nur lesbar. Sie bleiben auf diesem Desktop und werden nicht in eine neue Gruppe kopiert.'
   },
   es: {
-    ...GROUP_REASON_LOCALES["es"],
-    ...GROUP_PEER_LOCALES["es"],
+    ...GROUP_REASON_LOCALES['es'],
+    ...GROUP_PEER_LOCALES['es'],
+    ...GROUP_PEER_SETUP_LOCALES['es'],
     abandonRetry: 'Abandonar reintento',
-    abandonRetryWarning: 'Puede que este mensaje ya se haya publicado o que llegue más tarde. Esto solo elimina la copia local para reintentar; no retira ni reenvía el mensaje.',
-    abandonRetryChanged: 'Este mensaje pendiente ha cambiado. Cierra este cuadro y revísalo antes de volver a intentarlo.',
+    abandonRetryWarning:
+      'Puede que este mensaje ya se haya publicado o que llegue más tarde. Esto solo elimina la copia local para reintentar; no retira ni reenvía el mensaje.',
+    abandonRetryChanged:
+      'Este mensaje pendiente ha cambiado. Cierra este cuadro y revísalo antes de volver a intentarlo.',
     retryAbandoned: 'Reintento abandonado. Revisa la conversación antes de volver a enviar el mismo mensaje.',
     allMembers: 'Todos los miembros',
     pickerLabel: 'Elegir a quién mencionar',
     unresolvedMention: 'Algunas menciones no están vinculadas a un miembro. Elígelos en el menú @ antes de enviar.',
-    pastedMentionReset: 'Las menciones pegadas pertenecen a otro grupo o ya no están disponibles. Vuelve a elegir los miembros en el menú @.',
+    pastedMentionReset:
+      'Las menciones pegadas pertenecen a otro grupo o ya no están disponibles. Vuelve a elegir los miembros en el menú @.',
     memberGeneric: 'Miembro',
     manageMembers: 'Gestionar miembros',
     manageGroup: 'Gestión',
@@ -1722,20 +1718,24 @@ export const CANONICAL_GROUP_LOCALES = {
     loadingGroup: 'Cargando grupo…',
     loadingGroups: 'Cargando chats de grupo…',
     emptyGroups: 'No se encontraron chats de grupo.',
-    driverUnavailable:
-      'Este chat de grupo no está disponible. Actualiza o vuelve a conectar la pasarela que lo aloja.',
+    driverUnavailable: 'Este chat de grupo no está disponible. Actualiza o vuelve a conectar la pasarela que lo aloja.',
     invalidLogCursor: 'No se pudo cargar más historial de este chat de grupo.',
     allowOnce: 'Permitir una vez',
     deny: 'Denegar',
     discardUnknown: 'Descartar turno',
-    discardWarning: 'Es posible que ya se hayan producido cambios. Descartar no los deshace. Si el bot está en otro equipo, se espera a que ese equipo confirme que el turno se ha detenido o nunca llegó a empezar.',
-    discardStopPending: '{name} aún no ha confirmado que su turno se haya detenido. El turno se ha conservado. Vuelve a intentar descartarlo cuando su equipo responda.',
+    discardWarning:
+      'Es posible que ya se hayan producido cambios. Descartar no los deshace. Si el bot está en otro equipo, se espera a que ese equipo confirme que el turno se ha detenido o nunca llegó a empezar.',
+    discardStopPending:
+      '{name} aún no ha confirmado que su turno se haya detenido. El turno se ha conservado. Vuelve a intentar descartarlo cuando su equipo responda.',
     retryBusy: 'Puede que {name} siga trabajando en este turno. Inténtalo de nuevo cuando termine.',
-    discardPeerUnreachable: 'El equipo de {name} no responde. El turno se ha conservado. Reconecta ese equipo y vuelve a intentar descartar el turno.',
-    discardPeerUpdateRequired: 'La versión de Hermes en el equipo de {name} es demasiado antigua para confirmar que este turno nunca llegó a empezar. El turno se ha conservado. Actualiza Hermes en ese equipo y vuelve a intentar descartar el turno.',
+    discardPeerUnreachable:
+      'El equipo de {name} no responde. El turno se ha conservado. Reconecta ese equipo y vuelve a intentar descartar el turno.',
+    discardPeerUpdateRequired:
+      'La versión de Hermes en el equipo de {name} es demasiado antigua para confirmar que este turno nunca llegó a empezar. El turno se ha conservado. Actualiza Hermes en ese equipo y vuelve a intentar descartar el turno.',
     confirmDiscard: 'Confirmar descarte',
     unconfirmedSend: 'El envío anterior no está confirmado. Reintenta su texto original antes de enviar otro mensaje.',
-    restoredPendingSend: 'Se restauró un envío sin confirmar. Reinténtalo o abandona el reintento antes de enviar otro mensaje.',
+    restoredPendingSend:
+      'Se restauró un envío sin confirmar. Reinténtalo o abandona el reintento antes de enviar otro mensaje.',
     groupMessage: 'Mensaje de grupo',
     attachFiles: 'Adjuntar archivos',
     removeAttachment: 'Quitar adjunto',
@@ -1792,7 +1792,8 @@ export const CANONICAL_GROUP_LOCALES = {
     routingEveryone: 'Responden todos',
     routingLead: 'Líder: {name}',
     routingEveryoneHint: 'Cada miembro tiene su turno, como ahora.',
-    routingLeadHint: 'El líder elige quién se encarga; las @menciones y @everyone siguen yendo directamente a esos miembros.',
+    routingLeadHint:
+      'El líder elige quién se encarga; las @menciones y @everyone siguen yendo directamente a esos miembros.',
     leadBadge: 'Líder',
     assignment: '{lead} se lo dio a {names}',
     assignmentFallback: '{lead} se encarga',
@@ -1803,54 +1804,50 @@ export const CANONICAL_GROUP_LOCALES = {
     continueDiscussion: 'Continuar',
     continued: 'Reanudado',
     routingAuto: 'Elegir automáticamente quién responde',
-    routingAutoHint: 'Una llamada rápida al modelo elige a quién va dirigido un mensaje. Las @menciones siguen yendo directamente a quienes nombras.',
+    routingAutoHint:
+      'Una llamada rápida al modelo elige a quién va dirigido un mensaje. Las @menciones siguen yendo directamente a quienes nombras.',
     statusBlocked: 'Bloqueado',
     statusApprovals: '{count} esperando aprobación',
     statusAttention: 'Atención necesaria: {count}',
-    stopped: 'Parada solicitada. Los turnos pendientes de confirmación siguen visibles; usa Reintentar o Descartar cuando se ofrezcan.',
+    stopped:
+      'Parada solicitada. Los turnos pendientes de confirmación siguen visibles; usa Reintentar o Descartar cuando se ofrezcan.',
     pendingActionUnconfirmed: 'No pudimos confirmar esta acción. Actualiza el chat para comprobar su estado.',
     sendRefused: 'La pasarela rechazó este mensaje. Edítalo y envíalo de nuevo.',
     sendStopped: 'Se detuvo antes de enviar. Tu mensaje sigue aquí.',
-    sendMaybe: 'Es posible que este mensaje ya se haya enviado. Reintentar envía el mismo mensaje sin publicarlo dos veces.',
-    sendSettledElsewhere: 'Otra ventana de Desktop ya terminó con este mensaje. Revisa la conversación antes de volver a enviarlo.',
-    journalLoadFailed: 'No se pudieron cargar los mensajes guardados. El envío está en pausa para evitar enviar un mensaje guardado dos veces.',
+    sendMaybe:
+      'Es posible que este mensaje ya se haya enviado. Reintentar envía el mismo mensaje sin publicarlo dos veces.',
+    sendSettledElsewhere:
+      'Otra ventana de Desktop ya terminó con este mensaje. Revisa la conversación antes de volver a enviarlo.',
+    journalLoadFailed:
+      'No se pudieron cargar los mensajes guardados. El envío está en pausa para evitar enviar un mensaje guardado dos veces.',
     journalReload: 'Volver a cargar',
     approvalAction: 'Acción',
     approvalCommand: 'Comando',
     approvalDetailsMissing: 'Los detalles de la acción no están disponibles. Actualízalos antes de permitirla.',
     checkingDriver: 'Comprobando los chats de grupo de esta conexión…',
-    legacyRoom: 'Desktop ejecutaba este chat de grupo por sí mismo, así que no puede continuar en esta pasarela. Inicia un grupo nuevo con los mismos bots: seguirá funcionando cuando Desktop esté cerrado. Los mensajes anteriores no se copian en él.',
+    legacyRoom:
+      'Desktop ejecutaba este chat de grupo por sí mismo, así que no puede continuar en esta pasarela. Inicia un grupo nuevo con los mismos bots: seguirá funcionando cuando Desktop esté cerrado. Los mensajes anteriores no se copian en él.',
     startGatewayGroup: 'Iniciar nuevo grupo',
     createRefused: 'La pasarela no pudo crear este chat de grupo.',
     createGroupSize: 'Un chat de grupo alojado en esta pasarela necesita de dos a seis bots.',
     createOtherConnection: 'Un chat de grupo alojado en esta pasarela solo puede incluir bots de esta conexión.',
-    createDuplicateMember: 'Un chat de grupo alojado en esta pasarela necesita bots con perfiles e identificadores distintos; @all y @everyone están reservados.',
-    createUncertain: 'La pasarela no respondió, así que este chat de grupo puede que ya exista. Inténtalo de nuevo para abrirlo. No se creará dos veces.',
-    createEnded: 'La pasarela rechazó este chat de grupo; puede que se haya cambiado o eliminado en otro lugar. Inténtalo de nuevo para crear uno nuevo.',
-    legacyRoomElsewhere: 'Este chat de grupo no puede continuar aquí: tiene bots en otros equipos, y un chat de grupo alojado en esta pasarela solo incluye bots de una conexión. Cambia a la conexión donde funcionan esos bots e inicia un grupo allí, o inicia un chat de grupo nuevo con bots de esta conexión. Los mensajes anteriores no se copian en un grupo nuevo.',
+    createDuplicateMember:
+      'Un chat de grupo alojado en esta pasarela necesita bots con perfiles e identificadores distintos; @all y @everyone están reservados.',
+    createUncertain:
+      'La pasarela no respondió, así que este chat de grupo puede que ya exista. Inténtalo de nuevo para abrirlo. No se creará dos veces.',
+    createEnded:
+      'La pasarela rechazó este chat de grupo; puede que se haya cambiado o eliminado en otro lugar. Inténtalo de nuevo para crear uno nuevo.',
+    legacyRoomElsewhere:
+      'Este chat de grupo no puede continuar aquí: tiene bots en otros equipos, y un chat de grupo alojado en esta pasarela solo incluye bots de una conexión. Cambia a la conexión donde funcionan esos bots e inicia un grupo allí, o inicia un chat de grupo nuevo con bots de esta conexión. Los mensajes anteriores no se copian en un grupo nuevo.',
     otherConnections: 'Bots en otras conexiones: {connections}',
-    legacyRoomBlocked: 'Desktop ejecutaba este chat de grupo por sí mismo, así que no puede continuar en esta pasarela, y estos bots no pueden formar un chat de grupo alojado en esta pasarela tal como están (el motivo está abajo). Inicia un chat de grupo nuevo y elige sus bots. Los mensajes anteriores no se copian en él.',
-    groupsUnsupported: 'Los chats de grupo no se pueden abrir aquí: Hermes en el equipo de esta conexión es demasiado antiguo para ellos. Actualiza Hermes en ese equipo y vuelve a conectarte; después, inténtalo de nuevo. No se pierde nada: los mensajes anteriores siguen donde están.',
-    groupDriverStopped: 'Los chats de grupo no se pueden abrir aquí ahora mismo: la pasarela de esta conexión no está ejecutando los chats de grupo. Reinicia o actualiza Hermes en ese equipo y vuelve a intentarlo. No se pierde nada: los mensajes anteriores siguen donde están.',
-    groupsUnreachable: 'No se pudo contactar con la pasarela de esta conexión para abrir este chat de grupo. Comprueba que Hermes se esté ejecutando allí y que estés conectado, y vuelve a intentarlo. No se pierde nada: los mensajes anteriores siguen donde están.',
-    earlierMessages: 'Mensajes anteriores, solo lectura. Se quedan en este Desktop y no se copian en un grupo nuevo.',
-    peerTargetSetup: '{connection} todavía no puede aportar un bot a un chat de grupo de otro equipo. {reason}',
-    peerSetupUpdate: 'Hermes es demasiado antiguo allí. Actualiza Hermes en ese equipo y vuelve a comprobarlo.',
-    peerSetupApiServer: 'Su servidor API está desactivado. Activa allí el servidor API (gateway.platforms.api_server), reinicia Hermes en ese equipo y vuelve a comprobarlo.',
-    peerSetupRunStorage: 'Su servidor API no puede guardar los registros de ejecución, así que un mensaje podría ejecutarse dos veces. Comprueba que Hermes pueda escribir en su carpeta de datos en ese equipo, reinicia Hermes allí y vuelve a comprobarlo.',
-    peerSetupRoomKey: 'Hermes no puede crear allí la clave que protege el acceso a los chats de grupo. Comprueba que Hermes pueda escribir en su carpeta de datos en ese equipo, reinicia Hermes allí y vuelve a comprobarlo.',
-    peerSetupApprovals: 'Las aprobaciones de comandos están desactivadas allí, o no se puede leer su configuración. Configura las aprobaciones como manual o smart en ese equipo (approvals.mode) y vuelve a comprobarlo.',
-    peerSetupAddress: 'No tiene una dirección que el equipo que gestiona este chat de grupo pueda alcanzar. Configura gateway.room_link_url en ese equipo, reinicia Hermes allí y vuelve a comprobarlo.',
-    peerSetupBackground: 'Hermes se detiene allí cuando se cierra su Desktop. Ejecuta allí su pasarela por sí sola (hermes gateway run, o instálala como servicio) y vuelve a comprobarlo.',
-    peerSetupGeneric: 'Actualiza Hermes allí, activa su servidor API con una dirección que el equipo que gestiona este chat de grupo pueda alcanzar (gateway.room_link_url) y mantén activadas las aprobaciones.',
-    readTimedOut: 'La pasarela no respondió a tiempo. Puede que esté esperando al equipo de un bot. Elige Actualizar para reintentarlo.',
-    createdNotJoined: 'El chat de grupo se ha creado, pero {names} aún no se ha unido. El chat de grupo indica el motivo; usa Reintentar allí.',
-    peerNotJoinedBadge: 'sin unirse',
-    peerOfflineBadge: 'sin conexión',
-    peerRejoinBadge: 'acceso caducado',
-    peerNotJoined: '{name} aún no se ha unido a este chat de grupo.',
-    peerRejoin: 'El acceso de {name} a este chat de grupo ha caducado. Para volver a invitarlo, elige Reintentar desde un Desktop conectado a su equipo.',
-    peerAway: 'No se pudo conectar con el equipo de {name}. El próximo mensaje dirigido a ese miembro lo volverá a intentar.',
-    peerRetryFailed: 'No se pudo reconectar a {name}. Comprueba que Hermes se esté ejecutando en su equipo y vuelve a intentarlo.',
+    legacyRoomBlocked:
+      'Desktop ejecutaba este chat de grupo por sí mismo, así que no puede continuar en esta pasarela, y estos bots no pueden formar un chat de grupo alojado en esta pasarela tal como están (el motivo está abajo). Inicia un chat de grupo nuevo y elige sus bots. Los mensajes anteriores no se copian en él.',
+    groupsUnsupported:
+      'Los chats de grupo no se pueden abrir aquí: Hermes en el equipo de esta conexión es demasiado antiguo para ellos. Actualiza Hermes en ese equipo y vuelve a conectarte; después, inténtalo de nuevo. No se pierde nada: los mensajes anteriores siguen donde están.',
+    groupDriverStopped:
+      'Los chats de grupo no se pueden abrir aquí ahora mismo: la pasarela de esta conexión no está ejecutando los chats de grupo. Reinicia o actualiza Hermes en ese equipo y vuelve a intentarlo. No se pierde nada: los mensajes anteriores siguen donde están.',
+    groupsUnreachable:
+      'No se pudo contactar con la pasarela de esta conexión para abrir este chat de grupo. Comprueba que Hermes se esté ejecutando allí y que estés conectado, y vuelve a intentarlo. No se pierde nada: los mensajes anteriores siguen donde están.',
+    earlierMessages: 'Mensajes anteriores, solo lectura. Se quedan en este Desktop y no se copian en un grupo nuevo.'
   }
 } satisfies Record<string, CanonicalGroupMessages>

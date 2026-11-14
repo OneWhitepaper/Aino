@@ -9,6 +9,10 @@
  * like a successful shot of nothing.
  */
 
+import type { Session } from 'electron'
+
+import { isOwnedPreviewGuest, watchNativePreviewOwner } from './preview-guest-owner'
+
 export interface CaptureRect {
   height: number
   width: number
@@ -24,6 +28,75 @@ export interface CaptureViewport {
 export interface CaptureGuest {
   capturePage: (rect?: CaptureRect) => Promise<CaptureImage>
   isDestroyed: () => boolean
+}
+
+export interface CaptureOwner {
+  getType: () => string
+  isDestroyed: () => boolean
+}
+
+export interface OwnedCaptureGuest extends CaptureGuest {
+  getType: () => string
+  hostWebContents?: CaptureOwner | null
+  session?: Session
+}
+
+export async function captureOwnedPreviewContents(
+  owner: CaptureOwner,
+  guest: OwnedCaptureGuest | null | undefined,
+  rect?: CaptureRect,
+  viewport?: CaptureViewport
+): Promise<string> {
+  if (!isOwnedPreviewGuest(owner, guest)) {
+    throw new Error('Preview guest does not belong to this window')
+  }
+
+  let changedOwner = false
+
+  const stopWatching = watchNativePreviewOwner(guest, () => {
+    changedOwner = true
+  })
+
+  try {
+    return await captureWithRecovery(owner, guest, rect, viewport, () => changedOwner)
+  } finally {
+    stopWatching()
+  }
+}
+
+async function captureWithRecovery(
+  owner: CaptureOwner,
+  guest: OwnedCaptureGuest,
+  rect: CaptureRect | undefined,
+  viewport: CaptureViewport | undefined,
+  changedOwner: () => boolean
+): Promise<string> {
+  const assertOwner = () => {
+    if (changedOwner() || !isOwnedPreviewGuest(owner, guest)) {
+      throw new Error('Preview guest does not belong to this window')
+    }
+  }
+
+  for (let attempt = 1; ; attempt++) {
+    assertOwner()
+
+    try {
+      const image = await capturePreviewContents(guest, rect, viewport)
+      assertOwner()
+
+      return image
+    } catch (error) {
+      assertOwner()
+
+      // A newly resized/attached compositor can have no Viz surface yet. Repeat
+      // only this native transient failure, with a fixed budget and the same owner.
+      if (!(error instanceof Error) || error.message !== 'UnknownVizError' || attempt === 3) {
+        throw error
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
 }
 
 export interface CaptureImage {

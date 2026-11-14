@@ -121,6 +121,7 @@ export function unboundManagedSessionRow(
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return false
   }
+
   const selected = config as Record<string, unknown>
 
   return (

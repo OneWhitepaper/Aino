@@ -200,10 +200,7 @@ export function saveHermesConfig(
 /** Capability-scoped counterpart of saveHermesConfig — writes the config of
  *  the profile/connection the Capabilities scope selector points at (possibly
  *  on another registered gateway), mirroring getHermesConfigRecord. */
-export function saveHermesConfigRecord(
-  config: HermesConfigRecord,
-  profile?: ProfileScope
-): Promise<{ ok: boolean }> {
+export function saveHermesConfigRecord(config: HermesConfigRecord, profile?: ProfileScope): Promise<{ ok: boolean }> {
   return window.hermesDesktop.api<{ ok: boolean }>({
     ...resolveConfigWriteScope(config, profile),
     path: '/api/config',
@@ -396,10 +393,7 @@ export function pollOAuthSession(
 
 /** The free tier's handoff after a Nous sign-in. A long-poll: given `since`
  *  (the `updated_at` on screen) the backend answers once the record changes. */
-export function getNousHandoffStatus(
-  since: null | string,
-  profile?: ProfileScope
-): Promise<AppHandoffStatus> {
+export function getNousHandoffStatus(since: null | string, profile?: ProfileScope): Promise<AppHandoffStatus> {
   const query = new URLSearchParams({ wait: String(OAUTH_LONG_POLL_SECONDS), ...(since ? { since } : {}) })
 
   return window.hermesDesktop.api<AppHandoffStatus>({

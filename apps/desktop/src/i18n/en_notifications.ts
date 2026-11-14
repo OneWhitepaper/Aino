@@ -52,7 +52,7 @@ export const enNotifications = {
   testBody: 'Notifications are working.',
   testSent: 'Test sent. If nothing appears, check your OS notification permissions and Focus/Do Not Disturb.',
   testUnsupported: 'This system does not support native notifications.',
-  muteSoundsTitle: 'Mute interface sounds',
+  muteSoundsTitle: 'Mute sounds and haptic feedback',
   muteSoundsDesc:
     'Silences automatic completion, wake-word and thinking cues, haptic feedback, and OS notification sounds. Sound previews and spoken replies still play.',
   completionSoundTitle: 'Completion Sound',

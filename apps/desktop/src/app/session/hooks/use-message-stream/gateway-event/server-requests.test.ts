@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { registerPreviewNav } from '@/app/chat/right-rail/preview-nav'
 import { registerPreviewPageReader } from '@/app/chat/right-rail/preview-reader'
-import { group } from '@/components/pane-shell/tree/model'
+import { registerPreviewScriptRunner } from '@/app/chat/right-rail/preview-script-runner'
+import { abortPreviewTyping } from '@/app/chat/right-rail/preview-typing-abort'
+import { group, split } from '@/components/pane-shell/tree/model'
 import { $layoutTree, noteActiveTreeGroup } from '@/components/pane-shell/tree/store'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { runTour } from '@/lib/tour'
@@ -218,6 +220,32 @@ describe('preview action request routing', () => {
     }
   })
 
+  it('declines active-only page operations from a tile window so the active window can answer', () => {
+    $sessionTiles.set([{ runtimeId: 'session-a', storedSessionId: 'stored-a' } as never])
+
+    try {
+      const routed = ['preview.act', 'theme.apply', 'tour'].map(method =>
+        deliver(method, { action: 'elements', session_id: 'session-a' }, 'session-b')
+      )
+
+      for (const { decline, respond } of routed) {
+        expect(decline).toHaveBeenCalledTimes(1)
+        expect(respond).not.toHaveBeenCalled()
+      }
+
+      expect(
+        previewSessionRoute({
+          activeSessionId: 'session-b',
+          method: 'preview.read',
+          replayed: false,
+          sessionId: 'session-a'
+        })
+      ).toBe('run')
+    } finally {
+      $sessionTiles.set([])
+    }
+  })
+
   it('fails fast for an unscoped request with no session in view', () => {
     const { respond } = deliver('preview.act', { action: 'elements' }, null)
 
@@ -397,6 +425,18 @@ describe('preview pop-out forwarding', () => {
     expect(JSON.parse(respond.mock.calls[0][0].value)).toMatchObject({ acted: 'elements', success: true })
   })
 
+  it('preserves a requested full inventory when forwarding to the live browser', async () => {
+    requestPopoutPreviewAct.mockResolvedValue({ elements: [], success: true })
+
+    const { respond } = deliver('preview.act', { action: 'elements', full: true, session_id: 'session-a' }, 'session-a')
+
+    await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
+    expect(requestPopoutPreviewAct).toHaveBeenCalledWith(
+      expect.objectContaining({ full: true, kind: 'elements' }),
+      sessionAOwner
+    )
+  })
+
   it('runs the act locally when this window has a live surface', async () => {
     hasLivePreviewSurface.mockReturnValue(true)
 
@@ -404,6 +444,43 @@ describe('preview pop-out forwarding', () => {
 
     await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
     expect(requestPopoutPreviewAct).not.toHaveBeenCalled()
+  })
+
+  it('aborts an in-flight page operation when the user switches to another session', async () => {
+    hasLivePreviewSurface.mockReturnValue(true)
+    deps.activeSessionIdRef.current = 'session-a'
+    openPreview({ kind: 'url', label: 'a', source: 'https://a.example', url: 'https://a.example' }, 'stored-a')
+    const tab = $previewTabs.get().find(tab => tab.sessionId === 'stored-a')!
+    let receivedSignal: AbortSignal | undefined
+    let entered!: () => void
+
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+
+    const unbind = registerPreviewScriptRunner(
+      tab.id,
+      (_code, signal) =>
+        new Promise((_resolve, reject) => {
+          receivedSignal = signal
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+          entered()
+        })
+    )
+
+    try {
+      deliver('preview.act', { action: 'elements', session_id: 'session-a' }, 'session-a')
+      await started
+      deps.activeSessionIdRef.current = 'session-b'
+
+      await vi.waitFor(() => expect(receivedSignal?.aborted).toBe(true), { timeout: 2_000 })
+      expect(receivedSignal?.reason).toBe('session_changed')
+    } finally {
+      abortPreviewTyping('srq-1')
+      deps.activeSessionIdRef.current = null
+      unbind()
+      closeRightRail()
+    }
   })
 
   it('reads from the pop-out when the chat window has no live surface', async () => {
@@ -461,6 +538,29 @@ describe('preview pop-out forwarding', () => {
     expect(requestPopoutPreviewVault).not.toHaveBeenCalled()
   })
 
+  it('still closes a hosted vault binding after the user switched sessions', async () => {
+    requestPopoutPreviewVault.mockResolvedValue({ success: true })
+    $sessionTiles.set([{ runtimeId: 'session-a', storedSessionId: 'stored-a' } as never])
+
+    try {
+      const { decline, respond } = deliver(
+        'preview.act',
+        { action: 'vault', session_id: 'session-a', vault: { operation: 'close', target: 'bind-xyz' } },
+        'session-b'
+      )
+
+      await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
+      expect(decline).not.toHaveBeenCalled()
+      expect(requestPopoutPreviewVault).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'close', target: 'bind-xyz' }),
+        sessionAOwner
+      )
+      expect(JSON.parse(respond.mock.calls[0][0].value)).toEqual({ success: true })
+    } finally {
+      $sessionTiles.set([])
+    }
+  })
+
   it('reads locally in a browser tab, which has no pop-out to wait on', async () => {
     document.documentElement.dataset.hermesDesktopHost = 'browser'
 
@@ -495,36 +595,60 @@ describe('preview requests act for the session that asked (#73890)', () => {
   })
 
   // Tile B holds focus while the primary session A's agent is the one asking.
-  const focusTileB = () => {
-    $layoutTree.set(group(['session-tile:stored-b'], { active: 'session-tile:stored-b', id: 'grp-b' }))
+  const focusTileB = (visibleBrowser?: string) => {
+    const tile = group(['session-tile:stored-b'], { active: 'session-tile:stored-b', id: 'grp-b' })
+    $layoutTree.set(
+      visibleBrowser
+        ? split('row', [
+            tile,
+            group([`preview-tile:${visibleBrowser}`], {
+              active: `preview-tile:${visibleBrowser}`,
+              id: 'grp-visible-browser'
+            })
+          ])
+        : tile
+    )
     noteActiveTreeGroup('grp-b')
   }
 
-  it("drives the requesting session's page, not the focused tile's", async () => {
-    openPreview({ kind: 'url', label: 'a', source: 'https://a.example', url: 'https://a.example' }, 'stored-a')
-    openPreview({ kind: 'url', label: 'b', source: 'https://b.example', url: 'https://b.example' }, 'stored-b')
-    const [a, b] = $previewTabs.get()
-    const backA = vi.fn()
-    const backB = vi.fn()
+  it.each([true, false])(
+    'keeps requesting-session routing while requiring its Browser to be visible (%s)',
+    async visible => {
+      openPreview({ kind: 'url', label: 'a', source: 'https://a.example', url: 'https://a.example' }, 'stored-a')
+      openPreview({ kind: 'url', label: 'b', source: 'https://b.example', url: 'https://b.example' }, 'stored-b')
+      const [a, b] = $previewTabs.get()
+      const backA = vi.fn()
+      const backB = vi.fn()
 
-    const unbind = [
-      registerPreviewNav(a!.id, { back: backA, forward: () => {}, reload: () => {} }),
-      registerPreviewNav(b!.id, { back: backB, forward: () => {}, reload: () => {} })
-    ]
+      const unbind = [
+        registerPreviewNav(a!.id, { back: backA, forward: () => {}, reload: () => {} }),
+        registerPreviewNav(b!.id, { back: backB, forward: () => {}, reload: () => {} })
+      ]
 
-    focusTileB()
+      // #73890 scopes the request to A, even while B has keyboard focus. The
+      // browser must also be on screen; a background tab grants no input authority.
+      focusTileB(visible ? a!.id : undefined)
 
-    try {
-      const { respond } = deliver('preview.act', { action: 'back', session_id: 'rt-a' }, 'rt-a')
+      try {
+        const { respond } = deliver('preview.act', { action: 'back', session_id: 'rt-a' }, 'rt-a')
 
-      await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
-      expect(JSON.parse(respond.mock.calls[0][0].value)).toMatchObject({ acted: 'back', success: true })
-      expect(backA).toHaveBeenCalledTimes(1)
-      expect(backB).not.toHaveBeenCalled()
-    } finally {
-      unbind.forEach(stop => stop())
+        await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
+        const result = JSON.parse(respond.mock.calls[0][0].value)
+        expect(result.success).toBe(visible)
+
+        if (visible) {
+          expect(result.acted).toBe('back')
+        } else {
+          expect(result.error).toMatch(/hidden/i)
+        }
+
+        expect(backA).toHaveBeenCalledTimes(visible ? 1 : 0)
+        expect(backB).not.toHaveBeenCalled()
+      } finally {
+        unbind.forEach(stop => stop())
+      }
     }
-  })
+  )
 
   it("runs a preview tour against the requesting session's tabs", async () => {
     focusTileB()
@@ -659,20 +783,18 @@ describe('tour request routing', () => {
     }
   })
 
-  it('still refuses a scoped request naming another conversation', () => {
-    // The window hosts the request's session as a tile (so the request is
-    // routed here rather than left unanswered), but the pane shows a different
-    // conversation — the gate must still refuse.
+  it('declines an active-only request for a tile session so another window can handle it', () => {
+    // This window hosts the request's session as a tile, but another window
+    // may have it active. A final refusal here would win the fan-out race.
     setSessions([{ id: 'stored-tip', _lineage_root_id: 'stored-root' } as SessionInfo])
     deps.sessionStateByRuntimeIdRef.current.set('runtime-2', createClientSessionState('stored-tip'))
     $sessionTiles.set([{ runtimeId: 'runtime-2', storedSessionId: 'stored-tip' } as never])
 
     try {
-      const { respond } = deliver('tour', { action: 'discover', session_id: 'runtime-2' }, 'other-root')
+      const { decline, respond } = deliver('tour', { action: 'discover', session_id: 'runtime-2' }, 'other-root')
 
-      expect(JSON.parse(respond.mock.calls[0][0].value)).toMatchObject({
-        error: expect.stringContaining('the session the user is looking at')
-      })
+      expect(decline).toHaveBeenCalledTimes(1)
+      expect(respond).not.toHaveBeenCalled()
     } finally {
       $sessionTiles.set([])
       deps.sessionStateByRuntimeIdRef.current.clear()

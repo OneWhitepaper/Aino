@@ -12,11 +12,17 @@ export function validateDiagnosticBundle(value: unknown): string {
 
     const bytes = Buffer.from(value, 'base64')
 
-    if (bytes.length > MAX_BUNDLE_BYTES || bytes.toString('base64') !== value) { throw new Error('base64') }
+    if (bytes.length > MAX_BUNDLE_BYTES || bytes.toString('base64') !== value) {
+      throw new Error('base64')
+    }
 
     const envelope = JSON.parse(gunzipSync(bytes, { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'))
 
-    if (envelope?.format !== 'hermes-debug-share/1' || envelope.redacted !== true || typeof envelope.files?.report !== 'string') {
+    if (
+      envelope?.format !== 'hermes-debug-share/1' ||
+      envelope.redacted !== true ||
+      typeof envelope.files?.report !== 'string'
+    ) {
       throw new Error('envelope')
     }
 

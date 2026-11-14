@@ -15,6 +15,7 @@ import time
 from typing import Any, Dict, Optional
 
 from agent.error_classifier import FailoverReason
+from agent.interrupt_control import USER_INTERRUPT_REASONS
 from agent.auxiliary_billing_scope import ManagedCredential, managed_operation_scope
 from agent.managed_inference_errors import raise_managed_operation_error
 from agent.agent_runtime_helpers_placeholders import hidden_interrupt_placeholder_row
@@ -218,6 +219,8 @@ def handle_api_interrupt(
             "role": "assistant", "content": _partial, "display_metadata": {"interrupted": True},
         })
         final_response = _partial
+    elif getattr(agent, "_tool_interrupt_reason", None) in USER_INTERRUPT_REASONS:
+        final_response = ""
     else:
         final_response = f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{api_elapsed:.1f}s elapsed)."
     agent._persist_session(messages, conversation_history)

@@ -42,6 +42,15 @@ python -c "import pm; pm.sync_venv(['messaging'], explicit=True)"
 
 ## Setup
 
+### Aino desktop
+
+Open **Messaging platforms → WeChat** and scan the QR code with WeChat. Confirm on
+your phone. Aino automatically saves the returned account and
+token and connects the WeChat adapter without restarting the shared chat service.
+The scanning account is authorized automatically; existing access policies are kept.
+If this connection is handling messages, finish them before retrying the connection.
+Use **Advanced configuration** for an existing token or custom access settings.
+
 ### 1. Run the Setup Wizard
 
 The easiest way to connect your WeChat account is through the interactive setup:

@@ -62,6 +62,7 @@ export function createNativePlatformAuth(
     validateDiagnostics: validateDiagnosticBundle,
     allowInsecureLoopback: origin.development
   })
+
   const tokenStore = createPlatformTokenStore({ filePath: path.join(userData, 'platform-tokens.json'), crypto })
   let metadata: Promise<PlatformDeviceInfo> | undefined
 

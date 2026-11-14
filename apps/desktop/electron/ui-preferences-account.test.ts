@@ -10,8 +10,12 @@ test('preference broadcasts follow the active account and stop after disposal', 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-account-preferences-'))
   const accountA = path.join(root, 'alpha')
   const accountB = path.join(root, 'beta')
-  await writeUiPreferences(path.join(accountA, 'ui-preferences.json'), { values: { 'hermes.desktop.account-test': 'alpha' } })
-  await writeUiPreferences(path.join(accountB, 'ui-preferences.json'), { values: { 'hermes.desktop.account-test': 'beta' } })
+  await writeUiPreferences(path.join(accountA, 'ui-preferences.json'), {
+    values: { 'hermes.desktop.account-test': 'alpha' }
+  })
+  await writeUiPreferences(path.join(accountB, 'ui-preferences.json'), {
+    values: { 'hermes.desktop.account-test': 'beta' }
+  })
   let activeHome = accountA
   const broadcast = vi.fn<(snapshot: UiPreferencesSnapshot) => void>()
   vi.useFakeTimers()
@@ -25,16 +29,22 @@ test('preference broadcasts follow the active account and stop after disposal', 
   try {
     activeHome = accountB
     await vi.advanceTimersByTimeAsync(2000)
-    expect(broadcast).toHaveBeenLastCalledWith(expect.objectContaining({ values: { 'hermes.desktop.account-test': 'beta' } }))
+    expect(broadcast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ values: { 'hermes.desktop.account-test': 'beta' } })
+    )
     broadcast.mockClear()
 
-    await writeUiPreferences(path.join(accountA, 'ui-preferences.json'), { values: { 'hermes.desktop.account-test': 'old-alpha' } })
+    await writeUiPreferences(path.join(accountA, 'ui-preferences.json'), {
+      values: { 'hermes.desktop.account-test': 'old-alpha' }
+    })
     await vi.advanceTimersByTimeAsync(2000)
     expect(broadcast).not.toHaveBeenCalled()
 
     activeHome = accountA
     await vi.advanceTimersByTimeAsync(2000)
-    expect(broadcast).toHaveBeenLastCalledWith(expect.objectContaining({ values: { 'hermes.desktop.account-test': 'old-alpha' } }))
+    expect(broadcast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ values: { 'hermes.desktop.account-test': 'old-alpha' } })
+    )
     broadcast.mockClear()
     dispose()
     activeHome = accountB

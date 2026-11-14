@@ -54,6 +54,38 @@ afterEach(() => {
 })
 
 describe('tool row preview recording', () => {
+  it('uses a bridged tool identity to distinguish HTML sources from generated outputs', () => {
+    $activeSessionId.set(PRIMARY_ID)
+    $messages.set(messages)
+    const source = '/tile/work/reference.html'
+
+    renderToolRow(node => node, {
+      args: { path: source },
+      innerToolName: 'read_file',
+      result: { path: source },
+      toolName: 'Read file'
+    })
+    expect($previewStatusBySession.get()[PRIMARY_ID]).toBeUndefined()
+    cleanup()
+
+    for (const innerToolName of ['patch', 'write_file']) {
+      const target = `/tile/work/${innerToolName}.html`
+      $previewStatusBySession.set({})
+      renderToolRow(node => node, {
+        args: {},
+        innerToolName,
+        result: { inline_diff: `--- ${target}\n+++ ${target}\n@@ -1 +1 @@\n-before\n+after` },
+        toolName: 'Update file'
+      })
+
+      expect(summaryOutputs([], [], $previewStatusBySession.get()[PRIMARY_ID] ?? []).map(item => item.target)).toEqual([
+        target
+      ])
+      expect($previewStatusBySession.get()[PRIMARY_ID]?.[0]?.generated).toBe(true)
+      cleanup()
+    }
+  })
+
   it('only promotes successful producer previews to outputs and preserves that evidence when reread', () => {
     $activeSessionId.set(PRIMARY_ID)
     $currentCwd.set('/primary/work')

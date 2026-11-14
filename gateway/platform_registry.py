@@ -170,6 +170,11 @@ class PlatformEntry:
     # Credentials the card treats as "configured"; None = ``required_env`` (which also drives
     # ``hermes setup`` and the child-env scrub, so the card may legitimately ask for a different set).
     dashboard_required_env: Optional[tuple] = None
+    # Optional desktop/dashboard QR setup. The host owns the expiring, profile-scoped
+    # pairing handle; plugins keep credentials in opaque state until explicit apply.
+    onboarding_start: Optional[Callable] = None  # async (home) -> {state, qr_payload, expires_in}
+    onboarding_poll: Optional[Callable] = None  # async (home, state) -> {status, state?, message?}
+    onboarding_apply: Optional[Callable] = None  # (home, state) -> safe account metadata
     # ``{ENV_KEY: (accepts(value) -> bool, 400 detail)}``: the dashboard PUT rejects a non-empty value
     # the predicate refuses, catching credentials pasted into the wrong field.
     env_value_rules: dict = field(default_factory=dict)

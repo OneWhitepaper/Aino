@@ -62,10 +62,8 @@ const SHARED_KEYS: ReadonlySet<string> = new Set([
   'hermes.desktop.composerPopout.gesturesEnabled',
   'hermes.desktop.files.showIgnored',
   'hermes.desktop.keybinds',
-  'hermes.desktop.layoutPresets.v2',
   'hermes.desktop.panesFlipped',
   'hermes.desktop.tabStripDefault',
-  'hermes.desktop.titlebarAppActions',
   // Guidance: what the user already skipped, saw or dismissed does not come
   // back in every new browser or origin (#145600).
   'hermes-onboarding-skipped-v1',

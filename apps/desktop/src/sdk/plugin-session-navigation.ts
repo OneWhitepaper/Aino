@@ -19,7 +19,10 @@ function existingTileDelegate(storedSessionId: string) {
 }
 
 /** Background wakes refresh only an existing surface; they never navigate or mint a tab. */
-export async function refreshVisiblePluginSession(storedSessionId: string, ownerRoute: SessionOwnerRoute | null): Promise<void> {
+export async function refreshVisiblePluginSession(
+  storedSessionId: string,
+  ownerRoute: SessionOwnerRoute | null
+): Promise<void> {
   const tileDelegate = existingTileDelegate(storedSessionId)
 
   if (tileDelegate) {
@@ -30,7 +33,9 @@ export async function refreshVisiblePluginSession(storedSessionId: string, owner
 }
 
 export function navigatePluginSession(
-  storedSessionId: string, options: SessionSurfaceOptions, ownerRoute: SessionOwnerRoute | null
+  storedSessionId: string,
+  options: SessionSurfaceOptions,
+  ownerRoute: SessionOwnerRoute | null
 ): string {
   const navigate = (to: string, opts?: { replace?: boolean }) => {
     const target = to.startsWith('#') ? to : `#${to}`
@@ -60,12 +65,19 @@ export function navigatePluginSession(
 
 /** Explicit navigation may need fresh history even when a stale cached transcript is already painted. */
 export async function refreshPluginSessionAfterOpen(
-  storedSessionId: string, options: SessionSurfaceOptions, ownerRoute: SessionOwnerRoute | null
+  storedSessionId: string,
+  options: SessionSurfaceOptions,
+  ownerRoute: SessionOwnerRoute | null
 ): Promise<void> {
-  const surfaceHealthy = $selectedStoredSessionId.get() === storedSessionId &&
-    Boolean($activeSessionId.get()) && (!options.expectHistory || $messages.get().length > 0)
+  const surfaceHealthy =
+    $selectedStoredSessionId.get() === storedSessionId &&
+    Boolean($activeSessionId.get()) &&
+    (!options.expectHistory || $messages.get().length > 0)
 
-  if (!options.awaitHydration || (!options.forceResume && surfaceHealthy)) { return }
+  if (!options.awaitHydration || (!options.forceResume && surfaceHealthy)) {
+    return
+  }
+
   const tileDelegate = existingTileDelegate(storedSessionId)
 
   if (tileDelegate) {

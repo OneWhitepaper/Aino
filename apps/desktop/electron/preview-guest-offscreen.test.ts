@@ -1,10 +1,12 @@
+import type { Session } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 
 import { commandFocusedGuest, notePreviewGuestHidden } from './preview-guest-offscreen'
+import { admitPreviewGuestSession, registerNativePreviewGuest, setNativePreviewOwner } from './preview-guest-owner'
 
 let nextId = 1
 
-function fakeContents(type: 'webview' | 'window', hostWebContents?: unknown) {
+function fakeContents(type: 'webview' | 'window' | 'browserView', hostWebContents?: unknown) {
   const history = {
     canGoBack: vi.fn(() => true),
     canGoForward: vi.fn(() => true),
@@ -12,9 +14,13 @@ function fakeContents(type: 'webview' | 'window', hostWebContents?: unknown) {
     goForward: vi.fn()
   }
 
+  const session = {} as Session
+  admitPreviewGuestSession(session)
+
   return {
     id: nextId++,
     hostWebContents,
+    session,
     navigationHistory: history,
     reload: vi.fn(),
     getType: () => type,
@@ -27,6 +33,29 @@ type Fake = ReturnType<typeof fakeContents>
 const asContents = (fake: Fake) => fake as never
 
 describe('focused preview guest gestures', () => {
+  it('follows the current native view owner and ignores a detached or unregistered view', () => {
+    const host = fakeContents('window')
+    const next = fakeContents('window')
+    const guest = fakeContents('browserView')
+    expect(commandFocusedGuest('back', asContents(guest))).toBe(false)
+    const unregister = registerNativePreviewGuest(asContents(guest), asContents(host))
+
+    try {
+      notePreviewGuestHidden(asContents(host), asContents(guest), false)
+      expect(commandFocusedGuest('back', asContents(guest))).toBe(true)
+      setNativePreviewOwner(asContents(guest), asContents(next))
+      notePreviewGuestHidden(asContents(host), asContents(guest), true)
+      expect(commandFocusedGuest('back', asContents(guest))).toBe(true)
+      notePreviewGuestHidden(asContents(next), asContents(guest), true)
+      expect(commandFocusedGuest('back', asContents(guest))).toBe(false)
+      notePreviewGuestHidden(asContents(next), asContents(guest), false)
+      setNativePreviewOwner(asContents(guest), null)
+      expect(commandFocusedGuest('back', asContents(guest))).toBe(false)
+    } finally {
+      unregister()
+    }
+  })
+
   it('navigates the focused guest its host reports on screen', () => {
     const host = fakeContents('window')
     const guest = fakeContents('webview', host)

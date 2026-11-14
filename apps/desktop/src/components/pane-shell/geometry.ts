@@ -165,8 +165,8 @@ function sameRect(a: Rect | null, b: Rect | null) {
 // property writes: each one invalidates computed style for the whole document,
 // and the sash's ResizeObserver fires per frame. Measured live (LoAF, real
 // session): drag frames of ~68ms with style+layout=67ms and no script ≥5ms;
-// suppressing the writes recovered 14fps → 51fps. The vars only align titlebar
-// chrome — republishing once on release is visually identical.
+// suppressing the writes recovered 14fps → 51fps. Titlebar-local copies stay
+// live so its chrome follows the seam without restyling the whole transcript.
 let sashDragDepth = 0
 let onSashDragEnd: null | (() => void) = null
 
@@ -184,6 +184,19 @@ export function endSashDrag() {
 
 const sashDragging = () => sashDragDepth > 0
 
+function publishWorkspaceEdges(target: HTMLElement, left: number, right: number): void {
+  for (const [name, value] of [
+    ['--workspace-left', left],
+    ['--workspace-right', right]
+  ] as const) {
+    const px = `${value}px`
+
+    if (target.style.getPropertyValue(name) !== px) {
+      target.style.setProperty(name, px)
+    }
+  }
+}
+
 /**
  * Publish the workspace zone's viewport edges as root CSS vars:
  *   --workspace-left  : px from the viewport's left to the main zone
@@ -197,8 +210,6 @@ const sashDragging = () => sashDragDepth > 0
 export function publishWorkspaceGeometry(): () => void {
   const root = document.documentElement
   let el: HTMLElement | null = null
-  let lastLeft = NaN
-  let lastRight = NaN
   let rail: HTMLElement | null = null
   let titlebar: HTMLElement | null = null
   let workspaceMountObserver: MutationObserver | null = null
@@ -274,12 +285,6 @@ export function publishWorkspaceGeometry(): () => void {
       }
     }
 
-    // DEFER during a sash drag (see beginSashDrag above) — republished once on
-    // release via the onSashDragEnd hook registered below.
-    if (sashDragging()) {
-      return
-    }
-
     // The workspace surface can be unmounted or parked while a sibling session
     // tab is active. Its layout zone still owns the titlebar alignment. Stable
     // keep-alive hosts also carry group identity, but do not own zone geometry.
@@ -318,16 +323,14 @@ export function publishWorkspaceGeometry(): () => void {
     const left = Math.round(r.left)
     const right = Math.round(window.innerWidth - r.right)
 
-    // Skip unchanged writes: a sash drag fires the RO every frame, and each
-    // :root custom-property set dirties style for everything that reads them.
-    if (left !== lastLeft) {
-      lastLeft = left
-      root.style.setProperty('--workspace-left', `${left}px`)
+    // The header overrides inherited edges locally while the document-wide
+    // values remain frozen during a gesture to protect transcript rendering.
+    if (titlebar) {
+      publishWorkspaceEdges(titlebar, left, right)
     }
 
-    if (right !== lastRight) {
-      lastRight = right
-      root.style.setProperty('--workspace-right', `${right}px`)
+    if (!sashDragging()) {
+      publishWorkspaceEdges(root, left, right)
     }
   }
 
@@ -353,6 +356,8 @@ export function publishWorkspaceGeometry(): () => void {
       delete titlebar.dataset.titlebarRail
       titlebar.style.removeProperty('--titlebar-rail-left')
       titlebar.style.removeProperty('--titlebar-rail-width')
+      titlebar.style.removeProperty('--workspace-left')
+      titlebar.style.removeProperty('--workspace-right')
     }
   }
 }

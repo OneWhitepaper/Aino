@@ -194,19 +194,26 @@ const displayDescriptorsDiffer = (a: ChatMessage, b: ChatMessage) =>
   Boolean(a.contentRefused) !== Boolean(b.contentRefused) ||
   (a.contentRefused?.notice ?? null) !== (b.contentRefused?.notice ?? null)
 
+const messageIdentityDiffers = (a: ChatMessage, b: ChatMessage) =>
+  a.id !== b.id ||
+  a.rowId !== b.rowId ||
+  !persistedTurnsEquivalent(a.persistedTurn, b.persistedTurn) ||
+  a.role !== b.role ||
+  a.branchGroupId !== b.branchGroupId
+
 export function chatMessagesEquivalent(a: ChatMessage, b: ChatMessage): boolean {
+  if (a === b) {
+    return true
+  }
+
   if (
-    a.id !== b.id ||
-    a.rowId !== b.rowId ||
-    !persistedTurnsEquivalent(a.persistedTurn, b.persistedTurn) ||
-    a.role !== b.role ||
+    messageIdentityDiffers(a, b) ||
     a.durableComplete !== b.durableComplete ||
     a.recovered !== b.recovered ||
     a.pending !== b.pending ||
     a.error !== b.error ||
     !failureMetadataEquivalent(a, b) ||
     a.hidden !== b.hidden ||
-    a.branchGroupId !== b.branchGroupId ||
     a.timestamp !== b.timestamp ||
     a.completedAt !== b.completedAt ||
     a.durationS !== b.durationS ||

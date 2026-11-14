@@ -765,7 +765,14 @@ describe('useSessionTileDelegate resumeTile', () => {
     const updateSessionState = vi.fn()
 
     vi.mocked(requestGatewayForProfile).mockResolvedValueOnce({
-      info: { cwd: '/repo/.worktrees/restored', fast: true, model: 'gpt-5', provider: 'openai', reasoning_effort: 'high', running: false },
+      info: {
+        cwd: '/repo/.worktrees/restored',
+        fast: true,
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoning_effort: 'high',
+        running: false
+      },
       session_id: 'runtime-model'
     } as never)
 

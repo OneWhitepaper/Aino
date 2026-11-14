@@ -1412,6 +1412,7 @@ _SEND_TARGET_RE = re.compile(r"^\s*((?:wxid|gh|v\d+|wm|wb)_[A-Za-z0-9_-]+|[A-Za-
 def register(ctx) -> None:
     """Plugin entry point — called by the Hermes plugin system."""
     from . import gateway_env  # env -> GatewayConfig bridge (gateway.config_env)
+    from . import onboarding
     ctx.register_platform(
         target_ref_syntax_fn=regex_groups_parser(_SEND_TARGET_RE, thread_group=False),
         standalone_send=StandaloneSendPolicy(label="Weixin", media=True),
@@ -1420,6 +1421,7 @@ def register(ctx) -> None:
         dashboard_description="Connect a personal WeChat account through Tencent's iLink Bot API.",
         docs_url="https://hermes-agent.nousresearch.com/docs/user-guide/messaging/weixin/",
         dashboard_env_vars=("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN", "WEIXIN_BASE_URL"),
+        onboarding_start=onboarding.start, onboarding_poll=onboarding.poll, onboarding_apply=onboarding.apply,
         is_connected=_is_connected, required_env=["WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"], install_hint=_INSTALL_HINT,
         config_connected_fn=_config_connected,
         setup_fn=interactive_setup,

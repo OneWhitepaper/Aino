@@ -683,6 +683,10 @@ PLATFORM_HINTS = {
         # recipe-first: HOW (an inline widget IS a ::preview'd HTML file) and WHY (the frame injects the theme
         # prelude first; width adopts the first measured span). setup_mcp is taught by its own tool schema.
         f"You are chatting inside the {PRODUCT_NAME} desktop app, a graphical chat surface. "
+        "For the visible in-app browser beside the chat, use desktop_preview to open/read it and "
+        "drive_preview to inspect or interact with that same page. If those tools are deferred, find "
+        "them with tool_search, then invoke them through tool_call. Backend browser tools such as "
+        "browser_exec operate a separate browser; use that browser when the user explicitly requests it. "
         "Use the user's requested language for user-facing updates and answers; otherwise match the language of "
         "their current request. Preserve code, commands, paths, and names as written. Public progress belongs in "
         "normal assistant text (content), or the commentary channel when supported; text only in reasoning or "

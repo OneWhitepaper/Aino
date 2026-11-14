@@ -5,16 +5,16 @@ type ThreadCopy = Translations['assistant']['thread']
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const enErrorCodes: ThreadCopy['errorCodes'] = {
   managed_billing_unavailable: {
-    title: "Plan status unavailable",
-    body: "Check your subscription and expiry in My Account. Once access is restored, send your message again, or choose an available model."
+    title: 'Plan status unavailable',
+    body: 'Check your subscription and expiry in My Account. Once access is restored, send your message again, or choose an available model.'
   },
   managed_subscription_expired: {
-    title: "Your plan has expired",
-    body: "Renew the subscription in My Account, then send your message again, or choose an available model."
+    title: 'Your plan has expired',
+    body: 'Renew the subscription in My Account, then send your message again, or choose an available model.'
   },
   managed_model_access_denied: {
-    title: "This model is not available to your account",
-    body: "Your current plan or account cannot use this model. Check My Account, or choose an available model."
+    title: 'This model is not available to your account',
+    body: 'Your current plan or account cannot use this model. Check My Account, or choose an available model.'
   },
   auth: {
     title: provider => `${provider} rejected your API key`,

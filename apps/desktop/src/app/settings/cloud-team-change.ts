@@ -7,10 +7,7 @@ import { normalizeGatewayUrl } from './connections-registry'
 // opaque strings. If a team gains or changes its slug, a connection saved under
 // the old ref reads as moved once: the reconnect below re-authenticates and
 // rewrites the ref, so the mismatch self-heals at the cost of one silent cascade.
-export function cloudTeamChanged(
-  connection: DesktopRegistryConnection | undefined,
-  org: string | null
-): boolean {
+export function cloudTeamChanged(connection: DesktopRegistryConnection | undefined, org: string | null): boolean {
   return Boolean(connection?.kind === 'cloud' && org && connection.org !== org)
 }
 

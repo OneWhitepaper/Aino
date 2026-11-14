@@ -347,8 +347,10 @@ export const ja: BotsMessages = {
     compressing: (member: string) => `${member} のグループチャット履歴を圧縮中…`,
     compressDone: (member: string, compressed: number, detail: string) =>
       `${member} のグループチャットセッション ${compressed} 件を圧縮しました${detail ? ` — ${detail}` : ''}`,
-    compressNothing: (member: string) => `${member} に圧縮する履歴はありません — グループチャットセッションがまだありません`,
-    compressFailed: (member: string, error: string) => `${member} のグループチャット履歴を圧縮できませんでした: ${error}`,
+    compressNothing: (member: string) =>
+      `${member} に圧縮する履歴はありません — グループチャットセッションがまだありません`,
+    compressFailed: (member: string, error: string) =>
+      `${member} のグループチャット履歴を圧縮できませんでした: ${error}`,
     searchToAdd: '追加するボットを検索',
     searchToAddPlaceholder: '追加するボットを検索…',
     removeFromSelection: '選択から外す',

@@ -11,7 +11,6 @@ import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
 import { $sessionStates, $sessionTiles } from '@/store/session-states'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
-import { $layoutEditMode } from '../../edit-mode'
 import { resetRememberedActivePanes, setWorkspaceScope } from '../../workspace-scope'
 import { group } from '../model'
 import { $hiddenTreePanes, $narrowViewport } from '../store'
@@ -32,7 +31,6 @@ beforeEach(() => {
   stubMenuDomApis()
   vi.stubGlobal('CSS', { ...globalThis.CSS, escape: (value: string) => value })
   $workspaceIsPage.set(false)
-  $layoutEditMode.set(false)
   $hiddenTreePanes.set(new Set())
   $narrowViewport.set(false)
   $activeSessionId.set(null)

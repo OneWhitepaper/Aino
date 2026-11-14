@@ -29,7 +29,7 @@
   --pane-tab-active-accent: transparent;
   --pane-tab-active-bg: color-mix(in srgb, var(--ui-base) 5%, var(--ui-bg-chrome));
   --pane-tab-strip-bg: var(--ui-bg-chrome);
-  /* Keep the shared 28px track: minimization and the layout-edit veil use it. */
+  /* Keep the shared 28px tab track when files join other tool tabs. */
   padding: 0.25rem 0.5rem;
   border-bottom: 1px solid var(--aino-surface-stroke);
   background: var(--ui-editor-surface-background);

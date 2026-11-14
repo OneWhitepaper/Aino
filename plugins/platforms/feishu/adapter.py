@@ -4520,7 +4520,7 @@ def register(ctx) -> None:
     from .adapter_hint import PLATFORM_HINT
     from .send_targets import SEND_ENTRY_KWARGS
     from .dashboard_card import DASHBOARD_CARD
-    from . import gateway_env  # env -> GatewayConfig bridge (gateway.config_env)
+    from . import gateway_env, onboarding
     ctx.register_platform(
         **SEND_ENTRY_KWARGS,  # send_message target syntax + routing
         name="feishu", label="Feishu / Lark", adapter_factory=FeishuAdapter,
@@ -4532,7 +4532,7 @@ def register(ctx) -> None:
         apply_yaml_config_fn=_apply_yaml_config, cron_deliver_env_var="FEISHU_HOME_CHANNEL",
         standalone_sender_fn=_standalone_send, max_message_length=8000, emoji="🪽",
         allow_update_command=True,
-        platform_hint=PLATFORM_HINT,
+        platform_hint=PLATFORM_HINT, onboarding_start=onboarding.start, onboarding_poll=onboarding.poll, onboarding_apply=onboarding.apply,
         display_tier="medium",
         env_overrides=gateway_env.ENV_OVERRIDES,
         env_enable_credentials=gateway_env.ENV_ENABLE_CREDENTIALS, **gateway_env.AUTHZ,

@@ -202,6 +202,7 @@ async function normalizeCanonicalFallback(
   if (!initialModel || initialProvider === 'aino' || !current()) {
     return null
   }
+
   const scope = platformDefaultScope({ connectionId: route.connectionId, profile: route.targetProfile })
   const row = (await getSession(storedSessionId, scope.route)) as PersistedBotSession
 
@@ -309,6 +310,7 @@ export async function restoreEmptyBotModelDefault({
   if (!capturedRoute.connectionId || !capturedRoute.profile || !capturedRoute.targetProfile) {
     return false
   }
+
   const runtimeId = boundRuntimeId(storedSessionId, capturedRoute)
 
   if (!runtimeId) {
@@ -333,17 +335,20 @@ export async function restoreEmptyBotModelDefault({
   if (!emptyRuntime()) {
     return false
   }
+
   const scope = platformDefaultScope({ connectionId: capturedRoute.connectionId, profile: capturedRoute.targetProfile })
   await catalog.owner.load()
 
   if (!emptyRuntime()) {
     return false
   }
+
   const owner = catalog.owner.state.get().owner
 
   if (!owner || owner.user_id !== account.account.id) {
     return false
   }
+
   const preferred = readPlatformDefault(account.account.id, scope, account.mode, owner.platform_origin)
 
   // An API fallback or another workspace's selection is not this Bot's choice.
@@ -367,6 +372,7 @@ export async function restoreEmptyBotModelDefault({
     if (!canRestore()) {
       return false
     }
+
     const resolved = await resolveModelDefault(scope.route, capturedRoute)
 
     if (!canRestore() || resolved.platform?.modelId !== preferred) {

@@ -841,17 +841,18 @@ function bootstrapProgress(state: DesktopBootstrapState, now: number) {
 function BootstrapProgressHeader({ failed, active }: { failed: boolean; active: boolean }) {
   const { t } = useI18n()
   const copy = t.install
+
   return (
-        <div className="flex shrink-0 items-start gap-4 p-5 pb-4">
-          {!failed && <BrandMark className="size-11 shrink-0" />}
-          <div className="min-w-0">
-            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
-              {failed ? copy.failedTitle : active ? copy.settingUpTitle : copy.finishingTitle}
-            </h2>
-            <p className="mt-1.5 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary)">
-              {failed ? copy.failedDesc : copy.activeDesc}
-            </p>
-          </div>
-        </div>
+    <div className="flex shrink-0 items-start gap-4 p-5 pb-4">
+      {!failed && <BrandMark className="size-11 shrink-0" />}
+      <div className="min-w-0">
+        <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+          {failed ? copy.failedTitle : active ? copy.settingUpTitle : copy.finishingTitle}
+        </h2>
+        <p className="mt-1.5 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary)">
+          {failed ? copy.failedDesc : copy.activeDesc}
+        </p>
+      </div>
+    </div>
   )
 }

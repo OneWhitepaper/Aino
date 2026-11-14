@@ -246,6 +246,9 @@
   max-width: 36rem;
   max-height: calc(100dvh - 5rem);
 }
+.messaging-quick-dialog {
+  max-width: 30rem;
+}
 .messaging-dialog-layout {
   display: flex;
   flex-direction: column;
@@ -363,9 +366,59 @@
   font-size: var(--aino-text-caption);
   color: var(--ui-text-secondary);
 }
+.messaging-qr-setup {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding-block: 10px;
+  text-align: center;
+}
+.messaging-qr-instruction {
+  font-size: var(--aino-text-body);
+  line-height: 1.6;
+  color: var(--ui-text-secondary);
+  text-wrap: balance;
+}
+.messaging-qr-stage {
+  display: grid;
+  place-items: center;
+  width: min(240px, 100%);
+  min-height: 240px;
+}
+.messaging-qr-stage img {
+  width: 100%;
+  height: auto;
+}
+.messaging-qr-stage[data-phase='configured'],
+.messaging-qr-stage[data-phase='saved'] {
+  min-height: 64px;
+}
+.messaging-qr-stage[data-phase='failed'],
+.messaging-qr-stage[data-phase='expired'] {
+  display: none;
+}
+.messaging-qr-connected {
+  width: 32px;
+  height: 32px;
+  color: var(--ui-text-secondary);
+}
+.messaging-qr-status,
+.messaging-qr-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.messaging-qr-status {
+  font-size: var(--aino-text-label);
+  color: var(--ui-text-secondary);
+  min-height: 24px;
+}
 .messaging-dialog-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
   flex-shrink: 0;
   padding: 1.1rem 1.8rem;

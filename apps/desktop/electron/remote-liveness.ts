@@ -60,7 +60,9 @@ export class RemoteRevalidationCoordinator {
   readonly #pending = new Set<Promise<unknown>>()
 
   async drain(): Promise<void> {
-    while (this.#pending.size) { await Promise.allSettled([...this.#pending]) }
+    while (this.#pending.size) {
+      await Promise.allSettled([...this.#pending])
+    }
   }
 
   run<T>(connection: object, task: () => Promise<T>): Promise<T> {

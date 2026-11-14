@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload recovered historical failure
         if: steps.known.outputs.id != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: install-e2e-known-${{ steps.known.outputs.id }}--${{ inputs.leg-id }}
           path: ${{ runner.temp }}/e2e-logs/known-failure.json
@@ -192,7 +192,7 @@ jobs:
       # tripped when a real install breaks.
       - name: Upload installer logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Unique per leg: a matrix over releases runs this workflow several
           # times per route, and same-named artifacts collide.

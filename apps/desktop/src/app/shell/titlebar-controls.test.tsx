@@ -23,7 +23,6 @@ import { I18nProvider } from '@/i18n'
 import { $fileBrowserOpen, $leftSideOpen, CHAT_SIDEBAR_PANE_ID, FILE_BROWSER_PANE_ID } from '@/store/layout'
 import { REVIEW_PANE_ID } from '@/store/review'
 import { $summaryOpen } from '@/store/summary'
-import { setTitlebarAppActionsSide } from '@/store/titlebar-app-actions'
 import { stubResizeObserver } from '@/test/jsdom'
 
 import { CAPABILITIES_ROUTE, ROUTES_AREA } from '../routes'
@@ -55,9 +54,7 @@ describe('titlebar terminal toggle', () => {
     $hiddenTreePanes.set(new Set())
     $layoutTree.set(split('column', [group(['workspace']), group(['terminal'], { minimized: true })]))
 
-    const terminals = [
-      { auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }
-    ]
+    const terminals = [{ auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }]
 
     $terminals.set(terminals)
     $activeTerminalId.set('running-shell')
@@ -71,7 +68,8 @@ describe('titlebar terminal toggle', () => {
     )
 
     expect(screen.queryByRole('button', { name: '打开设置' })).toBeNull()
-    expect(screen.getByRole('button', { name: '布局编辑器' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '布局编辑器' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '交换侧边栏位置' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '显示终端' }))
     expect(isPaneVisible('terminal')).toBe(true)
@@ -104,9 +102,7 @@ describe('titlebar terminal toggle', () => {
     $fileBrowserOpen.set(true)
     setTerminalTakeover(true)
 
-    const terminals = [
-      { auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }
-    ]
+    const terminals = [{ auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }]
 
     $terminals.set(terminals)
     $activeTerminalId.set('retained-shell')
@@ -387,7 +383,6 @@ describe('titlebar app-action cluster', () => {
   afterEach(() => {
     $narrowViewport.set(false)
     $narrowOverlayPaneIds.set(new Set())
-    setTitlebarAppActionsSide('right')
     cleanup()
     vi.unstubAllGlobals()
     delete window.document.documentElement.dataset.hermesDesktopHost
@@ -436,13 +431,9 @@ describe('titlebar app-action cluster', () => {
     $narrowViewport.set(true)
     renderControls('/')
     const left = screen.getByLabelText('Window controls')
-    expect(within(left).getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-expanded')).toBe(
-      'false'
-    )
+    expect(within(left).getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-expanded')).toBe('false')
     act(() => $narrowOverlayPaneIds.set(new Set([CHAT_SIDEBAR_PANE_ID])))
-    expect(within(left).getByRole('button', { name: 'Hide sidebar' }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
+    expect(within(left).getByRole('button', { name: 'Hide sidebar' }).getAttribute('aria-expanded')).toBe('true')
     act(() => $narrowOverlayPaneIds.set(new Set()))
     expect(within(left).getByRole('button', { name: 'Show sidebar' })).toBeTruthy()
   })
@@ -485,14 +476,16 @@ describe('titlebar app-action cluster', () => {
     }
   })
 
-  it('defaults layout, HUD, and haptics to the right so the left titlebar stays free for tabs', () => {
+  it('keeps only navigation on the left and groups remaining app actions on the right', () => {
     renderControls('/')
 
     const left = screen.getByLabelText('Window controls')
     const right = screen.getByLabelText('App controls')
 
-    expect(within(right).getByLabelText('Mute haptics')).toBeTruthy()
-    expect(within(right).getByLabelText('Layout editor')).toBeTruthy()
+    expect(screen.queryByLabelText('Mute haptics')).toBeNull()
+    expect(screen.queryByLabelText('Unmute haptics')).toBeNull()
+    expect(screen.queryByLabelText('Layout editor')).toBeNull()
+    expect(screen.queryByLabelText('Swap sidebar sides')).toBeNull()
     expect(within(right).getByLabelText('HUD mode')).toBeTruthy()
 
     expect(within(left).queryByLabelText('Mute haptics')).toBeNull()
@@ -501,30 +494,25 @@ describe('titlebar app-action cluster', () => {
     expect(within(left).getByLabelText(/Hide sidebar|Show sidebar/)).toBeTruthy()
   })
 
-  it('moves layout, HUD, and haptics to the left when the appearance setting says left', () => {
-    setTitlebarAppActionsSide('left')
+  it('ignores the retired app-actions placement preference', () => {
+    window.localStorage.setItem('hermes.desktop.titlebarAppActions', 'left')
     renderControls('/')
 
     const left = screen.getByLabelText('Window controls')
     const right = screen.getByLabelText('App controls')
 
-    expect(within(left).getByLabelText('Mute haptics')).toBeTruthy()
-    expect(within(left).getByLabelText('Layout editor')).toBeTruthy()
-    expect(within(left).getByLabelText('HUD mode')).toBeTruthy()
+    expect(within(left).getAllByRole('button')).toHaveLength(3)
     expect(within(right).queryByLabelText('Mute haptics')).toBeNull()
+    expect(within(right).getByLabelText('HUD mode')).toBeTruthy()
+    window.localStorage.removeItem('hermes.desktop.titlebarAppActions')
   })
 
-  it('keeps HUD hidden in the browser on either app-action side', () => {
+  it('keeps HUD unavailable in the browser without restoring the removed editor', () => {
     vi.stubGlobal('hermesDesktop', { ...window.hermesDesktop, hud: undefined })
     renderControls('/')
 
     expect(screen.queryByLabelText('HUD mode')).toBeNull()
-    expect(screen.getByLabelText('Layout editor')).toBeTruthy()
-
-    // Each side assembles its own cluster, so the move must keep the filter.
-    act(() => setTitlebarAppActionsSide('left'))
-    expect(screen.queryByLabelText('HUD mode')).toBeNull()
-    expect(within(screen.getByLabelText('Window controls')).getByLabelText('Layout editor')).toBeTruthy()
-    expect(screen.getByLabelText('Layout editor')).toBeTruthy()
+    expect(screen.queryByLabelText('Layout editor')).toBeNull()
+    expect(within(screen.getByLabelText('Window controls')).getAllByRole('button')).toHaveLength(3)
   })
 })

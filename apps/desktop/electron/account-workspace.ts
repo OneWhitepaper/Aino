@@ -24,8 +24,16 @@ export function prepareAccountWorkspace(workspace: AccountWorkspace): void {
   }
 }
 
-export function matchesAccountWindowOwner(snapshot: PlatformAccountSnapshot, expected?: PlatformAccountWindowOwner): boolean {
-  return Boolean(expected && snapshot.account?.id === expected.userId && snapshot.mode === expected.mode && snapshot.revision === expected.revision)
+export function matchesAccountWindowOwner(
+  snapshot: PlatformAccountSnapshot,
+  expected?: PlatformAccountWindowOwner
+): boolean {
+  return Boolean(
+    expected &&
+    snapshot.account?.id === expected.userId &&
+    snapshot.mode === expected.mode &&
+    snapshot.revision === expected.revision
+  )
 }
 
 /** Auth stays in the native process; no session-only credential crosses disk during a re-home. */
@@ -77,7 +85,9 @@ export function createAccountWorkspaceSwitch({
       }
 
       blocked = true
-      switching = settle().finally(() => { switching = null })
+      switching = settle().finally(() => {
+        switching = null
+      })
 
       return switching
     }
@@ -85,8 +95,16 @@ export function createAccountWorkspaceSwitch({
 }
 
 const PRESENTATION_CHANNELS = new Set([
-  'aino:account:windowMode', 'aino:platform-captcha:get', 'aino:platform-captcha:submit', 'hermes:window-control', 'hermes:window:size', 'hermes:bootstrap:get', 'hermes:deep-link-ready',
-  'hermes:power-battery:get', 'hermes:get-remote-display-reason', 'hermes:embed-host:origin'
+  'aino:account:windowMode',
+  'aino:platform-captcha:get',
+  'aino:platform-captcha:submit',
+  'hermes:window-control',
+  'hermes:window:size',
+  'hermes:bootstrap:get',
+  'hermes:deep-link-ready',
+  'hermes:power-battery:get',
+  'hermes:get-remote-display-reason',
+  'hermes:embed-host:origin'
 ])
 
 export function accountWorkspaceAdministrativeChannel(channel: string): boolean {
@@ -111,9 +129,11 @@ export function createAccountWorkspaceIpc<T extends object>(
       }
 
       if (!allowed(args[0]?.sender?.id)) {
-        if (notification) { args[0].returnValue = null;
+        if (notification) {
+          args[0].returnValue = null
 
- return }
+          return
+        }
 
         throw new Error('account_workspace_unavailable')
       }
@@ -123,7 +143,10 @@ export function createAccountWorkspaceIpc<T extends object>(
       if (result && typeof (result as Promise<unknown>).then === 'function') {
         const task = Promise.resolve(result)
         pending.add(task)
-        void task.then(() => pending.delete(task), () => pending.delete(task))
+        void task.then(
+          () => pending.delete(task),
+          () => pending.delete(task)
+        )
       }
 
       return result
@@ -144,8 +167,16 @@ export function createAccountWorkspaceIpc<T extends object>(
     return on(channel, guarded)
   }
 
-  native.removeListener = (channel: string, listener: (...args: any[]) => unknown) => removeListener(channel, listeners.get(listener) || listener)
+  native.removeListener = (channel: string, listener: (...args: any[]) => unknown) =>
+    removeListener(channel, listeners.get(listener) || listener)
   native.off = native.removeListener
 
-  return { ipc, drain: async () => { while (pending.size) { await Promise.allSettled([...pending]) } } }
+  return {
+    ipc,
+    drain: async () => {
+      while (pending.size) {
+        await Promise.allSettled([...pending])
+      }
+    }
+  }
 }

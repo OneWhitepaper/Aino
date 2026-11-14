@@ -266,7 +266,7 @@ jobs:
           node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux deb --${{ inputs.arch }} -c.extraMetadata.version="$PACKAGE_VERSION" -c.directories.output="$RUNNER_TEMP/native-packages"
       - name: Retain unverified DEB before RPM packaging
         if: always() && inputs.format == 'deb'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-unverified-deb-${{ inputs.arch }}-${{ github.run_id }}
           path: ${{ runner.temp }}/native-packages/*.deb
@@ -296,7 +296,7 @@ jobs:
           PYCODE
       - name: Retain unverified native DEB and RPM files
         if: always() && inputs.format == 'deb'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-unverified-linux-packages-${{ inputs.arch }}-${{ github.run_id }}
           path: |
@@ -342,7 +342,7 @@ jobs:
           xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/deb-home" --user-data "$RUNNER_TEMP/deb-user-data" --out "$RUNNER_TEMP/candidate-proof/deb" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
       - name: Retain verified native DEB
         if: inputs.format == 'deb'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-verified-deb-${{ inputs.arch }}-${{ github.run_id }}
           path: ${{ runner.temp }}/native-packages/*.deb
@@ -393,7 +393,7 @@ jobs:
           xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/rpm-home" --user-data "$RUNNER_TEMP/rpm-user-data" --out "$RUNNER_TEMP/candidate-proof/rpm-ubuntu" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
       - name: Retain native RPM with Ubuntu verification scope
         if: inputs.format == 'deb'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-rpm-ubuntu-smoked-${{ inputs.arch }}-${{ github.run_id }}
           path: ${{ runner.temp }}/native-packages/*.rpm
@@ -422,7 +422,7 @@ jobs:
         run: test "$DIRECT" = success && test "$EXTRACTED" = success
       - name: Save verification diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aino-native-resmoke-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_id }}
           path: ${{ runner.temp }}/candidate-proof
@@ -523,7 +523,7 @@ jobs:
 
       - name: Retain public TLS fixture certificates
         if: always() && runner.os == 'macOS'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-tls-preflight-${{ github.run_id }}
           path: ${{ env.SMOKE_ROOT }}/out/tls-preflight.json
@@ -668,7 +668,7 @@ jobs:
         if: always()
         # Evidence only. A 403 from the artifact store must not fail the smoke.
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-smoke-${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.format }}-${{ github.run_id }}-${{ github.run_attempt }}
           # Only evidence, never the isolated profile or installed application.

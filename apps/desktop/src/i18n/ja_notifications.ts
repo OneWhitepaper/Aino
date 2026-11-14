@@ -52,7 +52,7 @@ export const jaNotifications = {
   testBody: '通知は正常に動作しています。',
   testSent: 'テストを送信しました。表示されない場合は、OS の通知許可と集中モード／おやすみモードを確認してください。',
   testUnsupported: 'このシステムはネイティブ通知に対応していません。',
-  muteSoundsTitle: 'インターフェース音をミュート',
+  muteSoundsTitle: '効果音と触覚フィードバックをオフ',
   muteSoundsDesc:
     '完了・ウェイクワード・思考中の自動通知音、触覚フィードバック、OS 通知の音を無効にします。サウンドのプレビューと音声による応答は引き続き再生されます。',
   completionSoundTitle: '完了サウンド',

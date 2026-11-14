@@ -38,6 +38,7 @@ from hermes_cli.web_routers._common import (
     REDACTED_CREDENTIAL_WRITE_DETAIL, http_failure, is_redacted_credential_preview,
     redacted_credential_preview,
 )
+from hermes_cli.web_routers.messaging_onboarding import router as _onboarding_router
 from hermes_cli.web_models import (
     MessagingPlatformUpdate, TelegramOnboardingApply, TelegramOnboardingStart,
     WhatsAppOnboardingApply, WhatsAppOnboardingStart,
@@ -45,6 +46,7 @@ from hermes_cli.web_models import (
 
 _log = logging.getLogger("hermes_cli.web_server")
 router = APIRouter()
+router.include_router(_onboarding_router)
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
 _config_profile_scope = late("_config_profile_scope", "hermes_cli.web_server_profiles")
@@ -294,6 +296,7 @@ def _messaging_platform_payload(
     payload = {
         "id": platform_id, "name": entry["name"], "description": entry["description"],
         "docs_url": entry["docs_url"], "enabled": enabled, "configured": configured,
+        "onboarding": entry.get("onboarding", False),
         "gateway_running": gateway_running, "state": state, "error_code": error_code,
         "error_message": error_message, "updated_at": runtime_platform.get("updated_at"),
         "home_channel": home_channel, "env_vars": env_vars,
@@ -964,6 +967,10 @@ async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApp
     with _telegram_onboarding_lock:
         _telegram_onboarding_pairings.pop(pairing_id, None)
 
+    if body.apply_live:
+        return {"ok": True, "platform": "telegram", "bot_username": bot_username,
+                "needs_activation": True, "needs_restart": False, "restart_started": False}
+
     # Best-effort restart: the QR flow pulls users into Telegram on another device, so a
     # saved token waiting on a manual restart click reads as "Hermes is broken" from the
     # chat side. The save stays authoritative; a failed restart is reported for the UI banner.
@@ -1107,8 +1114,8 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
         )
         # A live multiplexer serving this named profile builds the adapter from the new token now
         # (its periodic rescan would otherwise pick it up within a cycle); no gateway restart.
-        hot_served = await asyncio.to_thread(_notify_multiplexer_hot_serve, target_profile)
-        return {"ok": True, "platform": platform_id, "hot_served": hot_served}
+        hot_served = False if body.apply_live else await asyncio.to_thread(_notify_multiplexer_hot_serve, target_profile)
+        return {"ok": True, "platform": platform_id, "hot_served": hot_served, "needs_activation": True}
 
 
 def _notify_multiplexer_hot_serve(profile: Optional[str]) -> bool:

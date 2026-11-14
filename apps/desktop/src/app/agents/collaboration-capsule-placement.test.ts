@@ -13,6 +13,7 @@ it('retains the full desktop width on the conversation axis, including a narrowe
     rightControls: rect(1240, 184),
     leftControls: rect(65, 56)
   }
+
   expect(capsulePlacement(input)).toEqual({ left: 850, top: 0.5 })
   expect(capsulePlacement({ ...input, anchor: rect(547, 286) })).toEqual({ left: 690, top: 0.5 })
 })
@@ -26,6 +27,7 @@ it('keeps a narrow closed capsule clear of native tools and places the full expa
     rightControls: rect(551, 184),
     leftControls: rect(65, 56)
   }
+
   const closed = capsulePlacement(input)
   expect(closed.left + 113).toBeLessThan(input.rightControls.left)
   expect(closed.left - 113).toBeGreaterThan(input.leftControls.right)

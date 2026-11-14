@@ -5,8 +5,8 @@ import { buildToolView } from '@/components/assistant-ui/tool/fallback-model'
 import { CompactMarkdown } from '@/components/chat/compact-markdown'
 import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
 import { Loader } from '@/components/ui/loader'
+import { ToolIcon } from '@/components/ui/tool-icon'
 import { useI18n } from '@/i18n'
 import { chatMessageText, toChatMessages } from '@/lib/chat-messages'
 import type { SessionOwnerScope } from '@/store/session-request-router'
@@ -31,9 +31,7 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   const [expandedSource, setExpandedSource] = useState<string | null>(null)
 
   const messages = useMemo(() => {
-    const visible = toChatMessages(source.messages).filter(
-      message => !message.hidden && message.role !== 'system'
-    )
+    const visible = toChatMessages(source.messages).filter(message => !message.hidden && message.role !== 'system')
 
     const first = visible[0]
 
@@ -81,9 +79,11 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   }
 
   if (!messages.length) {
-    return source.awaitingOutput
-      ? <Loader label={t.agents.running} />
-      : <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    return source.awaitingOutput ? (
+      <Loader label={t.agents.running} />
+    ) : (
+      <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    )
   }
 
   return (
@@ -106,7 +106,7 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
 
             return tool ? (
               <div className="flex min-w-0 items-start gap-2 text-(--ui-text-secondary)" key={key}>
-                <Codicon className="mt-0.5 shrink-0" name={tool.icon || 'tools'} size="0.875rem" />
+                <ToolIcon className="mt-0.5 shrink-0" name={tool.icon || 'tools'} size="0.875rem" />
                 <div className="min-w-0">
                   <p>{tool.title}</p>
                   {tool.subtitle && <p className="break-words text-(--ui-text-tertiary)">{tool.subtitle}</p>}

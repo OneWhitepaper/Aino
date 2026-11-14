@@ -3,9 +3,10 @@ import { useStore } from '@nanostores/react'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { SidebarToggleIcon } from '@/components/ui/sidebar-toggle-icon'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { Maximize, PanelLeftIcon } from '@/lib/icons'
+import { Maximize } from '@/lib/icons'
 
 import { setTreeGroupMinimized } from '../store'
 import { $maximizedToolGroup, toggleToolGroupMaximized } from '../tool-panel-view'
@@ -78,7 +79,7 @@ export function ToolPanelControls({
           size="icon-xs"
           variant="ghost"
         >
-          <PanelLeftIcon className="size-3.5 rotate-180" />
+          <SidebarToggleIcon expanded side="right" />
         </Button>
       </Tip>
     </span>

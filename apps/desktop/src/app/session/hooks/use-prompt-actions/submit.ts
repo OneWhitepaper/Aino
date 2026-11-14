@@ -73,7 +73,11 @@ import {
   writePreparedSubmission
 } from './prepared-submissions'
 import { registerRecoveredRuntime, singleFlightSessionResume, takeRecoveredRuntime } from './single-flight-resume'
-import { captureSubmissionDestination, destinationAfterCreate, sameAuthorityPublishedOwner } from './submission-destination'
+import {
+  captureSubmissionDestination,
+  destinationAfterCreate,
+  sameAuthorityPublishedOwner
+} from './submission-destination'
 import {
   acquireSubmitInFlight,
   type GatewayRequest,
@@ -273,6 +277,39 @@ function prepareSubmitInput(
   }
 }
 
+function buildSubmitContextText(atts: ComposerAttachment[], visibleText: string): string {
+  // atts may be the post-sync array, which can reintroduce holes; filter
+  // before touching a.refText / a.kind.
+  const present = atts.filter((a): a is ComposerAttachment => Boolean(a))
+
+  const contextRefs = present
+    .map(a => a.refText)
+    .filter(Boolean)
+    .join('\n')
+
+  // Terminal fences live inside visibleText (frozen above / at enqueue).
+  return (
+    [contextRefs, visibleText].filter(Boolean).join('\n\n') ||
+    (present.some(a => a.kind === 'image') ? 'What do you see in this image?' : '')
+  )
+}
+
+function requestDeferredCredentialSetup(fromQueue: boolean | undefined): boolean {
+  if (fromQueue) {
+    return false
+  }
+
+  const warning = consumePendingCredentialWarning()
+
+  if (!warning) {
+    return false
+  }
+
+  requestDesktopOnboarding(warning)
+
+  return true
+}
+
 function acceptsImageAttachments(
   guardSessionId: string | null,
   fromQueue: boolean | undefined,
@@ -399,23 +436,6 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
       let { attachmentRefs } = prepared
 
-      const buildContextText = (atts: ComposerAttachment[]): string => {
-        // atts may be the post-sync array, which can reintroduce holes; filter
-        // before touching a.refText / a.kind.
-        const present = atts.filter((a): a is ComposerAttachment => Boolean(a))
-
-        const contextRefs = present
-          .map(a => a.refText)
-          .filter(Boolean)
-          .join('\n')
-
-        // Terminal fences live inside visibleText (frozen above / at enqueue).
-        return (
-          [contextRefs, visibleText].filter(Boolean).join('\n\n') ||
-          (present.some(a => a.kind === 'image') ? 'What do you see in this image?' : '')
-        )
-      }
-
       // Queue drains fire on the busy→false settle edge, where busyRef (synced
       // from $busy by a separate effect) may still read true — honoring it would
       // bounce the drained send. The drain lock serializes them; the user path
@@ -460,14 +480,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       // the gateway said will fail. The draft
       // stays in the composer; once a provider is configured they just hit
       // Enter again.
-      if (!options?.fromQueue) {
-        const deferredCredentialWarning = consumePendingCredentialWarning()
-
-        if (deferredCredentialWarning) {
-          requestDesktopOnboarding(deferredCredentialWarning)
-
-          return false
-        }
+      if (requestDeferredCredentialSetup(options?.fromQueue)) {
+        return false
       }
 
       // Barged mid-speech (here or via the voice loop's VAD)? Flag the submit
@@ -615,8 +629,14 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // the retry is refused once, visibly, and the entry is retired: sending
         // the words again afterwards is the user's informed new turn.
         if (retained?.legacyAttempted && retainedKey) {
-          await removePreparedSubmission(retainedKey, retained.id).catch(error => console.warn('[prepared-submission-retire]', error))
-          notify({ kind: 'warning', title: copy.promptFailed, message: translateNow('promptNotices.legacySendUnconfirmed') })
+          await removePreparedSubmission(retainedKey, retained.id).catch(error =>
+            console.warn('[prepared-submission-retire]', error)
+          )
+          notify({
+            kind: 'warning',
+            title: copy.promptFailed,
+            message: translateNow('promptNotices.legacySendUnconfirmed')
+          })
 
           return false
         }
@@ -1193,7 +1213,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // Images keep their inline bounded thumbnail — see optimisticAttachmentRef.
         attachmentRefs = syncedAttachments.map(optimisticAttachmentRef).filter((r): r is string => Boolean(r))
         rewriteOptimistic(liveSessionId, syncedAttachments)
-        const text = retained?.text ?? buildContextText(syncedAttachments)
+        const text = retained?.text ?? buildSubmitContextText(syncedAttachments, visibleText)
 
         // No pre-send stale-transcript guard (removed on main, fcfc5c66ede):
         // windows on one backend share the live session and turns are
@@ -1238,7 +1258,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
         const prepared: NonNullable<typeof retained> = retained ?? {
           id: submissionId,
-          owner: destination.owner ?? sameAuthorityPublishedOwner(destination, targetStoredSessionId, ambientRequestGateway),
+          owner:
+            destination.owner ?? sameAuthorityPublishedOwner(destination, targetStoredSessionId, ambientRequestGateway),
           displayText: options?.displayText,
           attachments: syncedAttachments,
           text,
@@ -1391,7 +1412,10 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
                   receiptSessionId,
                   state => ({
                     ...state,
-                    messages: result.status === 'unknown' ? state.messages : state.messages.filter(message => message.id !== optimisticId),
+                    messages:
+                      result.status === 'unknown'
+                        ? state.messages
+                        : state.messages.filter(message => message.id !== optimisticId),
                     ...(!state.turnLive &&
                       !state.streamId &&
                       !state.sawAssistantPayload && {
@@ -1462,7 +1486,9 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // The gateway admitted it: a failed journal retirement (ENOSPC/EIO) must not report a
         // delivered prompt as failed and invite a resend. The identity is tombstoned first, so the
         // stale entry is never adopted again — not after a reload either.
-        await removePreparedSubmission(retryKey, prepared.id).catch(error => console.warn('[prepared-submission-retire]', error))
+        await removePreparedSubmission(retryKey, prepared.id).catch(error =>
+          console.warn('[prepared-submission-retire]', error)
+        )
 
         // The prompt is now accepted. Report the EXACT identity it landed on
         // (recovered id included) so a caller that must prove delivery — the

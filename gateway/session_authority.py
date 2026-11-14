@@ -718,7 +718,8 @@ class SessionAuthority:
         self._require_admission_open(queue_only=queue_only)
         if (request.intent != 'queue' or not {'text'} <= set(request.payload) <= {
                 'text', 'attachments', 'finite', 'unattended', 'surface', 'voice_context', 'interrupted',
-                'voice_turn', 'display_kind', 'title_preview', 'turn_author', 'api_text', 'model_override', 'clarify_batch'}
+                'voice_turn', 'display_kind', 'title_preview', 'turn_author', 'api_text', 'model_override', 'clarify_batch',
+                'continuation_of'}
                 or not isinstance(request.payload['text'], str)):
             raise RuntimeStoreError('invalid_params')
         from gateway.session_ingress_media import admit_attachments
@@ -726,6 +727,9 @@ class SessionAuthority:
         from gateway.session_surface import admit_surface
         from gateway.session_display import admit_display
         from gateway.session_cli_turn import admit_cli_turn
+        from gateway.session_pause import admit_continuation, continuation_guard
+        _authorize_write = continuation_guard(request.ref, actor.subject,
+                                              request.payload.get('continuation_of'), _authorize_write)
         finite = admit_finite(request.payload)
         def admitted():
             # The exact durable identity (authenticated principal + target + request id); the
@@ -735,6 +739,7 @@ class SessionAuthority:
                                           session_id=request.ref.session_id, request_id=request.request_id)
         payload = {'text': request.payload['text'], **finite, **admit_surface(request.payload),
                    **admit_display(request.payload), **admit_cli_turn(request.payload),
+                   **admit_continuation(request.payload.get('continuation_of')),
                    **admit_attachments(request.payload.get('attachments'), admitted=admitted)}
         if _kanban_card is not None:
             payload['kanban_card_v1'] = _kanban_card

@@ -24,10 +24,7 @@ import {
   runPluginAppAction
 } from '@/lib/keybinds/plugin-actions'
 import { readKey, writeKey } from '@/lib/storage'
-import {
-  dispatchPluginNativeNotification,
-  type PluginNativeNotificationInput
-} from '@/store/native-notifications'
+import { dispatchPluginNativeNotification, type PluginNativeNotificationInput } from '@/store/native-notifications'
 import { $petActive } from '@/store/pet'
 import { clearPetMessages, type PetSayOptions, sayPetMessage } from '@/store/pet-plugin-messages'
 
@@ -47,11 +44,7 @@ import type { Contribution } from './types'
 export type { PluginSettingsPage, PluginSettingsSubpage } from './settings-pages'
 export type { PluginRestOptions } from '@/hermes'
 export type { HermesOpenTarget } from '@/lib/hermes-open-target'
-export type {
-  PluginAppActionId,
-  PluginAppActionInfo,
-  PluginRunActionResult
-} from '@/lib/keybinds/plugin-actions'
+export type { PluginAppActionId, PluginAppActionInfo, PluginRunActionResult } from '@/lib/keybinds/plugin-actions'
 export type { PluginNativeNotificationInput, PluginNotificationAction } from '@/store/native-notifications'
 export type { PetMessageTone, PetSayOptions } from '@/store/pet-plugin-messages'
 
@@ -265,9 +258,7 @@ function createPluginOs(pluginId: string): PluginOs {
   }
 
   // Same shape as `attempt`, for the pickers that answer with a path.
-  const attemptPath = async (
-    run: (bridge: NonNullable<typeof window.hermesDesktop>) => Promise<null | string>
-  ) => {
+  const attemptPath = async (run: (bridge: NonNullable<typeof window.hermesDesktop>) => Promise<null | string>) => {
     const bridge = typeof window === 'undefined' ? undefined : window.hermesDesktop
 
     if (!bridge) {

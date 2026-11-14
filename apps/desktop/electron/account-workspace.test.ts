@@ -9,15 +9,22 @@ import { accountWorkspace, createAccountWorkspaceIpc, createAccountWorkspaceSwit
 
 function deferred() {
   let release!: () => void
-  const promise = new Promise<void>(resolve => { release = resolve })
+
+  const promise = new Promise<void>(resolve => {
+    release = resolve
+  })
 
   return { promise, release }
 }
 
 class NativeIpc extends EventEmitter {
   handlers = new Map<string, (...args: any[]) => unknown>()
-  handle(channel: string, listener: (...args: any[]) => unknown) { this.handlers.set(channel, listener) }
-  invoke(channel: string, senderId: number) { return this.handlers.get(channel)!({ sender: { id: senderId } }) }
+  handle(channel: string, listener: (...args: any[]) => unknown) {
+    this.handlers.set(channel, listener)
+  }
+  invoke(channel: string, senderId: number) {
+    return this.handlers.get(channel)!({ sender: { id: senderId } })
+  }
 }
 
 test('switch blocks old data immediately and publishes only the final requested account after draining', async () => {
@@ -50,10 +57,20 @@ test('switch blocks old data immediately and publishes only the final requested 
 test('native IPC registration also fences sibling registrations and drains old async work', async () => {
   const ipc = new NativeIpc()
   let activeSender = 1
-  const guard = createAccountWorkspaceIpc(ipc, id => id === activeSender, () => true)
+
+  const guard = createAccountWorkspaceIpc(
+    ipc,
+    id => id === activeSender,
+    () => true
+  )
+
   const held = deferred()
   const read = vi.fn(() => held.promise)
-  const sync = vi.fn(event => { event.returnValue = 'old-private-data' })
+
+  const sync = vi.fn(event => {
+    event.returnValue = 'old-private-data'
+  })
+
   ipc.handle('hermes:api', read)
   ipc.on('hermes:skin:snapshot', sync)
   const relay = vi.fn()
@@ -82,7 +99,14 @@ test('a failed retirement stays closed and can retry the original account', asyn
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-account-retry-'))
   const resolve = (id: string | null) => accountWorkspace(userData, 'https://platform.invalid', id)
   const retire = vi.fn().mockRejectedValueOnce(new Error('not drained')).mockResolvedValue(undefined)
-  const switching = createAccountWorkspaceSwitch({ initial: resolve('A'), resolve, retire, activate: vi.fn(), ready: vi.fn() })
+
+  const switching = createAccountWorkspaceSwitch({
+    initial: resolve('A'),
+    resolve,
+    retire,
+    activate: vi.fn(),
+    ready: vi.fn()
+  })
 
   try {
     await expect(switching.change('B')).rejects.toThrow('not drained')

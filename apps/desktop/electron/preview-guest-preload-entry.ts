@@ -13,15 +13,30 @@
 // Deliberate scope: only trusted anchor clicks are forwarded. A page's direct
 // `window.open` calls stay blocked (the webview has no `allowpopups`): hooking
 // them would mean reaching into the guest's JS world, and this preload exposes
-// nothing there.
+// no host APIs there. The prompt-only restoration below keeps Blink's modal
+// behavior available because Electron otherwise replaces prompt() with a throwing stub.
 
 import { installGuestExternalHandoff } from './preview-guest-preload'
+import { installPreviewGuestPrompt } from './preview-guest-prompt'
 
 const electron = require('electron') as {
-  ipcRenderer: { sendToHost(channel: string, ...args: unknown[]): void }
+  contextBridge: { executeInMainWorld(options: { func: () => void }): void }
+  ipcRenderer: {
+    sendToHost(channel: string, ...args: unknown[]): void
+    send(channel: string, ...args: unknown[]): void
+  }
 }
+
+// This exposes no host APIs: the serialized function only restores a browser-native prompt.
+electron.contextBridge.executeInMainWorld({ func: installPreviewGuestPrompt })
 
 installGuestExternalHandoff({
   addEventListener: (type, listener, capture) => document.addEventListener(type, listener, capture),
-  sendToHost: (channel, ...args) => electron.ipcRenderer.sendToHost(channel, ...args)
+  sendToHost: (channel, ...args) => {
+    if (process.argv.includes('--aino-native-preview')) {
+      electron.ipcRenderer.send('hermes:preview-native:external', channel, args)
+    } else {
+      electron.ipcRenderer.sendToHost(channel, ...args)
+    }
+  }
 })

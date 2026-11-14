@@ -71,19 +71,22 @@ it('resets an unrelated settings override without switching an already active ow
   expect($routeRequest.get()?.path).toBe('/settings?tab=config:model')
 })
 
-it.each(['rejects', 'does not land'] as const)('keeps the other owner settings closed when the requested switch %s', async outcome => {
-  const action = recoveryAction()
+it.each(['rejects', 'does not land'] as const)(
+  'keeps the other owner settings closed when the requested switch %s',
+  async outcome => {
+    const action = recoveryAction()
 
-  activate('personal', 'default')
-  switches.selectConnection.mockImplementation(async () => {
-    if (outcome === 'rejects') {
-      throw new Error('Connection unavailable')
-    }
-  })
-  await action.onClick()
+    activate('personal', 'default')
+    switches.selectConnection.mockImplementation(async () => {
+      if (outcome === 'rejects') {
+        throw new Error('Connection unavailable')
+      }
+    })
+    await action.onClick()
 
-  expect($routeRequest.get()).toBeNull()
-  expect($activeConnectionId.get()).toBe('personal')
-  expect($settingsScopeProfile.get()).toBe('default')
-  expect($notifications.get().some(row => row.kind === 'error')).toBe(true)
-})
+    expect($routeRequest.get()).toBeNull()
+    expect($activeConnectionId.get()).toBe('personal')
+    expect($settingsScopeProfile.get()).toBe('default')
+    expect($notifications.get().some(row => row.kind === 'error')).toBe(true)
+  }
+)

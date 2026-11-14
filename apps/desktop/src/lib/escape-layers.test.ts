@@ -20,25 +20,25 @@ describe('escape-layers', () => {
   })
 
   it('equal-or-higher priority counts as top (ties act)', () => {
-    const release = pushEscapeLayer(ESCAPE_PRIORITY.zoneEditor)
-    expect(isTopEscapeLayer(ESCAPE_PRIORITY.zoneEditor)).toBe(true)
-    expect(isTopEscapeLayer(ESCAPE_PRIORITY.layoutEdit)).toBe(false)
+    const release = pushEscapeLayer(ESCAPE_PRIORITY.overlay)
+    expect(isTopEscapeLayer(ESCAPE_PRIORITY.overlay)).toBe(true)
+    expect(isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)).toBe(false)
     release()
   })
 
   it('tracks the max across several open layers', () => {
     const releases = [
       pushEscapeLayer(ESCAPE_PRIORITY.narrowOverlay),
-      pushEscapeLayer(ESCAPE_PRIORITY.layoutEdit),
-      pushEscapeLayer(ESCAPE_PRIORITY.zoneEditor)
+      pushEscapeLayer(ESCAPE_PRIORITY.narrowOverlay),
+      pushEscapeLayer(ESCAPE_PRIORITY.overlay)
     ]
 
-    expect(isTopEscapeLayer(ESCAPE_PRIORITY.zoneEditor)).toBe(true)
-    expect(isTopEscapeLayer(ESCAPE_PRIORITY.layoutEdit)).toBe(false)
+    expect(isTopEscapeLayer(ESCAPE_PRIORITY.overlay)).toBe(true)
+    expect(isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)).toBe(false)
 
-    // Close the zone editor — layout edit becomes top.
+    // Close the full-page overlay — the narrow pane becomes top.
     releases[2]()
-    expect(isTopEscapeLayer(ESCAPE_PRIORITY.layoutEdit)).toBe(true)
+    expect(isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)).toBe(true)
 
     releases.forEach(release => release())
     expect(isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)).toBe(true)

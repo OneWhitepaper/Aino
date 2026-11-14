@@ -50,5 +50,6 @@ it.each([
   const { result } = renderHook(() =>
     useCanonicalRoomLive(events as never, { pending_actions: pending } as never, members)
   )
+
   expect(result.current.cycle).toEqual(cycle)
 })

@@ -7,7 +7,7 @@ import { translateBots } from './i18n-test-helper'
 import { LegacyGroupReplyStatus } from './legacy-group-reply-status'
 
 vi.mock('@hermes/plugin-sdk', async importOriginal => ({
-  ...await importOriginal<typeof HermesSdk>(),
+  ...(await importOriginal<typeof HermesSdk>()),
   usePluginI18n: () => translateBots
 }))
 
@@ -25,7 +25,9 @@ const activity: GroupActivityEntry[] = [
 
 it('reuses the reply presentation with current-thread activity while leaving Stop to the existing coordinator', () => {
   const onStop = vi.fn()
-  render(<LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={onStop} room={room} waitingForAnswer={false} />)
+  render(
+    <LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={onStop} room={room} waitingForAnswer={false} />
+  )
   const status = screen.getByRole('status')
   expect(status.textContent).toContain('Reviewer · Replying')
   expect(status.textContent).toContain('1 replies completed')
@@ -36,9 +38,20 @@ it('reuses the reply presentation with current-thread activity while leaving Sto
 })
 
 it('keeps a member question honest and removes the progress controls after settlement', () => {
-  const { rerender } = render(<LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={vi.fn()} room={room} waitingForAnswer />)
+  const { rerender } = render(
+    <LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={vi.fn()} room={room} waitingForAnswer />
+  )
+
   expect(screen.getByRole('status').textContent).not.toContain('Replying')
-  rerender(<LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={vi.fn()} room={{ ...room, running: false }} waitingForAnswer={false} />)
+  rerender(
+    <LegacyGroupReplyStatus
+      activity={activity}
+      allMeta={meta}
+      onStop={vi.fn()}
+      room={{ ...room, running: false }}
+      waitingForAnswer={false}
+    />
+  )
   expect(screen.queryByRole('status')).toBeNull()
   expect(screen.queryByRole('button')).toBeNull()
 })

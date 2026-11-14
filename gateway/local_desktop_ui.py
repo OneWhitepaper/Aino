@@ -44,8 +44,6 @@ CALLBACK_ATTRS = ("read_terminal_callback", "read_preview_callback", "drive_prev
 _TERMINAL_READ_TIMEOUT_S = 30
 _PREVIEW_READ_TIMEOUT_S = 45
 _WINDOW_READ_TIMEOUT_S = 30
-_PREVIEW_ACTION_TIMEOUT_S = 45
-_PREVIEW_ACTION_PROBE_TIMEOUT_S = 10
 _PREVIEW_ACTION_REPROBE_COOLDOWN_S = 30
 _PREVIEW_ACTION_BRIDGE_UNAVAILABLE = json.dumps({
     "success": False,
@@ -229,8 +227,10 @@ def _read_block(turn, agent, method, timeout):
 
 
 def _preview_action(turn, agent, payload) -> str:
-    """main's ``_preview_action_request`` ladder: a short probe until the renderer has answered once,
-    then the full deadline; an unanswered probe fails fast for a cooldown instead of stacking waits."""
+    """main's preview ladder: short observation probes, human-review time for input, and a
+    cooldown after an unanswered request instead of stacking waits."""
+    from tools.desktop_ui import preview_action_timeout
+
     session_id = turn._approval_owner[1]
     now = time.monotonic()
     with _lock:
@@ -240,8 +240,7 @@ def _preview_action(turn, agent, payload) -> str:
             return _PREVIEW_ACTION_BRIDGE_UNAVAILABLE
         if state == "unanswered":
             bridge["retry_at"] = now + _PREVIEW_ACTION_REPROBE_COOLDOWN_S
-    answer = _ask(turn, agent, "preview.act", payload,
-                  _PREVIEW_ACTION_TIMEOUT_S if state == "answered" else _PREVIEW_ACTION_PROBE_TIMEOUT_S)
+    answer = _ask(turn, agent, "preview.act", payload, preview_action_timeout(payload, state))
     with _lock:
         if answer:
             bridge["state"] = "answered"

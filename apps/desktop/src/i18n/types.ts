@@ -588,8 +588,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
     enterHud: string
     exitHud: string
     resetHudLayout: string
-    layoutEditor: string
-    layoutEditorTitle: (modifier: string) => string
   }
 
   keybinds: {
@@ -845,10 +843,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
       tabStripAuto: string
       tabStripAlways: string
       tabStripNever: string
-      appActionsTitle: string
-      appActionsDesc: string
-      appActionsLeft: string
-      appActionsRight: string
       terminalFontTitle: string
       terminalFontDesc: string
       terminalFontPlaceholder: string
@@ -2676,7 +2670,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
     }
 
     contributedActions: {
-      layoutEditMode: string
       reloadPlugins: string
       resetLayout: string
       toggleStatusbar: string
@@ -3300,6 +3293,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
     steer: string
     redirect: string
     stop: string
+    pauseTask: string
+    pausingTask: string
+    continuingTask: string
     send: string
     speaking: string
     transcribing: string
@@ -4462,29 +4458,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
     pluginDisabled: (pluginId: string) => string
     pluginDisabledBody: string
     missingPane: (paneId: string) => string
-    editTitle: string
-    editHint: string
-    reset: string
-    templates: string
-    custom: string
-    newGridLayout: string
-    saveCurrentAs: string
-    nameLayoutPlaceholder: string
-    deletePreset: (name: string) => string
-    zoneEditorTitle: string
-    editorHintPre: string
-    editorHintPost: string
-    templateColumns: string
-    templateRows: string
-    templateGrid: string
-    templatePriority: string
-    zoneTag: (index: number) => string
-    mergeZones: (count: number) => string
-    customZoneName: (count: number) => string
-    layoutNamePlaceholder: (fallback: string) => string
-    saveApply: string
-    notExpressible: string
-    zoneCount: (count: number) => string
     tabCount: (count: number) => string
 
     paneTitles: {
@@ -4493,13 +4466,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
       files: string
       review: string
       logs: string
-    }
-
-    layoutTitles: {
-      default: string
-      focus: string
-      terminalDeck: string
-      quad: string
     }
 
     tabActions: (title: string) => string

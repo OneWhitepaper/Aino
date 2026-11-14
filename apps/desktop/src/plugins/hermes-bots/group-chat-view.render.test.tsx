@@ -56,12 +56,21 @@ it('uses a single host title for a legacy main workspace and restores its own ti
   Element.prototype.scrollIntoView = vi.fn()
   const { $groupChats } = await import('./group-chat')
   const { GroupChatWorkspace } = await import('./group-chat-view')
-  $groupChats.set({ 'Legacy team': {
-    log: [{ id: 'reply', from: { kind: 'member', name: 'helper' }, text: 'Legacy reply', at: 1 }],
-    watermarks: {}
-  } })
+  $groupChats.set({
+    'Legacy team': {
+      log: [{ id: 'reply', from: { kind: 'member', name: 'helper' }, text: 'Legacy reply', at: 1 }],
+      watermarks: {}
+    }
+  })
   const onBack = vi.fn()
-  const view = render(<><h1>Legacy team</h1><GroupChatWorkspace group="Legacy team" mainTab members={[]} onBack={onBack} /></>)
+
+  const view = render(
+    <>
+      <h1>Legacy team</h1>
+      <GroupChatWorkspace group="Legacy team" mainTab members={[]} onBack={onBack} />
+    </>
+  )
+
   await screen.findByText('Legacy reply')
   expect(screen.getAllByRole('heading', { name: 'Legacy team' })).toHaveLength(1)
   expect(screen.getByRole('region', { name: 'Legacy team' })).toBeTruthy()

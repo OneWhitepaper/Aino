@@ -6,7 +6,6 @@ import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { registry } from '@/contrib/registry'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
-import { $layoutEditMode } from '../../edit-mode'
 import { group, split } from '../model'
 import { $hiddenTreePanes, $layoutTree, $narrowViewport, restoreTreePane } from '../store'
 
@@ -24,7 +23,6 @@ beforeEach(() => {
   vi.stubGlobal('CSS', { ...globalThis.CSS, escape: (value: string) => value })
   $hiddenTreePanes.set(new Set())
   $narrowViewport.set(false)
-  $layoutEditMode.set(false)
 
   for (const id of ['review', 'terminal', 'files']) {
     disposers.push(
@@ -53,7 +51,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   $layoutTree.set(null)
-  $layoutEditMode.set(false)
   disposers.splice(0).forEach(dispose => dispose())
   vi.unstubAllGlobals()
 })
@@ -210,19 +207,6 @@ describe('safe tool-only groups restored without presentation metadata', () => {
 
     expect(screen.queryByRole('menuitem', { name: /(?:show|hide) tabs/i })).toBeNull()
     expect(screen.getByRole('menuitem', { name: 'Hide panel' })).toBeTruthy()
-  })
-
-  it('retains the tab-strip configuration command in layout edit mode', () => {
-    $layoutEditMode.set(true)
-    const node = group(['review'], { id: 'legacy-tools' })
-    $layoutTree.set(node)
-    const { container } = render(<TreeGroup node={node} parentAxis="row" />)
-    const tab = container.querySelector<HTMLElement>('[data-tree-tab="review"]')!
-
-    fireEvent.pointerDown(tab, { button: 2, pointerType: 'mouse' })
-    fireEvent.contextMenu(tab, { button: 2 })
-
-    expect(screen.getByRole('menuitem', { name: /hide tabs/i })).toBeTruthy()
   })
 
   it('hides and restores a live tool guest without losing its state or sized track', () => {

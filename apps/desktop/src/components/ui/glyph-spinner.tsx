@@ -70,12 +70,7 @@ interface GlyphSpinnerProps {
  * clipping viewport is centred inside it by the same `items-center` that used
  * to centre the single glyph.
  */
-export function GlyphSpinner({
-  ariaLabel,
-  className,
-  paused = false,
-  spinner = 'braille'
-}: GlyphSpinnerProps) {
+export function GlyphSpinner({ ariaLabel, className, paused = false, spinner = 'braille' }: GlyphSpinnerProps) {
   const { t } = useI18n()
   const resolvedAriaLabel = ariaLabel ?? t.common.loading
   const spin = FRAMES_BY_NAME[spinner] ?? FRAMES_BY_NAME.braille!

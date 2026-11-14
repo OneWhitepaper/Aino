@@ -247,7 +247,11 @@ it('lets a focused composer dismiss its own mention list before the collaboratio
 
 it('opens the delegated conversation once and closes the capsule only after navigation succeeds', async () => {
   let finish!: (opened: boolean) => void
-  vi.mocked(openCollaborationTask).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  vi.mocked(openCollaborationTask).mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
   mount()
   const delegated = task()
   publish(delegated)
@@ -268,23 +272,26 @@ it('opens the delegated conversation once and closes the capsule only after navi
   expect(screen.queryByRole('region', { name: 'Collaboration' })).toBeNull()
 })
 
-it.each(['unavailable', 'rejected'] as const)('keeps the capsule and recovery message when child navigation is %s', async outcome => {
-  if (outcome === 'rejected') {
-    vi.mocked(openCollaborationTask).mockRejectedValueOnce(new Error('Connection closed'))
-  } else {
-    vi.mocked(openCollaborationTask).mockResolvedValueOnce(false)
-  }
+it.each(['unavailable', 'rejected'] as const)(
+  'keeps the capsule and recovery message when child navigation is %s',
+  async outcome => {
+    if (outcome === 'rejected') {
+      vi.mocked(openCollaborationTask).mockRejectedValueOnce(new Error('Connection closed'))
+    } else {
+      vi.mocked(openCollaborationTask).mockResolvedValueOnce(false)
+    }
 
-  mount()
-  publish(task())
-  fireEvent.click(screen.getByRole('button', { name: /1 assistants collaborating/ }))
-  fireEvent.click(screen.getByRole('button', { name: /Research assistant/ }))
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'View conversation' })))
-  expect($collaborationCapsuleOpen.get()).toBe(true)
-  expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
-  expect(screen.getByRole('alert').textContent).toContain('Reconnect to its workspace and try again.')
-  expect((screen.getByRole('button', { name: 'View conversation' }) as HTMLButtonElement).disabled).toBe(false)
-})
+    mount()
+    publish(task())
+    fireEvent.click(screen.getByRole('button', { name: /1 assistants collaborating/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Research assistant/ }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'View conversation' })))
+    expect($collaborationCapsuleOpen.get()).toBe(true)
+    expect(screen.getByRole('region', { name: 'Collaboration' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('Reconnect to its workspace and try again.')
+    expect((screen.getByRole('button', { name: 'View conversation' }) as HTMLButtonElement).disabled).toBe(false)
+  }
+)
 
 it('keeps retry preparation on the original task source without opening its child conversation', async () => {
   mount()

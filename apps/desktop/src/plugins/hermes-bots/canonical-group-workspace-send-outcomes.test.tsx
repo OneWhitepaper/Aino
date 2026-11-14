@@ -59,6 +59,7 @@ afterEach(() => {
   window.hermesDesktop = originalDesktop
   vi.unstubAllGlobals()
 })
+
 // What gateway/session_group_controls.py answers for groups.send.
 const receipt = (params: { event_id?: string }) => ({
   event: {},
@@ -79,6 +80,7 @@ const frame = (message: string, code: number, data?: Record<string, unknown>) =>
 
 const MAYBE = 'This message may already have been sent. Retry sends the same message; it will not be posted twice.'
 const REFUSED = 'The gateway refused this message. Edit it and send again.'
+
 const FINISHED_ELSEWHERE =
   'Another Desktop window already finished with this message. Check the conversation before sending it again.'
 
@@ -132,6 +134,7 @@ function nativeJournal(beforeMutation?: (call: number, entry: string | null) => 
 
 const sentIds = () =>
   request.mock.calls.filter(call => call[1] === 'groups.send').map(call => call[2].event_id as string)
+
 const editor = (scope: HTMLElement) => within(scope).getByRole('textbox') as HTMLTextAreaElement
 
 async function openRoom(binding: { connectionId: string; profile: string; roomId: string }) {
@@ -315,6 +318,28 @@ it.each([
 })
 
 // AM4: the same reasons and codes also follow a committed user event, without `admitted: false`.
+it('explains a model preparation failure beside the retained draft instead of blaming the gateway', async () => {
+  const hint = 'The selected model is unavailable. Choose an available model and send again.'
+
+  const failure = Object.assign(new Error(hint), {
+    code: 'model_unavailable',
+    data: { admitted: false, preparation_message: hint }
+  })
+
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'model-not-ready' }
+  room((params, attempt) => (attempt === 1 ? Promise.reject(failure) : receipt(params)))
+  const scope = await openRoom(binding)
+  await typeAndSend(scope, 'Keep my question')
+
+  await within(scope).findByText(hint)
+  expect(within(scope).queryByText(REFUSED)).toBeNull()
+  expect(editor(scope).value).toBe('Keep my question')
+  expect(await readCanonicalGroupSend(binding)).toMatchObject({ attempts: 0 })
+  fireEvent.click(within(scope).getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(sentIds()).toHaveLength(2))
+  await waitFor(() => expect(editor(scope).value).toBe(''))
+})
+
 it.each([
   ['an invalid_params from the gateway', refusal('invalid_params')],
   ['a room error from hermes serve', frame('hosted room not found', 4111)],
@@ -356,12 +381,15 @@ it('does not dispatch a Send still preparing when Stop is pressed, and keeps its
   const binding = { connectionId: 'local', profile: 'team', roomId: 'stop-while-preparing' }
   let entered!: () => void
   let release!: () => void
+
   const preparing = new Promise<void>(resolve => {
     entered = resolve
   })
+
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
+
   nativeJournal(async call => {
     if (call === 1) {
       entered()
@@ -531,6 +559,7 @@ it('names the Bot behind each pending action and shows what an approval would al
   const guarded = screen
     .getByText('Guard Bot is asking for approval. You decide.')
     .closest('[data-task-id]') as HTMLElement
+
   expect(within(guarded).getByText('Approve running pwd')).toBeTruthy()
   expect(within(guarded).queryByText(/plugin approval rule/)).toBeNull()
   expect(within(guarded).queryByText('Action details are unavailable. Check again before allowing this.')).toBeNull()
@@ -618,6 +647,7 @@ it.each(['attempts', 'payload', 'event_id', 'binding'] as const)(
     if (change === 'binding') {
       changed.binding.profile = 'other-owner'
     }
+
     journal[Object.keys(journal)[0]] = changed
     fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
     await within(dialog).findByText(ABANDON_CHANGED)

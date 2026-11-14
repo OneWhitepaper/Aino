@@ -99,10 +99,7 @@ describe('runtime plugin localization', () => {
     const restore = withBlobReroute()
 
     try {
-      const id = await loadRuntimePlugin(
-        "import value from 'unsupported-package'; export default value",
-        'demo'
-      )
+      const id = await loadRuntimePlugin("import value from 'unsupported-package'; export default value", 'demo')
 
       expect(id).toBeNull()
       expect($notifications.get()[0]?.title).toBe('插件“demo”加载失败')
@@ -142,9 +139,7 @@ describe('scanDiskPlugins (#66899)', () => {
     readDir.mockImplementation(async dir => {
       if (dir === '/local/.hermes/desktop-plugins') {
         return {
-          entries: [
-            { isDirectory: true, name: 'my-feature', path: '/local/.hermes/desktop-plugins/my-feature' }
-          ]
+          entries: [{ isDirectory: true, name: 'my-feature', path: '/local/.hermes/desktop-plugins/my-feature' }]
         }
       }
 
@@ -179,9 +174,7 @@ describe('scanDiskPlugins (#66899)', () => {
       if (dir === '/local/.hermes/desktop-plugins/odd') {
         // A folder literally named plugin.js — must resolve to "no entry".
         return {
-          entries: [
-            { isDirectory: true, name: 'plugin.js', path: '/local/.hermes/desktop-plugins/odd/plugin.js' }
-          ]
+          entries: [{ isDirectory: true, name: 'plugin.js', path: '/local/.hermes/desktop-plugins/odd/plugin.js' }]
         }
       }
 
@@ -514,8 +507,7 @@ describe('uninstallDiskPlugin (Plugins hub trash button)', () => {
     readFileText.mockResolvedValue({ text: 'export default { id: "gone", register() {} }' })
     watchPreviewFile.mockResolvedValue({ id: 'w-gone' })
     removeDesktopPlugin.mockReset()
-    ;(window.hermesDesktop as unknown as { removeDesktopPlugin: unknown }).removeDesktopPlugin =
-      removeDesktopPlugin
+    ;(window.hermesDesktop as unknown as { removeDesktopPlugin: unknown }).removeDesktopPlugin = removeDesktopPlugin
 
     await discoverRuntimePlugins()
     expect($pluginRecords.get().gone).toMatchObject({ kind: 'disk', status: 'loaded' })
@@ -1135,9 +1127,7 @@ describe('loader hardening: hangs, leaks, duplicate ids, stale incarnations', ()
       expect(counters.__dupBeta).toBe(0)
       expect($pluginRecords.get().dup).toMatchObject({ status: 'loaded', file: `${root}/alpha/plugin.js` })
       expect($pluginRecords.get().beta).toMatchObject({ status: 'error', file: `${root}/beta/plugin.js` })
-      expect($pluginRecords.get().beta?.error).toMatch(
-        /duplicate id "dup", already loaded from .*alpha\/plugin\.js/
-      )
+      expect($pluginRecords.get().beta?.error).toMatch(/duplicate id "dup", already loaded from .*alpha\/plugin\.js/)
     } finally {
       unloadRuntimePlugin('dup')
       delete counters.__dupAlpha

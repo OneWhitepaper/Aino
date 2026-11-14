@@ -11,7 +11,6 @@ import type * as ChatRuntime from '@/lib/chat-runtime'
 import type * as GatewayStore from '@/store/gateway'
 import type * as ProjectsStore from '@/store/projects'
 import type * as SessionStore from '@/store/session'
-import type * as SessionColorStore from '@/store/session-color'
 import type * as SessionStatesStore from '@/store/session-states'
 import type * as WindowsStore from '@/store/windows'
 
@@ -186,11 +185,6 @@ vi.mock('@/store/session', async importOriginal => {
   const actual = await importOriginal<typeof SessionStore>()
 
   return { ...actual, $unreadFinishedSessionIds: atom<string[]>([]) }
-})
-vi.mock('@/store/session-color', async importOriginal => {
-  const actual = await importOriginal<typeof SessionColorStore>()
-
-  return { ...actual, $sessionColorOverrides: atom<Record<string, string>>({}) }
 })
 vi.mock('@/store/session-states', async importOriginal => {
   const actual = await importOriginal<typeof SessionStatesStore>()

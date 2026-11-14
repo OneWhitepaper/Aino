@@ -44,7 +44,9 @@ it('rejects a color change atomically while retaining Aino brightness and layout
   $pendingModeApply.set(null)
   const layout = $activePresetId.get()
   expect(applyAppearance({ accent: 'violet', mode: 'dark', layout: 'terminal-deck' })).toEqual({
-    available: ['mono', 'theme'], error: 'Aino uses a fixed neutral palette.', success: false
+    available: ['mono', 'theme'],
+    error: 'Aino uses a fixed neutral palette.',
+    success: false
   })
   expect($pendingModeApply.get()).toBeNull()
   expect($activePresetId.get()).toBe(layout)

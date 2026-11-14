@@ -6,7 +6,7 @@ import {
   useAuiState
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { memo, StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,9 +16,17 @@ import { useIncrementalExternalStoreRuntime } from '@/lib/incremental-external-s
 import { $paneStates } from '@/store/panes'
 
 import { group, split } from '../model'
-import { $collapsedTreeSides, $hiddenTreePanes, $layoutTree, $narrowViewport, mirrorLayoutTree } from '../store'
+import {
+  $collapsedTreeSides,
+  $hiddenTreePanes,
+  $layoutTree,
+  $narrowViewport,
+  mirrorLayoutTree,
+  setTreeGroupMinimized
+} from '../store'
 
 import { layoutRequiredWidth } from './required-width'
+import { isNavigationGroup } from './track-model'
 import { TreeSplit } from './tree-split'
 
 const status = getAutoStatus(false, false, false, false, undefined)
@@ -136,6 +144,48 @@ describe('sidebar swaps preserve the live workspace', () => {
     )
     const { container } = render(<Workspace />)
     expect(layoutRequiredWidth(container)).toBe(520)
+  })
+
+  it.each([
+    { label: 'registered navigation', panes: ['navigation'] },
+    { label: 'navigation with an unavailable Bot contribution', panes: ['navigation', 'hermes-bots:pane'] }
+  ])('hides minimized $label completely and restores it without touching the conversation', ({ panes }) => {
+    $layoutTree.set(
+      split('row', [group(panes, { id: 'nav-zone' }), group(['chat'], { id: 'chat-zone' })], [1, 4], 'workspace')
+    )
+    const { container } = render(<Workspace />)
+    const draft = screen.getByRole('textbox', { name: 'Draft' })
+
+    fireEvent.change(draft, { target: { value: 'Keep while navigation is hidden' } })
+    act(() => setTreeGroupMinimized('nav-zone', true))
+
+    const track = container.querySelector<HTMLElement>('[data-tree-track="nav-zone"]')!
+
+    expect(track.style.display).toBe('none')
+    expect(within(track).queryByRole('tablist')).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
+
+    act(() => setTreeGroupMinimized('nav-zone', false))
+    expect(track.style.display).not.toBe('none')
+    expect(screen.getByText('Navigation')).toBeTruthy()
+    expect((draft as HTMLTextAreaElement).value).toBe('Keep while navigation is hidden')
+  })
+
+  it('requires a registered navigation pane and never classifies tools or main content as navigation', () => {
+    disposers.push(
+      registry.register({
+        area: 'panes',
+        id: 'review',
+        data: { placement: 'right', toolPanel: true },
+        render: () => null
+      })
+    )
+    const paneFor = (id: string) => registry.getArea('panes').find(pane => pane.id === id)
+
+    expect(isNavigationGroup(group(['unregistered']), paneFor)).toBe(false)
+    expect(isNavigationGroup(group(['review']), paneFor)).toBe(false)
+    expect(isNavigationGroup(group(['navigation', 'review']), paneFor)).toBe(false)
+    expect(isNavigationGroup(group(['navigation', 'chat']), paneFor)).toBe(false)
   })
 
   it('continues updating the conversation after swapping without losing the composer', async () => {

@@ -16,6 +16,8 @@
 
 import type { WebContents } from 'electron'
 
+import { isOwnedPreviewGuest, nativePreviewOwner } from './preview-guest-owner'
+
 type GuestCommand = 'back' | 'forward' | 'reload'
 
 const hiddenGuests = new Set<number>()
@@ -24,7 +26,7 @@ const watchedGuests = new WeakSet<WebContents>()
 /** Record what the host renderer `sender` reports for one of ITS guests. A
  *  renderer may only speak for the guests it embeds. */
 export function notePreviewGuestHidden(sender: WebContents, guest: null | undefined | WebContents, hidden: boolean) {
-  if (!guest || guest.isDestroyed() || guest.getType() !== 'webview' || guest.hostWebContents !== sender) {
+  if (!isOwnedPreviewGuest(sender, guest)) {
     return
   }
 
@@ -60,7 +62,9 @@ export function isPreviewGuestHidden(guest: WebContents): boolean {
  * where the renderer is the one that knows which pane is active.
  */
 export function commandFocusedGuest(command: GuestCommand, focused: null | undefined | WebContents): boolean {
-  if (!focused || focused.isDestroyed() || focused.getType() !== 'webview' || isPreviewGuestHidden(focused)) {
+  const owner = focused && (nativePreviewOwner(focused) ?? focused.hostWebContents)
+
+  if (!owner || !isOwnedPreviewGuest(owner, focused) || isPreviewGuestHidden(focused)) {
     return false
   }
 

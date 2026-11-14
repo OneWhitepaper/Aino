@@ -2470,7 +2470,6 @@ class TestHandleMaxIterations:
 
     def test_interrupted_summary_ends_turn_interrupted_and_keeps_pending_message(self, agent, monkeypatch):
         from agent.context_compressor import MAX_ITERATIONS_SUMMARY_REQUEST
-        from agent.conversation_loop import INTERRUPT_WAITING_FOR_MODEL_PREFIX
 
         agent._cached_system_prompt = "You are helpful."
         agent._use_prompt_caching = False
@@ -2516,7 +2515,8 @@ class TestHandleMaxIterations:
         assert result["completed"] is False
         assert result["interrupt_message"] == "follow-up message"
         assert result["turn_exit_reason"].startswith("interrupted_during_api_call")
-        assert result["final_response"].startswith(INTERRUPT_WAITING_FOR_MODEL_PREFIX)
+        assert result["user_interrupted"] is True
+        assert result["final_response"] == ""
         assert "couldn't produce a summary" not in result["final_response"]
         assert all(m.get("content") != MAX_ITERATIONS_SUMMARY_REQUEST for m in result["messages"])
 

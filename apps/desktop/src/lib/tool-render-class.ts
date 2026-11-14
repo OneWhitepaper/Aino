@@ -17,12 +17,11 @@ export function isFileEditTool(toolName: string): boolean {
   return FILE_EDIT_TOOL_NAMES.has(toolName)
 }
 
-// Tools that draw their own surface and must never be folded into a run's
-// summary. Two kinds, for the same reason — the thing on screen IS the point:
+// Tools that draw their own surface or retain a deliverable when activity is
+// disabled. The run splitter explicitly includes successful file edits:
 //
-//   - File edits are the deliverable, not scaffolding. The diff is what the
-//     user reviews, so it stays visible at its place in the turn, live and
-//     settled, the way a PR shows its changes.
+//   - File edits retain their reviewable diff behind the execution log and
+//     per-row disclosure. Turning tool activity off still preserves that review.
 //   - `clarify`, `image_generate` and `delegate_task` bypass ToolEntry to
 //     render their own markup: a question the user has to answer, an image
 //     they asked for, the several agents a fan-out is running.

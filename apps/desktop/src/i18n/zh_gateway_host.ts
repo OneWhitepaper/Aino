@@ -25,7 +25,7 @@ export const zhGatewayHost: GatewayHostTranslations = {
     restartNeeded: '需要重启',
     unavailable: '不可用',
     notRunningDetail: '启动后即可从其他设备打开 Hermes。',
-    needsNous: "请先在“模型服务 → 服务授权”中登录你的 Nous 账户。",
+    needsNous: '请先在“模型服务 → 服务授权”中登录你的 Nous 账户。',
     runningLan: '在同一网络中的设备上打开此地址。',
     runningPublic: '通过你的网址提供服务。',
     runningLocal: '只有这台电脑可以打开。要从其他设备打开，请先停止，再重新启动。',

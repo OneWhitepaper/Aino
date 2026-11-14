@@ -22,6 +22,7 @@ const { request, locale, union } = vi.hoisted(() => ({
   locale: { value: 'en' },
   union: { profiles: [] as unknown[] }
 }))
+
 vi.mock('@hermes/plugin-sdk', async importOriginal =>
   localGatewaySdkMock(await importOriginal<typeof HermesSdk>(), request, () => translateBotsIn(locale.value))
 )
@@ -32,9 +33,11 @@ vi.mock('./data', async importOriginal => ({
 
 const binding = { connectionId: 'local', profile: 'default', roomId: 'linked' }
 const locales = Object.keys(CANONICAL_GROUP_LOCALES) as (keyof typeof CANONICAL_GROUP_LOCALES)[]
+
 const cases = locales.flatMap(language =>
   (['offline', 'notJoined'] as const).map(state => ({ language, state, connection: 'absent' }))
 )
+
 cases.push(
   ...['matching', 'another computer', 'unreachable', 'contradictory route'].map(connection => ({
     language: 'en' as const,

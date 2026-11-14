@@ -2,9 +2,9 @@ import { useStore } from '@nanostores/react'
 
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
+import { WindowChromeIcon } from '@/components/ui/window-chrome-icon'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { List } from '@/lib/icons'
 import { $summaryOpen, toggleSummary } from '@/store/summary'
 
 export function SummaryToggle() {
@@ -12,7 +12,7 @@ export function SummaryToggle() {
   const open = useStore($summaryOpen)
 
   return (
-    <Tip label={t.summary.title}>
+    <Tip label={t.summary.title} placement="toolbar">
       <Button
         aria-controls="session-summary"
         aria-expanded={open}
@@ -28,7 +28,7 @@ export function SummaryToggle() {
         type="button"
         variant="titlebar-popover"
       >
-        <List />
+        <WindowChromeIcon name="list" />
       </Button>
     </Tip>
   )

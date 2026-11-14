@@ -38,6 +38,7 @@ export async function syncPreviewSignins(
   }
 
   const key = previewSigninsScopeKey(scope)
+
   const result = await bridge({
     connectionId: scope?.connectionId ?? null,
     enabled,
