@@ -42,12 +42,15 @@ def test_only_the_empty_user_pause_omits_internal_model_wait_diagnostics(reason,
         assert verdict.final_response.startswith("Operation interrupted: waiting for model response (")
 
 
-def test_user_pause_of_budget_summary_omits_internal_model_wait_diagnostics():
+@pytest.mark.parametrize("reason", [
+    "explicit stop requested", "user sent a new message", "user interrupt", "gateway shutdown",
+])
+def test_budget_summary_omits_model_wait_diagnostics_only_for_user_interrupts(reason):
     from agent.turn_finalizer import _resolve_budget_fallback
 
     agent = _StubAgent()
     agent.max_iterations = 1
-    agent._tool_interrupt_reason = "explicit stop requested"
+    agent._tool_interrupt_reason = reason
     agent._emit_diagnostic_status = lambda text: None
 
     def pause(*args):
@@ -60,7 +63,10 @@ def test_user_pause_of_budget_summary_omits_internal_model_wait_diagnostics():
         _pending_verification_response_previewed=False, logger=SimpleNamespace(),
     )
     assert interrupted is True
-    assert response == ""
+    if reason == "gateway shutdown":
+        assert response.startswith("Operation interrupted: waiting for model response (")
+    else:
+        assert response == ""
 
 
 @pytest.mark.parametrize("failure", [False, True])
