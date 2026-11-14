@@ -134,6 +134,7 @@ _PLATFORM_HINT = (
 
 def register(ctx) -> None:
     from . import gateway_env  # env -> GatewayConfig bridge (gateway.config_env)
+    from . import onboarding
     ctx.register_platform(
         standalone_send=StandaloneSendPolicy(label="QQ Bot", media=True, captionable=True, text_direct=True),
         name="qqbot",
@@ -148,6 +149,7 @@ def register(ctx) -> None:
         required_env=["QQ_APP_ID", "QQ_CLIENT_SECRET"],
         install_hint="QQBot: aiohttp/httpx missing or QQ_APP_ID/QQ_CLIENT_SECRET not configured",
         setup_fn=setup_qqbot,
+        onboarding_start=onboarding.start, onboarding_poll=onboarding.poll, onboarding_apply=onboarding.apply,
         emoji="🐧",
         cron_deliver_env_var="QQBOT_HOME_CHANNEL",
         standalone_sender_fn=standalone_send,

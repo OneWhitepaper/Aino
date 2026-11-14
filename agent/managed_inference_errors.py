@@ -55,7 +55,9 @@ class ManagedOperationUnknown(RuntimeError):
 
 def managed_operation_error(error, *, managed=False):
     """Distinguish proven pre-send failures from uncertain post-dispatch outcomes."""
-    if not managed:
+    # Explicit cancellation is turn control, even after dispatch. Preserve it for
+    # the interrupted-turn handler instead of replacing it with a provider failure.
+    if not managed or isinstance(error, InterruptedError):
         return None
     import httpx
     from agent.errors import EmptyStreamError

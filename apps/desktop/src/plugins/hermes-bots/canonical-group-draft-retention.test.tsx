@@ -41,7 +41,9 @@ beforeEach(() => {
         ? { events: [] }
         : method === 'groups.attachment.upload'
           ? { attachment_id: 'plan-upload', kind: 'file', name: 'plan.txt', mime: 'text/plain', size: 4 }
-          : method === 'groups.send' ? { accepted: true, client_event_id: params.event_id } : {}
+          : method === 'groups.send'
+            ? { accepted: true, client_event_id: params.event_id }
+            : {}
   )
 })
 

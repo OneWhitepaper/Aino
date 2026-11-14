@@ -126,12 +126,14 @@ export function canonicalGroupMessageMatches(
   if (!isMessage || !term) {
     return false
   }
+
   const author = eventAuthor(event, eventMember(event, roster, true), true, nameFor, memberGeneric)
   const identities = [...roster.values()].map(member => ({ handle: member.handle, label: nameFor(member) }))
 
   if (allMembers) {
     identities.push({ handle: 'everyone', label: allMembers }, { handle: 'all', label: allMembers })
   }
+
   const text = event.payload.text || event.payload.content || ''
 
   return [
@@ -146,6 +148,7 @@ function EventTime({ timestamp }: { timestamp?: number }) {
   if (typeof timestamp !== 'number') {
     return null
   }
+
   const at = new Date(timestamp * 1000)
 
   if (!Number.isFinite(at.getTime())) {
@@ -179,14 +182,18 @@ function EventBody({ event, identities }: { event: CanonicalGroupEvent; identiti
 
 function EventNotice({ event, title, author }: { event: CanonicalGroupEvent; title: string; author?: string }) {
   const labels = useCanonicalGroupLabels()
+
   const details = [
     ...new Set([event.payload.error, event.payload.reason, event.payload.reason_code].filter(Boolean))
   ].join('\n')
+
   const serviceUnavailable = /\bruntime_draining\b/.test(details)
+
   const detail =
     groupReasonText(event.payload.error, labels) ||
     groupReasonText(event.payload.reason, labels) ||
     groupReasonText(event.payload.reason_code, labels)
+
   const description = [event.payload.reason, event.payload.error, event.payload.reason_code].includes(
     'member_unavailable'
   )
@@ -265,6 +272,7 @@ function queuePreview(
   const queue = previewQueues.get(connectionId) ?? { slots: 2, waiters: [] }
   previewQueues.set(connectionId, queue)
   let cancelled = false
+
   const deliver = (download: Promise<Preview>) =>
     void download.then(
       preview => {
@@ -339,9 +347,11 @@ function ImagePreview({
     if (src || disabled || !el) {
       return
     }
+
     const observer = new IntersectionObserver(entries => setNear(entries[entries.length - 1].isIntersecting), {
       rootMargin: '200px'
     })
+
     observer.observe(el)
 
     return () => observer.disconnect()
@@ -351,6 +361,7 @@ function ImagePreview({
     if (disabled || !near || !attachmentId || !previewable) {
       return
     }
+
     let url = ''
     const key = JSON.stringify([connectionId, profile, roomId, eventId, attachmentId])
 
@@ -398,10 +409,12 @@ export function CanonicalGroupHistory(props: CanonicalGroupHistoryProps) {
   const { nameFor } = useCanonicalMembers(binding)
   const roster = new Map(members.map(member => [member.member_id, member]))
   const presentedMembers = members.map(member => ({ ...member, display_name: nameFor(member) }))
+
   const pauses = useMemo(
     () => (pause?.maxContinues === undefined ? undefined : pausedDiscussions(events, pause.maxContinues)),
     [events, pause?.maxContinues]
   )
+
   const handoffsAfter = new Map<number, RoomHandoff[]>()
 
   for (const handoff of roomHandoffs(events as RoomLogEvent[], members)) {
@@ -480,6 +493,7 @@ function CanonicalHistoryEvent(props: HistoryEventProps) {
   const { event, members, binding, roster, notices, pause, paused } = props
   const labels = useCanonicalGroupLabels()
   const { nameFor } = useCanonicalMembers(binding)
+
   const RoutingRow = Object.hasOwn(ROUTING_ROWS, event.kind)
     ? ROUTING_ROWS[event.kind as keyof typeof ROUTING_ROWS]
     : undefined
@@ -491,6 +505,7 @@ function CanonicalHistoryEvent(props: HistoryEventProps) {
   if (pause && paused && isBoundedActivity(event)) {
     return <CanonicalGroupPausedRow {...pause} event={event} paused={paused} />
   }
+
   const ended =
     (!event.room_id || event.room_id === binding.roomId) &&
     event.kind === 'room.activity' &&
@@ -572,6 +587,7 @@ function MessageActions({
   const text = event.payload.text || event.payload.content || ''
   const canReply = !!onReply && !!text && (!!member || typeof event.payload.thread_id === 'string')
   const replyLabel = canReply ? fill(labels.replyTo, { name: author ?? '' }) : `${labels.reply} ${author}`
+
   const reply = () =>
     canReply ? onReply!(member, text, event.payload.thread_id, author ?? '') : member && onMention?.(member)
 
@@ -615,11 +631,13 @@ function CanonicalMessageRow({
   const query = searchQuery.trim().toLocaleLowerCase()
   const text = event.payload.text || event.payload.content || ''
   const human = event.kind === 'message.user' || event.actor?.kind === 'user'
+
   const avatarMember = member ?? {
     member_id: event.actor?.id ?? '',
     profile: event.actor?.id ?? '',
     handle: author ?? ''
   }
+
   const matches = canonicalGroupMessageMatches(
     event,
     binding,

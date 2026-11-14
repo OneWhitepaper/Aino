@@ -83,6 +83,34 @@ export function dispatchedTo(
   return false
 }
 
+/** The sender a reply answers, unless this exchange returns our own dispatch. */
+export function interAgentReplySender(
+  messages: readonly { content?: unknown; role?: string }[],
+  index: number
+): string | null {
+  for (let j = index - 1; j >= 0; j--) {
+    const previous = messages[j]
+
+    if (previous.role === 'assistant') {
+      return null
+    }
+
+    if (previous.role === 'user') {
+      const match = AGENT_MESSAGE_RE.exec(messageContentText(previous.content).trim())
+
+      if (!match) {
+        return null
+      }
+
+      const sender = (match[1] || match[3] || 'agent').trim()
+
+      return dispatchedTo(messages.slice(0, j), [match[1], match[2], match[3]]) ? null : sender
+    }
+  }
+
+  return null
+}
+
 /** Extract the recipient's reply text from the terminal result payload. */
 export function replyTextFromResult(result: unknown): string {
   const container = (result ?? {}) as { content?: unknown; output?: unknown }

@@ -164,6 +164,7 @@ export async function replaceCanonicalGroupSend(
   if (existing.attempts !== 0) {
     return existing
   }
+
   const entry = freshEntry(binding, payload)
   const { applied, current } = await compareAndSet(key, JSON.stringify(existing), JSON.stringify(entry))
   const stored = validEntry(binding, key, current === null ? undefined : JSON.parse(current))
@@ -208,15 +209,19 @@ async function countRequests(binding: CanonicalGroupBinding, eventId: string, st
     if (entry?.params.event_id !== eventId) {
       return null
     }
+
     const attempts = entry.attempts ?? 1
 
     // An entry journaled before the count may have been sent by requests nobody counted.
     if (step < 0 && (entry.attempts === undefined || !attempts)) {
       return attempts
     }
+
     const { handedBack: _, ...rest } = entry
+
     const next =
       attempts + step ? { ...rest, attempts: attempts + step } : { ...rest, attempts: 0, handedBack: true as const }
+
     const { applied } = await compareAndSet(key, JSON.stringify(entry), JSON.stringify(next))
 
     if (applied) {

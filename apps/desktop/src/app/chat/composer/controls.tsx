@@ -7,7 +7,7 @@ import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { hostHas } from '@/lib/host-capabilities'
-import { Ear, EarOff, iconSize, ListPlus, Loader2, PlayFilled, Square } from '@/lib/icons'
+import { Ear, EarOff, iconSize, ListPlus, Loader2, Pause, PlayFilled, Square } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { recordAction } from '@/store/desktop-metrics'
 import { $hudMode, closeHud, resetHudLayout } from '@/store/hud'
@@ -197,7 +197,7 @@ export function ComposerControls({
         <Tip
           label={
             showStop ? (
-              <TipKeybindLabel actionId="composer.send" text={c.stop} />
+              <TipKeybindLabel actionId="composer.send" text={c.pauseTask} />
             ) : (
               <TipKeybindLabel actionId="composer.send" text={sendLabel} />
             )
@@ -205,18 +205,14 @@ export function ComposerControls({
           placement="control"
         >
           <Button
-            aria-label={showStop ? c.stop : sendLabel}
+            aria-label={showStop ? c.pauseTask : sendLabel}
             className={PRIMARY_ICON_BTN}
             disabled={disabled || !canSubmit}
             onClick={() => recordAction(showStop ? 'composer.cancel' : 'composer.send', 'click')}
             onMouseDown={keepEditorFocus}
             type="submit"
           >
-            {showStop ? (
-              <span className="block size-2.5 rounded-[0.1875rem] bg-current" />
-            ) : (
-              <Codicon name="arrow-up" size="0.875rem" />
-            )}
+            {showStop ? <Pause className="size-4" /> : <Codicon name="arrow-up" size="0.875rem" />}
           </Button>
         </Tip>
       )}
@@ -253,11 +249,17 @@ function TaskContinueButton({
   const { t } = useI18n()
   const pending = continuation.phase !== 'paused'
 
+  const label = {
+    stopping: t.composer.pausingTask,
+    paused: t.common.continue,
+    continuing: t.composer.continuingTask
+  }[continuation.phase]
+
   return (
-    <Tip label={t.common.continue} placement="control">
+    <Tip label={label} placement="control">
       <Button
         aria-busy={pending}
-        aria-label={t.common.continue}
+        aria-label={label}
         className={PRIMARY_ICON_BTN}
         data-slot="composer-continue"
         disabled={disabled || busy || pending}
@@ -268,7 +270,7 @@ function TaskContinueButton({
         onMouseDown={keepEditorFocus}
         type="button"
       >
-        {pending ? <Loader2 className="size-4 animate-spin" /> : <PlayFilled className="size-4" viewBox="16 14 20 20" />}
+        {pending ? <Loader2 className="size-4 animate-spin" /> : <PlayFilled className="size-4" />}
       </Button>
     </Tip>
   )

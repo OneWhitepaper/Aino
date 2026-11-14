@@ -166,8 +166,8 @@ Two auth-flavored corollaries worth naming because they are easy to get wrong:
 
 ## Guest content never opens anything by itself
 
-Untrusted HTML runs in two places: sandboxed `allow-scripts` iframes (artifact
-previews) and the preview pane's `<webview>` (`persist:hermes-preview`). Neither
+Untrusted HTML runs in sandboxed `allow-scripts` iframes (artifact previews),
+file-preview webviews and native Browser views (`persist:hermes-preview`). None
 may drive the OS browser without the user's hand on it (GHSA-9f4c-93c8-jc8g):
 `setWindowOpenHandler` denies everything and never opens a URL as a side
 effect (`electron/window-open-policy.ts`), and the webview has no
@@ -176,13 +176,15 @@ effect (`electron/window-open-policy.ts`), and the webview has no
 A guest page's `target="_blank"` links (Streamlit's "Ask Google" traceback
 button) reach the OS browser through one explicit bridge instead:
 
-- `main.ts` installs `electron/preview-guest-preload-entry.ts` via
-  `will-attach-webview`, keyed on the `persist:hermes-preview` partition only.
+- `electron/preview-guest-setup.ts` installs `electron/preview-guest-preload-entry.ts` via
+  `will-attach-webview`; the native Browser factory uses the same preload and
+  partition family with an explicit native-surface argument.
   It is the app's only guest preload; a new webview does not inherit it unless
   it opts into that partition.
 - The preload runs in the isolated world, exposes nothing to the page, and
   forwards only a **trusted** (`event.isTrusted`) primary-button click on an
-  `a[target="_blank"]` to the host via `ipcRenderer.sendToHost`. A synthetic
+  `a[target="_blank"]` to the host via `ipcRenderer.sendToHost`, or the registered
+  native guest's main-process event bridge to its current owner. A synthetic
   `dispatchEvent(click)` from page script is dropped there; page `window.open`
   stays blocked.
 - `PreviewPane` admits `http:`/`https:` only (`src/lib/preview-external.ts`)
@@ -277,6 +279,54 @@ test:preview-activity-native` exercises real hidden-frame navigation (including
 lease-only rAF and capture), overlapping operations, cancellation and plugin
 completion values in a disposable profile. Add `--minimized` with a running
 window manager to exercise actual iconification rather than hiding the window.
+
+## Native browser operation verification
+
+Browser URL tabs use one main-owned `WebContentsView` per tab (`electron/preview-native.ts`).
+`preview-native-surface.ts` adapts the existing pane interface; file/HTML webviews
+and browser-hosted iframes keep their original paths. Pop-out and dock-back move
+the same view without loading the stored URL. Mount tokens fence late release,
+input and layout requests; `preview-guest-owner.ts` grants capture/activity only
+to the current owner and retires old leases on transfer. A failed pop-out returns
+the page to its source. Docking while another session is active parks the page
+under the same eight-page retention cap; explicit tab close or account reload
+disposes it. No forms, cookies or JavaScript objects are serialized for handoff.
+
+The renderer reports native bounds and visibility. Dialogs, menus and annotation
+cards hide the native child and show a local capture behind the overlay; opening
+the console reduces the native viewport instead of covering the console. The
+native input channel must settle before a script/capture verifies its result.
+
+Run `pnpm exec electron electron/preview-native-retention-fixture` from
+`apps/desktop` to verify the production service with real native windows: repeated
+round trips preserve WebContents identity, unsaved forms, JavaScript, scroll,
+history, cookies and zoom; stale owners cannot capture or execute scripts.
+It uses temporary user data and prints the independent evidence directory.
+
+`drive_preview` enters `preview-agent.ts` before the existing semantic engine. The controller owns one operation lease per tab, binds observations to the requesting owner, selected tab, document generation, URL, viewport and page revision, and uses the shared confirmation dialog for consequential input. Human takeover invalidates observations, aborts pending input and persists across browser window handoff. History navigation remains available during loading through the same ownership gate. Pop-out requests acknowledge ownership before extending the confirmation deadline; a claimed failure or timeout never falls back to local execution.
+
+Website alert, confirm and prompt responses use the owned guest's native callback,
+bound to its exact frame and URL. `preview-native-dialog-adapter.ts` replaces only
+the recognized Electron `-run-dialog` handler: Electron's default handler rejects
+prompts and opens OS message boxes before CDP can respond. Unknown handler shapes
+retain the system dialog and report `dialog_control: system`; automated input
+stops for manual completion. Pending dialogs are presented in arrival order, and
+navigation, owner changes and disposal settle each callback at most once.
+
+Run `pnpm run test:preview-native /absolute/proof-directory preview-agent-native.test.mjs` from `apps/desktop` with a graphical session. This disposable fixture imports the production controller, semantic engine, toolbar status and confirmation UI, and uses actual sandboxed Electron webviews and owner-checked capture/input. It checks PNG/viewport coordinates at 100% and 125% zoom, forms, Shadow DOM, same-origin and cross-origin frames, canvas, drag, SPA/document navigation, takeover and cross-window capture isolation. It uses temporary user data and runtime directories, and prints the proof-image directory. Renderer/Python transport tests separately cover cancellation, multiwindow ownership, image-result adaptation and confirmation deadlines; no model credentials are needed for these contract checks.
+
+`pnpm run test:preview-native /absolute/proof-directory` runs the native fixtures
+sequentially with the locked Electron executable on the current host. Its parent
+process creates an isolated runtime for each fixture and
+removes it only after Electron closes. Windows file-handle cleanup retries are
+bounded, and a cleanup failure fails the receipt. To debug one fixture, append
+its filename, for example `preview-page-zoom-native.test.mjs`; invoke fixtures
+through this runner so active Chromium data is never removed inside Electron. Every fixture
+uses a disposable user-data/runtime directory; its log, screenshots and structured
+receipts go under the supplied proof directory. A missing fixture, startup failure
+or timeout fails the run. `.github/workflows/e2e-browser-native.yml` exposes the same
+entry point on macOS, Windows and Linux (under Xvfb), without building or publishing
+an installer. A passing Mac receipt does not establish Windows or Linux acceptance.
 
 ## Nous free tier: state is pulled, never latched in the renderer
 

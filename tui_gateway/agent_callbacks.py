@@ -168,9 +168,8 @@ def _agent_cbs(sid: str) -> dict:
         "clarify_callback": lambda questions: _clarify_block(sid, questions),
         "read_terminal_callback": _read_block("terminal.read", 30),
         "read_preview_callback": _read_block("preview.read", 45),
-        # drive_preview / annotate_preview (desktop GUI): same budget as the preview read it ends with.
-        # The probe ladder lives in server.py (_preview_action_request) so an
-        # absent renderer fails fast instead of burning 45s per action (#94272).
+        # Input actions allow human confirmation; read-only probes keep their short deadline.
+        # The availability ladder lives in server.py (_preview_action_request).
         "drive_preview_callback": lambda payload: _preview_action_request(sid, dict(payload)),
         # read_window_below (desktop GUI): main process enumerates native windows.
         "read_window_below_callback": lambda: _ask("window.read", sid, {}, timeout=30),

@@ -13,7 +13,6 @@ import tabSessionsIcon from '@/assets/aino-home/tab-sessions.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
-import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
 import { WindowTitlebarContext } from '@/components/pane-shell/tree/renderer/header-placement'
@@ -50,7 +49,6 @@ import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
 import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
-import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
 import { $botChatScopes } from '@/store/bot-chat-scope'
@@ -83,6 +81,7 @@ import {
 } from '@/store/session'
 import { watchSessionPins } from '@/store/session-pin-sync'
 import { watchUnreadWriteGuard } from '@/store/session-unread-remote'
+import { bindSummaryPanelVisibility } from '@/store/summary-panel-policy'
 import { $toolWorkspaceCwd } from '@/store/tool-session'
 import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows'
 
@@ -331,28 +330,6 @@ registry.registerMany([
 registry.registerMany([
   // Session titles stay on the left; the center hosts live collaboration
   // without adding another header row or entering the file-panel tab strip.
-  // Layout edit mode registers through the SAME declarative surfaces plugins
-  // use: a rebindable keybind (collision-checked in the panel) + a ⌘K row
-  // whose hotkey hint tracks the live binding.
-  {
-    id: 'layout.editMode',
-    area: KEYBINDS_AREA,
-    data: {
-      id: 'layout.editMode',
-      label: 'Toggle layout edit mode',
-      defaults: ['mod+shift+\\'],
-      run: toggleLayoutEditMode
-    } satisfies KeybindContribution
-  },
-  paletteToggle({
-    id: 'layout.editMode',
-    label: 'Toggle layout edit mode',
-    action: 'layout.editMode',
-    icon: LayoutDashboard,
-    keywords: ['layout', 'zones', 'panes', 'edit', 'rearrange'],
-    get: () => $layoutEditMode.get(),
-    set: enabled => $layoutEditMode.set(enabled)
-  }),
   // The agent's write -> see loop: rescan <hermes home>/desktop-plugins
   // without relaunching (same-id reloads dispose the previous incarnation).
   {
@@ -399,7 +376,7 @@ registry.registerMany([
     set: enabled => $profileRailVisible.set(enabled)
   }),
   // Simple hides most of the chrome that would offer the way back, so ⌘K is a
-  // guaranteed door (alongside the layout editor and Settings → Appearance).
+  // guaranteed door alongside Settings → Appearance.
   paletteToggle({
     id: 'view.simpleMode',
     label: 'Simple mode',
@@ -607,6 +584,7 @@ registerLayoutResetHandler(stackSessionTilesIntoMain)
 // real function instead of a copy. See its docblock for the semantics.
 
 bindLayoutSides()
+bindSummaryPanelVisibility()
 
 // Workspace-scoped surfaces: the file tree and git diff only mean something
 // inside a project. A detached chat (no cwd) hides them — their zones

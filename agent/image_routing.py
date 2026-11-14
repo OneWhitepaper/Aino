@@ -6,7 +6,8 @@ non-vision models). :func:`decide_image_input_mode` picks once per turn from
 ``agent.image_input_mode`` (``auto`` | ``native`` | ``text``): in ``auto`` an
 explicit ``auxiliary.vision`` backend forces ``text`` even for vision-capable
 main models (``native`` is the absolute override); else ``supports_vision``
-(config override or catalog) decides. ``vision_analyze`` stays a tool regardless.
+(authenticated managed binding, config override or catalog) decides.
+``vision_analyze`` stays a tool regardless.
 """
 
 from __future__ import annotations
@@ -139,6 +140,19 @@ def _runtime_main(key: str) -> Any:
         return value if key == "api_key" else _clean_str(value)
     except Exception:
         return ""
+
+
+def _managed_binding_supports_vision(provider: str, model: str) -> Optional[bool]:
+    """Use the active Aino binding, never another session or a vendor-name guess."""
+    from agent.auxiliary_billing_scope import ManagedCredential
+
+    if _clean_str(provider).lower() != "aino" or _runtime_main("provider").lower() != "aino":
+        return None
+    credential = _runtime_main("api_key")
+    if (isinstance(credential, ManagedCredential)
+            and _runtime_main("model") == _clean_str(model) == credential.model):
+        return credential.vision
+    return None
 
 
 def _model_supports_vision_override(models_cfg: Any, model: str) -> Optional[bool]:
@@ -359,7 +373,7 @@ def _lookup_supports_vision(
 ) -> Optional[bool]:
     """Return True/False if vision capability can be resolved, None if unknown.
 
-    Order: config ``supports_vision`` override → :data:`_VISION_PROBES`
+    Order: exact active Aino binding → config ``supports_vision`` override → :data:`_VISION_PROBES`
     (managed local runtime → models.dev catalog → Ollama probe). A plugin's
     per-model ``ProviderProfile.model_capabilities`` reaches this through the
     catalog probe. The provider-wide ``ProviderProfile.supports_vision`` flag is
@@ -367,6 +381,11 @@ def _lookup_supports_vision(
     images (``tools.vision_tools``), not that every model on the provider can see
     user attachments — relays such as ``router`` set it for mixed catalogs.
     """
+    # Managed capability belongs to the authenticated session, whereas config may
+    # still describe a previous BYOK default. Never let that default replace it.
+    managed = _managed_binding_supports_vision(provider, model)
+    if managed is not None:
+        return managed
     # Named custom providers are canonicalized to ``provider="custom"``; the
     # original name lives in the context-local main runtime. Borrow it only on an
     # exact provider+model match so background/auxiliary lookups never take

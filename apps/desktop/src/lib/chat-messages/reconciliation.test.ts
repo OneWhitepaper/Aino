@@ -96,6 +96,29 @@ it('reconciles only the represented failed tail, retaining its structured error 
 
 const turnLabels = (messages: ChatMessage[]) => messages.map(message => `${message.role}:${chatMessageText(message)}`)
 
+it('keeps equivalent hydrated history reusable while only the live tail grows', () => {
+  const local = row('settled', 'assistant', 'Already complete.', {
+    timestamp: 1,
+    completedAt: 2,
+    parts: [{ ...textPart('Already complete.'), timestamp: 1, completedAt: 2 }]
+  })
+
+  const hydrated: ChatMessage = { ...local, parts: local.parts.map(part => ({ ...part })) }
+  const tail = row('live', 'assistant', 'First', { pending: true })
+  const published = preserveLocalAssistantErrors([hydrated, tail], [local])
+
+  // The runtime caches settled messages by identity. A no-op hydration merge
+  // must not make every subsequent streamed frame convert old history again.
+  expect(published[0]).toBe(hydrated)
+  expect(published[0].parts[0]).toBe(hydrated.parts[0])
+
+  const nextTail = row('live', 'assistant', 'First second', { pending: true })
+  const nextPublished = preserveLocalAssistantErrors([hydrated, nextTail], published)
+
+  expect(nextPublished[0]).toBe(hydrated)
+  expect(chatMessageText(nextPublished[1])).toBe('First second')
+})
+
 it('drops a local errored turn the refreshed transcript already stored under new ids', () => {
   const stored = [
     row('s1', 'user', 'old q', { rowId: 1 }),

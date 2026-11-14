@@ -22,6 +22,7 @@ import type { PreviewOwner } from '@/store/preview-ownership'
 
 import { resolveActivePreviewTab } from './preview-active-tab'
 import { nudgeOverlay } from './preview-nudge'
+import { type PreviewLoadFailure, previewLoadFailureFor, previewLoadFailureMessage } from './preview-script-runner'
 
 export interface PreviewReadOptions {
   /** Characters to return from `start` (capped at PREVIEW_READ_MAX_CHARS). */
@@ -42,6 +43,7 @@ export interface PreviewReadResult {
   active_tab_id?: string
   end: number
   kind: string
+  load_error?: PreviewLoadFailure
   note?: string
   path?: string
   start: number
@@ -140,6 +142,22 @@ export async function readActivePreview(
   const reader = readers.get(tab.id)
   const multi = tabs.length > 1
   const meta = zoneMeta(tab, tabs)
+  const failure = previewLoadFailureFor(tab.id)
+
+  if (failure) {
+    return windowText(
+      {
+        ...meta,
+        kind: target.kind,
+        load_error: failure,
+        note: withMultiNote(previewLoadFailureMessage(failure), multi),
+        title: target.label,
+        url: failure.url || target.url
+      },
+      '',
+      opts
+    )
+  }
 
   if (reader) {
     try {

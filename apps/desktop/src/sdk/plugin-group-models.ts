@@ -1,4 +1,8 @@
-import { answerPlatformConversationModelRequest, type ConversationModelRequest, type ConversationModelRow } from '@/api/platform-conversation-models'
+import {
+  answerPlatformConversationModelRequest,
+  type ConversationModelRequest,
+  type ConversationModelRow
+} from '@/api/platform-conversation-models'
 import { bindPlatformModel } from '@/api/platform-models'
 import { capturePlatformDraftAuthority } from '@/api/platform-session-binding'
 import type { resolveModelDefault } from '@/lib/model-default'
@@ -45,14 +49,25 @@ export async function respondPluginGroupModelRequests(
   const account = platformModelCatalog().account.get()
 
   const assertAccount = () => {
-    if (account !== platformModelCatalog().account.get() && !samePlatformAccount(account, platformModelCatalog().account.get())) {
+    if (
+      account !== platformModelCatalog().account.get() &&
+      !samePlatformAccount(account, platformModelCatalog().account.get())
+    ) {
       throw new PlatformSelectionError('platform_account_changed')
     }
   }
 
   for (const entry of pending) {
-    if (!members.some(member => member.member_id === entry.member_id && member.profile === entry.profile &&
-      (!member.target || member.target.kind === 'local'))) { continue }
+    if (
+      !members.some(
+        member =>
+          member.member_id === entry.member_id &&
+          member.profile === entry.profile &&
+          (!member.target || member.target.kind === 'local')
+      )
+    ) {
+      continue
+    }
 
     const key = JSON.stringify([route.connectionId, route.targetProfile, roomId, entry.request_id])
     let work = answering.get(key)
@@ -61,14 +76,21 @@ export async function respondPluginGroupModelRequests(
       work = (async () => {
         assertAccount()
 
-        const result = await answerPlatformConversationModelRequest({ connectionId: route.connectionId, profile: entry.profile }, {
-          action: entry.action,
-          ...(entry.query !== undefined ? { query: entry.query } : {}),
-          ...(entry.provider !== undefined ? { provider: entry.provider } : {})
-        })
+        const result = await answerPlatformConversationModelRequest(
+          { connectionId: route.connectionId, profile: entry.profile },
+          {
+            action: entry.action,
+            ...(entry.query !== undefined ? { query: entry.query } : {}),
+            ...(entry.provider !== undefined ? { provider: entry.provider } : {})
+          }
+        )
 
         assertAccount()
-        await request('groups.model_respond', { profile: route.targetProfile, room_id: roomId, request_id: entry.request_id, result }, 10_000)
+        await request(
+          'groups.model_respond',
+          { profile: route.targetProfile, room_id: roomId, request_id: entry.request_id, result },
+          10_000
+        )
         assertAccount()
       })().finally(() => answering.delete(key))
       answering.set(key, work)
@@ -79,55 +101,111 @@ export async function respondPluginGroupModelRequests(
 }
 
 async function inspectGroupConversationSelection(
-  route: PluginSessionCreateRoute, request: Request, roomId: string, member: HostedMember, assertAccount: () => void
+  route: PluginSessionCreateRoute,
+  request: Request,
+  roomId: string,
+  member: HostedMember,
+  assertAccount: () => void
 ): Promise<ConversationModelRow | null> {
-  const inspected = await request<{ profile: string; session_id: string; selection: ConversationModelRow | null }>('groups.prepare_model', {
-    profile: route.targetProfile, room_id: roomId, member_id: member.member_id, inspect_selection: true
-  }, 10_000)
+  const inspected = await request<{ profile: string; session_id: string; selection: ConversationModelRow | null }>(
+    'groups.prepare_model',
+    {
+      profile: route.targetProfile,
+      room_id: roomId,
+      member_id: member.member_id,
+      inspect_selection: true
+    },
+    10_000
+  )
 
   assertAccount()
 
-  if (inspected.profile !== member.profile || !inspected.session_id) { throw new PlatformSelectionError('unsupported_gateway') }
+  if (inspected.profile !== member.profile || !inspected.session_id) {
+    throw new PlatformSelectionError('unsupported_gateway')
+  }
 
   return inspected.selection
 }
 
 async function applyGroupProviderSelection(
-  route: PluginSessionCreateRoute, request: Request, roomId: string, member: HostedMember,
-  selected: ConversationModelRow, assertAccount: () => void
+  route: PluginSessionCreateRoute,
+  request: Request,
+  roomId: string,
+  member: HostedMember,
+  selected: ConversationModelRow,
+  assertAccount: () => void
 ) {
-  const checked = await answerPlatformConversationModelRequest({ connectionId: route.connectionId, profile: member.profile }, {
-    action: 'select', query: selected.model_id, provider: selected.provider
-  })
+  const checked = await answerPlatformConversationModelRequest(
+    { connectionId: route.connectionId, profile: member.profile },
+    {
+      action: 'select',
+      query: selected.model_id,
+      provider: selected.provider
+    }
+  )
 
   assertAccount()
 
-  if (checked.selection?.model_source !== 'provider' || checked.selection.model_id !== selected.model_id || checked.selection.provider !== selected.provider) {
+  if (
+    checked.selection?.model_source !== 'provider' ||
+    checked.selection.model_id !== selected.model_id ||
+    checked.selection.provider !== selected.provider
+  ) {
     throw new PlatformSelectionError('model_unavailable')
   }
 
-  const applied = await request<{ profile: string; selection?: ConversationModelRow }>('groups.prepare_model', {
-    profile: route.targetProfile, room_id: roomId, member_id: member.member_id, apply_selection: true
-  }, 10_000)
+  const applied = await request<{ profile: string; selection?: ConversationModelRow }>(
+    'groups.prepare_model',
+    {
+      profile: route.targetProfile,
+      room_id: roomId,
+      member_id: member.member_id,
+      apply_selection: true
+    },
+    10_000
+  )
 
   assertAccount()
 
-  if (applied.profile !== member.profile || applied.selection?.model_id !== selected.model_id || applied.selection?.provider !== selected.provider) {
+  if (
+    applied.profile !== member.profile ||
+    applied.selection?.model_id !== selected.model_id ||
+    applied.selection?.provider !== selected.provider
+  ) {
     throw new PlatformSelectionError('unsupported_gateway')
   }
 }
 
-async function selectedGroupDefault(selected: ConversationModelRow | null, profile: string, resolveDefault: ResolveDefault) {
-  if (!selected) { return resolveDefault(profile) }
+async function selectedGroupDefault(
+  selected: ConversationModelRow | null,
+  profile: string,
+  resolveDefault: ResolveDefault
+) {
+  if (!selected) {
+    return resolveDefault(profile)
+  }
 
-  if (!selected.owner?.user_id || !selected.owner.platform_origin) { throw new PlatformSelectionError('platform_account_changed') }
+  if (!selected.owner?.user_id || !selected.owner.platform_origin) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
 
-  return { platform: { modelId: selected.model_id, ownerUserId: selected.owner.user_id, platformOrigin: selected.owner.platform_origin } }
+  return {
+    platform: {
+      modelId: selected.model_id,
+      ownerUserId: selected.owner.user_id,
+      platformOrigin: selected.owner.platform_origin
+    }
+  }
 }
 
 function requirePreparedMemberModel(prepared: PreparedModel, member: HostedMember, modelId: string) {
-  if (prepared.profile !== member.profile || prepared.model_id !== modelId ||
-    !prepared.session_id || !prepared.session_ticket || prepared.managed_model_binding !== 1) {
+  if (
+    prepared.profile !== member.profile ||
+    prepared.model_id !== modelId ||
+    !prepared.session_id ||
+    !prepared.session_ticket ||
+    prepared.managed_model_binding !== 1
+  ) {
     throw new PlatformSelectionError('unsupported_gateway')
   }
 }
@@ -143,7 +221,8 @@ export async function preparePluginGroupModels(
   memberId?: string
 ): Promise<void> {
   const snapshot = await request<{ room: { members: HostedMember[] } }>('groups.state', {
-    profile: route.targetProfile, room_id: roomId
+    profile: route.targetProfile,
+    room_id: roomId
   })
 
   assertAccount()
@@ -151,19 +230,28 @@ export async function preparePluginGroupModels(
   let selectionsSupported = false
 
   for (const member of snapshot.room.members) {
-    if (memberId !== undefined && member.member_id !== memberId) { continue }
+    if (memberId !== undefined && member.member_id !== memberId) {
+      continue
+    }
 
     // Independent/remote members keep their own runtime and credential authority.
-    if (member.target && member.target.kind !== 'local') { continue }
+    if (member.target && member.target.kind !== 'local') {
+      continue
+    }
 
     if (supported === undefined) {
-      const capabilities = await request<{ methods?: string[] }>('groups.capabilities', { profile: route.targetProfile })
+      const capabilities = await request<{ methods?: string[] }>('groups.capabilities', {
+        profile: route.targetProfile
+      })
+
       assertAccount()
       supported = capabilities.methods?.includes('groups.prepare_model') === true
       selectionsSupported = capabilities.methods?.includes('groups.model_respond') === true
     }
 
-    const selected = selectionsSupported ? await inspectGroupConversationSelection(route, request, roomId, member, assertAccount) : null
+    const selected = selectionsSupported
+      ? await inspectGroupConversationSelection(route, request, roomId, member, assertAccount)
+      : null
 
     if (selected?.model_source === 'provider') {
       await applyGroupProviderSelection(route, request, roomId, member, selected, assertAccount)
@@ -177,9 +265,16 @@ export async function preparePluginGroupModels(
 
     if (!resolved.platform) {
       if (supported) {
-        const followed = await request<{ profile: string; follow_profile_config: boolean }>('groups.prepare_model', {
-          profile: route.targetProfile, room_id: roomId, member_id: member.member_id, follow_profile_config: true
-        }, 10_000)
+        const followed = await request<{ profile: string; follow_profile_config: boolean }>(
+          'groups.prepare_model',
+          {
+            profile: route.targetProfile,
+            room_id: roomId,
+            member_id: member.member_id,
+            follow_profile_config: true
+          },
+          10_000
+        )
 
         assertAccount()
 
@@ -191,32 +286,57 @@ export async function preparePluginGroupModels(
       continue
     }
 
-    if (!supported) { throw new PlatformSelectionError('unsupported_gateway') }
+    if (!supported) {
+      throw new PlatformSelectionError('unsupported_gateway')
+    }
 
-    const authority = await capturePlatformDraftAuthority(resolved.platform.ownerUserId, resolved.platform.platformOrigin)
+    const authority = await capturePlatformDraftAuthority(
+      resolved.platform.ownerUserId,
+      resolved.platform.platformOrigin
+    )
+
     assertAccount()
 
-    const prepared = await request<PreparedModel>('groups.prepare_model', {
-      profile: route.targetProfile, room_id: roomId, member_id: member.member_id,
-      model_id: resolved.platform.modelId, owner: authority.owner
-    }, 10_000)
+    const prepared = await request<PreparedModel>(
+      'groups.prepare_model',
+      {
+        profile: route.targetProfile,
+        room_id: roomId,
+        member_id: member.member_id,
+        model_id: resolved.platform.modelId,
+        owner: authority.owner
+      },
+      10_000
+    )
 
     assertAccount()
 
     requirePreparedMemberModel(prepared, member, resolved.platform.modelId)
 
-    const result = await bindPlatformModel({
-      connection_id: route.connectionId || '', profile: prepared.profile, session_id: prepared.session_id,
-      model_id: prepared.model_id, expected_account_revision: authority.account.revision
-    }, authority.account, async <T>(method: string) => {
-      if (method !== 'session.managed_model_ticket') { throw new PlatformSelectionError('unsupported_gateway') }
-      assertAccount()
+    const result = await bindPlatformModel(
+      {
+        connection_id: route.connectionId || '',
+        profile: prepared.profile,
+        session_id: prepared.session_id,
+        model_id: prepared.model_id,
+        expected_account_revision: authority.account.revision
+      },
+      authority.account,
+      async <T>(method: string) => {
+        if (method !== 'session.managed_model_ticket') {
+          throw new PlatformSelectionError('unsupported_gateway')
+        }
 
-      return prepared as T
-    })
+        assertAccount()
+
+        return prepared as T
+      }
+    )
 
     assertAccount()
 
-    if (!result.ok) { throw new PlatformSelectionError(result.error.code) }
+    if (!result.ok) {
+      throw new PlatformSelectionError(result.error.code)
+    }
   }
 }

@@ -67,10 +67,18 @@ const tilePane = (id: string) => `session-tile:${id}`
 const scopeDisposers: (() => void)[] = []
 
 function registerScopedTile(id: string, scope: Pick<SessionTile, 'workspaceMode' | 'workspaceOwnerKey'>) {
-  scopeDisposers.push(registry.register({
-    area: 'panes', id: tilePane(id), title: id, render: () => null,
-    data: { placement: 'main', workspaceScope: { mode: scope.workspaceMode ?? 'sessions', ownerKey: scope.workspaceOwnerKey } }
-  }))
+  scopeDisposers.push(
+    registry.register({
+      area: 'panes',
+      id: tilePane(id),
+      title: id,
+      render: () => null,
+      data: {
+        placement: 'main',
+        workspaceScope: { mode: scope.workspaceMode ?? 'sessions', ownerKey: scope.workspaceOwnerKey }
+      }
+    })
+  )
 }
 
 afterEach(() => {

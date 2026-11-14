@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils'
 import { $chatOnboardingSolo } from '@/store/onboarding-intro'
 import { $paneStates } from '@/store/panes'
 
-import { $layoutEditMode } from '../../edit-mode'
 import { useWindowControlsOverlap } from '../../geometry'
 import { $narrowOverlayPaneIds } from '../../narrow-overlay-state'
 import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
@@ -142,7 +141,6 @@ export function NarrowOverlays() {
   const stableHosts = useStablePaneHosts()
   const hiddenPanes = useStore($hiddenTreePanes)
   const workspacePage = useStore($workspaceIsPage)
-  const editMode = useStore($layoutEditMode)
   const workspaceMode = useStore($workspaceMode)
   const workspaceOwnerKey = useStore($workspaceOwnerKey)
   const [reveal, setReveal] = useState<RevealState | null>(null)
@@ -194,10 +192,10 @@ export function NarrowOverlays() {
               (paneChrome(p).collapsible || narrowTools.has(p.id)) &&
               inTree.has(p.id) &&
               !hiddenPanes.has(p.id) &&
-              (editMode || scopePanes.has(p.id)) &&
+              scopePanes.has(p.id) &&
               (!workspacePage || workspacePageKeepsPane(p.id))
           ),
-    [solo, panes, inTree, hiddenPanes, workspacePage, narrowTools, editMode, scopePanes]
+    [solo, panes, inTree, hiddenPanes, workspacePage, narrowTools, scopePanes]
   )
 
   useNarrowRevealControls(narrow, solo, reveal, setReveal)
@@ -208,7 +206,7 @@ export function NarrowOverlays() {
   const { group: revealedGroup, panes: zonePanes } = collapsedZonePanes(revealed, tree, collapsibles)
   const toolPanel = Boolean(revealedGroup && isToolPanelGroup(revealedGroup, id => panes.find(pane => pane.id === id)))
   usePaneRevealMotion(overlayRef, Boolean(revealed), toolPanel, revealed?.id)
-  const modePanes = sidebarModePanes(revealedGroup?.panes ?? [], zonePanes, !editMode)
+  const modePanes = sidebarModePanes(revealedGroup?.panes ?? [], zonePanes, true)
   const compactSidebar = modePanes.length > 0
   useActiveTabVisible(tabsRef, revealed?.id ?? '', {
     enabled: overlayTabsNeedScroll(narrow, solo, Boolean(revealed), compactSidebar, toolPanel, zonePanes.length),

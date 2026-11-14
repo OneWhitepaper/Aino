@@ -890,3 +890,36 @@ async def disconnect(self):
 | `plugins/platforms/weixin/adapter.py` | Long-poll + CDN | High | Media handling, encryption |
 | `plugins/platforms/wecom/callback_adapter.py` | Callback/webhook | Medium | HTTP server, AES crypto, multi-app |
 | `plugins/platforms/irc/adapter.py` | Long-poll + IRC protocol | High | Full-featured plugin adapter with scoped token lock |
+
+### Desktop QR onboarding
+
+Platforms with a provider-supported QR registration flow can expose it through
+`ctx.register_platform(onboarding_start=..., onboarding_poll=..., onboarding_apply=...)`.
+All three callbacks are optional as a set. Without them, desktop keeps the normal credential form.
+WeChat, QQ and Feishu are the consumers of this contract.
+
+- `async onboarding_start(home: str)` returns `{state: dict, qr_payload: str,
+  expires_in: int, poll_interval?: int}`. Reuse the platform's CLI registration transport;
+  `qr_payload` is the text encoded into the QR code, not a terminal rendering.
+- `async onboarding_poll(home: str, state: dict)` performs one provider poll and returns
+  `{status, state?: dict, message?: str}`. Status is `waiting`, `scanned`, `ready`, `expired`
+  or `error`. A returned `state` replaces the previous opaque state, so retain fields
+  needed to decrypt or apply the grant. Messages must be safe to show to the user.
+- `onboarding_apply(home: str, state: dict)` is synchronous and saves the confirmed
+  credentials using the existing public config helpers. It may return safe `account_id`
+  and `account_name` metadata. Preserve explicit access policies; add the scanning owner
+  to an existing allowlist rather than opening the bot to everyone.
+
+The host binds home and secret scope for every callback and runs apply off the event loop.
+A pairing handle belongs to one profile and platform, expires, and is superseded by a new
+setup. Private `state` and provider tokens are never returned to the renderer. Polling
+confirmation does not save; explicit apply does, and repeat apply returns the same receipt.
+The REST routes are `/api/messaging/platforms/{platform}/onboarding/start`,
+`/{pairing_id}` (GET/DELETE), and `/{pairing_id}/apply` (POST).
+
+After apply, desktop calls `POST /api/messaging/platforms/{platform}/connect` to activate
+only that saved connection. It uses the gateway owner's existing adapter lifecycle and
+does not restart the shared session service. A busy adapter is left intact until the user
+retries after its current messages finish. `PUT /api/messaging/platforms/{platform}` accepts
+`apply_live: true` for clients that perform this scoped connect themselves; older clients
+retain the existing secondary-profile rescan behavior.

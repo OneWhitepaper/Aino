@@ -34,6 +34,7 @@ import { esUpdateChannel } from './es_update_channel'
 import { homeGuidance } from './home-guidance'
 import { introEs } from './intro-es'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
@@ -323,9 +324,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const esBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Abriendo el chat de grupo…",
-    lookupFailed: "No se pudo encontrar este grupo en la pasarela. Inténtalo de nuevo.",
-    missing: "Este chat de grupo ya no existe."
+    opening: 'Abriendo el chat de grupo…',
+    lookupFailed: 'No se pudo encontrar este grupo en la pasarela. Inténtalo de nuevo.',
+    missing: 'Este chat de grupo ya no existe.'
   },
   notificationCenter: notificationCenterCopy['es'],
   platformModels: {
@@ -890,9 +891,7 @@ const esBaseOverrides = {
     openStarmap: 'Abrir grafo de memoria',
     enterHud: 'Modo HUD',
     exitHud: 'Salir del modo HUD',
-    resetHudLayout: 'Restablecer el tamaño y la posición del HUD',
-    layoutEditor: 'Editor de diseño',
-    layoutEditorTitle: mod => `Editor de diseño — clic ${mod} restablece el diseño`
+    resetHudLayout: 'Restablecer el tamaño y la posición del HUD'
   },
   keybinds: {
     title: 'Atajos de teclado',
@@ -1356,11 +1355,6 @@ const esBaseOverrides = {
       tabStripAuto: 'Auto',
       tabStripAlways: 'Siempre',
       tabStripNever: 'Nunca',
-      appActionsTitle: 'Acciones de la app',
-      appActionsDesc:
-        'Dónde se colocan Configuración, Diseño y HUD en la barra de título. A la derecha deja espacio para pestañas a la izquierda.',
-      appActionsLeft: 'Izquierda',
-      appActionsRight: 'Derecha',
       terminalFontTitle: 'Fuente de terminal',
       terminalFontDesc:
         'Elige una fuente instalada para las terminales del escritorio. Las Nerd Fonts renderizan Powerlevel10k y los iconos de shell; déjalo vacío para usar la JetBrains Mono incluida.',
@@ -2516,12 +2510,15 @@ const esBaseOverrides = {
         enabledTitle: 'Navegación con perfil real activada',
         enabledMessage: 'Las sesiones nuevas navegarán con una instantánea de tu perfil predeterminado del navegador.',
         disabledTitle: 'Navegación con perfil real desactivada',
-        disabledMessage: 'Se eliminará la instantánea del perfil y se cerrará su sesión en el navegador integrado; las sesiones nuevas usan un navegador limpio.',
+        disabledMessage:
+          'Se eliminará la instantánea del perfil y se cerrará su sesión en el navegador integrado; las sesiones nuevas usan un navegador limpio.',
         failedSave: 'No se pudo guardar el ajuste del perfil real',
         reimportSignins: 'Volver a importar inicios de sesión',
         signinsImportedTitle: 'Inicios de sesión del navegador integrado',
-        signinsImported: count => `Se inició sesión en el navegador integrado con ${count} cookie${count === 1 ? '' : 's'} de tu perfil del navegador.`,
-        signinsRemote: 'Este backend se ejecuta en otro equipo, así que su perfil del navegador no se importa al navegador integrado.',
+        signinsImported: count =>
+          `Se inició sesión en el navegador integrado con ${count} cookie${count === 1 ? '' : 's'} de tu perfil del navegador.`,
+        signinsRemote:
+          'Este backend se ejecuta en otro equipo, así que su perfil del navegador no se importa al navegador integrado.',
         signinsFailed: 'No se pudieron importar los inicios de sesión al navegador integrado',
         prompt: {
           title: 'Mantén la sesión iniciada en tus sitios',
@@ -3032,6 +3029,7 @@ const esBaseOverrides = {
   },
   messaging: {
     directory: messagingDirectory['es'],
+    qrSetup: messagingOnboarding['es'],
     search: 'Buscar mensajería...',
     statusFilter: {
       all: 'Todos',
@@ -3172,7 +3170,7 @@ const esBaseOverrides = {
       userIdPlaceholder: 'ID de usuario de Telegram',
       add: 'Añadir',
       numericOnly: 'Los ID de usuario de Telegram permitidos deben ser numéricos.',
-      saveAndRestart: 'Guardar y reiniciar',
+      saveAndRestart: 'Guardar y conectar',
       applying: 'Guardando…',
       pairingExpired:
         'La vinculación con Telegram caducó. Inicia una nueva configuración por QR para volver a intentarlo.',
@@ -3957,6 +3955,9 @@ const esBaseOverrides = {
     queueMessage: 'Poner mensaje en cola',
     steer: 'Guiar la ejecución actual',
     redirect: 'Redirigir la ejecución actual',
+    pauseTask: 'Pausar tarea',
+    pausingTask: 'Pausando tarea…',
+    continuingTask: 'Continuando tarea…',
     stop: 'Detener',
     send: 'Enviar',
     speaking: 'Hablando',
@@ -5041,30 +5042,6 @@ const esBaseOverrides = {
     pluginDisabled: pluginId => `Plugin "${pluginId}" desactivado`,
     pluginDisabledBody: 'Vuelve a activarlo en Capacidades → Plugins para recuperar el panel.',
     missingPane: paneId => `Falta el panel: ${paneId}`,
-    editTitle: 'Diseños',
-    editHint: 'Elige una disposición, o arrastra paneles entre zonas.',
-    reset: 'Restablecer',
-    templates: 'Plantillas',
-    custom: 'Personalizado',
-    newGridLayout: 'Nuevo diseño de cuadrícula',
-    saveCurrentAs: 'Guardar la disposición actual como plantilla',
-    nameLayoutPlaceholder: 'Nombre del diseño…',
-    deletePreset: name => `Eliminar ${name}`,
-    zoneEditorTitle: 'Editor de zonas',
-    editorHintPre: 'clic para dividir · ',
-    editorHintPost:
-      ' invierte la línea · arrastra entre zonas para unirlas · arrastra los bordes compartidos para redimensionar',
-    templateColumns: 'Columnas',
-    templateRows: 'Filas',
-    templateGrid: 'Cuadrícula',
-    templatePriority: 'Prioridad',
-    zoneTag: index => `zona ${index}`,
-    mergeZones: count => `Unir ${count} zonas`,
-    customZoneName: count => `Diseño personalizado de ${count} zonas`,
-    layoutNamePlaceholder: fallback => `Nombre del diseño (${fallback})`,
-    saveApply: 'Guardar y aplicar',
-    notExpressible: 'esta disposición se entrelaza (en molinete) y aún no puede expresarse como divisiones anidadas',
-    zoneCount: count => `${count} zonas`,
     tabCount: count => `${count} pestaña${count === 1 ? '' : 's'}`,
     tabActions: title => `Acciones de ${title}`
   },

@@ -9,6 +9,7 @@ import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { ruBoot } from './ru_boot'
 import { ruCatalog, ruSkillDeepLink } from './ru_catalog'
@@ -327,9 +328,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const ruBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Открываем групповой чат…",
-    lookupFailed: "Не удалось найти эту группу на шлюзе. Попробуйте ещё раз.",
-    missing: "Этот групповой чат больше не существует."
+    opening: 'Открываем групповой чат…',
+    lookupFailed: 'Не удалось найти эту группу на шлюзе. Попробуйте ещё раз.',
+    missing: 'Этот групповой чат больше не существует.'
   },
   notificationCenter: notificationCenterCopy['ru'],
   platformModels: {
@@ -530,9 +531,7 @@ const ruBaseOverrides = {
     openSettings: 'Открыть настройки',
     openStarmap: 'Открыть граф памяти',
     enterHud: 'Режим HUD',
-    exitHud: 'Выйти из режима HUD',
-    layoutEditor: 'Редактор раскладки',
-    layoutEditorTitle: mod => `Редактор раскладки — ${mod}-клик сбрасывает раскладку`
+    exitHud: 'Выйти из режима HUD'
   },
   keybinds: {
     title: 'Горячие клавиши',
@@ -834,10 +833,6 @@ const ruBaseOverrides = {
       tabStripAuto: 'Авто',
       tabStripAlways: 'Всегда',
       tabStripNever: 'Никогда',
-      appActionsTitle: 'Действия приложения',
-      appActionsDesc: 'Где в заголовке окна сидят Настройки, Макет и HUD. Справа оставляют место для вкладок слева.',
-      appActionsLeft: 'Слева',
-      appActionsRight: 'Справа',
       terminalFontTitle: 'Шрифт терминала',
       terminalFontDesc:
         'Выберите установленный шрифт для терминалов приложения. Nerd Fonts отображают Powerlevel10k и иконки оболочки; оставьте пустым, чтобы использовать встроенный JetBrains Mono.',
@@ -1479,8 +1474,9 @@ const ruBaseOverrides = {
         reimportSignins: 'Импортировать входы заново',
         signinsImportedTitle: 'Входы во встроенном браузере',
         signinsImported: count => `Встроенный браузер вошёл с cookie из профиля браузера: ${count}.`,
-        signinsRemote: 'Этот бэкенд работает на другом компьютере, поэтому его профиль браузера не импортируется во встроенный браузер.',
-        signinsFailed: 'Не удалось импортировать входы во встроенный браузер',
+        signinsRemote:
+          'Этот бэкенд работает на другом компьютере, поэтому его профиль браузера не импортируется во встроенный браузер.',
+        signinsFailed: 'Не удалось импортировать входы во встроенный браузер'
       },
       loadingConfig: 'Загрузка конфигурации',
       savedTitle: 'Учётные данные сохранены',
@@ -1996,6 +1992,7 @@ const ruBaseOverrides = {
   },
   messaging: {
     directory: messagingDirectory['ru'],
+    qrSetup: messagingOnboarding['ru'],
     search: 'Поиск в сообщениях...',
     statusFilter: {
       all: 'Все',
@@ -2131,7 +2128,7 @@ const ruBaseOverrides = {
       userIdPlaceholder: 'Telegram ID пользователя',
       add: 'Добавить',
       numericOnly: 'Telegram ID должны быть числовыми.',
-      saveAndRestart: 'Сохранить и перезапустить',
+      saveAndRestart: 'Сохранить и подключить',
       applying: 'Сохранение…',
       pairingExpired: 'Срок QR-настройки истёк. Начните новую.',
       stillWaiting: detail => `Всё ещё ждём Telegram. Повтор после: ${detail}`,
@@ -2832,6 +2829,9 @@ const ruBaseOverrides = {
     queueMessage: 'Вставить сообщение в очередь',
     steer: 'Направить текущий запуск',
     redirect: 'Перенаправить текущий запуск',
+    pauseTask: 'Приостановить задачу',
+    pausingTask: 'Приостановка задачи…',
+    continuingTask: 'Продолжение задачи…',
     stop: 'Стоп',
     send: 'Отправить',
     speaking: 'Говорит',
@@ -3800,30 +3800,6 @@ const ruBaseOverrides = {
     pluginDisabled: pluginId => `Плагин «${pluginId}» отключён`,
     pluginDisabledBody: 'Включите его снова в Возможности → Плагины, чтобы вернуть панель.',
     missingPane: paneId => `нет панели: ${paneId}`,
-    editTitle: 'Раскладки',
-    editHint: 'Выберите раскладку или перетащите панели между зонами.',
-    reset: 'Сбросить',
-    templates: 'Шаблоны',
-    custom: 'Свои',
-    newGridLayout: 'Новая сеточная раскладка',
-    saveCurrentAs: 'Сохранить текущую расстановку как шаблон',
-    nameLayoutPlaceholder: 'Название этой раскладки…',
-    deletePreset: name => `Удалить ${name}`,
-    zoneEditorTitle: 'Редактор зон',
-    editorHintPre: 'клик — разделить · ',
-    editorHintPost:
-      ' переворачивает линию · перетаскивание между зонами — слить · перетаскивание общих граней — изменить размер',
-    templateColumns: 'Колонки',
-    templateRows: 'Строки',
-    templateGrid: 'Сетка',
-    templatePriority: 'Приоритет',
-    zoneTag: index => `зона ${index}`,
-    mergeZones: count => `Слить ${count} ${RU_NOUN(count, 'зона', 'зоны', 'зон')}`,
-    customZoneName: count => `Своя ${count}-зонная`,
-    layoutNamePlaceholder: fallback => `Название раскладки (${fallback})`,
-    saveApply: 'Сохранить и применить',
-    notExpressible: 'эта расстановка зацеплена (pinwheel) — пока не выразима как вложенные разделения',
-    zoneCount: count => `${count} ${RU_NOUN(count, 'зона', 'зоны', 'зон')}`,
     tabCount: count => `${count} ${RU_NOUN(count, 'вкладка', 'вкладки', 'вкладок')}`,
     tabActions: title => `Действия: ${title}`
   },

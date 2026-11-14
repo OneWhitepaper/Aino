@@ -96,6 +96,60 @@ def test_gui_reads_are_server_requests_to_the_session_viewers(window):
     assert terminal["params"] == {"session_id": "canon", "start": 0, "count": 2}
 
 
+@pytest.fixture
+def reviewing_window(window, monkeypatch):
+    """Keep the real request registry while a viewer takes 90 simulated seconds to answer."""
+    stream = window.turn._approval_owner[0].sessions["canon"].event_stream
+
+    class ReviewWait:
+        def __init__(self, frame):
+            self.frame, self.elapsed, self.answered = frame, 0, False
+
+        def wait(self, timeout):
+            self.elapsed += timeout
+            if self.elapsed >= 90:
+                session_server_requests.resolve({"id": self.frame["id"], "result": _ANSWERS[self.frame["method"]]})
+            return self.answered
+
+        def set(self):
+            self.answered = True
+
+    def write(frame):
+        window.requests.append(frame)
+        session_server_requests._open[frame["id"]].event = ReviewWait(frame)
+        return True
+
+    monkeypatch.setattr(stream.fanout, "write", write)
+    return window
+
+
+@pytest.mark.parametrize("bridge_state", [None, "answered"])
+def test_browser_input_allows_human_review_before_and_after_first_answer(reviewing_window, bridge_state):
+    window = reviewing_window
+    if bridge_state:
+        local_desktop_ui._preview_bridge["canon"] = {"state": bridge_state}
+    local_viewer_events.wire(window.turn, window.agent)
+
+    result = window.agent.drive_preview_callback({"action": "click", "ref": "pay"})
+
+    assert json.loads(result)["success"] is True
+    assert window.requests[0]["method"] == "preview.act"
+    assert not any(payload["reason"] == "timeout" for _, kind, payload in window.streamed if kind == "request.cancel")
+
+
+def test_preview_reads_timeout_before_a_slow_reviewer_and_reject_late_answers(reviewing_window):
+    window = reviewing_window
+    local_viewer_events.wire(window.turn, window.agent)
+
+    assert window.agent.read_preview_callback() == ""
+
+    frame = window.requests[0]
+    assert window.streamed == [("canon", "request.cancel", {
+        "id": frame["id"], "method": "preview.read", "reason": "timeout",
+    })]
+    assert not session_server_requests.resolve({"id": frame["id"], "result": {"value": "late"}})
+
+
 def test_set_theme_applies_and_picks(window):
     local_viewer_events.wire(window.turn, window.agent)
     assert window.agent.theme_callback({"accent": "violet"}) == {"applied": {"accent": "violet"}}

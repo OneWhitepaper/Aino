@@ -55,6 +55,91 @@ const fileTarget = {
 } as const
 
 describe('unified tool panel', () => {
+  it('keeps a user-hidden panel closed while pinned preview metadata changes or a new chat is selected', async () => {
+    const { tree, model, preview } = await setup()
+    const session = await import('@/store/session')
+    session.$selectedStoredSessionId.set('first')
+    preview.openPreview(fileTarget)
+    const id = preview.$previewTabs.get()[0]!.id
+    preview.setPreviewTabPinned(id, true)
+    tree.setTreeGroupMinimized('tools', true)
+    preview.$previewTabs.set(
+      preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Updated label' } }))
+    )
+    expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBe(true)
+    session.$selectedStoredSessionId.set(null)
+    expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBe(true)
+    preview.openPreview(fileTarget)
+    expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBeFalsy()
+  })
+
+  it('restores another chat’s saved preview selection without opening its hidden panel', async () => {
+    const { tree, model, preview } = await setup()
+    const session = await import('@/store/session')
+    session.$selectedStoredSessionId.set('first')
+    preview.openPreview(fileTarget)
+    session.$selectedStoredSessionId.set('second')
+    preview.openPreview({ ...fileTarget, path: '/work/b.ts', source: '/work/b.ts', url: 'file:///work/b.ts' })
+    tree.setTreeGroupMinimized('tools', true)
+    session.$selectedStoredSessionId.set('first')
+    expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBe(true)
+  })
+
+  it.each([
+    fileTarget,
+    { kind: 'url', label: 'Browser', source: 'https://example.com', url: 'https://example.com' } as const
+  ])('keeps a user-hidden returning $kind preview folded after Files was closed', async target => {
+    const { tree, model, preview } = await setup()
+    const session = await import('@/store/session')
+    const actions = await import('../right-sidebar/tool-panel-actions')
+    session.$selectedStoredSessionId.set('first')
+    preview.openPreview(target)
+    const paneId = `preview-tile:${preview.$previewTabs.get()[0]!.id}`
+    expect(tree.isPaneVisible(paneId)).toBe(true)
+    actions.closeUnifiedFilesTab()
+    const survivingPanel = model.findGroupOfPane(tree.$layoutTree.get()!, paneId)!
+    // Closing Files leaves the preview visible; the user must hide that surviving panel.
+    tree.setTreeGroupMinimized(survivingPanel.id, true)
+    expect(tree.isPaneVisible(paneId)).toBe(false)
+    session.$selectedStoredSessionId.set('second')
+    expect(model.findGroupOfPane(tree.$layoutTree.get()!, paneId)).toBeNull()
+    session.$selectedStoredSessionId.set('first')
+    expect(tree.isPaneVisible(paneId)).toBe(false)
+    expect(model.findGroupOfPane(tree.$layoutTree.get()!, paneId)?.minimized).toBe(true)
+    preview.openPreview(target)
+    expect(tree.isPaneVisible(paneId)).toBe(true)
+  })
+
+  it('opens a new browser explicitly after all tool hosts were removed', async () => {
+    const { tree, preview } = await setup()
+    const actions = await import('../right-sidebar/tool-panel-actions')
+    actions.closeUnifiedFilesTab()
+    preview.newBrowserTab()
+    const paneId = `preview-tile:${preview.$previewTabs.get()[0]!.id}`
+    expect(tree.isPaneVisible(paneId)).toBe(true)
+  })
+
+  it('keeps the user-selected terminal in front while preview metadata refreshes', async () => {
+    const { tree, model, preview } = await setup()
+    const { registry } = await import('@/contrib/registry')
+    registry.register({
+      id: 'terminal',
+      area: 'panes',
+      data: { placement: 'right', toolPanel: true },
+      render: () => null
+    })
+    preview.openPreview(fileTarget)
+    tree.restoreTreePane('terminal')
+    preview.$previewTabs.set(
+      preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Saved' } }))
+    )
+    expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.active).toBe('terminal')
+    const id = preview.$previewTabs.get()[0]!.id
+    preview.openPreview(fileTarget)
+    expect(preview.$previewTabs.get()).toHaveLength(1)
+    expect(tree.isPaneVisible(`preview-tile:${id}`)).toBe(true)
+  })
+
   it.each([
     fileTarget,
     { kind: 'url', label: 'Browser', source: 'https://example.com', url: 'https://example.com' } as const

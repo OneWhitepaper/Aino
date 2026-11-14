@@ -28,12 +28,13 @@ export type PreviewInputEvent =
   | { button: 'left'; clickCount: number; type: 'mouseDown' | 'mouseUp'; x: number; y: number }
   | { deltaX: number; deltaY: number; type: 'mouseWheel'; x: number; y: number }
   | { keyCode: string; modifiers?: string[]; type: 'char' | 'keyDown' | 'keyUp' }
-  | { type: 'mouseMove'; x: number; y: number }
+  | { button?: 'left'; modifiers?: string[]; type: 'mouseMove'; x: number; y: number }
 
 export interface PreviewInputHandle {
   /** Give the guest keyboard focus, so key events reach its active element. */
   focus: () => void
   send: (event: PreviewInputEvent) => void
+  settle?: () => Promise<void>
 }
 
 /** Convert a point the act engine measured in guest CSS pixels into the

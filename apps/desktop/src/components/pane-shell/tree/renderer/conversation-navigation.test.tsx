@@ -6,7 +6,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { registry } from '@/contrib/registry'
 import { $activeSessionId, $selectedStoredSessionId, setCurrentCwd } from '@/store/session'
 import { $focusedStoredSessionId } from '@/store/session-focus'
-import { $focusedRuntimeId, $focusedWorkspaceCwd, $sessionTiles, closeAllOpenSessionTiles } from '@/store/session-states'
+import {
+  $focusedRuntimeId,
+  $focusedWorkspaceCwd,
+  $sessionTiles,
+  closeAllOpenSessionTiles
+} from '@/store/session-states'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
 import { resetRememberedActivePanes, setWorkspaceScope } from '../../workspace-scope'

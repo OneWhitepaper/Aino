@@ -52,15 +52,15 @@ import type { GatewayEventDeps } from './types'
  *  off the boot path (dev: a fresh copy per action so edits reach the guest — see
  *  the previous home of this loader in desktop-bridge.ts for the full story). */
 const loadPreviewEngine = () => {
-  const stable = () => import('@/app/chat/right-rail/preview-act')
+  const stable = () => import('@/app/chat/right-rail/preview-agent')
 
   if (!import.meta.hot) {
-    return stable().then(mod => mod.actOnActivePreview)
+    return stable().then(mod => mod.runPreviewAgentAction)
   }
 
-  return import(/* @vite-ignore */ '/src/app/chat/right-rail/preview-act.ts?hot=' + Date.now())
+  return import(/* @vite-ignore */ '/src/app/chat/right-rail/preview-agent.ts?hot=' + Date.now())
     .catch(stable)
-    .then(mod => mod.actOnActivePreview as Awaited<ReturnType<typeof stable>>['actOnActivePreview'])
+    .then(mod => mod.runPreviewAgentAction as Awaited<ReturnType<typeof stable>>['runPreviewAgentAction'])
 }
 
 // This module owns short-lived bindings shared across open/evaluate/close
@@ -123,6 +123,23 @@ const WINDOW_OWNED_REQUESTS = new Set([
   'window.read',
   'tour'
 ])
+
+// These handlers return a final inactive-session error. A window may host the
+// same conversation as a tile while another attached window has it active; let
+// the tile window decline so its final refusal cannot win that fan-out race.
+const ACTIVE_SESSION_REQUESTS = new Set(['preview.act', 'theme.apply', 'tour'])
+
+function isPreviewVaultCleanup(request: ScopedServerRequest): boolean {
+  const vault = request.params.vault
+
+  return (
+    request.method === 'preview.act' &&
+    request.params.action === 'vault' &&
+    !!vault &&
+    typeof vault === 'object' &&
+    (vault as { operation?: unknown }).operation === 'close'
+  )
+}
 
 /**
  * A window not hosting the session declines instead of staying silent. The
@@ -240,12 +257,14 @@ export function windowReadClaimsSession(sessionId: string, activeSessionId: null
  */
 export function previewSessionRoute({
   activeSessionId,
+  allowInactiveCleanup = false,
   method,
   replayed,
   sessionId,
   storedIdForRuntimeId
 }: {
   activeSessionId: null | string
+  allowInactiveCleanup?: boolean
   method?: string
   replayed: boolean | undefined
   sessionId: string
@@ -255,13 +274,17 @@ export function previewSessionRoute({
     return 'run'
   }
 
-  // window.read routes through the tolerant claim (see windowReadClaimsSession);
-  // every other window-owned request keeps the strict host check.
-  if (
-    method === 'window.read'
-      ? windowReadClaimsSession(sessionId, activeSessionId)
-      : windowHostsSession(sessionId, activeSessionId, storedIdForRuntimeId)
-  ) {
+  // window.read routes through the tolerant claim (see windowReadClaimsSession).
+  // Active-only operations must be answered by the selected session window;
+  // pane reads can be served by any window hosting that session.
+  const claimsSession =
+    ACTIVE_SESSION_REQUESTS.has(method ?? '') && !allowInactiveCleanup
+      ? requestNamesActiveSession({ activeSessionId, sessionId, storedIdForRuntimeId })
+      : method === 'window.read'
+        ? windowReadClaimsSession(sessionId, activeSessionId)
+        : windowHostsSession(sessionId, activeSessionId, storedIdForRuntimeId)
+
+  if (claimsSession) {
     return 'run'
   }
 
@@ -539,9 +562,10 @@ const previewRead: Handler = ({ request, sessionId }) => {
   // A browser host has no pop-out and no readable surface to forward to, so
   // asking would only wait out the pop-out timeout before the same answer.
   void (async () => {
-    const result = hasLivePreviewSurface(owner) || !hostHas('webviewPreview')
-      ? await readActivePreview(opts, owner)
-      : ((await requestPopoutPreviewRead(opts, owner)) ?? (await readActivePreview(opts, owner)))
+    const result =
+      hasLivePreviewSurface(owner) || !hostHas('webviewPreview')
+        ? await readActivePreview(opts, owner)
+        : ((await requestPopoutPreviewRead(opts, owner)) ?? (await readActivePreview(opts, owner)))
 
     answerValue(request, result)
   })()
@@ -687,13 +711,35 @@ const previewAct: Handler = ({ deps, isActiveSession, request, sessionId }) => {
     ? setInterval(() => {
         if (deps.sessionInterrupted(sessionId)) {
           abortPreviewTyping(request.id, 'interrupted')
+        } else if (
+          !requestNamesActiveSession({
+            activeSessionId: deps.activeSessionIdRef.current,
+            sessionId,
+            storedIdForRuntimeId: runtimeId =>
+              deps.sessionStateByRuntimeIdRef.current.get(runtimeId)?.storedSessionId ?? undefined
+          })
+        ) {
+          abortPreviewTyping(request.id, 'session_changed')
         }
       }, 50)
     : undefined
 
   const action = {
+    tabId: str(p.tab_id) || undefined,
+    observationId: str(p.observation_id) || undefined,
+    coordinate: p.coordinate as PreviewActAction['coordinate'],
+    toCoordinate: p.to_coordinate as PreviewActAction['toCoordinate'],
+    sensitive: p.sensitive === true,
+    dialogId: str(p.dialog_id) || undefined,
+    accept: typeof p.accept === 'boolean' ? p.accept : undefined,
+    promptText: typeof p.prompt_text === 'string' ? p.prompt_text : undefined,
+    paths: p.paths as PreviewActAction['paths'],
+    downloadId: str(p.download_id) || undefined,
+    downloadPath: str(p.download_path) || undefined,
+    chooserId: str(p.chooser_id) || undefined,
     allowShortcut: p.allow_shortcut === true,
     amount: p.amount as never,
+    full: p.full === true,
     key: p.key as never,
     kind: (str(p.action) || '') as never,
     max: p.max as never,
@@ -711,8 +757,8 @@ const previewAct: Handler = ({ deps, isActiveSession, request, sessionId }) => {
       // answer with the pop-out's result. No pop-out answering (null) falls
       // through to the local engine, which keeps the legacy NOTHING_OPEN
       // error for a genuinely closed pane.
-      if (!hasLivePreviewSurface(owner)) {
-        const remote = await requestPopoutPreviewAct(action, owner)
+      if (action.kind !== 'tabs' && action.kind !== 'select_tab' && !hasLivePreviewSurface(owner)) {
+        const remote = await requestPopoutPreviewAct(action, owner, signal)
 
         if (remote) {
           answerValue(request, remote)
@@ -912,11 +958,17 @@ export const SERVER_REQUEST_HANDLERS: Record<string, Handler> = {
       return
     }
 
-    void answerPlatformConversationModelRequest({ connectionId: request.connectionId, profile: request.profile }, {
-      action,
-      ...(typeof request.params.query === 'string' ? { query: request.params.query } : {}),
-      ...(typeof request.params.provider === 'string' ? { provider: request.params.provider } : {})
-    }).then(result => request.respond({ ...result }), () => request.respond({ status: 'unavailable' }))
+    void answerPlatformConversationModelRequest(
+      { connectionId: request.connectionId, profile: request.profile },
+      {
+        action,
+        ...(typeof request.params.query === 'string' ? { query: request.params.query } : {}),
+        ...(typeof request.params.provider === 'string' ? { provider: request.params.provider } : {})
+      }
+    ).then(
+      result => request.respond({ ...result }),
+      () => request.respond({ status: 'unavailable' })
+    )
   },
   'display.install.sudo': displayInstallSudo,
   'preview.act': previewAct,
@@ -960,6 +1012,7 @@ export function handleServerRequest(
     // every other window-owned request keeps the strict host check.
     const route = previewSessionRoute({
       activeSessionId,
+      allowInactiveCleanup: isPreviewVaultCleanup(request),
       method: request.method,
       replayed: request.replayed,
       sessionId,
@@ -989,6 +1042,8 @@ export function handleServerRequest(
         if (
           previewSessionRoute({
             activeSessionId: deps.activeSessionIdRef.current,
+            allowInactiveCleanup: isPreviewVaultCleanup(request),
+            method: request.method,
             replayed: false,
             sessionId,
             storedIdForRuntimeId

@@ -5,22 +5,39 @@ import { type GroupMentionIdentity, projectGroupMentions } from './group-chat-me
 
 /** Hosted rooms address immutable handles; presentation never resolves a mutable name. */
 export function addressedGroupMentionText(identities: GroupMentionIdentity[]) {
-  return (children: ReactNode) => Children.map(children, child => {
-    if (typeof child !== 'string') {return child}
-    const projected = projectGroupMentions(child, identities)
-    const parts: ReactNode[] = []
-    let last = 0
+  return (children: ReactNode) =>
+    Children.map(children, child => {
+      if (typeof child !== 'string') {
+        return child
+      }
 
-    for (const span of projected.spans) {
-      parts.push(projected.text.slice(last, span.start))
-      parts.push(<span className="aino-group-mention ref font-medium" data-ref={['all', 'everyone'].includes(span.handle) ? 'broadcast' : 'agent'} key={`${span.start}:${span.handle}`}>
-        {projected.text.slice(span.start, span.end)}
-      </span>)
-      last = span.end
-    }
+      const projected = projectGroupMentions(child, identities)
+      const parts: ReactNode[] = []
+      let last = 0
 
-    return parts.length ? <>{parts}{projected.text.slice(last)}</> : child
-  })
+      for (const span of projected.spans) {
+        parts.push(projected.text.slice(last, span.start))
+        parts.push(
+          <span
+            className="aino-group-mention ref font-medium"
+            data-ref={['all', 'everyone'].includes(span.handle) ? 'broadcast' : 'agent'}
+            key={`${span.start}:${span.handle}`}
+          >
+            {projected.text.slice(span.start, span.end)}
+          </span>
+        )
+        last = span.end
+      }
+
+      return parts.length ? (
+        <>
+          {parts}
+          {projected.text.slice(last)}
+        </>
+      ) : (
+        child
+      )
+    })
 }
 
 /** Older shells preserve the same prose-only decoration without mounting another renderer. */
@@ -59,7 +76,13 @@ export function readableGroupMentionSearch(text: string, identities: GroupMentio
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(original)?.[1]
 
     if (fence) {
-      if (marker?.[0] === fence.marker && marker.length >= fence.length && !original.slice(original.indexOf(marker) + marker.length).trim()) {fence = undefined}
+      if (
+        marker?.[0] === fence.marker &&
+        marker.length >= fence.length &&
+        !original.slice(original.indexOf(marker) + marker.length).trim()
+      ) {
+        fence = undefined
+      }
 
       result += line
 
@@ -69,7 +92,10 @@ export function readableGroupMentionSearch(text: string, identities: GroupMentio
     if (marker || /^(?: {4}|\t)/.test(original)) {
       flush()
 
-      if (marker) {fence = { marker: marker[0], length: marker.length }}
+      if (marker) {
+        fence = { marker: marker[0], length: marker.length }
+      }
+
       result += line
 
       continue

@@ -1046,6 +1046,8 @@ export interface ProviderUsageAccount {
   resets_at?: string | null
 }
 export interface ImageGenerateParams {
+  session_id?: string | null
+  profile?: string | null
   prompt?: string | null
   aspect_ratio?: string | null
   probe?: unknown | null
@@ -6012,6 +6014,18 @@ export interface PreviewActRequestParams {
   amount?: number | null
   max?: number | null
   allow_shortcut?: boolean | null
+  tab_id?: string | null
+  observation_id?: string | null
+  coordinate?: number[] | null
+  to_coordinate?: number[] | null
+  sensitive?: boolean | null
+  dialog_id?: string | null
+  accept?: boolean | null
+  prompt_text?: string | null
+  paths?: string[] | null
+  download_id?: string | null
+  download_path?: string | null
+  chooser_id?: string | null
   vault?: PreviewVaultOperation | null
 }
 /** Internal vault transport, never arguments exposed to the model. */

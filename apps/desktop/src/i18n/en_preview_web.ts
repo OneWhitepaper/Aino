@@ -24,6 +24,11 @@ export const enPreviewWeb: Translations['preview']['web'] = {
   reload: 'Reload page',
   address: 'Address',
   addressPlaceholder: 'Enter address',
+  pageZoom: 'Page zoom',
+  fitWidth: 'Fit width',
+  actualSize: 'Actual size (100%)',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
   blankPageBody: 'Type an address above to browse, or ask Hermes to open a page.',
   finishedRestarting: message => `Hermes finished restarting the preview server${message ? `: ${message}` : ''}`,
   failedRestarting: message => `Server restart failed: ${message}`,
@@ -64,7 +69,7 @@ export const enPreviewWeb: Translations['preview']['web'] = {
   vaultFillFailed: 'Could not fill the login',
   vaultLoadFailed: 'Could not load saved logins',
   vaultPageNotReady: 'The page is still loading. Try again when it has finished.',
-      restartNoActiveSession: 'No active session is available for a background restart.',
+  restartNoActiveSession: 'No active session is available for a background restart.',
 
-      restartMissingTaskId: 'The background restart did not return a task ID.'
+  restartMissingTaskId: 'The background restart did not return a task ID.'
 }

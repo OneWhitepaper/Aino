@@ -1,6 +1,6 @@
 import { atom } from 'nanostores'
 
-/** Window-local choice; only the titlebar toggle changes summary visibility. */
+/** Window-local choice; panel transitions fold it, and a fresh draft starts quiet. */
 export const $summaryOpen = atom(false)
 
 export function toggleSummary(): void {

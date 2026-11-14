@@ -181,8 +181,7 @@ import {
   resumedStreamTarget
 } from './resume-reconcile'
 import { applyRuntimeInfo, applyStoredSessionPreviewRuntimeInfo } from './runtime-info'
-import { backgroundRuntimeOptions, runtimeOwner } from './runtime-owner'
-import { runtimeOwnerProfile } from './runtime-owner'
+import { backgroundRuntimeOptions, runtimeOwner, runtimeOwnerProfile } from './runtime-owner'
 import { archiveStoredSession, restoreArchivedSession, type SessionArchiveOptions } from './session-archive'
 import { retainSessionCreateOwner, sessionCreateOwnerRequest } from './session-create-request'
 import { publishWarmSessionRuntime } from './session-usage'
@@ -2859,6 +2858,7 @@ export function useSessionActions({
         if (removalEpoch !== $notificationEpoch.get()) {
           return
         }
+
         finishSessionDeletion({
           storedSessionId,
           removedIds,

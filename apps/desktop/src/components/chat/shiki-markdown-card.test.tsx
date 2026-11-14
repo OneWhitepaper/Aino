@@ -59,7 +59,9 @@ describe('Markdown source cards', () => {
     expect(within(card as HTMLElement).getByRole('button', { name: '复制' })).toBeTruthy()
 
     await act(async () => rerender(<Card code={source} defer={false} />))
-    await waitFor(() => expect(card?.querySelector('[data-testid="shiki-container"]')).not.toBeNull(), { timeout: 5_000 })
+    await waitFor(() => expect(card?.querySelector('[data-testid="shiki-container"]')).not.toBeNull(), {
+      timeout: 5_000
+    })
     expect(card?.querySelector('pre')?.textContent).toBe(source)
     expect(container.querySelector('[data-slot="code-card"]')).toBe(card)
     expect(container.querySelector('.aui-prose-fence')).toBeNull()

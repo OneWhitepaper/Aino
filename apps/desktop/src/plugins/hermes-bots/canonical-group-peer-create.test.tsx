@@ -108,6 +108,7 @@ afterEach(() => {
 
 const box = (row: Element | undefined) =>
   row?.closest('label')?.querySelector('button[role="checkbox"]') as HTMLButtonElement
+
 const localOnly = () => request.mock.calls.every(call => call[0]?.connectionId === 'local')
 
 async function openDialog(onCreated = vi.fn()) {
@@ -146,6 +147,7 @@ it('seats a named profile from another computer on that gateway, pinned to that 
       }
     }
   }
+
   gateways(undefined, (method, params) =>
     method === 'groups.capabilities' && params.profile === 'coder'
       ? coder
@@ -377,11 +379,13 @@ it.each([
 )
 
 const route = { connectionId: 'local', profile: 'default' }
+
 const pin = () => ({
   installationId: 'install:3f2a0000000000000000000000000000',
   catalogDigest: 'c'.repeat(64),
   profile: 'default'
 })
+
 const peer = (connectionId: string, connectionLabel: string) => ({
   name: 'default',
   handle: 'hermes',
@@ -397,6 +401,7 @@ it('refuses a roster whose Bots would share a handle or id even after naming the
   expect(canonicalGroupRoster(route, [here, { name: 'hermes-mac-mini', connectionId: 'local' }, mac], pin)).toEqual({
     problem: 'duplicateMember'
   })
+
   const seated = canonicalGroupRoster(
     route,
     [
@@ -405,6 +410,7 @@ it('refuses a roster whose Bots would share a handle or id even after naming the
     ],
     pin
   )
+
   expect('roster' in seated && seated.roster[1]).toMatchObject({
     member_id: 'hermes',
     handle: 'hermes',
@@ -426,10 +432,12 @@ it('gives Bots from distinct connections distinct handles, whatever script their
 
 it('reads whether another gateway can host a Bot here from its own capabilities', () => {
   const catalog = MINI.room_link.catalog
+
   const link = (change: Record<string, unknown>) => ({
     ...MINI,
     room_link: { ...MINI.room_link, catalog: { ...catalog, ...change } }
   })
+
   expect(
     [
       CANONICAL_GROUP_CAPABILITIES,
@@ -480,6 +488,7 @@ function lifecycleGateway(
     },
     ended: false
   }
+
   gateways(
     home((method, params) => {
       if (method === 'groups.create') {
@@ -500,6 +509,7 @@ function lifecycleGateway(
         if (disband === 'another room') {
           return { tombstone: { room_id: 'another-room', disbanded_at: 1 } }
         }
+
         state.ended = true
       }
 
@@ -555,10 +565,12 @@ it.each(
   await createWithMini(first)
   first.unmount()
   const saved = $groupChats.get().Team
+
   const otherOwner = {
     ...(saved.engine as object),
     ...(entry === 'header' ? { connectionId: 'another-gateway' } : { profile: 'another-profile' })
   }
+
   updateGroupChat('Other owner', () => ({ ...saved, engine: otherOwner as typeof saved.engine }), { sync: false })
   const stored = structuredClone((values.get('group-chats') as ReturnType<typeof $groupChats.get>).Team)
   $groupChatWorkspace.set('Team')
@@ -614,6 +626,7 @@ it('retries a lost create reply with one immutable intent; changing the name or 
       if (method !== 'groups.create') {
         return undefined
       }
+
       const answer = create(params)
 
       if (lost) {
@@ -629,10 +642,12 @@ it('retries a lost create reply with one immutable intent; changing the name or 
   fireEvent.click(box(dialog.rows[1]))
   const name = screen.getByRole('textbox', { name: 'Group name' })
   fireEvent.change(name, { target: { value: 'Team' } })
+
   const submit = async () =>
     act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^New group chat/ }))
     })
+
   await submit()
   // #150235: a lost reply says trying again is safe, in the dialog, instead of an error toast.
   expect(screen.getByText(words.createUncertain)).toBeTruthy()
@@ -724,6 +739,7 @@ it.each(Object.keys(CANONICAL_GROUP_LOCALES) as (keyof typeof CANONICAL_GROUP_LO
       { canonicalGroupProblem: 'duplicateMember' },
       CANONICAL_GROUP_LOCALES[language]
     )
+
     expect(message).toContain(terms[language])
   }
 )
@@ -764,6 +780,7 @@ it.each([
   if (!('roster' in result)) {
     return
   }
+
   expect(result.roster[0]).toMatchObject({ member_id: 'default', profile: 'default', handle })
   expect(result.roster[0].display_name).toBe(expected)
   expect(result.roster[1]).toEqual({

@@ -10,7 +10,12 @@ vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 // exercising the real atomic-file implementation in this Node fixture.
 const nativeModule = '../../../electron/prepared-submissions'
 const { preparedJournal } = await import(/* @vite-ignore */ nativeModule)
-import { abandonCanonicalGroupSend, prepareCanonicalGroupSend, readCanonicalGroupSend, retireCanonicalGroupSend } from './canonical-group-send'
+import {
+  abandonCanonicalGroupSend,
+  prepareCanonicalGroupSend,
+  readCanonicalGroupSend,
+  retireCanonicalGroupSend
+} from './canonical-group-send'
 
 const binding = { connectionId: 'remote-a', profile: 'profile-a', roomId: 'room-a' }
 afterEach(() => vi.unstubAllGlobals())
@@ -20,15 +25,24 @@ test('uncertain sends reopen with exact identity and attachments, isolated by au
 
   const reopen = () => {
     const journal = preparedJournal(dir, 'http://localhost:5174')
-    vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: {
-      read: async () => JSON.stringify(journal.read()),
-      update: async (key: string, entry: string | null) => journal.update(key, entry === null ? null : JSON.parse(entry)),
-      compareAndSet: async (key: string, expected: string | null, entry: string | null) => {
-        const { applied, current } = journal.compareAndSet(key, expected && JSON.parse(expected), entry && JSON.parse(entry))
+    vi.stubGlobal('window', {
+      hermesDesktop: {
+        preparedSubmissions: {
+          read: async () => JSON.stringify(journal.read()),
+          update: async (key: string, entry: string | null) =>
+            journal.update(key, entry === null ? null : JSON.parse(entry)),
+          compareAndSet: async (key: string, expected: string | null, entry: string | null) => {
+            const { applied, current } = journal.compareAndSet(
+              key,
+              expected && JSON.parse(expected),
+              entry && JSON.parse(entry)
+            )
 
-        return { applied, current: current === null ? null : JSON.stringify(current) }
+            return { applied, current: current === null ? null : JSON.stringify(current) }
+          }
+        }
       }
-    } } })
+    })
   }
 
   try {
@@ -41,9 +55,15 @@ test('uncertain sends reopen with exact identity and attachments, isolated by au
     payload.attachments[0].path = '/mutated'
     reopen() // The server ACK was lost; no retirement has happened.
     expect(await readCanonicalGroupSend(binding)).toEqual(expected)
-    expect(await prepareCanonicalGroupSend(binding, { text: 'new draft must not replace uncertain input' })).toEqual(expected)
+    expect(await prepareCanonicalGroupSend(binding, { text: 'new draft must not replace uncertain input' })).toEqual(
+      expected
+    )
 
-    for (const other of [{ ...binding, profile: 'other' }, { ...binding, roomId: 'other' }, { ...binding, connectionId: 'other' }]) {
+    for (const other of [
+      { ...binding, profile: 'other' },
+      { ...binding, roomId: 'other' },
+      { ...binding, connectionId: 'other' }
+    ]) {
       expect(await readCanonicalGroupSend(other)).toBeUndefined()
     }
 
@@ -52,22 +72,35 @@ test('uncertain sends reopen with exact identity and attachments, isolated by au
     await retireCanonicalGroupSend(binding, expected.params.event_id)
     reopen()
     expect(await readCanonicalGroupSend(binding)).toBeUndefined()
-    expect((await prepareCanonicalGroupSend(binding, { text: 'fresh intent' })).params.event_id).not.toBe(expected.params.event_id)
-  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+    expect((await prepareCanonicalGroupSend(binding, { text: 'fresh intent' })).params.event_id).not.toBe(
+      expected.params.event_id
+    )
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('native journal acknowledgement gates send and a failed write cannot downgrade to browser storage', async () => {
   let acknowledge!: () => void
   let entered!: () => void
-  const writing = new Promise<void>(resolve => { entered = resolve })
-  const gate = new Promise<void>(resolve => { acknowledge = resolve })
 
-  const native = { read: async () => '{}', compareAndSet: vi.fn(async (_key: string, _expected: string | null, entry: string | null) => {
-    entered()
-    await gate
+  const writing = new Promise<void>(resolve => {
+    entered = resolve
+  })
 
-    return { applied: true, current: entry }
-  }) }
+  const gate = new Promise<void>(resolve => {
+    acknowledge = resolve
+  })
+
+  const native = {
+    read: async () => '{}',
+    compareAndSet: vi.fn(async (_key: string, _expected: string | null, entry: string | null) => {
+      entered()
+      await gate
+
+      return { applied: true, current: entry }
+    })
+  }
 
   const browserWrite = vi.fn()
   vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: native }, localStorage: { setItem: browserWrite } })
@@ -84,7 +117,6 @@ test('native journal acknowledgement gates send and a failed write cannot downgr
   expect(browserWrite).not.toHaveBeenCalled()
 })
 
-
 test('abandonment compares the whole confirmed legacy snapshot once at the native journal owner', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'group-abandon-journal-'))
   const journal = preparedJournal(dir, 'http://localhost:5174')
@@ -95,9 +127,14 @@ test('abandonment compares the whole confirmed legacy snapshot once at the nativ
     return { ...result, current: result.current === null ? null : JSON.stringify(result.current) }
   })
 
-  vi.stubGlobal('window', { hermesDesktop: { preparedSubmissions: {
-    read: async () => JSON.stringify(journal.read()), compareAndSet: compare
-  } } })
+  vi.stubGlobal('window', {
+    hermesDesktop: {
+      preparedSubmissions: {
+        read: async () => JSON.stringify(journal.read()),
+        compareAndSet: compare
+      }
+    }
+  })
 
   try {
     const prepared = await prepareCanonicalGroupSend(binding, { text: 'Unknown delivery' })
@@ -113,5 +150,7 @@ test('abandonment compares the whole confirmed legacy snapshot once at the nativ
     journal.update(key, legacy)
     expect(await abandonCanonicalGroupSend(confirmation!)).toBe(true)
     expect(journal.read()).toEqual({})
-  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })

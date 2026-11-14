@@ -49,13 +49,15 @@ import {
   screen,
   session,
   shell,
-  systemPreferences
+  systemPreferences,
+  WebContentsView
 } from 'electron'
 import type { Session } from 'electron'
 
 import { resolvePlatformOrigin } from '../shared/platform-client'
 import type { PlatformAccountWindowOwner } from '../shared/platform-contract'
 import { createPlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
+import { desktopWindowChrome } from '../shared/window-chrome'
 
 import { createAccountWindowController } from './account-window'
 import {
@@ -67,7 +69,7 @@ import {
 } from './account-workspace'
 import { type ActiveRuntimeState, classifyActiveRuntime } from './active-runtime-state'
 import { HERMES_API_EXPECTED_404 } from './api-expected-404'
-import { destroyKeepaliveAgents, readStatusCode } from './api-transport'
+import { destroyKeepaliveAgents, formatApiRequestFailure, readStatusCode } from './api-transport'
 import { appIconCandidates, resolveAppIcon, shouldOverrideDockIcon } from './app-icon'
 import { stageAppInstallerFile } from './app-installer-file'
 import { createAppRelauncher, relaunchApp } from './app-relaunch'
@@ -83,7 +85,13 @@ import { installApplicationMenuAfterFirstWindow } from './application-menu-start
 import { stopBackendChild as stopBackendChildImpl, waitForBackendExit } from './backend-child'
 import { execText, isPidOnlyStartMarker, processStartMarker, REAP_PROBE_TIMEOUT_MS } from './backend-claim'
 import { createBackendConnectionState } from './backend-connection-state'
-import { assertDescriptorStillOwned, forgetFailedDescriptor, newPoolEntry } from './backend-descriptor-cache'
+import {
+  assertDescriptorStillOwned,
+  forgetFailedDescriptor,
+  forgetStalePooledGatewayDescriptor,
+  forgetStalePrimaryGatewayDescriptor,
+  newPoolEntry
+} from './backend-descriptor-cache'
 import { BackendDialClaims } from './backend-dial-claim'
 import { buildDesktopBackendEnv, profileBackendParentEnv } from './backend-env'
 import { isReauthRequiredError, waitForHermesReady } from './backend-health'
@@ -116,7 +124,7 @@ import {
 } from './bootstrap-platform'
 import { decideBootstrapRepair } from './bootstrap-repair-guard'
 import { runBootstrap } from './bootstrap-runner'
-import { bootstrapSnapshot } from './bootstrap-state'
+import { bootstrapSnapshot, clampBootProgress } from './bootstrap-state'
 import {
   BROWSER_WINDOW_HEIGHT,
   BROWSER_WINDOW_MIN_HEIGHT,
@@ -246,6 +254,7 @@ import {
 } from './desktop-uninstall'
 import { describeDevCdpDecision, resolveDevCdpPort } from './dev-cdp'
 import { preReadyDockLaunchSteps } from './dock-launch-order'
+import { configureDownloadSaveDialog } from './download-options'
 import { embedHostOrigin } from './embed-host'
 import { installEmbedReferer } from './embed-referer'
 import { createAmbientClaimArbiter } from './event-dedupe'
@@ -334,6 +343,8 @@ import type { InstallStamp } from './install-stamp'
 import { createKeepAwakeController } from './keep-awake-controller'
 import { launchBuildIdentity } from './launch-build-identity'
 import { applyLaunchProfileOverride, parseLaunchProfile } from './launch-profile'
+import { runLegacyHistoryHelper } from './legacy-history-helper'
+import { createLegacyHistoryRecovery } from './legacy-history-recovery'
 import { fetchLinkTitle, resolveFaviconCached } from './link-metadata'
 import { CHROMIUM_LOG_FILENAME, enableLinuxCrashDiagnostics, linuxCrashDiagnostics } from './linux-crash-diagnostics'
 import {
@@ -355,6 +366,7 @@ import { parseNvidiaDriverMajor, parseNvidiaDriverVersion } from './linux-nvidia
 import { createNvidiaEglRecovery } from './linux-nvidia-egl-recovery'
 import { relaunchIfNoSandboxCameTooLate } from './linux-sandbox-relaunch'
 import { createLocalBackendLifecycle, LOCAL_GATEWAY_LIFECYCLE_SCOPE, waitForTeardown } from './local-backend-lifecycle'
+import { ticketRuntimeFor } from './local-gateway-python'
 import { localProfileIsLive } from './local-profile-liveness'
 import { resolveMediaStreamFile } from './local-read-path'
 import { resolveDesktopClientVersion } from './local-runtime-version'
@@ -446,15 +458,18 @@ import { clampPoolLimits, parsePoolLimits, POOL_LIMITS_DEFAULTS, type PoolLimits
 import { createPortalSession, resolvePortalBaseUrl } from './portal-session'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
 import { registerPreparedSubmissions } from './prepared-submissions'
-import { extensionForMimeType } from './preview-file-metadata'
+import { runPreviewBrowserInteraction } from './preview-browser-interactions'
+import { registerPreviewBrowserInteractionsIpc } from './preview-browser-interactions-ipc'
 import { registerPreviewFileReadIpc } from './preview-file-read-ipc'
 import { expandUserPath } from './preview-file-target'
 import { closePreviewWatchers } from './preview-file-watch'
-import { hasClosePreviewFlag, previewGuestInputAction } from './preview-guest-escape'
+import { hasClosePreviewFlag } from './preview-guest-escape'
 import { registerPreviewGuestIpc } from './preview-guest-ipc'
 import { commandFocusedGuest } from './preview-guest-offscreen'
+import { installPreviewGuestEscapeHatch, installPreviewGuestPreload } from './preview-guest-setup'
 import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
 import { isPreviewPartition, previewPartitionForProfile } from './preview-guest-throttle'
+import { authorizeNativePreviewPopout, registerNativePreviewIpc } from './preview-native'
 import { PreviewReachRegistry } from './preview-reach'
 import { PreviewSigninsRecord, registerPreviewSigninsIpc, runSigninExport } from './preview-signins'
 import { FirstRunSetupResetError, runPrimaryBackendStartup } from './primary-backend-startup'
@@ -742,7 +757,7 @@ import {
   writeGpuStackCookieMarker
 } from './windows-stack-cookie-fallback'
 import { readWindowsUserEnvVar } from './windows-user-env'
-import { isPackagedInstallPath as isPackagedInstallPathUnderRoots } from './workspace-cwd'
+import { isPackagedInstallPath as isPackagedInstallPathUnderRoots, resolveWorkspaceCwd } from './workspace-cwd'
 import { setActiveGatewayProfile, setWslBridgeProfileState } from './wsl-path-bridge'
 
 const IDENTITY_APP_NAME: string | null = applyDesktopIdentity(app)
@@ -1462,13 +1477,8 @@ const BOOT_FAKE_STEP_MS = (() => {
 
 const APP_NAME: string = IDENTITY_APP_NAME || process.env.HERMES_DESKTOP_APP_NAME || PRODUCT_NAME
 const HUD_WINDOW_TITLE = `${APP_NAME} HUD`
-const TITLEBAR_HEIGHT = 34
-const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
-
-const WINDOW_BUTTON_POSITION = {
-  x: 12,
-  y: TITLEBAR_HEIGHT / 2 - MACOS_TRAFFIC_LIGHTS_HEIGHT / 2
-}
+const TITLEBAR_HEIGHT = desktopWindowChrome.titlebarHeight
+const WINDOW_BUTTON_POSITION = desktopWindowChrome.trafficLightPosition
 
 // Right-edge window-control reservation lives in titlebar-overlay-width.ts
 // (pure + unit-testable); computeNativeOverlayWidth() applies it per platform.
@@ -1934,9 +1944,9 @@ function accountGatewayConnectionsStore() {
     readV1Config: () => readDesktopConnectionConfig(),
     decrypt: secret => decryptDesktopSecret(secret),
     log: message => rememberLog(message),
-    encodeSecret: value => gatewaySecretEncryptionOverride === false
-      ? { encoding: 'plain', value } : encryptDesktopSecret(value),
-    secretStorage: () => (gatewaySecretEncryptionOverride ?? secretStoragePolicy().on) ? 'safeStorage' : 'plain'
+    encodeSecret: value =>
+      gatewaySecretEncryptionOverride === false ? { encoding: 'plain', value } : encryptDesktopSecret(value),
+    secretStorage: () => ((gatewaySecretEncryptionOverride ?? secretStoragePolicy().on) ? 'safeStorage' : 'plain')
   })
 }
 
@@ -2362,16 +2372,6 @@ function ensureWslWindowsFonts() {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function clampBootProgress(value) {
-  const numeric = Number(value)
-
-  if (!Number.isFinite(numeric)) {
-    return 0
-  }
-
-  return Math.max(0, Math.min(100, Math.round(numeric)))
 }
 
 function broadcastBootProgress() {
@@ -4914,10 +4914,10 @@ const platformBindingController = createPlatformRuntimeBindingController({
         localGatewayDial({
           ensure: () =>
             connectionId ? ensureRegistryBackend(connectionId, routeProfile) : ensureBackend(routeProfile),
-          forget: () =>
+          forget: failed =>
             connectionId
-              ? forgetRegistryLocalGatewayDescriptor(connectionId, routeProfile)
-              : forgetLocalGatewayDescriptor(routeProfile),
+              ? forgetRegistryLocalGatewayDescriptor(connectionId, routeProfile, failed)
+              : forgetLocalGatewayDescriptor(routeProfile, failed),
           launchHome: HERMES_HOME,
           prepare: (baseUrl, ticket) =>
             `${baseUrl.replace(/^http/, 'ws')}/api/ws?native_dial=controller&ticket=${encodeURIComponent(ticket)}`,
@@ -4931,6 +4931,62 @@ const platformBindingController = createPlatformRuntimeBindingController({
 
 app.on('will-quit', () => platformBindingController.dispose())
 
+const legacyHistoryRecovery = createLegacyHistoryRecovery({
+  capture: expectedOwner => {
+    assertAccountDataReady()
+    const workspace = activeAccountWorkspace
+
+    if (!ACCOUNT_SCOPED || !matchesAccountWindowOwner(platformAuth.snapshot(), expectedOwner)) {
+      throw new Error('platform_account_changed')
+    }
+
+    return {
+      sourceHome: INSTALLATION_HOME,
+      targetHome: workspace.home,
+      userData: app.getPath('userData'),
+      origin: platformOrigin.origin,
+      owner: { ...expectedOwner },
+      isCurrent: () =>
+        accountDataReady() &&
+        activeAccountWorkspace.key === workspace.key &&
+        matchesAccountWindowOwner(platformAuth.snapshot(), expectedOwner)
+    }
+  },
+  run: async (input, scope) => {
+    const backend = await ensureRuntime(await resolveHermesBackend([]), () => {
+      if (!scope.isCurrent()) {
+        throw new Error('platform_account_changed')
+      }
+    })
+
+    const runtime = await ticketRuntimeFor(backend)
+
+    if (!scope.isCurrent()) {
+      throw new Error('platform_account_changed')
+    }
+
+    return runLegacyHistoryHelper({ ...runtime, cwd: backend.root || resolveHermesCwd() }, input)
+  },
+  request: async (profile, requestPath, body, scope) => {
+    if (!scope.isCurrent()) {
+      throw new Error('platform_account_changed')
+    }
+    const local = readDesktopConnectionsRegistry().connections.find(connection => connection.kind === 'local')
+
+    if (!local) {
+      throw new Error('history_local_connection_required')
+    }
+    const descriptor = await ensureRegistryBackend(local.id, profile)
+
+    if (!scope.isCurrent() || descriptor.mode !== 'local') {
+      throw new Error('platform_account_changed')
+    }
+    const scoped = `${requestPath}?profile=${encodeURIComponent(profile)}`
+
+    return fetchJsonForBackend(descriptor, scoped, { method: body === undefined ? 'GET' : 'POST', body })
+  }
+})
+
 const platformIpc = registerPlatformIpc({
   ipc: ipcMain,
   auth: platformAuth,
@@ -4941,13 +4997,10 @@ const platformIpc = registerPlatformIpc({
   trustedRendererUrl: DEV_SERVER
     ? new URL('/', DEV_SERVER).toString()
     : pathToFileURL(resolveRendererIndex()).toString(),
-  bindingController: platformBindingController
+  bindingController: platformBindingController,
+  historyRecovery: legacyHistoryRecovery
 })
 
-// True when `dir` lives inside the packaged app bundle / install tree.
-// Packaged Electron's process.cwd() (and npm's INIT_CWD when dev tooling
-// leaked into a release build) often resolve here — e.g. win-unpacked on
-// Windows — which is exactly where PR #37536 item 16 said we must NOT run.
 function isPackagedInstallPath(dir) {
   return isPackagedInstallPathUnderRoots(dir, {
     isPackaged: IS_PACKAGED,
@@ -4960,39 +5013,15 @@ function isPackagedInstallPath(dir) {
 }
 
 function resolveHermesCwd() {
-  // In a packaged build, `process.cwd()` resolves to the install root (e.g.
-  // `…/win-unpacked` on Windows or `/Applications/Hermes.app/Contents/...`
-  // on macOS). Sessions spawned there leave files inside the app bundle
-  // and bewilder users when "where did my files go?" is the install dir.
-  // The user-configurable default project directory wins over everything,
-  // followed by env hints (only honored when packaged if they point at a
-  // real directory), then the home dir.
-  const candidates = [
-    readDefaultProjectDir(),
-    ACCOUNT_SCOPED ? HERMES_HOME : process.env.HERMES_DESKTOP_CWD,
-    IS_PACKAGED ? null : process.env.INIT_CWD,
-    IS_PACKAGED ? null : process.cwd(),
-    !IS_PACKAGED ? SOURCE_REPO_ROOT : null,
-    app.getPath('home')
-  ]
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue
-    }
-
-    const resolved = path.resolve(String(candidate))
-
-    if (isPackagedInstallPath(resolved)) {
-      continue
-    }
-
-    if (directoryExists(resolved)) {
-      return resolved
-    }
-  }
-
-  return app.getPath('home')
+  return resolveWorkspaceCwd({
+    defaultProjectDir: readDefaultProjectDir(),
+    accountHome: ACCOUNT_SCOPED ? HERMES_HOME : undefined,
+    isPackaged: IS_PACKAGED,
+    sourceRepoRoot: SOURCE_REPO_ROOT,
+    home: app.getPath('home'),
+    directoryExists,
+    isPackagedInstallPath
+  })
 }
 
 function sanitizeWorkspaceCwd(cwd) {
@@ -6263,23 +6292,8 @@ function installDownloadHandling(targetSession: Session = session.defaultSession
       return
     }
 
-    const suggested = mediaProtocolDownloadName(item.getURL()) || item.getFilename() || 'download'
-    const hasExtension = Boolean(path.extname(suggested))
-    const extension = hasExtension ? '' : extensionForMimeType(item.getMimeType())
-    const filename = `${suggested}${extension}`
-
     try {
-      item.setSaveDialogOptions({
-        title: 'Save File',
-        defaultPath: path.join(app.getPath('downloads'), filename),
-        filters:
-          extension || /^image\//i.test(item.getMimeType() || '')
-            ? [
-                { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] },
-                { name: 'All Files', extensions: ['*'] }
-              ]
-            : undefined
-      })
+      configureDownloadSaveDialog(item, app.getPath('downloads'), mediaProtocolDownloadName(item.getURL()))
     } catch {
       // No Downloads directory to offer — keep Chromium's default prompt.
     }
@@ -6564,7 +6578,11 @@ async function hasLiveOauthSession(baseUrl) {
 
 const clearRemovedOauthJars = createRemovedConnectionCookieCleaner({
   sessionFor: partition =>
-    partition === OAUTH_SESSION_PARTITION ? getOauthSession() : app.isReady() ? session.fromPartition(accountPartition(partition)) : null,
+    partition === OAUTH_SESSION_PARTITION
+      ? getOauthSession()
+      : app.isReady()
+        ? session.fromPartition(accountPartition(partition))
+        : null,
   clearMirror: (partition, url) => remoteSessionCookies.clear(accountPartition(partition), url),
   v1RemoteUrl: () => readDesktopConnectionConfig()?.remote?.url,
   sharedUrls: () => [resolvePortalBaseUrl(), ...connectionConfigUrls(readDesktopConnectionConfig())]
@@ -7109,7 +7127,7 @@ async function freshGatewayWsUrl(profile, webContentsId) {
   if (connection.gatewayEndpoint) {
     return localGatewayDial({
       ensure: () => ensureBackend(profile),
-      forget: () => forgetLocalGatewayDescriptor(profile),
+      forget: failed => forgetLocalGatewayDescriptor(profile, failed),
       launchHome: HERMES_HOME,
       prepare: (baseUrl, ticket) => localGatewayDials.prepare(baseUrl, ticket, webContentsId),
       profile: String(profile ?? '')
@@ -7270,7 +7288,11 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
   // Shared gateway registry; even an empty store carries the explicit policy.
   const registry = readDesktopConnectionsRegistry()
 
-  if (registry.connections?.some(blockNeedsRewrite) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
+  if (
+    registry.connections?.some(blockNeedsRewrite) ||
+    secretStoragePolicy().on ||
+    gatewaySecretEncryptionOverride !== null
+  ) {
     touched = true
     writeDesktopConnectionsRegistry({ ...registry, connections: registry.connections.map(rewriteBlock) })
   }
@@ -7290,7 +7312,11 @@ function rewriteAllStoredSecrets(shouldRewrite: (secret: any) => boolean, reenco
   if (store && typeof store === 'object' && !Array.isArray(store)) {
     const entries = Object.entries(store)
 
-    if (entries.some(([, v]) => shouldRewrite(v)) || secretStoragePolicy().on || gatewaySecretEncryptionOverride !== null) {
+    if (
+      entries.some(([, v]) => shouldRewrite(v)) ||
+      secretStoragePolicy().on ||
+      gatewaySecretEncryptionOverride !== null
+    ) {
       touched = true
       io.writeStoreText(JSON.stringify(Object.fromEntries(entries.map(([k, v]) => [k, reencode(v)]))))
     }
@@ -7383,10 +7409,15 @@ function applySecretStorageEncryption(on: boolean) {
 
       try {
         rewriteAllStoredSecrets(needsDecrypt, (secret: any) => {
-          if (!needsDecrypt(secret)) {return secret}
+          if (!needsDecrypt(secret)) {
+            return secret
+          }
+
           const plaintext = decryptDesktopSecret(secret)
 
-          if (!plaintext) {throw new Error('A saved credential could not be decrypted; encryption remains enabled.')}
+          if (!plaintext) {
+            throw new Error('A saved credential could not be decrypted; encryption remains enabled.')
+          }
 
           return { encoding: 'plain', value: plaintext }
         })
@@ -9619,37 +9650,30 @@ function profileRouteOptions(
   }
 }
 
-// Resolve a backend connection for the given profile, per the routing table in
-// resolveProfileBackendRoute(). An empty / unknown profile resolves to the
-// primary, so legacy callers are unchanged.
 // Drop the cached descriptor for a canonical local gateway whose owner is gone
 // so the next ensureBackend() re-runs `gateway ensure` (attach or start) instead
 // of minting tickets against a dead control socket. Nothing is killed: the
 // descriptor never owned the runtime.
-async function forgetLocalGatewayDescriptor(profile, request?: { method?: string; path?: string }) {
+async function forgetLocalGatewayDescriptor(profile, failed, request?: { method?: string; path?: string }) {
   const key = profile && String(profile).trim() ? String(profile).trim() : primaryProfileKey()
   // Resolve the route the failed call used (B2-15): an unscopable mutation's stale entry is pooled.
   const route = resolveProfileBackendRoute(key, profileRouteOptions(key, request))
 
   if (route.backend === 'primary') {
-    const attempt = backendConnectionState.startAttempt()
-    attempt.promise = backendConnectionState.getPromise()
-    backendConnectionState.clearPromiseForAttempt(attempt)
-    rememberLog(`[gateway] forgot stale canonical endpoint for primary "${key}"; re-ensuring`)
+    if (await forgetStalePrimaryGatewayDescriptor(backendConnectionState, failed)) {
+      rememberLog(`[gateway] forgot stale canonical endpoint for primary "${key}"; re-ensuring`)
+    }
 
     return
   }
 
-  if (backendPool.delete(key)) {
+  if (await forgetStalePooledGatewayDescriptor(backendPool, key, failed)) {
     rememberLog(`[gateway] forgot stale canonical endpoint for profile "${key}"; re-ensuring`)
   }
 }
 
-// Registry twin of forgetLocalGatewayDescriptor: a 'local' registry connection
-// either delegates to the v1 profile route or pools a forced-local child under
-// its composite key, so the stale descriptor lives wherever ensureRegistryBackend
-// put it.
-async function forgetRegistryLocalGatewayDescriptor(connectionId, profile) {
+// Registry-local routes share the v1 cache unless remote overrides force a separate pool entry.
+async function forgetRegistryLocalGatewayDescriptor(connectionId, profile, failed) {
   const profileKey = String(profile ?? '').trim() || 'default'
 
   const localRoute = resolveRegistryLocalRoute(profileKey, {
@@ -9658,10 +9682,10 @@ async function forgetRegistryLocalGatewayDescriptor(connectionId, profile) {
   })
 
   if (localRoute.delegate) {
-    return forgetLocalGatewayDescriptor(profile)
+    return forgetLocalGatewayDescriptor(profile, failed)
   }
 
-  if (backendPool.delete(localRoute.poolKey)) {
+  if (await forgetStalePooledGatewayDescriptor(backendPool, localRoute.poolKey, failed)) {
     rememberLog(
       `[gateway] forgot stale canonical endpoint for connection "${String(connectionId || '').trim() || 'primary'}" profile "${profileKey}"; re-ensuring`
     )
@@ -11335,83 +11359,6 @@ function wireCommonWindowHandlers(win, { zoom = true }: { zoom?: boolean } = {})
   })
 }
 
-/**
- * The guaranteed exit path for a fullscreened preview guest (#97213).
- *
- * `before-input-event` fires on the guest's own webContents before the page
- * sees the key, so this works even while the guest holds fullscreen input
- * focus — the one interception point neither the renderer (no focus
- * visibility into the guest) nor the OS (Wayland has no xdotool/wmctrl) can
- * provide. The routing decision lives in preview-guest-escape.ts.
- */
-function installPreviewGuestEscapeHatch() {
-  app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() !== 'webview') {
-      return
-    }
-
-    contents.on('before-input-event', (event, input) => {
-      const owner = BrowserWindow.fromWebContents(contents.hostWebContents ?? contents)
-
-      switch (previewGuestInputAction(input, Boolean(owner?.isFullScreen()))) {
-        case 'exit-fullscreen': {
-          event.preventDefault()
-
-          if (owner && !owner.isDestroyed()) {
-            owner.setFullScreen(false)
-          }
-
-          break
-        }
-
-        case 'close-preview': {
-          event.preventDefault()
-          sendClosePreviewRequested()
-
-          break
-        }
-
-        default:
-          break
-      }
-    })
-  })
-}
-
-/**
- * Give the preview pane's `<webview>` guests a preload — and ONLY those
- * guests. The pane's webview is the one `webview` tag in the app and it
- * always carries the `persist:hermes-preview` partition, so the partition is
- * the ownership key: any future webview that does not opt into that partition
- * inherits nothing from this mechanism.
- *
- * The preload (preview-guest-preload-entry.ts) never opens anything itself.
- * It forwards a clicked `_blank` anchor to the host renderer via
- * `sendToHost`, and the pane admits the scheme and routes the URL through the
- * audited `hermes:openExternal` channel. Popup requests themselves stay
- * denied-by-omission: the webview has no `allowpopups`, and the
- * `setWindowOpenHandler` contract (GHSA-9f4c-93c8-jc8g) stays side-effect
- * free.
- */
-function installPreviewGuestPreload() {
-  app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() !== 'window') {
-      return
-    }
-
-    contents.on('will-attach-webview', (_attachEvent, webPreferences, params) => {
-      const partition =
-        params.partition && isPreviewPartition(params.partition) ? accountPartition(params.partition) : params.partition
-
-      applyPreviewGuestAttachPrefs(webPreferences, partition, PREVIEW_GUEST_PRELOAD_PATH, p => session.fromPartition(p))
-
-      if (partition !== params.partition) {
-        webPreferences.partition = partition
-      }
-    })
-  })
-}
-
 // Every window we open starts with `show: false` so the renderer's first themed
 // paint lands before it appears, and `ready-to-show` is what reveals it.
 // Electron 40 can drop that event entirely (electron/electron#51972) on
@@ -11575,7 +11522,7 @@ function notifyBrowserPopoutClosed(tabId) {
   }
 }
 
-function spawnBrowserWindow(tabId) {
+function spawnBrowserWindow(tabId, source: Electron.WebContents) {
   const icon = getAppIconPath()
 
   const win = newAccountWindow({
@@ -11592,6 +11539,13 @@ function spawnBrowserWindow(tabId) {
     show: false,
     webPreferences: chatWindowWebPreferences(PRELOAD_PATH)
   })
+
+  try {
+    authorizeNativePreviewPopout(source, win, tabId)
+  } catch (error) {
+    win.destroy()
+    throw error
+  }
 
   translucencyBackedWindows.add(win)
 
@@ -11641,8 +11595,8 @@ function spawnBrowserWindow(tabId) {
   return win
 }
 
-function createBrowserWindow(tabId) {
-  return browserWindows.openOrFocus(tabId, () => spawnBrowserWindow(tabId))
+function createBrowserWindow(tabId, source: Electron.WebContents) {
+  return browserWindows.openOrFocus(tabId, () => spawnBrowserWindow(tabId, source))
 }
 
 // Additional full "instance" windows — peers of the primary that render the
@@ -13513,12 +13467,12 @@ ipcMain.handle('hermes:window:openInstance', async (event, options) => {
   return { ok: true }
 })
 registerWindowControlIpc(ipcMain, sender => BrowserWindow.fromWebContents(sender))
-ipcMain.handle('hermes:window:openBrowser', async (_event, tabId) => {
+ipcMain.handle('hermes:window:openBrowser', async (event, tabId) => {
   if (typeof tabId !== 'string' || !tabId.trim()) {
     return { ok: false, error: 'invalid-tab-id' }
   }
 
-  createBrowserWindow(tabId.trim())
+  createBrowserWindow(tabId.trim(), event.sender)
 
   return { ok: true }
 })
@@ -14320,7 +14274,7 @@ ipcMain.handle('hermes:gateway:ws-url-for', async (_event, payload) => {
       return localGatewayDial({
         ensure: () => ensureRegistryBackend(payload?.connectionId, payload?.profile),
         launchHome: HERMES_HOME,
-        forget: () => forgetRegistryLocalGatewayDescriptor(payload?.connectionId, payload?.profile),
+        forget: failed => forgetRegistryLocalGatewayDescriptor(payload?.connectionId, payload?.profile, failed),
         profile: String(payload?.profile ?? ''),
         prepare: (baseUrl, ticket) => localGatewayDials.prepare(baseUrl, ticket, _event.sender.id)
       })
@@ -14855,6 +14809,7 @@ ipcMain.on('hermes:previewShortcutActive', (_event, active) => {
 })
 
 registerPreviewGuestIpc(owner => streamThrottle.holdWindow(owner))
+registerPreviewBrowserInteractionsIpc()
 // The in-app browser's real-profile sign-ins: main decides "local" from the route's own connection.
 registerPreviewSigninsIpc(ipcMain, () => {
   // Capture the account before queueing. The existing IPC fence drains this
@@ -15334,20 +15289,32 @@ async function dispatchRegistryApiRequest(
   // SSH tunnel / remote dashboard. A passive read never dials, so it stays
   // OUT of the claim: an interactive open coalescing onto an in-flight
   // passive read would otherwise inherit its "no warm backend" rejection.
-  const connection: any = request?.passive
-    ? await ensureRegistryBackend(registryConnectionId, routeProfile, '', { passive: true })
-    : await backendDialClaims.run(backendScopeKey(registryConnectionId, routeProfile), () =>
-        ensureRegistryBackend(registryConnectionId, routeProfile)
-      )
+  const ensure = () =>
+    request?.passive
+      ? ensureRegistryBackend(registryConnectionId, routeProfile, '', { passive: true })
+      : backendDialClaims.run(backendScopeKey(registryConnectionId, routeProfile), () =>
+          ensureRegistryBackend(registryConnectionId, routeProfile)
+        )
+
+  const connection: any = await ensure()
 
   const requestPath = pathForRegistryBackendRequest(request.path, requestProfile, connection, request?.method || 'GET')
 
-  const response = await fetchJsonForBackend(connection, requestPath, {
-    method: request?.method,
-    body: request?.body,
-    upload: request?.upload,
-    timeoutMs: resolveTimeoutMs(request?.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
-  })
+  const send = current =>
+    fetchJsonForBackend(current, requestPath, {
+      method: request?.method,
+      body: request?.body,
+      upload: request?.upload,
+      timeoutMs: resolveTimeoutMs(request?.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
+    })
+
+  const response = connection.gatewayEndpoint
+    ? await redialLocalGateway({
+        ensure,
+        forget: failed => forgetRegistryLocalGatewayDescriptor(registryConnectionId, routeProfile, failed),
+        use: send
+      })
+    : await send(connection)
 
   desktopProfilePreferences.afterProfileRequest(registryConnectionId, request, response, connection.mode)
 
@@ -15457,7 +15424,7 @@ async function handleHermesApiRequest(request) {
     response = connection.gatewayEndpoint
       ? await redialLocalGateway({
           ensure: () => ensureBackend(routeProfile, ensureOpts),
-          forget: () => forgetLocalGatewayDescriptor(routeProfile, ensureOpts.request),
+          forget: failed => forgetLocalGatewayDescriptor(routeProfile, failed, ensureOpts.request),
           use: send
         })
       : await send(connection)
@@ -15482,20 +15449,6 @@ async function handleHermesApiRequest(request) {
   }
 
   return response
-}
-
-// Format an api-request failure for desktop.log. The renderer only ever sees
-// the invoke rejection; the real stack lives here in main, so persist it
-// before rethrowing. Clamp: paths and error detail must not bloat the log.
-function formatApiRequestFailure(
-  request: { method?: string; path?: string } | null | undefined,
-  error: unknown
-): string {
-  const method = String(request?.method ?? 'GET').toUpperCase()
-  const path = String(request?.path ?? '(no path)').slice(0, 500)
-  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
-
-  return `[hermes:api ${method} ${path}] ${detail}`.slice(0, 6000)
 }
 
 ipcMain.handle('hermes:api', async (_event, request) => {
@@ -15567,6 +15520,37 @@ const nativeNotifications = registerNativeNotifications({
 })
 
 registerPreviewFileReadIpc({ rememberLog })
+
+registerNativePreviewIpc(ipcMain, {
+  preparePage: async (owner, guest, tabId) => {
+    // CDP Page.enable needs Chromium's initial renderer before the first real navigation.
+    await guest.loadURL('about:blank')
+    await runPreviewBrowserInteraction(owner, guest, { action: 'watch', scope: tabId })
+  },
+  fromWebContents: sender => BrowserWindow.fromWebContents(sender),
+  resolvePartition: partition => {
+    if (!isPreviewPartition(partition)) {
+      throw new Error('Invalid Browser partition')
+    }
+
+    return accountPartition(partition)
+  },
+  createView: partition => {
+    const webPreferences: Electron.WebPreferences = {
+      partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: ['--aino-native-preview']
+    }
+
+    applyPreviewGuestAttachPrefs(webPreferences, partition, PREVIEW_GUEST_PRELOAD_PATH, p => session.fromPartition(p))
+    const view = new WebContentsView({ webPreferences })
+    view.webContents.setWindowOpenHandler(createWindowOpenHandler())
+
+    return view
+  }
+})
 
 registerRendererContentIpc(ipcMain, {
   getMainWindow: () => mainWindow,
@@ -16985,8 +16969,17 @@ app.whenReady().then(() => {
     registerDeepLinkProtocol()
   }
 
-  installPreviewGuestEscapeHatch()
-  installPreviewGuestPreload()
+  installPreviewGuestEscapeHatch({
+    app,
+    fromWebContents: BrowserWindow.fromWebContents,
+    onClose: sendClosePreviewRequested
+  })
+  installPreviewGuestPreload({
+    app,
+    accountPartition,
+    preloadPath: PREVIEW_GUEST_PRELOAD_PATH,
+    sessionFor: p => session.fromPartition(p)
+  })
 
   ensureWslWindowsFonts()
   configureSpellChecker()

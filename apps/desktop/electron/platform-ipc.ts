@@ -1,3 +1,8 @@
+import type {
+  LegacyHistoryBridge,
+  LegacyHistoryReminderInput,
+  LegacyHistoryRestoreInput
+} from '../shared/legacy-history-recovery'
 import type { PlatformAuth } from '../shared/platform-auth'
 import { PlatformClientError } from '../shared/platform-client'
 import type {
@@ -66,7 +71,8 @@ export function registerPlatformIpc({
   trustedRendererUrl,
   bindingController,
   currentDeviceId,
-  openPaymentBrowser
+  openPaymentBrowser,
+  historyRecovery
 }: {
   ipc: IpcLike
   auth: PlatformAuth
@@ -76,6 +82,7 @@ export function registerPlatformIpc({
   bindingController?: PlatformRuntimeBindingController
   currentDeviceId?: () => string
   openPaymentBrowser?: (url: string) => Promise<void>
+  historyRecovery?: LegacyHistoryBridge
 }) {
   const windows = new Set<WindowLike>()
 
@@ -312,6 +319,30 @@ export function registerPlatformIpc({
         return { ok: false, error: safeIpcError(error) } satisfies PlatformAccountIpcResult<unknown>
       }
     })
+  }
+
+  if (historyRecovery) {
+    const historyMethods = {
+      inspect: (value: unknown) => historyRecovery.inspect(value as PlatformAccountWindowOwner),
+      restore: (value: unknown) => historyRecovery.restore(value as LegacyHistoryRestoreInput),
+      remind: (value: unknown) => historyRecovery.remind(value as LegacyHistoryReminderInput)
+    }
+
+    for (const [method, handler] of Object.entries(historyMethods)) {
+      // Deliberately outside platform-account:*: account retirement drains data IPC before re-home.
+      ipc.handle(`aino:legacy-history:${method}`, async (event, input) => {
+        try {
+          authorize(event)
+          const value = record(input)
+
+          const result = await handler(value)
+
+          return { ok: true, value: result }
+        } catch (error) {
+          return { ok: false, error: safeIpcError(error) }
+        }
+      })
+    }
   }
 
   // Older renderer windows can still ask, but cloud synchronization is permanently removed.
@@ -583,6 +614,10 @@ export function registerPlatformIpc({
     },
     unregisterWindow,
     dispose() {
+      for (const method of ['inspect', 'restore', 'remind']) {
+        ipc.removeHandler?.(`aino:legacy-history:${method}`)
+      }
+
       for (const name of Object.keys(deviceMethods)) {
         ipc.removeHandler?.(`aino:platform-devices:${name}`)
       }

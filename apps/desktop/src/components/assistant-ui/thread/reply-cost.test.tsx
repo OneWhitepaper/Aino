@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
 import { I18nProvider } from '@/i18n'
+import { queryClient } from '@/lib/query-client'
 import type { TurnBilling } from '@/lib/turn-billing'
 
 import type { PlatformAccountBridge, PlatformUsagePage } from '../../../../shared/platform-contract'
@@ -12,6 +13,7 @@ import { ReplyCost } from './reply-cost'
 const original = window.hermesDesktop
 afterEach(() => {
   cleanup()
+  queryClient.clear()
   window.hermesDesktop = original
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -148,15 +150,23 @@ it('converges only after every call settles and the final call manifest arrives,
     </I18nProvider>
   )
 
-  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
 
   expect(screen.getByText('Partially settled 0.0001 USD')).toBeTruthy()
 
-  listUsage.mockResolvedValue({ ...page, total: 2, items: [
-    row,
-    { ...row, id: '2', desktop_call_id: billing.calls[1].call_id, desktop_purpose: billing.calls[1].purpose }
-  ] })
-  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  listUsage.mockResolvedValue({
+    ...page,
+    total: 2,
+    items: [
+      row,
+      { ...row, id: '2', desktop_call_id: billing.calls[1].call_id, desktop_purpose: billing.calls[1].purpose }
+    ]
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000)
+  })
   expect(screen.getByText('Partially settled 0.0002 USD')).toBeTruthy()
   expect(screen.queryByText('Charged 0.0002 USD')).toBeNull()
 
@@ -165,11 +175,15 @@ it('converges only after every call settles and the final call manifest arrives,
       <ReplyCost billing={{ ...billing, revision: billing.revision + 1 }} />
     </I18nProvider>
   )
-  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
   expect(screen.getByText('Charged 0.0002 USD')).toBeTruthy()
   expect(screen.queryByText(/Partially settled/)).toBeNull()
   const settledReads = listUsage.mock.calls.length
-  await act(async () => { await vi.advanceTimersByTimeAsync(120000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(120000)
+  })
   expect(listUsage).toHaveBeenCalledTimes(settledReads)
 })
 
@@ -227,4 +241,137 @@ it.each([
 
   expect(screen.getByText(/部分费用已结算.*0.01 USD/)).toBeTruthy()
   expect(screen.queryByText(/本回合费用.*0.01 USD/)).toBeNull()
+})
+
+it('keeps each settled turn visible immediately when switching conversations or remounting', async () => {
+  vi.useFakeTimers()
+  const { billing, listUsage, page } = fixture()
+  billing.calls = billing.calls.slice(0, 1)
+  const other = { ...billing, session_id: crypto.randomUUID(), turn_id: crypto.randomUUID() }
+
+  const otherPage = {
+    ...page,
+    items: [
+      {
+        ...page.items[0],
+        session_id: other.session_id,
+        desktop_turn_id: other.turn_id,
+        actual_cost_decimal: '0.02000000'
+      }
+    ]
+  }
+
+  let finishOther!: (page: PlatformUsagePage) => void
+  listUsage.mockResolvedValueOnce(page).mockImplementation(
+    () =>
+      new Promise<PlatformUsagePage>(resolve => {
+        finishOther = resolve
+      })
+  )
+
+  const content = (value: TurnBilling) => (
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyCost billing={value} />
+    </I18nProvider>
+  )
+
+  const view = render(content(billing))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(screen.getByText('Charged 0.01 USD')).toBeTruthy()
+
+  view.rerender(content(other))
+  expect(screen.queryByText(/0.01 USD/)).toBeNull()
+  await act(async () => {
+    finishOther(otherPage)
+  })
+  expect(screen.getByText('Charged 0.02 USD')).toBeTruthy()
+
+  view.rerender(content(billing))
+  expect(screen.getByText('Charged 0.01 USD')).toBeTruthy()
+  view.unmount()
+  render(content(other))
+  expect(screen.getByText('Charged 0.02 USD')).toBeTruthy()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(listUsage).toHaveBeenCalledTimes(2)
+})
+
+it('keeps known amounts past idle cache collection and rechecks coverage when the manifest grows', async () => {
+  vi.useFakeTimers()
+  const { billing, listUsage } = fixture()
+  const complete = { ...billing, calls: billing.calls.slice(0, 1) }
+
+  const content = (value: TurnBilling) => (
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyCost billing={value} />
+    </I18nProvider>
+  )
+
+  const view = render(content(complete))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(screen.getByText('Charged 0.01 USD')).toBeTruthy()
+  view.unmount()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300001)
+  })
+  let failRead!: (error: unknown) => void
+  listUsage.mockImplementation(
+    () =>
+      new Promise<PlatformUsagePage>((_resolve, reject) => {
+        failRead = reject
+      })
+  )
+  const remounted = render(content(complete))
+  expect(screen.getByText('Charged 0.01 USD')).toBeTruthy()
+  await act(async () => {
+    failRead({ code: 'network_unavailable' })
+  })
+  expect(screen.getByText('Charged 0.01 USD')).toBeTruthy()
+  remounted.rerender(content(billing))
+  expect(screen.getByText('Partially settled 0.01 USD')).toBeTruthy()
+  expect(screen.queryByText('Charged 0.01 USD')).toBeNull()
+})
+
+it('retains partial costs during manifest refresh and retry, but retires them on an account switch', async () => {
+  vi.useFakeTimers()
+  const { billing, listUsage, page, snapshot } = fixture()
+
+  const content = (value: TurnBilling) => (
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyCost billing={value} />
+    </I18nProvider>
+  )
+
+  const view = render(content(billing))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(120000)
+  })
+  expect(screen.getByText('Partially settled 0.01 USD')).toBeTruthy()
+  let finish!: (page: PlatformUsagePage) => void
+  listUsage.mockImplementation(
+    () =>
+      new Promise<PlatformUsagePage>(resolve => {
+        finish = resolve
+      })
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+  expect(screen.getByText('Partially settled 0.01 USD')).toBeTruthy()
+  view.rerender(content({ ...billing, revision: billing.revision + 1, calls_complete: false }))
+  expect(screen.getByText('Partially settled 0.01 USD')).toBeTruthy()
+
+  const originalSnapshot = snapshot.get()!
+  act(() => snapshot.set({ ...originalSnapshot, account: { ...originalSnapshot.account!, id: '18' } }))
+  await act(async () => {
+    finish(page)
+  })
+  expect(screen.queryByText(/0.01 USD/)).toBeNull()
+  view.unmount()
+  act(() => snapshot.set(originalSnapshot))
+  render(content(billing))
+  expect(screen.queryByText(/0.01 USD/)).toBeNull()
 })

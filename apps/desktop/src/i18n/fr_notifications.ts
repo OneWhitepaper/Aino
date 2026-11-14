@@ -54,7 +54,7 @@ export const frNotifications = {
   testSent:
     "Test envoyé. Si rien n'apparaît, vérifiez les autorisations de notification de votre système et le mode Ne pas déranger.",
   testUnsupported: 'Ce système ne prend pas en charge les notifications natives.',
-  muteSoundsTitle: 'Couper les sons de l’interface',
+  muteSoundsTitle: 'Couper les sons et les retours haptiques',
   muteSoundsDesc:
     'Coupe les signaux automatiques de fin, d’activation et de réflexion, le retour haptique et les sons des notifications système. Les aperçus sonores et les réponses vocales restent audibles.',
   completionSoundTitle: 'Son de fin',

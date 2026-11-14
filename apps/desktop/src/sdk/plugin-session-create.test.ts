@@ -98,6 +98,7 @@ function transport(method: string, params: Record<string, unknown> = {}) {
   if (['groups.send', 'groups.retry', 'groups.approve', 'groups.stop'].includes(method)) {
     return { ok: true }
   }
+
   throw new Error(`Unexpected ${method}`)
 }
 
@@ -199,6 +200,7 @@ it('restores only the failed member binding before retry after a runtime restart
     execution_generation: 1,
     choice: 'once'
   }
+
   await host.requestProfile(route, 'groups.retry', params)
   expect(io.bind).toHaveBeenCalledOnce()
   expect(io.order.at(-1)).toBe('groups.retry')
@@ -213,6 +215,7 @@ it('approves the existing task without switching its frozen model to a newer def
     execution_generation: 1,
     choice: 'once'
   }
+
   await host.requestProfile(route, 'groups.approve', params)
   expect(io.bind).not.toHaveBeenCalled()
   expect(io.globalModel).not.toHaveBeenCalled()
@@ -366,6 +369,7 @@ it('creates and binds a follow-profile Bot Chat using its exact default route wi
 it.each(['', 'nous'])('opens an unselected canonical Bot despite an ambient provider (%s)', async provider => {
   window.hermesDesktop.platformModels.list = async () => [{ ...platformModel(), is_default: false }]
   await platformModelCatalog().refresh()
+
   const params = {
     source: 'desktop',
     profile: route.targetProfile,
@@ -373,6 +377,7 @@ it.each(['', 'nous'])('opens an unselected canonical Bot despite an ambient prov
     hidden: true,
     follow_profile_config: true
   }
+
   io.agent.mockImplementation(async (_connectionId, _profile, method, payload) => {
     if (method === 'session.create') {
       return {
@@ -415,11 +420,13 @@ it('rejects an unselected canonical creation response after its account changed'
   io.agent.mockImplementation(async (_connectionId, _profile, method, payload) =>
     method === 'session.create' ? created.promise : transport(method, payload)
   )
+
   const pending = host.requestProfile(route, 'session.create', {
     title: 'Bot Chat',
     hidden: true,
     follow_profile_config: true
   })
+
   await vi.waitFor(() => expect(io.agent.mock.calls.some(call => call[2] === 'session.create')).toBe(true))
   window.hermesDesktop.platformAccount.status = async () => platformSnapshot('user-b', 2)
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
@@ -589,6 +596,74 @@ it('inherits the cloned workspace saved Aino model without using the occupied co
   })
 })
 
+it('repairs a legacy empty Bot’s missing Aino inheritance without replacing another member’s saved model', async () => {
+  window.hermesDesktop.platformModels.list = async () => [
+    { ...platformModel('first-model'), is_default: false },
+    { ...platformModel('workspace-model'), is_default: false },
+    { ...platformModel('bot-model'), is_default: false }
+  ]
+  await platformModelCatalog().refresh()
+  const root = { connectionId: 'local', profile: 'default' }
+  const own = { connectionId: 'local', profile: 'bot-a' }
+  const inherited = { connectionId: 'local', profile: 'bot-b' }
+  writePlatformDefault(account.account!.id, 'workspace-model', root, account.mode, owner.platform_origin)
+  writePlatformDefault(account.account!.id, 'bot-model', own, account.mode, owner.platform_origin)
+
+  await host.requestProfile(route, 'groups.send', {
+    room_id: 'old-room',
+    event_id: 'old-room-event',
+    payload: { text: 'hello' }
+  })
+
+  expect(io.bind.mock.calls.map(([params]) => [params.profile, params.model_id])).toEqual([
+    ['bot-a', 'bot-model'],
+    ['bot-b', 'workspace-model']
+  ])
+  expect(readPlatformDefault(account.account!.id, inherited, account.mode, owner.platform_origin)).toBe(
+    'workspace-model'
+  )
+  writePlatformDefault(account.account!.id, 'first-model', root, account.mode, owner.platform_origin)
+  expect(await host.requestProfile({ ...route, targetProfile: 'bot-b' }, 'setup.runtime_check')).toMatchObject({
+    model: 'workspace-model'
+  })
+})
+
+it.each(['other-connection', 'explicit-unavailable', 'provider-source'])(
+  'does not repair an empty Bot from an unauthorized or inactive default: %s',
+  async scenario => {
+    window.hermesDesktop.platformModels.list = async () => [{ ...platformModel(), is_default: false }]
+    await platformModelCatalog().refresh()
+    const root = { connectionId: scenario === 'other-connection' ? 'studio' : 'local', profile: 'default' }
+    writePlatformDefault(account.account!.id, 'catalog-a', root, account.mode, owner.platform_origin)
+
+    if (scenario === 'explicit-unavailable') {
+      writePlatformDefault(
+        account.account!.id,
+        'removed-model',
+        { connectionId: 'local', profile: 'bot-a' },
+        account.mode,
+        owner.platform_origin
+      )
+    }
+
+    if (scenario === 'provider-source') {
+      io.globalModel.mockImplementation(async (scope: { profile: string }) =>
+        scope.profile === 'default' ? { model: 'custom-model', provider: 'custom' } : { model: '', provider: '' }
+      )
+    }
+
+    await expect(
+      host.requestProfile(route, 'groups.send', {
+        room_id: 'old-room',
+        event_id: 'not-dispatched',
+        payload: { text: 'hello' }
+      })
+    ).rejects.toMatchObject({ code: 'model_unavailable', data: { admitted: false } })
+    expect(io.bind).not.toHaveBeenCalled()
+    expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
+  }
+)
+
 it('snapshots the source effective Aino default when only the API catalog supplies it', async () => {
   const source = { ...route, profile: 'default', targetProfile: 'default' }
   const target = { ...source, profile: 'cloned-bot', targetProfile: 'cloned-bot' }
@@ -744,9 +819,11 @@ it.each(['setup.runtime_check', 'session.create'])(
     io.retain.mockResolvedValue(io.release)
     const params = { profile: route.targetProfile, follow_profile_config: true }
     let settled = false
+
     const pending = host.requestProfile(route, method, params).finally(() => {
       settled = true
     })
+
     await vi.advanceTimersByTimeAsync(0)
 
     recordGatewayReadyCapability({ connectionId: 'other', profile: route.profile }, {

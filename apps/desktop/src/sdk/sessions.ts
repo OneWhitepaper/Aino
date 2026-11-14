@@ -6,9 +6,8 @@ import {
   unpinSession
 } from '@/store/layout'
 import { $sessions, sessionMatchesStoredId, sessionPinId } from '@/store/session'
-import { setSessionColorOverride } from '@/store/session-color'
 
-/** Pins and colours are keyed by the DURABLE (lineage-root) id so they survive
+/** Pins are keyed by the DURABLE (lineage-root) id so they survive
  *  compression's session-id rotation; a row's live id resolves through
  *  `$sessions` (the app's own lineage matcher), and an id that resolves to
  *  nothing is passed through as-is (the stores tolerate ids for rows this
@@ -68,12 +67,5 @@ export const sessionsHost = {
    *  pins the list names move; a pin it omits (row not loaded) keeps its slot. */
   reorderPinned: (ids: string[]): void => {
     setPinnedSessionOrder(ids.map(durableSessionPinId))
-  },
-
-  /** Set a session's colour override (or clear it with `null`) — the same
-   *  per-session colour the app's own picker writes, so a plugin swatch and
-   *  a hand-picked colour are one value. */
-  setColor: (storedSessionId: string, color: null | string): void => {
-    setSessionColorOverride(durableSessionPinId(storedSessionId), color)
   }
 }

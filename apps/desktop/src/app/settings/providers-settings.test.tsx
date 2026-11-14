@@ -18,9 +18,7 @@ vi.mock('./custom-endpoints-settings', () => ({
   }) => (
     <div data-testid="custom-endpoints-settings">
       <button onClick={onConfigSaved}>Save endpoint</button>
-      <button onClick={() => onMainModelChanged?.('custom:relay', 'relay-model')}>
-        Apply endpoint model
-      </button>
+      <button onClick={() => onMainModelChanged?.('custom:relay', 'relay-model')}>Apply endpoint model</button>
     </div>
   )
 }))
@@ -45,12 +43,8 @@ describe('ProvidersSettings', () => {
     const copy = modelSourceCopy('en')
     render(<ProvidersSettings onConfigSaved={onConfigSaved} view="third-party" />)
 
-    expect(screen.getByRole('button', { name: copy.providerSource }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
-    expect(screen.getByRole('button', { name: copy.customApiTitle }).getAttribute('aria-expanded')).toBe(
-      'false'
-    )
+    expect(screen.getByRole('button', { name: copy.providerSource }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: copy.customApiTitle }).getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByTestId('custom-endpoints-settings')).toBeNull()
     fireEvent.click(screen.getByTestId('third-party-settings'))
     expect(onConfigSaved).toHaveBeenCalledTimes(1)

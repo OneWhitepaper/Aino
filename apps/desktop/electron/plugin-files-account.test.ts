@@ -21,7 +21,10 @@ beforeEach(() => {
   folderA = path.join(scratch, 'notebook-A')
   folderB = path.join(scratch, 'notebook-B')
 
-  for (const directory of [accountA, accountB, folderA, folderB]) { fs.mkdirSync(directory, { recursive: true }) }
+  for (const directory of [accountA, accountB, folderA, folderB]) {
+    fs.mkdirSync(directory, { recursive: true })
+  }
+
   fs.writeFileSync(path.join(folderA, 'note.txt'), 'Account A private note')
   fs.writeFileSync(path.join(folderB, 'note.txt'), 'Account B private note')
   active = accountA
@@ -39,38 +42,46 @@ async function grant(folder: string): Promise<PluginFolderGrant> {
 
 test('account switching isolates plugin folder grants and restores only the returning account', async () => {
   const a = await grant(folderA)
-  await expect(files.run('notebook', { op: 'writeText', folder: 'data', path: 'draft.txt', text: 'A draft' }))
-    .resolves.toMatchObject({ ok: true })
+  await expect(
+    files.run('notebook', { op: 'writeText', folder: 'data', path: 'draft.txt', text: 'A draft' })
+  ).resolves.toMatchObject({ ok: true })
   const readA = files.run('notebook', { op: 'readText', folder: 'data', path: 'draft.txt' })
   active = accountB
   await expect(readA).resolves.toMatchObject({ ok: true, text: 'A draft' })
   expect(await files.grants('notebook')).toEqual([])
   expect(await files.run('notebook', { op: 'readText', folder: a.id, path: 'note.txt' })).toMatchObject({
-    ok: false, error: 'not-granted'
+    ok: false,
+    error: 'not-granted'
   })
 
   const b = await grant(folderB)
   const savedB = JSON.parse(fs.readFileSync(path.join(accountB, 'plugin-files', 'grants.json'), 'utf8'))
   expect(savedB.grants.notebook).toEqual([b])
   expect(await files.run('notebook', { op: 'readText', folder: b.id, path: 'note.txt' })).toMatchObject({
-    ok: true, text: 'Account B private note'
+    ok: true,
+    text: 'Account B private note'
   })
   expect(await files.run('notebook', { op: 'readText', folder: 'data', path: 'draft.txt' })).toMatchObject({
-    ok: false, error: 'not-found'
+    ok: false,
+    error: 'not-found'
   })
-  await expect(files.run('notebook', { op: 'writeText', folder: 'data', path: 'draft.txt', text: 'B draft' }))
-    .resolves.toMatchObject({ ok: true })
+  await expect(
+    files.run('notebook', { op: 'writeText', folder: 'data', path: 'draft.txt', text: 'B draft' })
+  ).resolves.toMatchObject({ ok: true })
 
   active = accountA
   expect(await files.grants('notebook')).toEqual([a])
   expect(await files.run('notebook', { op: 'readText', folder: 'data', path: 'draft.txt' })).toMatchObject({
-    ok: true, text: 'A draft'
+    ok: true,
+    text: 'A draft'
   })
   expect(await files.run('notebook', { op: 'readText', folder: a.id, path: 'note.txt' })).toMatchObject({
-    ok: true, text: 'Account A private note'
+    ok: true,
+    text: 'Account A private note'
   })
   expect(await files.run('notebook', { op: 'readText', folder: b.id, path: 'note.txt' })).toMatchObject({
-    ok: false, error: 'not-granted'
+    ok: false,
+    error: 'not-granted'
   })
 })
 
@@ -89,7 +100,13 @@ test('a queued grant mutation stays with its original account after the active d
   active = accountA
   expect(await files.grants('notebook')).toEqual([])
   expect(await files.grants('sketchbook')).toEqual([(grantedA as { folder: PluginFolderGrant }).folder])
-  const fresh = createPluginFiles({ userDataDir: () => active, protectedRoots: () => [], trashItem: async () => undefined })
+
+  const fresh = createPluginFiles({
+    userDataDir: () => active,
+    protectedRoots: () => [],
+    trashItem: async () => undefined
+  })
+
   expect(await fresh.grants('notebook')).toEqual([])
   active = accountB
   expect(await fresh.grants('notebook')).toEqual([b])

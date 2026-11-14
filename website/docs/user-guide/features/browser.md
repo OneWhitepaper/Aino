@@ -32,6 +32,10 @@ Where the browser comes from is a separate choice:
 For simple information retrieval, prefer `web_search` or `web_extract` — they are faster and cheaper. Use the browser when the agent needs to **interact** with a page (click buttons, fill forms, handle dynamic content).
 :::
 
+## Aino's in-app browser
+
+In native Aino Desktop, `drive_preview` operates the browser panel beside the conversation. It prefers named element references, including open Shadow DOM and same-origin frames, and supports screenshot-based input for vision-capable models. The toolbar shows operation progress and offers **Take over** / **Return to AI**. Sensitive actions and visual input require one-action confirmation; page changes invalidate old observations and approvals. This uses the existing panel and its logged-in page. See [Working with the in-app browser](../desktop.md#working-with-the-in-app-browser) for controls and limitations.
+
 ## How `browser_exec` works
 
 Each call sends a block of Python (`code`) that runs with browser helpers

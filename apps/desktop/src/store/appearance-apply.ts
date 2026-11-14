@@ -65,7 +65,7 @@ export function onLayoutCommit(release: () => void): void {
 function applyLayout(id: string): void {
   releaseBorrowedLayout()
 
-  // A user's saved layouts are Advanced, like the layout picker's Custom section.
+  // Layouts without a Simple tier belong to Advanced.
   const mode = layoutPresetTier(id) === 'simple' ? 'simple' : 'advanced'
 
   if ($interfaceMode.get() !== mode) {

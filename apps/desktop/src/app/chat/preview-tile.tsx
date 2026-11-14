@@ -16,8 +16,10 @@ import { findGroup, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import {
   $activeTreeGroup,
   $layoutTree,
+  activateTreePane,
   closeTabPane,
-  revealTreePane,
+  restoreTreePane,
+  setTreeGroupMinimized,
   treePanesWithPrefix
 } from '@/components/pane-shell/tree/store'
 import { unifiedToolGroup } from '@/components/pane-shell/tree/tool-panel-policy'
@@ -45,8 +47,12 @@ import {
   setPreviewTabPinned
 } from '@/store/preview'
 import { $dirtyPreviewUrls, previewTabIsDirty } from '@/store/preview-edit'
-import { explicitOpenBlocksZone, PREVIEW_TILE_PREFIX } from '@/store/preview-explicit'
+import { explicitOpenBlocksZone, noteExplicitPreviewOpen, PREVIEW_TILE_PREFIX } from '@/store/preview-explicit'
+import { currentSessionId } from '@/store/preview-ownership'
+import { $focusedStoredSessionId } from '@/store/session-focus'
 import { canOpenBrowserWindow } from '@/store/windows'
+
+import { NATIVE_PREVIEW_RETAIN_LIMIT } from '../../../shared/preview-native'
 
 import { paneMirror } from './pane-mirror'
 import { PreviewTilePane } from './right-rail/preview'
@@ -235,6 +241,27 @@ function PreviewTabLead({ tabId }: { tabId: string }) {
 }
 
 const previewPaneId = (tabId: string) => `${PREVIEW_TILE_PREFIX}:${tabId}`
+const visibleRetainedGroups = new Map<string, string>()
+
+function restoreReturnedPreview(): void {
+  const tabId = $rightRailActiveTabId.get()
+  const previousGroup = tabId ? visibleRetainedGroups.get(tabId) : undefined
+  const tree = $layoutTree.get()
+  const group = tree && tabId ? findGroupOfPane(tree, previewPaneId(tabId)) : null
+
+  if (!tabId || !previousGroup || !group) {
+    return
+  }
+
+  // Selection can settle before pane adoption; consume only once it is placed.
+  visibleRetainedGroups.delete(tabId)
+
+  // A retained Browser-only group is adopted collapsed by default. Restore its
+  // previous visibility, while existing groups and explicit side collapse stay put.
+  if (group.id !== previousGroup && group.minimized) {
+    setTreeGroupMinimized(group.id, false)
+  }
+}
 
 /** The pane a NEW preview tile should stack into: another preview tile already
  *  in the tree, else — when several tabs arrive in one pass (a reload, or a
@@ -267,39 +294,51 @@ function existingPreviewAnchor(tabId: string): string | undefined {
   return head && head.id !== tabId ? previewPaneId(head.id) : undefined
 }
 
+function restoreDockedBrowserTab(tabId: string): void {
+  const tab = $previewTabs.get().find(item => item.id === tabId)
+  const wasPopped = $poppedBrowserTabIds.get().has(tabId)
+
+  adoptPersistedBrowserTab(tabId, false)
+  markBrowserTabPopped(tabId, false)
+
+  if (
+    wasPopped &&
+    tab?.target.kind === 'url' &&
+    currentSessionId(tab.sessionId) === currentSessionId($focusedStoredSessionId.get()) &&
+    $visiblePreviewTabs.get().some(item => item.id === tabId)
+  ) {
+    noteExplicitPreviewOpen(tab.id)
+    restoreTreePane(previewPaneId(tabId))
+    selectRightRailTab(tab.id)
+  }
+}
+
 /** Keep pane contributions mirroring `$previewTabs`, keep the store's selection
  *  and the tree's active pane agreeing, and front a tile when its tab is
  *  selected. Call once from the root. */
 export function watchPreviewTiles(): void {
   watchPreviewTileMirror()
 
-  window.hermesDesktop?.onBrowserPopoutClosed?.(tabId => {
-    adoptPersistedBrowserTab(tabId)
-    markBrowserTabPopped(tabId, false)
-  })
+  window.hermesDesktop?.onBrowserPopoutClosed?.(restoreDockedBrowserTab)
 
-  // The reveal analog of session tiles (session-states calls revealTreePane on
-  // open): `openPreview` selects the tab, and the TREE must front its pane —
-  // un-minimize, un-hide, activate in its zone. Both stores, because re-opening
-  // the already-active tab changes only `$previewTabs` (fresh tab object), while
-  // switching tabs changes only the active id.
-  const reveal = () => {
+  // Selection follows the session, but only explicit openPreview/restoreTreePane
+  // intent may unfold a tool panel. Metadata updates and session re-homing are quiet.
+  const select = () => {
     const tabId = $rightRailActiveTabId.get()
+    const tree = $layoutTree.get()
+    const paneId = `${PREVIEW_TILE_PREFIX}:${tabId}`
+    const group = tree && tabId && findGroupOfPane(tree, paneId)
 
-    if (tabId && targetFor(tabId)) {
-      revealTreePane(`${PREVIEW_TILE_PREFIX}:${tabId}`)
+    if (group && group.active !== paneId && targetFor(tabId!)) {
+      activateTreePane(group.id, paneId)
     }
   }
 
-  $rightRailActiveTabId.listen(reveal)
-  // One listener for the visible list: re-home the selection FIRST (a session
-  // switch or an unpin can leave the active tab outside the visible set, and
-  // a stale reveal of a just-hidden tab is a no-op — its pane left the tree),
-  // THEN reveal the tab the re-home left active. Registered after the mirror,
-  // so the pane set is already synced when this runs.
+  $rightRailActiveTabId.listen(select)
+  // A list refresh can change metadata without selecting a different resource.
   $visiblePreviewTabs.listen(() => {
     rehome()
-    reveal()
+    restoreReturnedPreview()
   })
 
   // A session switch (or an unpin) can leave the active tab outside the
@@ -348,7 +387,10 @@ export function watchPreviewTiles(): void {
     }
   }
 
-  $layoutTree.listen(follow)
+  $layoutTree.listen(() => {
+    follow()
+    restoreReturnedPreview()
+  })
   $activeTreeGroup.listen(follow)
 }
 
@@ -358,7 +400,7 @@ export function watchPreviewTiles(): void {
  *  the handful of chats a user is actually working in; past that the
  *  longest-hidden one is unmounted and reloads from its saved address when
  *  its session returns (the tab itself is never closed). */
-const HIDDEN_LIVE_PREVIEW_LIMIT = 8
+const HIDDEN_LIVE_PREVIEW_LIMIT = NATIVE_PREVIEW_RETAIN_LIMIT
 
 /** A page (live Browser guest or rendered HTML) whose body must survive
  *  being out of view; a text peek is cheap to re-render. */
@@ -373,8 +415,20 @@ function keepsLiveBody(tabId: string): boolean {
  *  out (the pop-out window owns that guest). */
 const isDirtyPreview = (tabId: string) => previewTabIsDirty(tabId, targetFor(tabId)?.url ?? '')
 
-const retainHiddenPreview = (tabId: string) =>
-  (keepsLiveBody(tabId) || isDirtyPreview(tabId)) && !$poppedBrowserTabIds.get().has(tabId)
+const retainHiddenPreview = (tabId: string) => {
+  const retained = (keepsLiveBody(tabId) || isDirtyPreview(tabId)) && !$poppedBrowserTabIds.get().has(tabId)
+  const tree = $layoutTree.get()
+  const paneId = previewPaneId(tabId)
+  const group = tree ? findGroupOfPane(tree, paneId) : null
+
+  if (retained && group?.active === paneId && !group.minimized) {
+    visibleRetainedGroups.set(tabId, group.id)
+  } else if (!retained) {
+    visibleRetainedGroups.delete(tabId)
+  }
+
+  return retained
+}
 
 const watchPreviewTileMirror = paneMirror<{ id: string }>({
   toolPanel: true,

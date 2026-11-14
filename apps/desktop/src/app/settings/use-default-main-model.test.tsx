@@ -108,13 +108,20 @@ it('does not retain the refresh display for another route or account revision', 
   })
 })
 
-it.each(['offline', 'reauth_required'] as const)('displays and permits a retained device model while management is %s', async phase => {
-  const { account, catalog } = await preparePlatform()
-  window.hermesDesktop.platformAccount.status = async () => ({ ...platformSnapshot(), phase, model_identity_ready: true })
-  await account.refresh()
-  await catalog.load()
-  const { result } = renderHook(() => useDefaultMainModel({ provider: '', model: '' }, 'work'))
+it.each(['offline', 'reauth_required'] as const)(
+  'displays and permits a retained device model while management is %s',
+  async phase => {
+    const { account, catalog } = await preparePlatform()
+    window.hermesDesktop.platformAccount.status = async () => ({
+      ...platformSnapshot(),
+      phase,
+      model_identity_ready: true
+    })
+    await account.refresh()
+    await catalog.load()
+    const { result } = renderHook(() => useDefaultMainModel({ provider: '', model: '' }, 'work'))
 
-  expect(result.current.appliedPlatformId).toBe('catalog-a')
-  expect(result.current.platformCanApply).toBe(true)
-})
+    expect(result.current.appliedPlatformId).toBe('catalog-a')
+    expect(result.current.platformCanApply).toBe(true)
+  }
+)

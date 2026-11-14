@@ -286,6 +286,13 @@ async def execute_admission(authority, ref, row):
         from gateway.session_cron import execute
         return await execute(authority, ref, row, policy)
     local_policy = policy
+    from gateway.session_pause import prepare_continuation
+    descriptor, refusal = await prepare_continuation(authority, ref, row, local_policy)
+    if refusal is not None:
+        from gateway.session_context_refs import refused_turn_result
+        authority.pending_results[row['admission_id']] = {'result': refused_turn_result(row, refusal), 'usage': {}}
+        return refusal
+    row = {**row, '_continuation_descriptor': descriptor}
     from gateway.session_managed_worker import managed_policy, admit_managed
     policy = managed_policy(authority, ref)
     if policy is not None:
@@ -416,7 +423,9 @@ async def _admission_scope(authority, home, row, event, captured):
     turn (``session_producer_lifecycle``; a no-op for every other admission)."""
     async with producer_turn(authority, row, event, captured):
         with await _execution_scope(authority, home):
-            yield
+            from gateway.session_pause import continuation_turn_scope
+            with continuation_turn_scope(row.get('_continuation_descriptor')):
+                yield
 
 
 async def _execution_scope(authority, home):

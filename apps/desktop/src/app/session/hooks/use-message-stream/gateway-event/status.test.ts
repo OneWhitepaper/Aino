@@ -57,7 +57,19 @@ afterEach(() => {
 describe('gateway `error` event → error card + toast', () => {
   it('routes an image credential rejection using its own owner and request version', () => {
     const { ctx } = errorContext('image')
-    ctx.event = { ...ctx.event, type: 'notification.show', payload: { text: 'Image authorization failed', level: 'error', kind: 'ttl', code: 'managed_credential_rejected', owner_user_id: 'image-account', managed_credential_version: 2, purpose: 'image' } } as GatewayEventContext['event']
+    ctx.event = {
+      ...ctx.event,
+      type: 'notification.show',
+      payload: {
+        text: 'Image authorization failed',
+        level: 'error',
+        kind: 'ttl',
+        code: 'managed_credential_rejected',
+        owner_user_id: 'image-account',
+        managed_credential_version: 2,
+        purpose: 'image'
+      }
+    } as GatewayEventContext['event']
     handleStatusEvent(ctx)
     expect(reportPlatformCredentialRejection).toHaveBeenCalledWith('managed_credential_rejected', 'image-account', 2)
   })

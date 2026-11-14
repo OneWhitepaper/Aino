@@ -17,7 +17,9 @@ export function canonicalMentionRecipients(
   for (const member of members) {
     const key = member.handle.toLowerCase()
 
-    if (!available.has(key)) {available.set(key, member.handle)}
+    if (!available.has(key)) {
+      available.set(key, member.handle)
+    }
   }
 
   const mentioned = new Set<string>()
@@ -26,8 +28,11 @@ export function canonicalMentionRecipients(
   for (const match of raw.matchAll(/@([A-Za-z0-9][A-Za-z0-9._:-]*)/g)) {
     const handle = match[1].toLowerCase()
 
-    if (handle === 'all' || handle === 'everyone') {broadcast = true}
-    else if (available.has(handle)) {mentioned.add(handle)}
+    if (handle === 'all' || handle === 'everyone') {
+      broadcast = true
+    } else if (available.has(handle)) {
+      mentioned.add(handle)
+    }
   }
 
   const all = broadcast || mentioned.size === 0

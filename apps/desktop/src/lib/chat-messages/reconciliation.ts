@@ -185,6 +185,10 @@ const attachmentTurnAssistantMatchIndex = (
 }
 
 const timelinePartMatch = (stored: ChatMessagePart, local: ChatMessagePart) => {
+  if (stored === local) {
+    return true
+  }
+
   if (stored.type !== local.type) {
     return false
   }
@@ -228,7 +232,10 @@ function reconcileLocalAssistantTimeline(nextMessages: ChatMessage[], currentMes
   return nextMessages.map((message, messageIndex) => {
     const local = matches.get(messageIndex)
 
-    if (!local) {
+    // Streaming keeps settled rows by reference. They already carry the same
+    // local timing, so cloning their parts here would invalidate the runtime's
+    // message cache and re-render old Markdown on every incoming chunk.
+    if (!local || message === local) {
       return message
     }
 
@@ -246,22 +253,40 @@ function reconcileLocalAssistantTimeline(nextMessages: ChatMessage[], currentMes
       unusedLocalParts.delete(localIndex)
       const localPart = local.parts[localIndex]
 
+      if (part === localPart) {
+        return part
+      }
+
+      const completedAt = latestBoundary(part.completedAt, localPart.completedAt)
+      const timestamp = earliestBoundary(part.timestamp, localPart.timestamp)
+
+      if (completedAt === part.completedAt && timestamp === part.timestamp) {
+        return part
+      }
+
       return {
         ...part,
-        completedAt: latestBoundary(part.completedAt, localPart.completedAt),
-        timestamp: earliestBoundary(part.timestamp, localPart.timestamp)
+        completedAt,
+        timestamp
       } as ChatMessagePart
     })
 
-    return {
-      ...message,
+    const metadata = {
       completedAt: latestBoundary(message.completedAt, local.completedAt, ...parts.map(part => part.completedAt)),
       turnMetrics: message.turnMetrics ?? local.turnMetrics,
       ...resolvedErrorMetadata(message, local),
       durationS: message.durationS ?? local.durationS,
-      parts,
       timestamp: earliestBoundary(message.timestamp, local.timestamp, ...parts.map(part => part.timestamp))
     }
+
+    if (
+      parts.every((part, index) => part === message.parts[index]) &&
+      Object.entries(metadata).every(([key, value]) => message[key as keyof typeof metadata] === value)
+    ) {
+      return message
+    }
+
+    return { ...message, ...metadata, parts }
   })
 }
 
@@ -605,6 +630,10 @@ export function preserveLocalAssistantErrors(
   nextMessages: ChatMessage[],
   currentMessages: ChatMessage[]
 ): ChatMessage[] {
+  if (nextMessages === currentMessages) {
+    return nextMessages
+  }
+
   const reconciled: ChatMessage[] = reconcileLocalAssistantTimeline(nextMessages, currentMessages)
   const merged: ChatMessage[] = mergeStoredAssistantErrors(reconciled, currentMessages)
   const preserveIds: Set<string> = localAssistantErrorIdsToPreserve(merged, currentMessages)

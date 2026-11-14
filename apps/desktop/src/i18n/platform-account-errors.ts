@@ -10,7 +10,8 @@ export const enAccountErrors: Record<string, string> = {
   second_factor_invalid: 'The authenticator code is incorrect.',
   captcha_cancelled: 'Verification was canceled.',
   captcha_provider_unsupported: 'This site captcha provider is not supported by the desktop app.',
-  captcha_browser_unavailable: 'This site requires verification in the Aino desktop app. Open the desktop app to sign in.',
+  captcha_browser_unavailable:
+    'This site requires verification in the Aino desktop app. Open the desktop app to sign in.',
   network_timeout: 'The account service timed out. Try again.',
   network_unavailable: 'The account service is offline. Check your connection and retry.',
   RECENT_AUTH_REQUIRED: 'Sign in again to continue.',

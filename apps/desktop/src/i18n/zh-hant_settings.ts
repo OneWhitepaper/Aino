@@ -369,7 +369,10 @@ export const zhHantSettings = {
         versionLabel: '版本',
         reviewedPin: sha => (sha ? `已審核的固定提交 ${sha}` : '已審核的固定提交'),
         latestCommit: '最新提交',
-        sourceMoved: sha => (sha ? `自你審閱後儲存庫已變更。請先審閱新版本（提交 ${sha}）再安裝。` : '自你審閱後儲存庫已變更。正在讀取新版本…'),
+        sourceMoved: sha =>
+          sha
+            ? `自你審閱後儲存庫已變更。請先審閱新版本（提交 ${sha}）再安裝。`
+            : '自你審閱後儲存庫已變更。正在讀取新版本…',
         legacyBackendConfirm:
           '此後端比本應用程式舊，無法保證安裝的就是你審閱過的版本：如果儲存庫之後有變更，安裝的會是較新的版本。更新後端即可獲得這項保證。',
         installAnyway: '仍要安裝',
@@ -551,7 +554,7 @@ export const zhHantSettings = {
       testBody: '通知運作正常。',
       testSent: '測試已傳送。若沒有出現，請檢查系統通知權限與專注模式／勿擾模式。',
       testUnsupported: '此系統不支援原生通知。',
-      muteSoundsTitle: '靜音介面提示音',
+      muteSoundsTitle: '靜音提示音與觸感回饋',
       muteSoundsDesc: '關閉自動完成、喚醒詞和思考提示音、觸感回饋以及系統通知聲音。聲音預覽和語音回覆仍會播放。',
       completionSoundTitle: '完成提示音',
       completionSoundDesc: '代理回合結束時播放。可在此選擇預設並預覽。',
@@ -625,10 +628,6 @@ export const zhHantSettings = {
       tabStripAuto: '自動',
       tabStripAlways: '一律',
       tabStripNever: '永不',
-      appActionsTitle: '應用操作',
-      appActionsDesc: '設定、版面與 HUD 放在標題列左側或右側。選右側可把左側留給分頁。',
-      appActionsLeft: '左側',
-      appActionsRight: '右側',
       terminalFontTitle: '終端機字型',
       terminalFontDesc:
         '選擇已安裝的字型用於桌面端終端機。Nerd Font 可正確顯示 Powerlevel10k 與 Shell 圖示；留空則使用內建的 JetBrains Mono。',
@@ -1125,7 +1124,7 @@ export const zhHantSettings = {
         restartNeeded: '需要重新啟動',
         unavailable: '無法使用',
         notRunningDetail: '啟動後即可從其他裝置開啟 Hermes。',
-        needsNous: "請先在「模型服務 → 服務授權」登入你的 Nous 帳戶。",
+        needsNous: '請先在「模型服務 → 服務授權」登入你的 Nous 帳戶。',
         runningLan: '在同一網路中的裝置上開啟此網址。',
         runningPublic: '透過你的網址提供服務。',
         runningLocal: '只有這台電腦可以開啟。要從其他裝置開啟，請先停止，再重新啟動。',
@@ -1152,7 +1151,8 @@ export const zhHantSettings = {
         lanUnencrypted: '連線未加密：同一網路中的其他人可能讀取你傳送和接收的內容。',
         noLan: '這台電腦沒有其他裝置可以連到的網路位址。',
         modePublic: '我自己的網址',
-        modePublicDetail: port => `你已有的 HTTPS 網址（例如 Tailscale Serve 或通道），並轉送到 http://127.0.0.1:${port}。`
+        modePublicDetail: port =>
+          `你已有的 HTTPS 網址（例如 Tailscale Serve 或通道），並轉送到 http://127.0.0.1:${port}。`
       }
     },
     keys: {
@@ -1903,8 +1903,8 @@ export const zhHantSettings = {
         code === 'captcha_browser_unavailable'
           ? '目前站點需要透過 Aino 桌面端完成人機驗證，請開啟桌面端登入。'
           : code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
-          ? `請求過於頻繁，請在 ${retryAfter} 秒後重試。`
-          : '帳戶請求失敗，請重試。',
+            ? `請求過於頻繁，請在 ${retryAfter} 秒後重試。`
+            : '帳戶請求失敗，請重試。',
       errors: {
         invalid_identifier: '請輸入有效的電子郵件或手機號碼。',
         missing_code: '請先取得驗證碼，再輸入以登入。',
@@ -1945,10 +1945,9 @@ export const zhHantSettings = {
       wechatTitle: '微信登入',
       wechatUnavailable: '微信登入尚未開放。',
       switchIdentifier: '切換電子郵件 / 電話'
-    }
-  ,
-memoryLayers: zhHantMemoryLayers
-},
+    },
+    memoryLayers: zhHantMemoryLayers
+  },
 
   modelPicker: zhHantModelPicker,
 

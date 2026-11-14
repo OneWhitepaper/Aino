@@ -241,6 +241,22 @@ The center of the app. You get:
 
 Async cron and delegation completions appear as collapsed timeline disclosures. Open the completion label to read the result body (including job output) as Markdown; long reports scroll within the disclosure. Task instructions and delivery envelopes are not shown as report content.
 
+#### Working with the in-app browser
+
+The assistant can list this conversation's Browser tabs with `drive_preview action="tabs"` and select an exact `tab_id` with `action="select_tab"`. Profile pins remain shared; other conversations' private tabs and other profiles' pins remain isolated. Selecting a tab reuses its existing page, including unsaved form input and scroll position. A popped-out tab is brought forward in its existing window. Request a fresh element inventory or screenshot after switching tabs; previous screenshot observations are retired. A tab under **Take over** remains under your control until **Return to AI**.
+
+`action="double_click"` uses the same named references or screenshot coordinates as a single click. Native Desktop sends two pointer clicks with the correct click counts; consequential targets and visual actions still require confirmation. Screenshots, dialog responses, uploads and downloads use the native Desktop browser capabilities and remain subject to their target and user confirmation checks.
+
+For uploads, `upload_files` accepts a file-input reference, its associated upload label, or the exact `chooser_id` reported by `dialog_status` after a website's Attach button opens a chooser. It asks for confirmation before selecting local files. `downloads_status` without a destination reads lifecycle status; with `download_path`, it asks to authorize one next download to that exact, nonexisting local path. Remote gateway paths are not substituted for Desktop-local files.
+
+Ask the agent to work on the page in Aino's browser panel while you follow its tool activity in the conversation. The browser toolbar shows **AI observing**, **AI operating**, **Awaiting approval**, or **You are in control**. **Take over** cancels the current browser operation and reserves that tab for you, including between tool calls. Choose **Return to AI** when ready; taking over does not cancel unrelated work in the conversation.
+
+The agent uses named element references for ordinary buttons and fields, including open Shadow DOM and same-origin frames. When a page needs visual interaction, a vision-capable model can request a screenshot and click, type, press keys or drag in that screenshot's coordinate space. Each image identifies its tab, page URL and viewport; changing the page, scrolling, navigating or switching tabs requires a fresh observation. Models that cannot receive images retain semantic controls and receive an explicit image-omitted result instead of guessed coordinates.
+
+Detected consequential actions, explicit sensitive requests and visual input ask for one-action confirmation with the website and target. Rejecting, taking over, switching conversations, or timing out cancels the pending operation. Navigation invalidates its approval. A completed action whose verification capture fails is reported as completed, with instructions to observe again rather than repeat it. Human control follows the tab when its browser window is popped out or docked again.
+
+These native controls operate the actual Electron browser panel. Cross-origin frames and closed Shadow DOM use visual fallback; the browser-hosted app's sandboxed iframe does not expose the native capture/input bridge. Existing annotation comments remain available for attaching selected page regions to a message.
+
 #### Status bar
 
 The bar along the bottom of the chat shows live session state and exposes quick controls without opening Settings:
@@ -322,12 +338,12 @@ The app is built for working on several things at once:
 
 #### Interface mode
 
-The layout editor (titlebar button, or **Cmd/Ctrl+Shift+\\**) opens with an **Interface mode** choice — also under **Settings → Appearance → Window & layout** and as *Simple mode* in the command palette. It changes what is shown, not what Hermes can do.
+**Interface mode** is available under **Settings → Appearance → Window & layout** and as *Simple mode* in the command palette. It changes what is shown, not what Aino can do. The desktop layout editor and its shortcut have been removed; normal pane resizing, tool tabs and layout reset remain available.
 
 - **Advanced** (default) is the app as you have set it up. Users who have not explicitly selected Simple stay in Advanced.
-- **Simple** is chat-first: the statusbar, profile rail, terminal, file browser and review panes, the technical tool-call view, inline code diffs, and the Artifacts / Scheduled jobs rows rest out of the way (Capabilities and Messaging stay — they are how you set Hermes up); thinking starts collapsed; session rows show the title, a preview and when they were last active. The titlebar keeps Settings and the layout editor. Simple's layout picker offers *Sidebar left* or *Sidebar right*. The templates and saved layouts are Advanced.
+- **Simple** is chat-first: the statusbar, profile rail, terminal, file browser and review panes, the technical tool-call view, inline code diffs, and the Artifacts / Scheduled jobs rows rest out of the way (Capabilities and Messaging stay — they are how you set Hermes up); thinking starts collapsed; session rows show the title, a preview and when they were last active. The titlebar keeps navigation, notifications and haptics. The navigation expand/collapse button restores the existing sidebar without leaving a vertical tab rail.
 
-A layout says what is on screen, not just where things sit: applying one opens every pane it places and closes the ones it leaves *resting*, so **Ctrl+`**, **Cmd/Ctrl+J** and **Cmd/Ctrl+G** always agree with what you see. *Basic* is sessions and chat with the terminal resting as a collapsed rail under the chat and the file browser and review resting in a right column — **Ctrl+`** opens the terminal under the chat, **Cmd/Ctrl+J** opens the tree on the right. *Focus* keeps files and review as tabs behind the chat, with the same terminal rail. *Default*, *Terminal deck* and *Quad* open everything they place. A layout you save remembers which of its panes were closed.
+A layout says what is on screen, not just where things sit: applying one opens every pane it places and closes the ones it leaves *resting*, so **Ctrl+`**, **Cmd/Ctrl+J** and **Cmd/Ctrl+G** always agree with what you see. *Basic* is sessions and chat with the terminal resting as a collapsed rail under the chat and the file browser and review resting in a right column — **Ctrl+`** opens the terminal under the chat, **Cmd/Ctrl+J** opens the tree on the right. *Focus* keeps files and review as tabs behind the chat, with the same terminal rail. *Default*, *Terminal deck* and *Quad* open everything they place. Existing saved layouts retain which panes were closed.
 
 Each mode remembers its own arrangement: pane positions, sizes, active tabs, hidden tabs, dismissals, collapsed sides and floating-card positions. Returning to a mode restores that arrangement rather than reapplying a preset. Simple starts with the sidebar on the left; moving it to the right does not change Advanced. Conversations, drafts, previews and running work stay shared.
 

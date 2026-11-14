@@ -8,21 +8,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getAuxiliaryModels,
-  getGlobalModelInfo,
-  getGlobalModelOptions,
-  getMoaModels,
-  saveHermesConfig,
-  setModelAssignment
-} from '@/hermes'
-import type {
-  AuxiliaryModelsResponse,
-  AuxiliaryTaskAssignment,
-  MoaConfigResponse,
-  ModelAssignmentRequest,
-  StaleAuxAssignment
-} from '@/hermes'
+import { getGlobalModelOptions, saveHermesConfig, setModelAssignment } from '@/hermes'
+import type { AuxiliaryTaskAssignment, MoaConfigResponse, ModelAssignmentRequest, StaleAuxAssignment } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { modelSourceCopy } from '@/i18n/model-source'
 import { isCodeSkewRestartRequired } from '@/lib/code-skew-error'
@@ -59,6 +46,7 @@ import { MoaModelSlots } from './moa-model-slots'
 import { MoaPresetSettings } from './moa-preset-settings'
 import { isCustomModelProvider, officialModelProviders } from './model-provider-source'
 import { ModelSelect } from './model-select'
+import { refreshModelSettingsData, useSettingsAuxiliaryData } from './model-settings-refresh'
 import { PlatformModelSettings } from './platform-model-settings'
 import { ListRowSkeleton, SectionHeading, SectionHeadingSkeleton } from './primitives'
 import { dismissStaleAux, readStaleAuxDismissal, staleAuxFingerprint } from './stale-aux-dismissal'
@@ -313,10 +301,11 @@ export function ModelSettings({
   const [skewRestart, setSkewRestart] = useState(false)
   const [restartingBackend, setRestartingBackend] = useState(false)
   const modelCatalog = useSettingsModelCatalog(scopeProfile)
-  const mainModel = modelCatalog.main ?? null
+  const { auxiliary, mainModel, setAuxiliary } = useSettingsAuxiliaryData(modelCatalog.key, modelCatalog.main)
   const setMainModel = modelCatalog.replaceMain
   const readMainRevision = modelCatalog.readMainRevision
   const mainAssignmentRevision = useRef(0)
+  const refreshGeneration = useRef(0)
 
   const {
     providers: catalogProviders,
@@ -341,7 +330,6 @@ export function ModelSettings({
 
   const customProviders = useMemo(() => providers.filter(isCustomModelProvider), [providers])
   const sourceProviders = defaultMain.source === 'custom' ? customProviders : officialProviders
-  const [auxiliary, setAuxiliary] = useState<AuxiliaryModelsResponse | null>(null)
   const [moa, setMoa] = useState<MoaConfigResponse | null>(null)
   const [selectedMoaPreset, setSelectedMoaPreset] = useState('')
   const [newMoaPresetName, setNewMoaPresetName] = useState('')
@@ -397,77 +385,39 @@ export function ModelSettings({
 
   const refresh = useCallback(async () => {
     const epoch = profileEpoch.current
+    const generation = ++refreshGeneration.current
     const assignmentRevision = mainAssignmentRevision.current
-    const cachedRevision = readMainRevision()
+    const isCurrent = () => profileEpoch.current === epoch && refreshGeneration.current === generation
     setLoading(true)
     setError('')
     setSkewRestart(false)
 
-    try {
-      // Degrade per call: a hung /api/model/info (its context-length probe
-      // hits the configured provider, which can be unreachable) must not
-      // block the config-backed sections — auxiliary and MOA are fast
-      // config-file reads — behind a single all-or-nothing Promise.all.
-      const [modelInfoResult, modelOptionsResult, auxiliaryModelsResult, moaModelsResult] = await Promise.allSettled([
-        getGlobalModelInfo(scopeProfile),
-        refreshModelCatalog(),
-        getAuxiliaryModels(scopeProfile),
-        getMoaModels(scopeProfile)
-      ])
-
-      if (profileEpoch.current !== epoch) {
-        return
-      }
-
-      const failures: string[] = []
-
-      const settledValue = <T,>(result: PromiseSettledResult<T>): T | null => {
-        if (result.status === 'fulfilled') {
-          return result.value
-        }
-
-        failures.push(result.reason instanceof Error ? result.reason.message : String(result.reason))
-
-        return null
-      }
-
-      const modelInfo = settledValue(modelInfoResult)
-      settledValue(modelOptionsResult)
-      const auxiliaryModels = settledValue(auxiliaryModelsResult)
-      // MOA has always been optional-on-failure; keep it out of the banner.
-      const moaModels = moaModelsResult.status === 'fulfilled' ? moaModelsResult.value : null
-      // The main assignment also lives in the auxiliary config read, so the
-      // page still knows the current model when only the live probe failed.
-      const resolvedMain = modelInfo ?? auxiliaryModels?.main ?? null
-
-      if (resolvedMain && mainAssignmentRevision.current === assignmentRevision) {
-        setMainModel({ model: resolvedMain.model, provider: resolvedMain.provider }, cachedRevision)
-      }
-
-      setAuxiliary(auxiliaryModels)
-      setMoa(moaModels)
-
-      if (moaModels) {
+    await refreshModelSettingsData({
+      profile: scopeProfile,
+      isCurrent,
+      canReplaceMain: () => mainAssignmentRevision.current === assignmentRevision,
+      readMainRevision,
+      replaceMain: setMainModel,
+      refreshCatalog: refreshModelCatalog,
+      onReady: () => setLoading(false),
+      onAuxiliary: setAuxiliary,
+      onMoa: moaModels => {
+        setMoa(moaModels)
         setSelectedMoaPreset(prev => (prev && moaModels.presets[prev] ? prev : moaModels.default_preset))
+      },
+      onFailure: error => setCaughtError(error, m.loadFailed)
+    }).catch(error => {
+      if (isCurrent()) {
+        setCaughtError(error, m.loadFailed)
       }
+    })
 
-      if (failures.length > 0) {
-        setCaughtError(new Error(failures.join('; ')), m.loadFailed)
-      }
-
-      // The config record loads via its own shared query; a model switch can
-      // change it server-side (aux slots), so nudge that cache to refetch.
+    if (isCurrent()) {
+      setLoading(false)
+      // A model switch can change config-backed aux slots on the server.
       void invalidateHermesConfig(scopeProfile)
-    } catch (err) {
-      if (profileEpoch.current === epoch) {
-        setCaughtError(err, m.loadFailed)
-      }
-    } finally {
-      if (profileEpoch.current === epoch) {
-        setLoading(false)
-      }
     }
-  }, [m.loadFailed, scopeProfile, setCaughtError, refreshModelCatalog, setMainModel, readMainRevision])
+  }, [m.loadFailed, scopeProfile, setCaughtError, refreshModelCatalog, setMainModel, readMainRevision, setAuxiliary])
 
   // Retire reads and key submissions when the settings owner changes or unmounts.
   // eslint-disable-next-line no-restricted-syntax -- generation owns asynchronous request lifetime, not a mirrored atom

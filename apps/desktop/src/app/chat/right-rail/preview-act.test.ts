@@ -363,7 +363,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
   it('types by pressing keys, after selecting whatever the field held', async () => {
     const send = withDrivenPane()
 
-    await actOnActivePreview({ kind: 'type', ref: '@e1', submit: true, text: 'hi' })
+    await actOnActivePreview({ kind: 'type', ref: '@e1', submit: true, text: 'hi+😀' })
 
     const events = send.mock.calls.map(([event]) => event)
     const chars = events.filter(event => event.type === 'char').map(event => event.keyCode)
@@ -380,7 +380,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
       modifiers: isMacPlatform() ? ['meta'] : ['control']
     })
     // The chord must not send a `char` phase, or select-all types a literal 'a'.
-    expect(chars).toEqual(['h', 'i', 'Enter'])
+    expect(chars).toEqual(['h', 'i', '+', '😀', 'Enter'])
   })
 
   /** A pane whose field STATE is scriptable, so the driver's verify-and-
@@ -415,7 +415,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
       registerPreviewScriptRunner(tabId, async code =>
         code.includes('hermes-focus-probe')
           ? JSON.stringify({ focused: true, success: true, tag: 'INPUT' })
-          : code.includes('document.activeElement')
+          : code.includes('hermes-field-state')
             ? JSON.stringify({ success: true, field: true, len: fieldLen })
             : code.includes('"kind":"locate"')
               ? JSON.stringify({
@@ -487,7 +487,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
             })
           : code.includes('getOwnPropertyDescriptor') // direct-set also fails
             ? JSON.stringify({ success: false, error: 'mask refuses' })
-            : code.includes('document.activeElement')
+            : code.includes('hermes-field-state')
               ? JSON.stringify({ success: true, field: true, len: 6 })
               : JSON.stringify({ elements: [], hit: { tag: 'INPUT', trusted: true }, success: true })
       )
@@ -520,7 +520,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
                 })
               : !code.includes('__hermesAct') && code.includes('getOwnPropertyDescriptor')
                 ? JSON.stringify({ success: true }) // the direct-set fallback succeeded (no preamble)
-                : !code.includes('__hermesAct') && code.includes('document.activeElement')
+                : code.includes('hermes-field-state')
                   ? JSON.stringify({ success: true, field: true, len: 4 }) // field-state read
                   : JSON.stringify({ elements: [], hit: { tag: 'INPUT', trusted: true }, success: true }) // finish trip
       )
@@ -862,5 +862,37 @@ describe('actOnActivePreview (drive_preview tool)', () => {
     expect(
       send.mock.calls.map(([event]) => event).some(event => event.type === 'keyDown' && event.keyCode === 'Escape')
     ).toBe(true)
+  })
+
+  it('sends native modifier combinations without inserting their literal spelling', async () => {
+    for (const [key, keyCode, modifiers] of [
+      ['Meta+A', 'a', ['meta']],
+      ['Cmd+Shift+K', 'k', ['meta', 'shift']],
+      ['Command+ArrowLeft', 'ArrowLeft', ['meta']],
+      ['Ctrl+A', 'a', ['control']],
+      ['Control+Alt+Delete', 'Delete', ['control', 'alt']],
+      ['Option+ArrowRight', 'ArrowRight', ['alt']],
+      ['Shift+Tab', 'Tab', ['shift']]
+    ] as const) {
+      const send = withPressedPane('INPUT')
+      const result = await actOnActivePreview({ key, kind: 'press', selector: 'input' })
+
+      expect(result.success).toBe(true)
+      expect(keyEvents(send)).toEqual([
+        { keyCode, modifiers, type: 'keyDown' },
+        { keyCode, modifiers, type: 'keyUp' }
+      ])
+    }
+  })
+
+  it('rejects malformed modifier combinations before sending any native input', async () => {
+    for (const key of ['Meta++A', 'Ctrl+Shift', 'Unknown+A', 'Ctrl+A+B', 'constructor+A']) {
+      const send = withPressedPane('INPUT')
+      const result = await actOnActivePreview({ key, kind: 'press', selector: 'input' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/key combination/i)
+      expect(send).not.toHaveBeenCalled()
+    }
   })
 })

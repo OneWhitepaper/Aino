@@ -16,16 +16,8 @@ const PANE_TITLE_KEYS = {
   terminal: 'terminal'
 } as const
 
-const LAYOUT_TITLE_KEYS = {
-  default: 'default',
-  focus: 'focus',
-  quad: 'quad',
-  'terminal-deck': 'terminalDeck'
-} as const
-
 const PALETTE_LABELS: Record<string, (t: Translations) => string> = {
   'keybinds.panel': t => t.commandCenter.contributedActions.keyboardShortcuts,
-  'layout.editMode': t => t.commandCenter.contributedActions.layoutEditMode,
   'layout.reset': t => t.commandCenter.contributedActions.resetLayout,
   'logs.toggle': t => t.commandCenter.contributedActions.toggleLogs,
   'plugins.reload': t => t.commandCenter.contributedActions.reloadPlugins,
@@ -80,23 +72,6 @@ export function localizedPaneTitle(
   }
 
   return fallback
-}
-
-/** Resolve the display name of a bundled layout preset while preserving names
- * authored by users and plugins. */
-export function localizedLayoutTitle(
-  translations: Translations,
-  presetId: string,
-  fallback: string,
-  source: CoreSource
-): string {
-  if (!isCoreContribution(source)) {
-    return fallback
-  }
-
-  const key = LAYOUT_TITLE_KEYS[presetId as keyof typeof LAYOUT_TITLE_KEYS]
-
-  return key ? translations.zones.layoutTitles[key] : fallback
 }
 
 /** Resolve a core command-palette contribution against the current locale.

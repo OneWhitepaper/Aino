@@ -150,6 +150,19 @@ function renderModelSettings(
 }
 
 describe('ModelSettings cached default', () => {
+  it('shows config-backed default and auxiliary tasks without waiting for catalog or live metadata probes', async () => {
+    const pending = deferred<never>()
+    getGlobalModelInfo.mockReturnValue(pending.promise)
+    getGlobalModelOptions.mockReturnValue(pending.promise)
+    getMoaModels.mockReturnValue(pending.promise)
+
+    const view = renderModelSettings()
+
+    await screen.findByText('hermes-4', { selector: '.default-main-model-current-value > span' })
+    expect(view.container.querySelector('[data-slot="model-settings-skeleton"]')).toBeNull()
+    expect((await screen.findAllByRole('button', { name: 'Set to main' })).length).toBeGreaterThan(0)
+  })
+
   it('keeps the applied model visible immediately on reentry while reads refresh in the background', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const first = renderModelSettings(undefined, client)

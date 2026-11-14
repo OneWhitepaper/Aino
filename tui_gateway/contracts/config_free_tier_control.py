@@ -602,6 +602,8 @@ method("model.options", params=ModelOptionsParams, result=ModelOptionsResult,
 
 
 class ImageGenerateParams(Params):
+    session_id: str | None = None
+    profile: str | None = None
     prompt: str | None = None
     aspect_ratio: str | None = None
     probe: JsonValue | None = None  # truthy word/flag: availability check only

@@ -12,9 +12,10 @@ import type { ManagedModelRouteCapability } from '@/store/gateway-managed-capabi
 import { notifyError } from '@/store/notifications'
 import { platformModelCatalog } from '@/store/platform-models'
 
-import type { PlatformModel, PlatformModelPurpose } from '../../shared/platform-contract'
+import { hasPlatformModelIdentity, type PlatformModel, type PlatformModelPurpose } from '../../shared/platform-contract'
 
 import { PlatformModelDetails } from './platform-model-details'
+import { PlatformModelRate } from './platform-model-rate'
 import { Button } from './ui/button'
 import { Codicon } from './ui/codicon'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command'
@@ -24,11 +25,12 @@ export function usePlatformModels(purpose: PlatformModelPurpose = 'chat') {
   const catalog = platformModelCatalog()
   const state = useStore(catalog.state)
   const account = useStore(catalog.account)
+  const identityReady = hasPlatformModelIdentity(account)
   useEffect(() => {
-    if (state.phase === 'idle') {
-      void catalog.load()
-    }
-  }, [catalog, state.phase, account?.revision])
+    // Reopening checks the existing TTL without clearing a fresh catalog.
+    // Account-specific rates may have changed since this picker was last used.
+    void catalog.load()
+  }, [catalog, account?.revision, account?.mode, account?.account?.id, identityReady])
 
   return {
     ...state,
@@ -114,6 +116,7 @@ function PlatformModelMenuRows({
             >
               <Codicon name="brain" size="1rem" />
               <span className="aino-model-menu-name">{model.display_name}</span>
+              <PlatformModelRate model={model} />
               {model.state !== 'available' && (
                 <span className="text-xs text-muted-foreground">{copy[model.state]}</span>
               )}
@@ -333,6 +336,7 @@ export function PlatformModelList({
                               : copy[model.state]}
                         </span>
                       </span>
+                      <PlatformModelRate model={model} />
                       {selectedId === model.id && <Check className="size-3.5 shrink-0" />}
                     </CommandItem>
                   ))}

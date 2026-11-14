@@ -26,6 +26,7 @@ const { request, notify, openWorkspace } = vi.hoisted(() => ({
   notify: vi.fn(),
   openWorkspace: vi.fn()
 }))
+
 vi.mock('@hermes/plugin-sdk', async importOriginal => {
   const sdk = await importOriginal<typeof HermesSdk>()
   const { en } = await import('@/i18n/en')

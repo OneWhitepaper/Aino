@@ -81,9 +81,6 @@
   width: 0.875rem;
   height: 0.875rem;
 }
-.appearance-preview[data-preview-actions='left'] .appearance-preview-title {
-  flex-direction: row-reverse;
-}
 .appearance-preview-tabs {
   display: flex;
   flex-wrap: wrap;

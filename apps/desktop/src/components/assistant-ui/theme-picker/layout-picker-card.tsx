@@ -4,7 +4,7 @@ import { useStore } from '@nanostores/react'
 
 import { isLayoutNode } from '@/components/pane-shell/tree/model'
 import { layoutPresetResting, LAYOUTS_AREA } from '@/components/pane-shell/tree/presets'
-import { TreeThumbnail } from '@/components/pane-shell/tree/renderer/layout-picker'
+import { TreeThumbnail } from '@/components/pane-shell/tree/renderer/tree-thumbnail'
 import { $activePresetId } from '@/components/pane-shell/tree/store'
 import { Button } from '@/components/ui/button'
 import { useContributions } from '@/contrib/react/use-contributions'

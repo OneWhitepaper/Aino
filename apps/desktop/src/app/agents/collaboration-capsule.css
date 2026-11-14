@@ -18,7 +18,7 @@
 .collaboration-capsule button { cursor:pointer; }
 .collaboration-capsule button:disabled { cursor:default; opacity:.5; }
 .collaboration-capsule button:focus-visible,.collaboration-capsule input:focus-visible { outline:2px solid var(--cc-focus); outline-offset:-2px; }
-.collaboration-capsule ::selection { background:#b5c3e16b; }
+.collaboration-capsule ::selection { background:var(--ui-selection-background); }
 .collaboration-capsule * { scrollbar-width:thin; scrollbar-color:var(--cc-line) transparent; }
 .collaboration-capsule [hidden] { display:none!important; }
 .cc-icon { width:16px; height:16px; flex-shrink:0; }

@@ -66,6 +66,10 @@ export function clampConsoleHeight(value: number): number {
   return Math.max(value, CONSOLE_HEADER_HEIGHT)
 }
 
+export function previewConsoleInset(open: boolean, height: number): CSSProperties | undefined {
+  return open ? { bottom: height } : undefined
+}
+
 interface ConsoleRowProps {
   copyText: string
   log: ConsoleEntry

@@ -284,9 +284,14 @@ test('an account workspace drops launch-root and launch-profile credentials and 
       sourceHermesHome: root,
       currentEnv: {
         HERMES_HOME: path.join(root, 'profiles', 'work'),
-        ROOT_SECRET: 'first', PROFILE_SECRET: 'second', PATH: '/usr/bin',
-        HERMES_DESKTOP_REMOTE_URL: 'https://old.invalid', HERMES_DESKTOP_REMOTE_TOKEN: 'old-token',
-        HERMES_DESKTOP_CWD: '/old/project', HERMES_PROFILE: 'work', HERMES_CONFIG_PATH: '/old/config.yaml'
+        ROOT_SECRET: 'first',
+        PROFILE_SECRET: 'second',
+        PATH: '/usr/bin',
+        HERMES_DESKTOP_REMOTE_URL: 'https://old.invalid',
+        HERMES_DESKTOP_REMOTE_TOKEN: 'old-token',
+        HERMES_DESKTOP_CWD: '/old/project',
+        HERMES_PROFILE: 'work',
+        HERMES_CONFIG_PATH: '/old/config.yaml'
       }
     })
 
@@ -302,11 +307,19 @@ test('account re-homing removes Windows routing overrides regardless of environm
     sourceHermesHome: 'C:\\legacy',
     platform: 'win32',
     currentEnv: {
-      Hermes_Home: 'C:\\legacy', Path: 'C:\\Windows',
-      Hermes_Desktop_Remote_Url: 'https://old.invalid', Hermes_Desktop_Remote_Token: 'old-token',
-      Hermes_Desktop_Cwd: 'C:\\old', Hermes_Profile: 'work', Hermes_Config_Path: 'C:\\old\\config.yaml'
+      Hermes_Home: 'C:\\legacy',
+      Path: 'C:\\Windows',
+      Hermes_Desktop_Remote_Url: 'https://old.invalid',
+      Hermes_Desktop_Remote_Token: 'old-token',
+      Hermes_Desktop_Cwd: 'C:\\old',
+      Hermes_Profile: 'work',
+      Hermes_Config_Path: 'C:\\old\\config.yaml'
     },
-    fsModule: { readFileSync() { throw Object.assign(new Error('missing'), { code: 'ENOENT' }) } }
+    fsModule: {
+      readFileSync() {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+    }
   })
 
   assert.deepEqual(env, { HERMES_HOME: home, Path: 'C:\\Windows' })

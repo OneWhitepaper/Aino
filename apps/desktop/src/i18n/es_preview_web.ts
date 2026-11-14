@@ -28,6 +28,11 @@ export const esPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   reload: 'Recargar página',
   address: 'Dirección',
   addressPlaceholder: 'Introduce una dirección',
+  pageZoom: 'Zoom de página',
+  fitWidth: 'Ajustar al ancho',
+  actualSize: 'Tamaño real (100%)',
+  zoomIn: 'Acercar',
+  zoomOut: 'Alejar',
   blankPageBody: 'Escribe una dirección arriba para navegar o pide a Hermes que abra una página.',
   finishedRestarting: message =>
     `Hermes terminó de reiniciar el servidor de vista previa${message ? `: ${message}` : ''}`,

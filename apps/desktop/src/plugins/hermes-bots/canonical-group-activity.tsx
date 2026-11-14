@@ -112,6 +112,7 @@ export function canonicalMemberStatus(
   }
 
   const activity = attempts.length === 1 ? attempts[0].activity : undefined
+
   const label =
     activity === 'replying'
       ? labels.memberReplying
@@ -207,6 +208,7 @@ export function CanonicalGroupWorkingLine({
   if (!current.length && !driver?.working) {
     return null
   }
+
   const first = current.length ? memberFor(current[0][0]) : undefined
 
   const title = statuses.length
@@ -285,6 +287,7 @@ export function useNowSeconds(live: boolean): number {
     if (!live) {
       return
     }
+
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000)
 
     return () => clearInterval(timer)

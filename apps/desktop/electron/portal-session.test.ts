@@ -77,7 +77,11 @@ test('a real portal load failure still ends sign-in', async () => {
 
 test('retirement during a cookie read cannot create a late login window in the next account', async () => {
   let releaseCookies!: (cookies: { name: string; value: string }[]) => void
-  const oldRead = new Promise<{ name: string; value: string }[]>(resolve => { releaseCookies = resolve })
+
+  const oldRead = new Promise<{ name: string; value: string }[]>(resolve => {
+    releaseCookies = resolve
+  })
+
   let session = { cookies: { get: () => oldRead } } as unknown as Session
   const createWindow = vi.fn()
 

@@ -24,7 +24,7 @@ export interface NamingKit {
   clamp(text: string, max: number): string
   cssEscape(value: string): string
   /** The accessible name, by the usual ladder, truncated. */
-  labelOf(el: Element): string
+  labelOf(el: Element, includeValue?: boolean): string
   /** An `#id` or `[data-testid]`, or empty when the page offers neither. */
   selectorFor(el: Element): string
   /** Lowercase, hyphenated, and short enough to read at a glance. */
@@ -44,7 +44,8 @@ export function namingKit(doc: Document): NamingKit {
 
   const clamp = (text: string, max: number) => (text.length > max ? text.slice(0, max - 1) + '…' : text)
 
-  const labelOf = (el: Element): string => {
+  const labelOf = (el: Element, includeValue = true): string => {
+    const password = el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'password'
     const aria = el.getAttribute('aria-label')
 
     if (aria) {
@@ -52,14 +53,22 @@ export function namingKit(doc: Document): NamingKit {
     }
 
     const labelledBy = el.getAttribute('aria-labelledby')
-    const labelled = labelledBy ? doc.getElementById(labelledBy) : null
-    const text = ((labelled || el).textContent || '').trim().replace(/\s+/g, ' ')
+    const root = el.getRootNode() as Document | ShadowRoot
+
+    const labelled = labelledBy
+      ?.trim()
+      .split(/\s+/)
+      .map(id => root.getElementById(id)?.textContent || '')
+      .join(' ')
+      .trim()
+
+    const text = (labelled || el.textContent || '').trim().replace(/\s+/g, ' ')
 
     if (text) {
       return clamp(text, 80)
     }
 
-    for (const attr of ['placeholder', 'title', 'alt', 'name', 'value']) {
+    for (const attr of ['placeholder', 'title', 'alt', 'name', ...(includeValue && !password ? ['value'] : [])]) {
       const value = el.getAttribute(attr)
 
       if (value) {
@@ -67,7 +76,9 @@ export function namingKit(doc: Document): NamingKit {
       }
     }
 
-    return ''
+    // A nameless password must remain reachable without using its secret as
+    // the name, durable ref, or action receipt.
+    return password ? 'Password' : ''
   }
 
   /** The strongest identity signal the page offers, if it offers one. Nothing a
@@ -187,6 +198,10 @@ export function namingKit(doc: Document): NamingKit {
     // input's TYPE, not on `checked` being defined, which it is (as false) on
     // every input including text fields.
     const kind = (control.type || '').toLowerCase()
+
+    if (kind === 'password') {
+      return ''
+    }
 
     if (kind === 'checkbox' || kind === 'radio') {
       return control.checked ? 'checked' : 'unchecked'

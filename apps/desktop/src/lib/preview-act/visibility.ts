@@ -18,6 +18,8 @@
  * factory shape.
  */
 
+import type { DomSurfaces } from './dom-surfaces'
+
 export interface VisibilityKit {
   /** In the viewport right now, and not a page-sized wrapper. */
   onScreen(el: Element): boolean
@@ -28,7 +30,7 @@ export interface VisibilityKit {
 }
 
 /** Build the visibility tests against one document and its view. */
-export function visibilityKit(doc: Document, win: null | Window): VisibilityKit {
+export function visibilityKit(doc: Document, win: null | Window, surfaces?: DomSurfaces): VisibilityKit {
   /** On screen right now, and worth drawing a box around. The field is strictly
    *  viewport-bound: a mark past the fold is one nobody can see, it spends the
    *  budget that should have gone to what IS on screen, and the ones parked far
@@ -39,6 +41,16 @@ export function visibilityKit(doc: Document, win: null | Window): VisibilityKit 
     }
 
     const box = el.getBoundingClientRect()
+
+    if (surfaces?.localPoint(el) === null) {
+      return false
+    }
+
+    const point = surfaces?.point(el)
+
+    if (point && (point.x < 0 || point.y < 0 || point.x >= win.innerWidth || point.y >= win.innerHeight)) {
+      return false
+    }
 
     if (box.right <= 0 || box.bottom <= 0 || box.left >= win.innerWidth || box.top >= win.innerHeight) {
       return false
@@ -52,16 +64,21 @@ export function visibilityKit(doc: Document, win: null | Window): VisibilityKit 
 
   /** Painted at all, ancestors included. */
   const shown = (el: Element): boolean => {
+    const style = win && win.getComputedStyle ? win.getComputedStyle(el) : null
     // Folds in display/visibility/opacity/content-visibility inherited from an
     // ANCESTOR, which this element's own computed style does not report: inside
     // a parent at opacity 0, every child still reads back opacity 1.
     const seen = (el as Element & { checkVisibility?: (opts: object) => boolean }).checkVisibility
 
-    if (typeof seen === 'function' && !seen.call(el, { checkOpacity: true, checkVisibilityCSS: true })) {
+    // A display:contents wrapper has no box, so its own checkVisibility is
+    // false even when its children paint. Their visibility is checked separately.
+    if (
+      style?.display !== 'contents' &&
+      typeof seen === 'function' &&
+      !seen.call(el, { checkOpacity: true, checkVisibilityCSS: true })
+    ) {
       return false
     }
-
-    const style = win && win.getComputedStyle ? win.getComputedStyle(el) : null
 
     if (style) {
       if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
@@ -79,8 +96,45 @@ export function visibilityKit(doc: Document, win: null | Window): VisibilityKit 
     return true
   }
 
+  const uncovered = (el: Element, rect: DOMRect, ancestors: Element[]): boolean => {
+    if (surfaces) {
+      return surfaces.localPoint(el) !== null
+    }
+
+    const midX = rect.left + rect.width / 2
+    const midY = rect.top + rect.height / 2
+    const owner = el.ownerDocument
+    const view = owner.defaultView
+    const root = el.getRootNode() as Document | ShadowRoot
+    const hitRoot = typeof root.elementFromPoint === 'function' ? root : owner
+    const under = hitRoot.elementFromPoint
+
+    if (
+      typeof under !== 'function' ||
+      !view ||
+      midX < 0 ||
+      midY < 0 ||
+      midX >= view.innerWidth ||
+      midY >= view.innerHeight
+    ) {
+      return true
+    }
+
+    const over = under.call(hitRoot, midX, midY)
+
+    return !!over && (over === el || el.contains(over) || ancestors.includes(over) || over.contains(el))
+  }
+
   const visible = (el: Element): boolean => {
-    if (!shown(el)) {
+    const ancestors = surfaces?.ancestors(el) ?? [el]
+
+    if (ancestors.some(ancestor => !shown(ancestor))) {
+      return false
+    }
+
+    const frame = el.ownerDocument !== doc ? el.ownerDocument.defaultView?.frameElement : null
+
+    if (frame && !visible(frame)) {
       return false
     }
 
@@ -90,7 +144,7 @@ export function visibilityKit(doc: Document, win: null | Window): VisibilityKit 
     // be clicked at all. Disabled controls are deliberately NOT filtered here —
     // they stay in the inventory so the agent is told a button is disabled
     // rather than hunting for one that appears not to exist.
-    if (el.closest('[aria-hidden="true"], [inert]')) {
+    if (ancestors.some(ancestor => ancestor.matches('[aria-hidden="true"], [inert]'))) {
       return false
     }
 
@@ -120,27 +174,7 @@ export function visibilityKit(doc: Document, win: null | Window): VisibilityKit 
     // targets the agent aims at and then misses. Elements below the fold cannot
     // be hit-tested from here, so they are taken on trust and land back in this
     // function after the scroll.
-    const midX = rect.left + rect.width / 2
-    const midY = rect.top + rect.height / 2
-
-    const under = (doc as Document & { elementFromPoint?: (x: number, y: number) => Element | null }).elementFromPoint
-
-    if (
-      typeof under === 'function' &&
-      win &&
-      midX >= 0 &&
-      midY >= 0 &&
-      midX < win.innerWidth &&
-      midY < win.innerHeight
-    ) {
-      const over = under.call(doc, midX, midY)
-
-      if (!over || !(over === el || el.contains(over) || over.contains(el))) {
-        return false
-      }
-    }
-
-    return true
+    return uncovered(el, rect, ancestors)
   }
 
   return { onScreen, shown, visible }

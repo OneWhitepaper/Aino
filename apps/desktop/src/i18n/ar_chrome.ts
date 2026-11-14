@@ -41,9 +41,7 @@ export const arChrome = {
     openStarmap: 'فتح خريطة الذاكرة',
     enterHud: 'وضع HUD',
     exitHud: 'إنهاء وضع HUD',
-    resetHudLayout: 'إعادة تعيين حجم HUD وموضعه',
-    layoutEditor: 'محرر التخطيط',
-    layoutEditorTitle: modifier => `محرر التخطيط — انقر مع ${modifier} لإعادة ضبط التخطيط`
+    resetHudLayout: 'إعادة تعيين حجم HUD وموضعه'
   },
   keybinds: {
     title: 'اختصارات لوحة المفاتيح',
@@ -538,15 +536,15 @@ export const arChrome = {
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "انقطع اتصال الطرفية. اضغط Enter للاتصال بنفس الصدفة.",
-    terminalExpired: "انتهت الطرفية أو انتهت صلاحيتها. اضغط Enter لإنشاء صدفة جديدة.",
-    terminalSuperseded: "الطرفية متصلة في نافذة أخرى. اضغط Enter لاستعادتها هنا.",
-    terminalDenied: "رُفض الوصول إلى الطرفية. تحقق من تسجيل الدخول والملف ثم اضغط Enter.",
-    terminalCapacity: "بلغ عدد الطرفيات الحد الأقصى. أغلق طرفية أخرى ثم اضغط Enter.",
-    terminalSignedOut: "تم تسجيل الخروج. سجّل الدخول مجددًا في هذا المتصفح ثم اضغط Enter.",
-    terminalReconnecting: "انقطع اتصال الطرفية. جارٍ الاتصال بنفس الصدفة…",
-    terminalStartRetry: (error: string) => "تعذر بدء الطرفية: " + error + ". اضغط Enter للمحاولة مجددًا.",
-    terminalCloseFailed: "تعذر إغلاق الطرفية",
+    terminalReconnectSame: 'انقطع اتصال الطرفية. اضغط Enter للاتصال بنفس الصدفة.',
+    terminalExpired: 'انتهت الطرفية أو انتهت صلاحيتها. اضغط Enter لإنشاء صدفة جديدة.',
+    terminalSuperseded: 'الطرفية متصلة في نافذة أخرى. اضغط Enter لاستعادتها هنا.',
+    terminalDenied: 'رُفض الوصول إلى الطرفية. تحقق من تسجيل الدخول والملف ثم اضغط Enter.',
+    terminalCapacity: 'بلغ عدد الطرفيات الحد الأقصى. أغلق طرفية أخرى ثم اضغط Enter.',
+    terminalSignedOut: 'تم تسجيل الخروج. سجّل الدخول مجددًا في هذا المتصفح ثم اضغط Enter.',
+    terminalReconnecting: 'انقطع اتصال الطرفية. جارٍ الاتصال بنفس الصدفة…',
+    terminalStartRetry: (error: string) => 'تعذر بدء الطرفية: ' + error + '. اضغط Enter للمحاولة مجددًا.',
+    terminalCloseFailed: 'تعذر إغلاق الطرفية',
     terminalDropUnquotable: (shell, paths) => `لا يمكن كتابة هذه الأسماء بأمان في ${shell}: ${paths}`,
     terminalReadOnly: 'مخرجات للقراءة فقط',
     terminalReadOnlyHelp:
@@ -589,17 +587,15 @@ export const arChrome = {
     loadingFiles: 'جار تحميل الملفات...',
     terminalHide: 'إخفاء الطرفية',
     addToChat: 'إضافة للمحادثة',
-    terminalStartFailed: (error: string) => `فشل تشغيل الطرفية: ${error}`
-  ,
-terminalNewOn: 'طرفية جديدة على…',
-terminalGatewayRemoved: 'بوابة محذوفة',
-terminalGatewayRemovedBody:
+    terminalStartFailed: (error: string) => `فشل تشغيل الطرفية: ${error}`,
+    terminalNewOn: 'طرفية جديدة على…',
+    terminalGatewayRemoved: 'بوابة محذوفة',
+    terminalGatewayRemovedBody:
       'حُذفت البوابة التي كانت تعمل عليها هذه الطرفية، لذا لا يمكن إعادة فتحها. أغلق علامة التبويب هذه.',
-terminalGatewayNoShellBody:
+    terminalGatewayNoShellBody:
       'لا توفر هذه البوابة وصولاً إلى الصدفة، لذا لا يمكن إعادة فتح هذه الطرفية. أغلق علامة التبويب هذه.',
-terminalDisconnectedBody:
-      'انقطع اتصال الطرفية. اضغط Enter لبدء صدفة جديدة؛ يُحفظ سجل التمرير.'
-},
+    terminalDisconnectedBody: 'انقطع اتصال الطرفية. اضغط Enter لبدء صدفة جديدة؛ يُحفظ سجل التمرير.'
+  },
   zones: {
     switchConversation: 'تبديل المحادثة',
     sidebarModeMenu: 'تبديل وضع المحادثة',
@@ -626,29 +622,6 @@ terminalDisconnectedBody:
     pluginDisabled: pluginId => `الإضافة "${pluginId}" معطلة`,
     pluginDisabledBody: 'أعد تفعيلها من القدرات ← الإضافات لإرجاع اللوحة.',
     missingPane: paneId => `لوحة مفقودة: ${paneId}`,
-    editTitle: 'التخطيطات',
-    editHint: 'اختر تخطيطا، أو اسحب اللوحات بين المناطق.',
-    reset: 'إعادة ضبط',
-    templates: 'القوالب',
-    custom: 'مخصص',
-    newGridLayout: 'تخطيط شبكة جديد',
-    saveCurrentAs: 'حفظ الترتيب الحالي كقالب',
-    nameLayoutPlaceholder: 'سم هذا التخطيط...',
-    deletePreset: name => `حذف ${name}`,
-    zoneEditorTitle: 'محرر المناطق',
-    editorHintPre: 'انقر للتقسيم · ',
-    editorHintPost: ' يعكس الخط · اسحب عبر المناطق للدمج · اسحب الحواف المشتركة لتغيير الحجم',
-    templateColumns: 'أعمدة',
-    templateRows: 'صفوف',
-    templateGrid: 'شبكة',
-    templatePriority: 'أولوية',
-    zoneTag: index => `منطقة ${index}`,
-    mergeZones: count => `دمج ${count} مناطق`,
-    customZoneName: count => `مخصص من ${count} مناطق`,
-    layoutNamePlaceholder: fallback => `اسم التخطيط (${fallback})`,
-    saveApply: 'حفظ وتطبيق',
-    notExpressible: 'هذا الترتيب متشابك — لا يمكن تمثيله كتقسيمات متداخلة بعد',
-    zoneCount: count => `${count} مناطق`,
     tabCount: count => `${count} تبويبات`,
     tabActions: title => `إجراءات ${title}`
   },

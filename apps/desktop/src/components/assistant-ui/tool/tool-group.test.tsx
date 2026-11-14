@@ -357,6 +357,14 @@ const GroupHarness = ({ message }: { message: ThreadMessage }) => (
   </ThreadRuntime>
 )
 
+function openRun(container: HTMLElement) {
+  const toggle = container.querySelector<HTMLButtonElement>('[data-tool-summary] button[aria-expanded="false"]')
+
+  if (toggle) {
+    fireEvent.click(toggle)
+  }
+}
+
 beforeEach(() => {
   clearAllPrompts()
   $activeSessionId.set('sess-1')
@@ -375,44 +383,55 @@ describe('settled tool run', () => {
   it('collapses to a summary line naming the work', async () => {
     const { container } = render(<GroupHarness message={settledRunMessage()} />)
 
-    expect(await screen.findByText('Explored wiring.tsx, ran 1 command')).toBeTruthy()
+    expect(await screen.findByText('Explored 1 file, ran 1 command')).toBeTruthy()
     expect(container.querySelectorAll('[data-tool-row]')).toHaveLength(0)
   })
 
   it('expands to the underlying rows when the summary is clicked', async () => {
     const { container } = render(<GroupHarness message={settledRunMessage()} />)
 
-    fireEvent.click(await screen.findByText('Explored wiring.tsx, ran 1 command'))
+    fireEvent.click(await screen.findByText('Explored 1 file, ran 1 command'))
 
     await waitFor(() => {
       expect(container.querySelectorAll('[data-tool-row]').length).toBeGreaterThan(0)
     })
   })
 
-  it('leaves a lone tool call as its own row, with no summary above it', async () => {
+  it('gives a lone tool call the same collapsed disclosure as a longer run', async () => {
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
 
     await waitFor(() => {
-      expect(container.querySelectorAll('[data-tool-row]').length).toBe(1)
+      expect(container.querySelector('[data-tool-summary] button[aria-expanded="false"]')).not.toBeNull()
     })
-    expect(container.querySelector('[data-tool-summary]')).toBeNull()
+    expect(container.querySelectorAll('[data-tool-row]')).toHaveLength(0)
+    openRun(container)
+    await waitFor(() => expect(container.querySelectorAll('[data-tool-row]')).toHaveLength(1))
   })
 })
 
-// A diff is what the user reviews, so it is never what gets summarized away.
-// It stays on screen at the point in the turn where it happened, with the
-// activity either side of it collapsing around it.
+// A diff stays reviewable at the point where the edit happened, behind the
+// same concise run summary as the surrounding reads and commands.
 describe('a file edit among ordinary activity', () => {
-  it('stays visible between the two runs it interrupted', async () => {
+  it('keeps the edit in chronological order inside the shared run', async () => {
     const { container } = render(<GroupHarness message={editBetweenRunsMessage()} />)
 
-    await screen.findByText('Explored 2 files')
+    await waitFor(() => expect(container.querySelectorAll('[data-tool-summary]')).toHaveLength(1))
 
     const shape = [...container.querySelectorAll('[data-tool-summary],[data-tool-row]')].map(node =>
       node.hasAttribute('data-tool-summary') ? 'summary' : 'row'
     )
 
-    expect(shape).toEqual(['summary', 'row', 'summary'])
+    expect(shape).toEqual(['summary'])
+    openRun(container)
+    const rows = container.querySelectorAll<HTMLElement>('[data-tool-row]')
+    expect(rows).toHaveLength(5)
+    expect(rows[0]?.textContent).toContain('a.ts')
+    expect(rows[2]?.textContent).toContain('wiring.tsx')
+    expect(rows[3]?.textContent).toContain('b.ts')
+    expect(rows[4]?.textContent).toContain('ls')
+    expect(container.textContent).not.toContain('added line')
+    fireEvent.click(rows[2]!.querySelector('button[aria-expanded="false"]')!)
+    await waitFor(() => expect(rows[2]?.textContent).toContain('added line'))
   })
 })
 
@@ -560,7 +579,7 @@ describe('live tool run', () => {
     }
   )
 
-  it('updates named skill summaries when identifying arguments arrive late', async () => {
+  it('keeps skill summaries concise while updating the expanded row when identifying arguments arrive late', async () => {
     const message = groupedPendingMessage()
     const first = { ...message.content[0], toolName: 'skill_view', args: {}, result: { success: true } }
 
@@ -569,10 +588,14 @@ describe('live tool run', () => {
     )
 
     const summary = () => container.querySelector('[data-tool-summary]')?.textContent
-    await waitFor(() => expect(summary()).toContain('Loaded skill'))
+    await waitFor(() => expect(summary()).toContain('used 1 tool'))
+    openRun(container)
+    const skillRow = () => container.querySelectorAll('[data-tool-row]')[0]?.textContent
+    expect(skillRow()).toContain('Loaded skill')
     const named = { ...first, args: { name: 'research-notes' } }
     rerender(<GroupHarness message={{ ...message, content: [named, message.content[1]] } as ThreadMessage} />)
-    await waitFor(() => expect(summary()).toContain('research-notes'))
+    await waitFor(() => expect(skillRow()).toContain('research-notes'))
+    expect(summary()).not.toContain('research-notes')
   })
 
   it('rests between sequential calls and resumes live activity when the next call arrives', async () => {
@@ -684,6 +707,7 @@ describe('flat tool list approval surfacing', () => {
     assert(message.role === 'assistant' && run.role === 'assistant')
     const command = run.content[1]!
     const { container } = render(<GroupHarness message={{ ...message, content: [command] }} />)
+    openRun(container)
     const rowToggle = await screen.findByRole('button', { name: /Ran ls -la/ })
 
     fireEvent.click(rowToggle)
@@ -707,6 +731,7 @@ describe('flat tool list approval surfacing', () => {
 
   it('lets completed tool rows be hidden through the actions menu', async () => {
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
+    openRun(container)
 
     const actions = await screen.findByRole('button', { name: 'Execution record actions' })
 
@@ -727,6 +752,7 @@ describe('flat tool list approval surfacing', () => {
     // forget it and the row would pop back. Simulate the remount by unmounting
     // and rendering the same message fresh.
     const first = render(<GroupHarness message={completedOnlyMessage()} />)
+    openRun(first.container)
 
     fireEvent.keyDown(await screen.findByRole('button', { name: 'Execution record actions' }), { key: 'ArrowDown' })
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide this record' }))
@@ -793,6 +819,7 @@ describe('tool error explanations', () => {
 describe('tool lifecycle timestamps', () => {
   it('keeps a settled row quiet and reveals its precise lifecycle on expansion', async () => {
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
+    openRun(container)
 
     const toggle = await screen.findByRole('button', { name: 'Read hosts' })
 
@@ -814,7 +841,7 @@ describe('tool lifecycle timestamps', () => {
     await waitFor(() => expect(container.querySelector('[data-tool-summary]')).toBeTruthy())
 
     expect(container.querySelector('[data-tool-summary] [data-slot="timeline-timestamp"]')).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: 'Explored wiring.tsx, ran 1 command' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Explored 1 file, ran 1 command' }))
 
     const timestamps = Array.from(
       container.querySelectorAll('[data-tool-run-details] [data-slot="timeline-timestamp"]')
@@ -862,6 +889,7 @@ describe('expanded terminal transcript', () => {
       )
 
       expect(screen.queryByRole('region', { name: 'Shell' })).toBeNull()
+      openRun(container)
       const toggle = container.querySelector('[data-tool-row] button[aria-expanded]') as HTMLButtonElement
       fireEvent.click(toggle)
 
@@ -916,6 +944,7 @@ describe('expanded terminal transcript', () => {
     { name: 'pending', part: {}, running: true, label: 'Running' }
   ])('reports $name without inventing successful completion', async ({ part, running, label, exit }) => {
     const { container } = render(<GroupHarness message={terminalMessage(part, running)} />)
+    openRun(container)
     const toggle = container.querySelector('[data-tool-row] button[aria-expanded]') as HTMLButtonElement
     fireEvent.click(toggle)
 

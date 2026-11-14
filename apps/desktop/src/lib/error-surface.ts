@@ -169,9 +169,7 @@ function parseUsageLimit(value: unknown): UsageLimitSurface | undefined {
   const action = raw.credits?.action
 
   const credits =
-    action === 'use_credits' || action === 'add_credits' || action === 'add_credits_and_keep_going'
-      ? action
-      : undefined
+    action === 'use_credits' || action === 'add_credits' || action === 'add_credits_and_keep_going' ? action : undefined
 
   return suggestions.length || credits ? { suggestions, ...(credits ? { credits } : {}) } : undefined
 }
@@ -213,12 +211,14 @@ export function parseErrorSurface(value: unknown): ErrorSurface | null {
     ...(typeof raw.provider === 'string' && raw.provider ? { provider: raw.provider } : {}),
     ...(typeof raw.model === 'string' && raw.model ? { model: raw.model } : {}),
     ...(raw.auth_kind === 'oauth' || raw.auth_kind === 'api_key' ? { authKind: raw.auth_kind } : {}),
-    ...(typeof raw.provider_label === 'string' && raw.provider_label
-      ? { providerLabel: raw.provider_label }
-      : {}),
+    ...(typeof raw.provider_label === 'string' && raw.provider_label ? { providerLabel: raw.provider_label } : {}),
     ...(typeof raw.api_key_env === 'string' && raw.api_key_env ? { apiKeyEnv: raw.api_key_env } : {}),
     ...(typeof raw.message === 'string' && raw.message.trim() ? { message: raw.message.trim() } : {}),
-    ...(typeof raw.managed_credential_version === 'number' && Number.isSafeInteger(raw.managed_credential_version) && raw.managed_credential_version > 0 ? { managedCredentialVersion: raw.managed_credential_version } : {}),
+    ...(typeof raw.managed_credential_version === 'number' &&
+    Number.isSafeInteger(raw.managed_credential_version) &&
+    raw.managed_credential_version > 0
+      ? { managedCredentialVersion: raw.managed_credential_version }
+      : {}),
     ...(typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at) && raw.resets_at > 0
       ? { resetsAt: raw.resets_at }
       : {}),
@@ -297,10 +297,7 @@ export function errorCardKey(surface: ErrorSurface | null | undefined): ErrorCar
 
   // A custom/local model server gets the endpoint copy ("Can't reach your
   // model server"), not the hosted-provider copy that says to check the internet.
-  if (
-    surface.layer === 'endpoint' &&
-    (surface.code === 'timeout' || surface.code === 'ssl_cert_verification')
-  ) {
+  if (surface.layer === 'endpoint' && (surface.code === 'timeout' || surface.code === 'ssl_cert_verification')) {
     return { layer: 'endpoint' }
   }
 
@@ -552,9 +549,7 @@ function endpointActions(surface: ErrorSurface, key: ErrorCardKey): ErrorCardAct
   // The managed local model server is down: another model is the fix the card can offer, and a
   // server that is still starting (retryable) is worth one more try.
   if (surface.code === 'local_runtime_unavailable') {
-    return surface.retryable
-      ? { primary: 'retry', secondary: 'switch_provider' }
-      : { primary: 'switch_provider' }
+    return surface.retryable ? { primary: 'retry', secondary: 'switch_provider' } : { primary: 'switch_provider' }
   }
 
   // errorCardKey routes a custom/local server's timeout or TLS failure to the endpoint copy.
@@ -604,9 +599,7 @@ export function errorCardActions(surface: ErrorSurface | null | undefined): Erro
 
   // Signing in is free and lifts the refusal; a transient one (rate limit) can also just be retried.
   if (isFreeTierSurface(surface)) {
-    return surface.retryable
-      ? { primary: 'sign_in_free_tier', secondary: 'retry' }
-      : { primary: 'sign_in_free_tier' }
+    return surface.retryable ? { primary: 'sign_in_free_tier', secondary: 'retry' } : { primary: 'sign_in_free_tier' }
   }
 
   if (

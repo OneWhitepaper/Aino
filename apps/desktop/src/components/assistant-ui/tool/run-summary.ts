@@ -2,8 +2,15 @@ import { translateNow } from '@/i18n'
 import { firstStringField } from '@/lib/text'
 import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 
-import { compactPreview, fileEditBasename, findFirstUrl, hostnameOf, isFileEditTool, parseMaybeObject } from './fallback-model'
-import { skillActivityTitle } from './skill-activity'
+import {
+  compactPreview,
+  fileEditBasename,
+  fileEditPath,
+  findFirstUrl,
+  hostnameOf,
+  isFileEditTool,
+  parseMaybeObject
+} from './fallback-model'
 
 /**
  * The little a summary needs from a tool call, stated structurally so both
@@ -25,7 +32,11 @@ export function isToolCallPart<T extends { type: string }>(part: T): part is Ext
 
 type WebCategory = 'search' | 'read' | 'browse' | 'interact' | 'analyze'
 type RunCategory = WebCategory | 'delegate' | 'edit' | 'explore' | 'other' | 'run'
-interface CategoryCopy { count: (count: number) => string; past: string; present: string }
+interface CategoryCopy {
+  count: (count: number) => string
+  past: string
+  present: string
+}
 
 export interface ToolRunCopy {
   search?: CategoryCopy
@@ -42,7 +53,18 @@ export interface ToolRunCopy {
 
 // Clause order is fixed so the same run always reads the same way, whichever
 // category happens to be live.
-const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'search', 'read', 'browse', 'interact', 'analyze', 'run', 'delegate', 'other']
+const CATEGORY_ORDER: readonly RunCategory[] = [
+  'edit',
+  'explore',
+  'search',
+  'read',
+  'browse',
+  'interact',
+  'analyze',
+  'run',
+  'delegate',
+  'other'
+]
 
 const DEFAULT_COPY: ToolRunCopy = {
   delegate: { count: count => `${count} task${count === 1 ? '' : 's'}`, past: 'Delegated', present: 'Delegating' },
@@ -56,7 +78,11 @@ const WEB_COPY: Record<WebCategory, CategoryCopy> = {
   search: { count: count => `${count} ${count === 1 ? 'query' : 'queries'}`, past: 'Searched', present: 'Searching' },
   read: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Read', present: 'Reading' },
   browse: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Opened', present: 'Opening' },
-  interact: { count: count => `${count} browser action${count === 1 ? '' : 's'}`, past: 'Performed', present: 'Performing' },
+  interact: {
+    count: count => `${count} browser action${count === 1 ? '' : 's'}`,
+    past: 'Performed',
+    present: 'Performing'
+  },
   analyze: { count: count => `${count} image${count === 1 ? '' : 's'}`, past: 'Analyzed', present: 'Analyzing' }
 }
 
@@ -75,13 +101,37 @@ const TOOL_CATEGORY: Record<string, RunCategory> = {
 }
 
 function toolCategory(toolName: string): RunCategory {
-  return isFileEditTool(toolName) ? 'edit' : TOOL_CATEGORY[toolName] ?? (toolName.startsWith('browser_') ? 'interact' : 'other')
+  return isFileEditTool(toolName)
+    ? 'edit'
+    : (TOOL_CATEGORY[toolName] ?? (toolName.startsWith('browser_') ? 'interact' : 'other'))
 }
 
 function unitCount(tool: ToolCallLike): number {
   const urls = tool.toolName === 'web_extract' ? parseMaybeObject(tool.args).urls : undefined
 
   return Array.isArray(urls) && urls.length > 0 ? urls.length : 1
+}
+
+function fileCount(tools: readonly ToolCallLike[]): number {
+  const paths = new Set<string>()
+  let unnamed = 0
+
+  for (const tool of tools) {
+    const path = fileEditPath(parseMaybeObject(tool.args), {}) || fileEditPath({}, parseMaybeObject(tool.result))
+
+    if (path) {
+      paths.add(
+        path
+          .replaceAll('\\', '/')
+          .replace(/\/{2,}/g, '/')
+          .replace(/^\.\//, '')
+      )
+    } else {
+      unnamed += 1
+    }
+  }
+
+  return paths.size + unnamed
 }
 
 function categoryCopy(category: RunCategory, copy: ToolRunCopy): CategoryCopy {
@@ -136,8 +186,8 @@ function toolTarget(tool: ToolCallLike): string {
 }
 
 /**
- * One clause per category. A category holding a single thing says what it was
- * ("Edited wiring.tsx"); anything else counts ("explored 3 files"). A settled
+ * One clause per category. File activity always counts, keeping paths in the
+ * expanded execution log; a lone web target may still name its host/query. A settled
  * command is the exception — the summary counts commands; the current command
  * already has its own ticker line and the complete command stays in its row.
  */
@@ -148,8 +198,13 @@ function clause(category: RunCategory, tools: ToolCallLike[], live: boolean, cop
 
   const categoryText = categoryCopy(category, copy)
   const verb = live ? categoryText.present : categoryText.past
-  const count = tools.reduce((sum, tool) => sum + unitCount(tool), 0)
-  const target = count === 1 ? toolTarget(tools[0]) : ''
+
+  const count =
+    category === 'edit' || category === 'explore'
+      ? fileCount(tools)
+      : tools.reduce((sum, tool) => sum + unitCount(tool), 0)
+
+  const target = count === 1 && category !== 'edit' && category !== 'explore' ? toolTarget(tools[0]) : ''
 
   if (target && category !== 'run') {
     return `${verb} ${target}`
@@ -172,9 +227,8 @@ function lowerFirst(text: string): string {
  * agent that moved on, and a run like that has to read as finished rather than
  * narrate work that stopped happening.
  *
- * A run only ever holds ephemeral activity — file edits and other cards are
- * split out before this sees them (`splitRunItems`), so there is no aggregate
- * diff to report here; each edit carries its own +N/−M on its card.
+ * File edits share the run; each edit's reviewable diff and +N/−M remain in
+ * its own expanded row. Consent, media, delegation and failures stay separate.
  */
 export function summarizeToolRun(
   tools: readonly ToolCallLike[],
@@ -188,17 +242,8 @@ export function summarizeToolRun(
   const liveCategories = new Set(narrating.map(tool => toolCategory(tool.toolName)))
 
   const byCategory = new Map<RunCategory, ToolCallLike[]>()
-  const skillClauses: string[] = []
 
   for (const tool of tools) {
-    const skill = skillActivityTitle(tool, live)
-
-    if (skill) {
-      skillClauses.push(skill)
-
-      continue
-    }
-
     const category = toolCategory(tool.toolName)
     const group = byCategory.get(category)
 
@@ -230,5 +275,5 @@ export function summarizeToolRun(
     clauses.push(translateNow('assistant.tool.failedCalls', failed))
   }
 
-  return [...skillClauses, ...clauses].map((text, index) => (index === 0 ? text : lowerFirst(text))).join(', ')
+  return clauses.map((text, index) => (index === 0 ? text : lowerFirst(text))).join(', ')
 }

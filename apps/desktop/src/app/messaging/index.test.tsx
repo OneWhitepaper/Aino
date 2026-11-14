@@ -28,6 +28,15 @@ const startTelegramOnboarding = vi.fn()
 const getTelegramOnboardingStatus = vi.fn()
 const applyTelegramOnboarding = vi.fn()
 const notify = vi.fn()
+const connectMessagingPlatform = vi.fn()
+const startMessagingOnboarding = vi.fn()
+const cancelMessagingOnboarding = vi.fn()
+
+vi.mock('@/api/messaging-onboarding', () => ({
+  startMessagingOnboarding: (...args: unknown[]) => startMessagingOnboarding(...args),
+  cancelMessagingOnboarding: (...args: unknown[]) => cancelMessagingOnboarding(...args),
+  connectMessagingPlatform: (...args: unknown[]) => connectMessagingPlatform(...args)
+}))
 
 vi.mock('@/hermes', () => ({
   approvePairing: (platformId: string, requestId: string, profile?: null | string) =>
@@ -101,6 +110,9 @@ beforeEach(() => {
   getPairing.mockResolvedValue({ approved: [], pending: [] })
   runGatewayRestart.mockResolvedValue(true)
   watchGatewayRestartOutcome.mockResolvedValue(true)
+  connectMessagingPlatform.mockResolvedValue({ ok: true, hot_served: true, state: 'connecting' })
+  startMessagingOnboarding.mockRejectedValue(new Error('offline'))
+  cancelMessagingOnboarding.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -271,6 +283,108 @@ describe('MessagingView enable switch', () => {
     expect(toggle.closest('label')?.textContent).toBe('Enabled')
   })
 
+  it.each([
+    { id: 'weixin', name: 'WeChat', onboarding: true },
+    { id: 'qqbot', name: 'QQ', onboarding: true },
+    { id: 'feishu', name: 'Feishu', onboarding: true },
+    { id: 'telegram', name: 'Telegram', onboarding: false }
+  ])('disables and re-enables configured $name directly on its page scope', async ({ id, name, onboarding }) => {
+    $settingsScopeOverride.set('worker')
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [platform({ id, name, onboarding, configured: true, enabled: true, state: 'connected' })]
+    })
+    updateMessagingPlatform.mockResolvedValue({ ok: true, platform: id, hot_served: true })
+
+    try {
+      await renderMessaging()
+      const disable = await screen.findByRole('switch', { name: `Disable ${name}` })
+      expect(disable.hasAttribute('disabled')).toBe(false)
+      fireEvent.click(disable)
+      await waitFor(() => expect(updateMessagingPlatform).toHaveBeenCalledWith(id, { enabled: false }, 'worker'))
+
+      const enable = await screen.findByRole('switch', { name: `Enable ${name}` })
+      await waitFor(() => expect(enable.hasAttribute('disabled')).toBe(false))
+      fireEvent.click(enable)
+      await waitFor(() => expect(updateMessagingPlatform).toHaveBeenCalledWith(id, { enabled: true }, 'worker'))
+      expect(await screen.findByRole('switch', { name: `Disable ${name}` })).toBeTruthy()
+      expect(runGatewayRestart).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => $settingsScopeOverride.set(null))
+    }
+  })
+
+  it.each([true, false])(
+    'keeps the quick-setup switch visible without saved credentials when enabled is %s',
+    async enabled => {
+      $settingsScopeOverride.set(null)
+      getMessagingPlatforms.mockResolvedValue({
+        platforms: [
+          platform({
+            id: 'weixin',
+            name: 'WeChat',
+            onboarding: true,
+            enabled,
+            state: enabled ? 'not_configured' : 'disabled'
+          })
+        ]
+      })
+      updateMessagingPlatform.mockResolvedValue({ ok: true, platform: 'weixin', hot_served: true })
+
+      await renderMessaging()
+      const toggle = await screen.findByRole('switch', { name: `${enabled ? 'Disable' : 'Enable'} WeChat` })
+      await waitFor(() => expect(toggle.hasAttribute('disabled')).toBe(false))
+
+      if (enabled) {
+        fireEvent.click(toggle)
+        await waitFor(() =>
+          expect(updateMessagingPlatform).toHaveBeenCalledWith('weixin', { enabled: false }, 'default')
+        )
+      }
+    }
+  )
+
+  it.each([
+    { id: 'qqbot', name: 'QQ', scope: 'default' },
+    { id: 'weixin', name: 'WeChat', scope: 'worker' }
+  ])('toggles $name while its QR is waiting without reconnecting an unsaved account', async ({ id, name, scope }) => {
+    $settingsScopeOverride.set(scope === 'default' ? null : scope)
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [platform({ id, name, onboarding: true })]
+    })
+    startMessagingOnboarding.mockResolvedValue({
+      pairing_id: `pair-${id}`,
+      qr_payload: `https://example.test/pair/${id}`,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      poll_interval: 30
+    })
+    updateMessagingPlatform.mockResolvedValue({ ok: true, platform: id, needs_activation: true })
+
+    try {
+      await renderMessaging()
+      await screen.findByAltText(`${name} connection QR code`)
+      const enable = screen.getByRole('switch', { name: `Enable ${name}` })
+      await waitFor(() => expect(enable.hasAttribute('disabled')).toBe(false))
+      fireEvent.click(enable)
+      await waitFor(() => expect(updateMessagingPlatform).toHaveBeenCalledWith(id, { enabled: true }, scope))
+      expect(connectMessagingPlatform).not.toHaveBeenCalled()
+
+      const disable = await screen.findByRole('switch', { name: `Disable ${name}` })
+      await waitFor(() => expect(disable.hasAttribute('disabled')).toBe(false))
+      fireEvent.click(disable)
+      await waitFor(() => expect(updateMessagingPlatform).toHaveBeenCalledWith(id, { enabled: false }, scope))
+      expect(cancelMessagingOnboarding).toHaveBeenCalledWith(
+        id,
+        `pair-${id}`,
+        expect.objectContaining({ profile: scope })
+      )
+      expect(cancelMessagingOnboarding.mock.invocationCallOrder[0]).toBeLessThan(
+        updateMessagingPlatform.mock.invocationCallOrder[1]
+      )
+    } finally {
+      await act(async () => $settingsScopeOverride.set(null))
+    }
+  })
+
   it("drops the previous profile's credential placeholders on the very first post-switch render", async () => {
     // #96542: blanking the stale platforms state in a passive effect lets the
     // "new scope + old data" frame paint first, so the new profile briefly
@@ -305,6 +419,7 @@ describe('MessagingView enable switch', () => {
 
     $settingsScopeOverride.set(null)
     await renderMessaging()
+    fireEvent.click(screen.getByRole('button', { name: 'Use existing credentials' }))
 
     // The previous profile's redacted token is visible as the placeholder.
     expect(await screen.findByPlaceholderText(oldToken)).not.toBeNull()
@@ -508,6 +623,66 @@ describe('MessagingView pairing', () => {
   })
 })
 
+describe('MessagingView guarded live connection', () => {
+  it('enables a new manual account and preserves a busy adapter without restarting the owner', async () => {
+    const fields = [
+      { key: 'QQ_APP_ID', prompt: 'App ID', is_password: false },
+      { key: 'QQ_CLIENT_SECRET', prompt: 'Client secret', is_password: true }
+    ].map(row => ({
+      ...row,
+      advanced: false,
+      description: '',
+      is_set: false,
+      redacted_value: null,
+      required: true,
+      url: null
+    }))
+
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [platform({ id: 'qqbot', name: 'QQ', onboarding: true, env_vars: fields })]
+    })
+    updateMessagingPlatform.mockResolvedValue({ ok: true, platform: 'qqbot', needs_activation: true })
+    connectMessagingPlatform.mockResolvedValue({ ok: false, hot_served: false, needs_restart: false, state: 'busy' })
+    await renderMessaging()
+    fireEvent.click(screen.getByRole('button', { name: 'Use existing credentials' }))
+    fireEvent.change(screen.getByLabelText('App ID'), { target: { value: 'application' } })
+    fireEvent.change(screen.getByLabelText('App Secret'), { target: { value: 'test-secret' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    })
+    await waitFor(() => expect(connectMessagingPlatform).toHaveBeenCalled())
+    expect(updateMessagingPlatform).toHaveBeenCalledWith(
+      'qqbot',
+      { env: { QQ_APP_ID: 'application', QQ_CLIENT_SECRET: 'test-secret' }, enabled: true },
+      'default'
+    )
+    expect(screen.getByText('This platform is handling a message. Try connecting again when it finishes.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restart now' })).toBeNull()
+    expect(runGatewayRestart).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [
+        platform({
+          id: 'qqbot',
+          name: 'QQ',
+          onboarding: true,
+          configured: true,
+          enabled: true,
+          state: 'connected',
+          updated_at: '2026-11-13T10:10:00Z',
+          env_vars: fields
+        })
+      ]
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'QQ' }))
+    expect(screen.queryByText('This platform is handling a message. Try connecting again when it finishes.')).toBeNull()
+    expect(screen.getAllByText('Connected').length).toBeGreaterThan(0)
+  })
+})
+
 describe('MessagingView restart banner', () => {
   const tokenField = {
     advanced: false,
@@ -657,7 +832,7 @@ describe('MessagingView Telegram quick setup', () => {
       })
       await waitFor(() => expect(startTelegramOnboarding).toHaveBeenCalledWith(undefined, 'worker'))
 
-      const save = await screen.findByRole('button', { name: /Save and restart/ }, { timeout: 4000 })
+      const save = await screen.findByRole('button', { name: /Save and connect/ }, { timeout: 4000 })
       expect(getTelegramOnboardingStatus).toHaveBeenCalledWith('pair-1', 'worker')
       expect(screen.getByText('8792111505')).toBeTruthy()
 
@@ -673,7 +848,7 @@ describe('MessagingView Telegram quick setup', () => {
         title: 'Telegram setup saved'
       })
       // The pairing UI is gone, but the card still names the bot that was just connected.
-      expect(screen.queryByRole('button', { name: /Save and restart/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Save and connect/ })).toBeNull()
       expect(screen.getByText('Connected')).toBeTruthy()
       expect(screen.getByText('@hermes_bot')).toBeTruthy()
     } finally {

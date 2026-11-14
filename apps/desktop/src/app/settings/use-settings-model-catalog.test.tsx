@@ -59,6 +59,18 @@ it('shows the applied assignment immediately when revisiting the same owner', as
   expect(second.result.current.providers).toEqual([originalProvider])
 })
 
+it('publishes the saved model while optional credential discovery is still pending', async () => {
+  const credentials = deferred<Record<string, never>>()
+  api.env.mockReturnValue(credentials.promise)
+  const { mount } = setup()
+  const { result } = mount()
+
+  await waitFor(() => expect(result.current.main).toEqual(applied))
+  expect(result.current.providers).toEqual([originalProvider])
+  expect(result.current.envVars).toEqual({})
+  await act(async () => credentials.resolve({}))
+})
+
 it('keeps the main assignment when replacing providers or reading an older backend catalog', async () => {
   const { mount } = setup()
   const { result } = mount()

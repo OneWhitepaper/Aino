@@ -1,4 +1,4 @@
-import type { mintLocalGatewayTicket } from './local-gateway';
+import type { mintLocalGatewayTicket } from './local-gateway'
 import { type GatewayEndpoint, localGatewayDial } from './local-gateway'
 
 /** What the renderer's `pluginSocket` asks for: its plugin namespace, the path under it, and the
@@ -21,8 +21,11 @@ export type PluginWsUrlReply = null | string | { refused: 'permission' }
 export function isMintPermissionRefusal(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
 
-  return message.startsWith('Unsafe gateway control path') || message.startsWith('Profile home is writable by a group')
-    || (error as { reason?: unknown })?.reason === 'unsafe_control_permissions'
+  return (
+    message.startsWith('Unsafe gateway control path') ||
+    message.startsWith('Profile home is writable by a group') ||
+    (error as { reason?: unknown })?.reason === 'unsafe_control_permissions'
+  )
 }
 
 interface ResolvedBackend {
@@ -50,14 +53,21 @@ export function pluginWsPath(pluginId: unknown, path: unknown): string {
 
   const prefix = `/api/plugins/${pluginId}/`
 
-  const url = typeof path === 'string' && path.startsWith('/') && path.length <= 2048 && !/[#\\]/.test(path)
-    && !path.split('?', 1)[0].split('/').some(segment => {
-      const decoded = decodedSegment(segment)
+  const url =
+    typeof path === 'string' &&
+    path.startsWith('/') &&
+    path.length <= 2048 &&
+    !/[#\\]/.test(path) &&
+    !path
+      .split('?', 1)[0]
+      .split('/')
+      .some(segment => {
+        const decoded = decodedSegment(segment)
 
-      return decoded === null || decoded === '.' || decoded === '..' || /[/\\%]/.test(decoded)
-    })
-    ? new URL(`${prefix.slice(0, -1)}${path}`, 'ws://plugin.invalid')
-    : null
+        return decoded === null || decoded === '.' || decoded === '..' || /[/\\%]/.test(decoded)
+      })
+      ? new URL(`${prefix.slice(0, -1)}${path}`, 'ws://plugin.invalid')
+      : null
 
   if (!url?.pathname.startsWith(prefix)) {
     throw new Error('Invalid plugin socket path')
@@ -74,8 +84,12 @@ export function pluginWsPath(pluginId: unknown, path: unknown): string {
 export function createPluginWsUrlHandler(deps: {
   ensureBackend: (profile: unknown) => Promise<ResolvedBackend>
   ensureRegistryBackend: (connectionId: unknown, profile: unknown) => Promise<ResolvedBackend>
-  forgetLocalGatewayDescriptor: (profile: unknown) => Promise<void> | void
-  forgetRegistryLocalGatewayDescriptor: (connectionId: unknown, profile: unknown) => Promise<void> | void
+  forgetLocalGatewayDescriptor: (profile: unknown, failed: ResolvedBackend) => Promise<void> | void
+  forgetRegistryLocalGatewayDescriptor: (
+    connectionId: unknown,
+    profile: unknown,
+    failed: ResolvedBackend
+  ) => Promise<void> | void
   launchHome: string | (() => string)
   mint?: typeof mintLocalGatewayTicket
   prepare: (origin: string, path: string, ticket: string, webContentsId: number) => string
@@ -83,7 +97,8 @@ export function createPluginWsUrlHandler(deps: {
   return async (request: PluginWsUrlRequest, webContentsId: number): Promise<PluginWsUrlReply> => {
     const path = pluginWsPath(request?.pluginId, request?.path)
     const { connectionId, profile } = request
-    const ensure = () => (connectionId ? deps.ensureRegistryBackend(connectionId, profile) : deps.ensureBackend(profile))
+    const ensure = () =>
+      connectionId ? deps.ensureRegistryBackend(connectionId, profile) : deps.ensureBackend(profile)
 
     if (!(await ensure()).gatewayEndpoint) {
       return null
@@ -92,7 +107,10 @@ export function createPluginWsUrlHandler(deps: {
     try {
       return await localGatewayDial({
         ensure,
-        forget: () => (connectionId ? deps.forgetRegistryLocalGatewayDescriptor(connectionId, profile) : deps.forgetLocalGatewayDescriptor(profile)),
+        forget: failed =>
+          connectionId
+            ? deps.forgetRegistryLocalGatewayDescriptor(connectionId, profile, failed)
+            : deps.forgetLocalGatewayDescriptor(profile, failed),
         launchHome: typeof deps.launchHome === 'function' ? deps.launchHome() : deps.launchHome,
         mint: deps.mint,
         prepare: (baseUrl, ticket) => deps.prepare(baseUrl, path, ticket, webContentsId),
@@ -100,7 +118,9 @@ export function createPluginWsUrlHandler(deps: {
         purpose: 'native-http'
       })
     } catch (error) {
-      if (isMintPermissionRefusal(error)) {return { refused: 'permission' }}
+      if (isMintPermissionRefusal(error)) {
+        return { refused: 'permission' }
+      }
       throw error
     }
   }

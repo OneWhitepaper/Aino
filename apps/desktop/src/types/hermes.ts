@@ -355,6 +355,8 @@ export interface MessagingHomeChannel {
 }
 
 export interface MessagingPlatformInfo {
+  /** The current runtime exposes a credential-free QR onboarding flow. */
+  onboarding?: boolean
   configured: boolean
   description: string
   docs_url: string
@@ -457,6 +459,7 @@ export type TelegramOnboardingStatusResponse =
   | { expires_at: string; status: 'waiting' }
 
 export interface TelegramOnboardingApplyResponse {
+  needs_activation?: boolean
   bot_username?: null | string
   needs_restart: boolean
   ok: boolean

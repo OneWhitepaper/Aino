@@ -182,8 +182,14 @@ function PaneClippedContent({
   const preferred = TOOLTIP_PLACEMENTS[placement]
   const anchor = React.useContext(TooltipAnchor)
   const [pane, setPane] = React.useState<Element | null>(null)
+  const [browserToolbar, setBrowserToolbar] = React.useState(false)
 
   React.useLayoutEffect(() => {
+    const trigger = anchor?.current ?? null
+    // A downward label covers the native page, forcing an entire guest swap.
+    // Resolve the shared toolbar scope here so nested vault/copy controls agree.
+    setBrowserToolbar(Boolean(trigger?.closest('[data-preview-toolbar]')))
+
     if (boundary !== 'pane') {
       setPane(null)
 
@@ -197,7 +203,6 @@ function PaneClippedContent({
     // skip layout-less hosts up to the enclosing pane, or the viewport when
     // none has layout. A trigger without geometry cannot be judged (jsdom),
     // so the nearest pane stands as before.
-    const trigger = anchor?.current ?? null
     let candidate = trigger?.closest('[data-tree-group]') ?? null
 
     if (hasLayout(trigger)) {
@@ -220,7 +225,9 @@ function PaneClippedContent({
           : 'tooltip-bubble bg-foreground px-2 py-1 text-[length:var(--aino-text-caption)] font-medium leading-[1.4] text-background',
         className
       )}
-      collisionBoundary={collisionBoundary ?? pane ?? undefined}
+      // The browser header starts at this pane's top edge. Its labels must
+      // use the window's chrome space above it, rather than flip into the page.
+      collisionBoundary={collisionBoundary ?? (browserToolbar ? undefined : (pane ?? undefined))}
       collisionPadding={collisionPadding}
       data-slot="tooltip-content"
       // Radix's `collisionPadding` also insets the hide middleware's clip box, so
@@ -229,7 +236,7 @@ function PaneClippedContent({
       // ticks unmount when scrolled away, so the middleware has nothing to hide
       // there; leave it to triggers that stay put inside scrolling lists.
       hideWhenDetached={hideWhenDetached ?? (placement !== 'left-rail' && placement !== 'right-rail')}
-      side={side ?? preferred.side}
+      side={side ?? (browserToolbar ? 'top' : preferred.side)}
       sideOffset={sideOffset}
       {...props}
     >

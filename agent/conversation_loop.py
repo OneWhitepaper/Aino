@@ -46,7 +46,7 @@ from agent.turn_scripted_prelude import Prelude, play_prelude
 from agent.turn_api_call import handle_api_interrupt, nous_rate_limit_guard, perform_api_call
 from agent.turn_api_error import handle_api_error
 from agent.turn_api_request import build_api_request
-from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, OPEN_TURN_TAIL_ROLES, durable_failed_turn_content, site_copy
+from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, OPEN_TURN_TAIL_ROLES, durable_failed_turn_content, is_user_interrupted_turn, site_copy
 from agent.turn_final_response import finish_text_response
 from agent.turn_finalizer import finalize_turn
 from agent.turn_iteration_prep import (
@@ -1958,11 +1958,15 @@ def _close_durable_failed_turn(agent, result: Any) -> None:
         # hedge over the whole list rather than under-report a possible side effect.
         start = result.get("current_turn_user_idx")
         turn_messages = messages[start:] if isinstance(start, int) and 0 <= start < len(messages) else messages
-        boundary = {
-            "role": "assistant", "content": durable_failed_turn_content(result, turn_messages), "display_kind": FAILED_TURN_DISPLAY_KIND,
-        }
-        if failure := _failed_turn_display_metadata(agent, result):
-            boundary["display_metadata"] = failure
+        if is_user_interrupted_turn(result):
+            # Keep API role alternation without contradicting the surface's Pause/Continue state.
+            boundary = hidden_interrupt_placeholder_row()
+        else:
+            boundary = {
+                "role": "assistant", "content": durable_failed_turn_content(result, turn_messages), "display_kind": FAILED_TURN_DISPLAY_KIND,
+            }
+            if failure := _failed_turn_display_metadata(agent, result):
+                boundary["display_metadata"] = failure
         append_message(messages, boundary)
         agent._flush_messages_to_session_db(messages)
     except Exception:

@@ -19,8 +19,6 @@ import {
   renderActionItem
 } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
-import { ColorSwatches } from '@/components/ui/color-swatches'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,9 +27,7 @@ import { getApiRequestConnection, getApiRequestProfile, renameSession } from '@/
 import { useI18n } from '@/i18n'
 import { sessionRemovalCopy, type SessionRemovalCopy } from '@/i18n/session-removal'
 import { triggerHaptic } from '@/lib/haptics'
-import { ArchiveOff } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
-import { PROFILE_SWATCHES } from '@/lib/profile-color'
 import { exportSession } from '@/lib/session-export'
 import { useStoresSelector } from '@/lib/use-session-slice'
 import { $botChatScopes } from '@/store/bot-chat-scope'
@@ -53,10 +49,8 @@ import {
   $unreadFinishedSessionIds,
   applySessionTitle,
   markSessionRead,
-  sessionMatchesStoredId,
-  sessionPinId
+  sessionMatchesStoredId
 } from '@/store/session'
-import { $sessionColorOverrides, setSessionColorOverride } from '@/store/session-color'
 import { ambientRequestFor } from '@/store/session-gone-latch'
 import {
   $sessionStates,
@@ -69,6 +63,8 @@ import { ackStoredSessionId } from '@/store/session-unread'
 import { canOpenSessionInTerminal, canOpenSessionWindow, openSessionInTerminal } from '@/store/windows'
 
 import type { SessionTitleResponse } from '../../types'
+
+import { SessionMenuIcon, type SessionMenuIconName } from './session-menu-icon'
 
 // Rename a session, preferring the gateway's session.title RPC over REST.
 //
@@ -228,30 +224,9 @@ function captureDeleteTarget(
   }
 }
 
-// The color picker inside the session menu's Appearance submenu. Its own
-// component so only an OPEN submenu subscribes to the stores (not every row's
-// menu). Reads/writes the override keyed by the DURABLE id so a color survives
-// compression; clearing falls back to the inherited project color.
-function SessionColorSwatches({ sessionId }: { sessionId: string }) {
-  const { t } = useI18n()
-  const overrides = useStore($sessionColorOverrides)
-  const session = useStore($sessions).find(s => sessionMatchesStoredId(s, sessionId))
-  const durableId = session ? sessionPinId(session) : sessionId
-
-  return (
-    <ColorSwatches
-      clearIcon="circle-slash"
-      clearLabel={t.sidebar.projects.noColor}
-      onChange={color => setSessionColorOverride(durableId, color)}
-      swatches={PROFILE_SWATCHES}
-      value={overrides[durableId] ?? null}
-    />
-  )
-}
-
 // The project list inside the session menu's "Move to project" submenu. Its own
-// component so only an OPEN submenu subscribes to the stores (same reasoning as
-// SessionColorSwatches). Re-homes the session's workspace at the target
+// component so only an OPEN submenu subscribes to the stores.
+// Re-homes the session's workspace at the target
 // project's root — the fix for a chat created in the wrong folder. The current
 // owner and folderless projects (the Home bucket) are excluded: there is
 // nothing to move into.
@@ -349,7 +324,13 @@ function useSessionActions({
   // a tab): offering "Open in new tab" again is noise.
   const alreadyTabbed = sessionId === selectedStoredSessionId || tiles.some(tile => tile.storedSessionId === sessionId)
 
-  const spec = (partial: Omit<ActionItemSpec, 'onSelect'> & { onSelect: () => void }): ActionItemSpec => partial
+  const spec = ({
+    icon,
+    ...partial
+  }: Omit<ActionItemSpec, 'icon' | 'iconNode' | 'onSelect'> & {
+    icon: SessionMenuIconName
+    onSelect: () => void
+  }): ActionItemSpec => ({ ...partial, iconNode: <SessionMenuIcon name={icon} /> })
 
   // OPEN — where else this session can go. A tab surface IS a tab already,
   // so it only offers the window hop (and its own Close, below).
@@ -431,7 +412,7 @@ function useSessionActions({
       : []),
     spec({
       disabled: !onPin,
-      icon: 'pin',
+      icon: pinned ? 'pin-off' : 'pin',
       label: pinned ? r.unpin : r.pin,
       onSelect: () => {
         triggerHaptic('selection')
@@ -444,8 +425,6 @@ function useSessionActions({
     // persisted watermark so the dot survives restarts.
     spec({
       disabled: !sessionId || (!onToggleUnread && !isUnread),
-      // Closed envelope = unread, open envelope = read (codicon has mail and
-      // mail-read, but no mail-unread glyph — verified against the font css).
       icon: unread || isUnread ? 'mail-read' : 'mail',
       label: unread || isUnread ? r.markRead : r.markUnread,
       onSelect: () => {
@@ -472,9 +451,6 @@ function useSessionActions({
   const workItems: ActionItemSpec[] = [
     spec({
       disabled: !onBranch,
-      // Fork glyph to match the inline message action's GitFork icon
-      // (assistant-message.tsx). NB: this codicon font has no `git-fork`
-      // glyph (only `git-fork-private`); `repo-forked` is the fork icon.
       icon: 'repo-forked',
       label: r.branchFrom,
       onSelect: () => {
@@ -568,11 +544,8 @@ function useSessionActions({
       disabled: !onArchive,
       // Already archived (the Archived view): the same verb restores the row
       // instead of re-archiving it (#98813). The wiring dispatches the shared
-      // onArchive callback to the restore path based on the row's state. No
-      // unarchive codicon exists, so the restore item carries the ArchiveOff
-      // glyph the Settings → Archived Chats restore button already uses.
-      icon: archived ? undefined : 'archive',
-      iconNode: archived ? <ArchiveOff className="size-3.5" /> : undefined,
+      // onArchive callback to the restore path based on the row's state.
+      icon: archived ? 'archive-restore' : 'archive',
       label: archived ? r.unarchive : r.archive,
       onSelect: () => {
         triggerHaptic('selection')
@@ -582,7 +555,7 @@ function useSessionActions({
     {
       className: 'text-destructive focus:text-destructive',
       disabled: !onDelete,
-      icon: 'trash',
+      iconNode: <SessionMenuIcon name="trash" />,
       label: t.common.delete,
       onSelect: () => {
         triggerHaptic('warning')
@@ -606,20 +579,12 @@ function useSessionActions({
       {openItems.map(item => renderActionItem(kit, item))}
       {openItems.length > 0 && <kit.Separator />}
       {identityItems.map(item => renderActionItem(kit, item))}
-      <kit.Sub>
-        <kit.SubTrigger disabled={!sessionId}>
-          <Codicon name="symbol-color" size="0.875rem" />
-          <span>{t.sidebar.projects.menuAppearance}</span>
-        </kit.SubTrigger>
-        <kit.SubContent className="p-2">
-          <SessionColorSwatches sessionId={sessionId} />
-        </kit.SubContent>
-      </kit.Sub>
       <CopyButton
         appearance={kit.copyAppearance}
         disabled={!sessionId}
         errorMessage={r.copyIdFailed}
-        iconClassName="size-3.5 text-current"
+        iconClassName="size-4 text-current"
+        idleIcon={<SessionMenuIcon name="copy" />}
         key={r.copyId}
         label={r.copyId}
         onCopyError={err => notifyError(err, r.copyIdFailed)}
@@ -629,7 +594,7 @@ function useSessionActions({
       {workItems.map(item => renderActionItem(kit, item))}
       <kit.Sub>
         <kit.SubTrigger disabled={!sessionId}>
-          <Codicon name="folder" size="0.875rem" />
+          <SessionMenuIcon name="folder" />
           <span>{t.sidebar.projects.moveToProject}</span>
         </kit.SubTrigger>
         <kit.SubContent>
@@ -649,7 +614,7 @@ function useSessionActions({
           <kit.Separator />
           {renderActionItem(kit, {
             disabled: false,
-            icon: 'eye-closed',
+            iconNode: <SessionMenuIcon name="eye-closed" />,
             label: r.hideTabBar,
             onSelect: () => {
               triggerHaptic('selection')

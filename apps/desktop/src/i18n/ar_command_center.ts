@@ -199,7 +199,8 @@ export const arCommandCenter = {
     relayLink: {
       title: 'Team Gateway',
       badge: 'لا حاجة لرمز بوت',
-      intro: (platform: string) => `يصل ${platform} إلى هذا الوكيل عبر بوت Hermes المشترك. اربط حسابك في ${platform} ثم راسل البوت للتحدث مع وكيلك.`,
+      intro: (platform: string) =>
+        `يصل ${platform} إلى هذا الوكيل عبر بوت Hermes المشترك. اربط حسابك في ${platform} ثم راسل البوت للتحدث مع وكيلك.`,
       link: (platform: string) => `ربط ${platform}`,
       linkAnother: (platform: string) => `ربط حساب ${platform} آخر`,
       linkedAccounts: 'الحسابات المرتبطة',
@@ -217,10 +218,12 @@ export const arCommandCenter = {
       refused: (platform: string) => `رفض ${platform} الربط. احصل على رمز جديد وحاول مرة أخرى.`,
       qrAlt: (platform: string) => `رمز QR لبوت ${platform} المشترك`,
       managed: 'تتم إدارته عبر Team Gateway',
-      managedNote: (platform: string) => `يتولى Team Gateway المراسلة في هذا المثيل، لذا يوقف البوابة الاتصال المباشر بـ ${platform} عند كل تشغيل. لتشغيله بجانب المرحّل، اضبط GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true في بيئة البوابة (الاتصال المباشر يمنع المثيل من التقلص إلى الصفر وقد يسلّم الرسائل مرتين).`,
+      managedNote: (platform: string) =>
+        `يتولى Team Gateway المراسلة في هذا المثيل، لذا يوقف البوابة الاتصال المباشر بـ ${platform} عند كل تشغيل. لتشغيله بجانب المرحّل، اضبط GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true في بيئة البوابة (الاتصال المباشر يمنع المثيل من التقلص إلى الصفر وقد يسلّم الرسائل مرتين).`,
       managedIntro: 'تُربط حسابات هذا الوكيل من Nous Portal.',
       openPortal: 'اربط الحسابات في Nous Portal',
-      noNewAccount: (platform: string) => `لم يعد الرمز نشطًا ولم يظهر حساب جديد. إذا لم يكن حسابك في ${platform} مدرجًا، فاحصل على رمز جديد وحاول مرة أخرى.`
+      noNewAccount: (platform: string) =>
+        `لم يعد الرمز نشطًا ولم يظهر حساب جديد. إذا لم يكن حسابك في ${platform} مدرجًا، فاحصل على رمز جديد وحاول مرة أخرى.`
     },
     telegramQr: {
       title: 'اختر طريقة ربط بوت Telegram',
@@ -243,7 +246,7 @@ export const arCommandCenter = {
       userIdPlaceholder: 'معرّف مستخدم Telegram',
       add: 'إضافة',
       numericOnly: 'يجب أن تكون معرّفات مستخدمي Telegram أرقامًا.',
-      saveAndRestart: 'حفظ وإعادة التشغيل',
+      saveAndRestart: 'حفظ واتصال',
       applying: 'جارٍ الحفظ…',
       pairingExpired: 'انتهت صلاحية اقتران Telegram. ابدأ إعداد QR جديدًا.',
       stillWaiting: detail => `ما زلنا ننتظر Telegram. إعادة المحاولة بعد: ${detail}`,
@@ -428,7 +431,8 @@ export const arCommandCenter = {
     exported: 'تم تصدير الملف الشخصي',
     failedImport: 'فشل استيراد الملف الشخصي',
     failedExport: 'فشل تصدير الملف الشخصي',
-    exportNeedsHost: name => `لا يمكن للمتصفح حفظ أرشيف الملف الشخصي. على مضيف Hermes، شغّل: hermes profile export ${name}`,
+    exportNeedsHost: name =>
+      `لا يمكن للمتصفح حفظ أرشيف الملف الشخصي. على مضيف Hermes، شغّل: hermes profile export ${name}`,
     allProfiles: 'كل الملفات الشخصية',
     showAllProfiles: 'إظهار كل الملفات الشخصية',
     notServedHere: 'غير متاح هنا',
@@ -437,9 +441,9 @@ export const arCommandCenter = {
     switchConnectionFailed: name => `تعذّر الاتصال بـ ${name}`,
     manageProfiles: 'إدارة الملفات الشخصية',
     fleet: {
-      switchDeviceTitle: "التبديل إلى هذا الجهاز؟",
-      switchDeviceDesc: "يفتح هذا جلسة جديدة على هذا الكمبيوتر. تبقى المحادثة الحالية على خدمة التشغيل الأخرى.",
-      switchDeviceConfirm: "تبديل",
+      switchDeviceTitle: 'التبديل إلى هذا الجهاز؟',
+      switchDeviceDesc: 'يفتح هذا جلسة جديدة على هذا الكمبيوتر. تبقى المحادثة الحالية على خدمة التشغيل الأخرى.',
+      switchDeviceConfirm: 'تبديل',
       localDevice: 'هذا الجهاز (خلفية محلية — تثبّت Hermes إن كان مفقودًا، وإلا تفتح جلسة جديدة)',
       installDeviceTitle: 'تثبيت Hermes على هذا الجهاز؟',
       installDeviceDesc: 'سيُثبَّت Hermes محليًا ثم تُفتح جلسة جديدة على هذا الحاسوب. لا يبدأ التثبيت قبل التأكيد.',

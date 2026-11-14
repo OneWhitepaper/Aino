@@ -16,7 +16,6 @@ import { rafCoalesce } from '@/lib/raf-coalesce'
 import { cn } from '@/lib/utils'
 import { $paneStates, type PaneStateSnapshot, setPaneHeightOverride, setPaneWidthOverride } from '@/store/panes'
 
-import { $layoutEditMode, $layoutEditRevealsHidden } from '../../edit-mode'
 import { $workspaceMode, $workspaceOwnerKey } from '../../workspace-scope'
 import type { LayoutNode, SplitNode } from '../model'
 import { allPaneIds } from '../model'
@@ -73,10 +72,9 @@ function toolTrackAnimationEnabled(
   child: LayoutNode,
   paneFor: TrackContext['paneFor'],
   narrowCollapsed: boolean,
-  workspacePage: boolean,
-  editMode: boolean
+  workspacePage: boolean
 ): boolean {
-  return !narrowCollapsed && !workspacePage && !editMode && child.type === 'group' && isToolPanelGroup(child, paneFor)
+  return !narrowCollapsed && !workspacePage && child.type === 'group' && isToolPanelGroup(child, paneFor)
 }
 
 /**
@@ -129,10 +127,8 @@ export function TreeSplit({
   // pointermove, but only the splits whose subtree actually resized should
   // re-render — not every split in the tree.
   const overrides = useSubtreeOverrides(useMemo(() => allPaneIds(node), [node]))
-  const editMode = useStore($layoutEditMode)
   const workspaceMode = useStore($workspaceMode)
   const workspaceOwner = useStore($workspaceOwnerKey)
-  const revealsHidden = useStore($layoutEditRevealsHidden)
   const collapsedSides = useStore($collapsedTreeSides)
   const maximizedToolGroup = useStore($maximizedToolGroup)
   const horizontal = node.orientation === 'row'
@@ -161,15 +157,11 @@ export function TreeSplit({
   const narrowTools = narrowToolPaneIds(node, paneFor)
   const scopePanes = new Set(workspaceShownPaneIds(allPaneIds(node)))
 
-  // Layout-edit mode (in Advanced) forces toggle-hidden panes (terminal off,
-  // review/preview closed) visible so they're rearrangeable — only truly-absent
-  // (unregistered) or narrow-collapsed panes stay gone. Restores itself on exit
-  // (render-only).
   const paneGone = (id: string) =>
     !paneFor(id) ||
-    (!editMode && id !== 'workspace' && !scopePanes.has(id)) ||
-    (!revealsHidden && hiddenPanes.has(id)) ||
-    (workspacePage && !editMode && !workspacePageKeepsPane(id)) ||
+    (id !== 'workspace' && !scopePanes.has(id)) ||
+    hiddenPanes.has(id) ||
+    (workspacePage && !workspacePageKeepsPane(id)) ||
     (narrow && (narrowTools.has(id) || Boolean(paneChrome(paneFor(id)).collapsible)))
 
   const trackCtx: TrackContext = { paneFor, paneGone, overrides }
@@ -178,14 +170,13 @@ export function TreeSplit({
   // display:none (content stays MOUNTED — toggling back is instant), and its
   // siblings absorb the space. Narrow-collapse UNMOUNTS instead, so the edge
   // overlay owns the single live instance of the pane's content.
-  // EMPTY zones only exist in editor-authored trees (normalize prunes them on
-  // every structural op) — they take space in edit mode as drop targets.
+  // Legacy empty zones stay out of the grid; structural operations prune them.
   const isEmptyZone = (child: LayoutNode) => child.type === 'group' && child.panes.length === 0
 
   const isCollapsed = (child: LayoutNode) =>
-    (workspacePage && !editMode && !allPaneIds(child).some(workspacePageKeepsPane)) ||
+    (workspacePage && !allPaneIds(child).some(workspacePageKeepsPane)) ||
     subtreeGone(child, trackCtx) ||
-    (isEmptyZone(child) && !editMode)
+    isEmptyZone(child)
 
   // Min/max clamps come from a direct GROUP child's panes (the same clamps
   // the app's Pane props express). Floors apply to every zone; caps only when
@@ -577,19 +568,7 @@ export function TreeSplit({
     },
     // trackCtx is derived state rebuilt per render; the drag captures it once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      axis,
-      editMode,
-      revealsHidden,
-      horizontal,
-      node.children,
-      node.id,
-      node.weights,
-      hiddenPanes,
-      narrow,
-      overrides,
-      panes
-    ]
+    [axis, horizontal, node.children, node.id, node.weights, hiddenPanes, narrow, overrides, panes]
   )
 
   // Double-click a sash: every neighbor returns to its DEFAULT size.
@@ -666,19 +645,7 @@ export function TreeSplit({
       setTreeSplitWeights(node.id, !preset && !pinned ? weights.map(() => 1) : weights)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      axis,
-      editMode,
-      revealsHidden,
-      horizontal,
-      node.children,
-      node.id,
-      node.weights,
-      hiddenPanes,
-      narrow,
-      overrides,
-      panes
-    ]
+    [axis, horizontal, node.children, node.id, node.weights, hiddenPanes, narrow, overrides, panes]
   )
 
   // A run of ONLY fixed tracks can't fill the container (grow-0 all around
@@ -688,10 +655,9 @@ export function TreeSplit({
   const isMinimized = (child: LayoutNode) => child.type === 'group' && Boolean(child.minimized)
 
   // Side toggles own physical sides of the root row, including after a flip.
-  // In edit mode sides stay visible.
   // `rootRow` covers both a row root (Default, Focus) and a row nested inside
   // a column root (Terminal deck, Quad) — wherever the side columns live.
-  const semanticSides = rootRow && horizontal && collapsedSides.size > 0 && !editMode
+  const semanticSides = rootRow && horizontal && collapsedSides.size > 0
 
   const sideGone = (i: number) => {
     if (!semanticSides) {
@@ -814,12 +780,12 @@ export function TreeSplit({
         return (
           <ToolTrackMotion
             collapsed={collapsed}
-            enabled={toolTrackAnimationEnabled(child, paneFor, narrowCollapsed, workspacePage, editMode)}
+            enabled={toolTrackAnimationEnabled(child, paneFor, narrowCollapsed, workspacePage)}
             horizontal={horizontal}
             id={child.id}
             key={child.id}
             minimized={minimized}
-            scope={JSON.stringify([workspaceMode, workspaceOwner, narrow, workspacePage, editMode, revealsHidden])}
+            scope={JSON.stringify([workspaceMode, workspaceOwner, narrow, workspacePage])}
             style={
               collapsed
                 ? { display: 'none', order: i }

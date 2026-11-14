@@ -6,10 +6,7 @@ import {
   graftRefreshedTailOntoBackfill,
   olderPageReader
 } from '@/app/chat/transcript-backfill'
-import {
-  isSessionRecentlyInterrupted,
-  recentInterruptRemainingMs
-} from '@/app/session/hooks/use-prompt-actions/utils'
+import { isSessionRecentlyInterrupted, recentInterruptRemainingMs } from '@/app/session/hooks/use-prompt-actions/utils'
 import { sessionCreatedThisRun } from '@/app/session/hooks/use-session-actions/created-this-run'
 import { preserveLocalPendingTurnMessages } from '@/app/session/hooks/use-session-actions/utils'
 import { getLatestSessionMessages, type ProfileScope } from '@/hermes'
@@ -27,12 +24,7 @@ import { $freshDraftKey } from '@/store/composer'
 import { pendingSessionReplay } from '@/store/gateway'
 import { sharedPrimaryRoute } from '@/store/gateway-shared-route'
 import { $sidebarShowArchived } from '@/store/layout'
-import {
-  $changeEventsAvailable,
-  $cronChangeTick,
-  $projectsChangeTick,
-  $sessionsChangeTick
-} from '@/store/live-sync'
+import { $changeEventsAvailable, $cronChangeTick, $projectsChangeTick, $sessionsChangeTick } from '@/store/live-sync'
 import { $onBattery, batteryPollInterval } from '@/store/power'
 import { normalizeProfileKey, refreshActiveProfile } from '@/store/profile'
 import { refreshProjects, refreshProjectTree } from '@/store/projects'
@@ -139,10 +131,7 @@ export interface ActiveTranscriptRefreshDeps {
   busyRef: MutableRefObject<boolean>
   requestSequenceRef: MutableRefObject<number>
   selectedStoredSessionIdRef: MutableRefObject<string | null>
-  resolveSession: (
-    storedSessionId: string,
-    runtimeSessionId: string
-  ) => ActiveTranscriptSession | null | undefined
+  resolveSession: (storedSessionId: string, runtimeSessionId: string) => ActiveTranscriptSession | null | undefined
   signatureRef: MutableRefObject<Map<string, string>>
   updateSessionState: (
     sessionId: string,
@@ -188,10 +177,7 @@ function tileRuntimeOwnsLiveState(runtimeId: string): boolean {
 }
 
 /** Backfill/retention may prepend or release a prefix without changing the tail. */
-function transcriptChangedDuringRead(
-  before: ChatMessage[] | undefined,
-  after: ChatMessage[] | undefined
-): boolean {
+function transcriptChangedDuringRead(before: ChatMessage[] | undefined, after: ChatMessage[] | undefined): boolean {
   if (before === after) {
     return false
   }
@@ -223,9 +209,7 @@ function emptyPageOverPopulatedTranscript(
   current: ClientSessionState | undefined,
   storedSessionId: string
 ): boolean {
-  return (
-    page.length === 0 && Boolean(current?.messages.length) && current?.storedSessionId === storedSessionId
-  )
+  return page.length === 0 && Boolean(current?.messages.length) && current?.storedSessionId === storedSessionId
 }
 
 type TileTranscriptTarget = { ownerRoute?: SessionOwnerRoute; storedSessionId: string; runtimeId?: string }
@@ -321,9 +305,7 @@ export async function reconcileTileTranscripts({
     const tileStillPresent = () =>
       tilesOverride
         ? tilesOverride.some(t => t.storedSessionId === storedSessionId && t.runtimeId === runtimeSessionId)
-        : $sessionTiles
-            .get()
-            .some(t => t.storedSessionId === storedSessionId && t.runtimeId === runtimeSessionId)
+        : $sessionTiles.get().some(t => t.storedSessionId === storedSessionId && t.runtimeId === runtimeSessionId)
 
     // Bot tiles are pinned to an exact owner (connection + target profile);
     // read from that backend, not whichever profile is foreground. Tiles
@@ -515,13 +497,7 @@ export async function hydrateStoredSessionTranscript({
 
       // A zero-row page over the populated turn is a transient read, not the
       // answer.
-      if (
-        emptyPageOverPopulatedTranscript(
-          latest.messages,
-          $sessionStates.get()[runtimeSessionId],
-          storedSessionId
-        )
-      ) {
+      if (emptyPageOverPopulatedTranscript(latest.messages, $sessionStates.get()[runtimeSessionId], storedSessionId)) {
         continue
       }
 
@@ -717,10 +693,7 @@ export async function reconcileActiveTranscript({
         // (fallback switch, #126422) are re-grafted last.
         messages: preserveLocalSystemNotices(
           preserveLocalAssistantErrors(
-            preserveLocalPendingTurnMessages(
-              graftRefreshedTailOntoBackfill(messages, state.messages),
-              state.messages
-            ),
+            preserveLocalPendingTurnMessages(graftRefreshedTailOntoBackfill(messages, state.messages), state.messages),
             state.messages
           ),
           state.messages
@@ -1000,9 +973,7 @@ async function liveStatusParams(activeGatewayProfile: string): Promise<Record<st
     Boolean(connection.profile?.trim()) &&
     normalizeProfileKey(connection.profile) === normalizeProfileKey(activeGatewayProfile)
 
-  return !ownSocket && (await sharedPrimaryRoute(activeGatewayProfile))
-    ? { profile: activeGatewayProfile }
-    : {}
+  return !ownSocket && (await sharedPrimaryRoute(activeGatewayProfile)) ? { profile: activeGatewayProfile } : {}
 }
 
 /** Forget every profile's live-runtime bookkeeping. A gateway wipe already
@@ -1214,12 +1185,7 @@ export function useBackgroundSync({
 
         // Let the canonical publication finish syncing the view before the
         // retry, and never carry it across navigation/profile/connection scope.
-        if (
-          !disposed &&
-          isCurrent() &&
-          !isLive() &&
-          activeTranscriptRefreshPendingRef.current === sessionKey
-        ) {
+        if (!disposed && isCurrent() && !isLive() && activeTranscriptRefreshPendingRef.current === sessionKey) {
           requestActiveTranscriptRefresh(true)
         }
       })
@@ -1273,14 +1239,7 @@ export function useBackgroundSync({
         })
         .catch(() => undefined)
     }
-  }, [
-    activeConnectionId,
-    activeGatewayProfile,
-    gatewayState,
-    refreshCurrentModel,
-    refreshSessions,
-    requestGateway
-  ])
+  }, [activeConnectionId, activeGatewayProfile, gatewayState, refreshCurrentModel, refreshSessions, requestGateway])
 
   // Reconnect backstop (#94779): turns that finished while the socket was
   // down never replay their sessions.changed tick, so the open transcript
@@ -1337,8 +1296,7 @@ export function useBackgroundSync({
       // clicking) drops the visibility leg under a combined focused gate, and
       // the focus leg it would wait for never arrives — the return refresh is
       // lost for a window the user is reading.
-      const viewed =
-        event?.type === 'visibilitychange' ? document.visibilityState === 'visible' : document.hasFocus()
+      const viewed = event?.type === 'visibilitychange' ? document.visibilityState === 'visible' : document.hasFocus()
 
       if (!viewed) {
         return
@@ -1634,9 +1592,7 @@ export function useBackgroundSync({
     runScheduledRefresh()
 
     return visiblePoll(
-      changeEventsAvailable
-        ? ACTIVE_MESSAGING_SESSION_BACKSTOP_INTERVAL_MS
-        : ACTIVE_MESSAGING_SESSION_POLL_INTERVAL_MS,
+      changeEventsAvailable ? ACTIVE_MESSAGING_SESSION_BACKSTOP_INTERVAL_MS : ACTIVE_MESSAGING_SESSION_POLL_INTERVAL_MS,
       runScheduledRefresh
     )
   }, [
@@ -1666,12 +1622,5 @@ export function useBackgroundSync({
       void refreshCurrentModel()
       void refreshHermesConfig()
     }
-  }, [
-    activeSessionId,
-    freshDraftKey,
-    freshDraftReady,
-    gatewayState,
-    refreshCurrentModel,
-    refreshHermesConfig
-  ])
+  }, [activeSessionId, freshDraftKey, freshDraftReady, gatewayState, refreshCurrentModel, refreshHermesConfig])
 }

@@ -41,7 +41,13 @@ import { connectorCalls, mcpTargets, toolLabels } from '@/lib/connector-tools'
 import { generatedImageFromResult, generatedImageToolArgs } from '@/lib/generated-images'
 import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
 import { isTodoToolName } from '@/lib/todos'
-import { type CardToolName, isCardTool, isSilentTool, resolveCardToolName } from '@/lib/tool-render-class'
+import {
+  type CardToolName,
+  isCardTool,
+  isFileEditTool,
+  isSilentTool,
+  resolveCardToolName
+} from '@/lib/tool-render-class'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { onboardingChatStore } from '@/store/onboarding-session'
@@ -528,10 +534,11 @@ const groupActivityParts =
       ]
     }
 
-    // Decisions, deliverables and failures retain their own place in the
-    // transcript. Registered tool UIs also own their visibility and lifecycle.
+    // Decisions, media and failures retain their own place. File edits join
+    // the execution log; their existing diff remains behind each row's toggle.
+    // Registered tool UIs still own their visibility and lifecycle.
     const standalone =
-      isCardTool(part.toolName, part.args) ||
+      (isCardTool(part.toolName, part.args) && !isFileEditTool(part.toolName)) ||
       isSilentTool(part.toolName) ||
       part.status.type === 'requires-action' ||
       !!context.toolUIs?.[part.toolName]?.length ||

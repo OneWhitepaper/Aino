@@ -35,16 +35,20 @@ export async function requestPluginProfile<T>(
   // Preserve the exact call arity the pool tests pin: pass the deadline and the
   // dial options only when the caller set them, so a plain routed RPC keeps its
   // four-argument shape and a timeout-only caller its five-argument shape.
-  const dialProfile = (profile: string): Promise<T> => requestPluginSession<T>(
-    { connectionId: null, profile, targetProfile: profile },
-    <R>(requestMethod: string, payload: Record<string, unknown> = {}, deadline?: number) =>
+  const dialProfile = (profile: string): Promise<T> =>
+    requestPluginSession<T>(
+      { connectionId: null, profile, targetProfile: profile },
+      <R>(requestMethod: string, payload: Record<string, unknown> = {}, deadline?: number) =>
+        spawnPriority
+          ? requestGatewayForProfile<R>(profile, requestMethod, payload, deadline, undefined, { spawnPriority })
+          : deadline === undefined
+            ? requestGatewayForProfile<R>(profile, requestMethod, payload)
+            : requestGatewayForProfile<R>(profile, requestMethod, payload, deadline),
+      method,
+      params,
+      timeoutMs,
       spawnPriority
-        ? requestGatewayForProfile<R>(profile, requestMethod, payload, deadline, undefined, { spawnPriority })
-        : deadline === undefined
-          ? requestGatewayForProfile<R>(profile, requestMethod, payload)
-          : requestGatewayForProfile<R>(profile, requestMethod, payload, deadline),
-    method, params, timeoutMs, spawnPriority
-  )
+    )
 
   if (typeof route !== 'string') {
     if (!route.connectionId.trim() || !route.profile.trim() || !route.targetProfile.trim()) {
@@ -53,16 +57,28 @@ export async function requestPluginProfile<T>(
 
     const captured = { ...route }
 
-    return requestPluginSession<T>(captured,
+    return requestPluginSession<T>(
+      captured,
       <R>(requestMethod: string, payload: Record<string, unknown> = {}, deadline?: number) =>
         spawnPriority
-          ? requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload, deadline, undefined, {
-              spawnPriority
-            })
+          ? requestGatewayForAgent<R>(
+              captured.connectionId,
+              captured.profile,
+              requestMethod,
+              payload,
+              deadline,
+              undefined,
+              {
+                spawnPriority
+              }
+            )
           : deadline === undefined
             ? requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload)
             : requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload, deadline),
-      method, params, timeoutMs, spawnPriority
+      method,
+      params,
+      timeoutMs,
+      spawnPriority
     )
   }
 

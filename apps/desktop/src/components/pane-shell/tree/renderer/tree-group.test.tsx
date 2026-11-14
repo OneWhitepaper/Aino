@@ -10,7 +10,7 @@ import { $tabStripDefault, setTabStripDefault } from '@/store/tabstrip-prefs'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
 import type { GroupNode } from '../model'
-import { $treeDragging, NEW_SESSION_DRAG, SESSION_TILE_DRAG } from '../store'
+import { $dropHint, $treeDragging, NEW_SESSION_DRAG, SESSION_TILE_DRAG } from '../store'
 
 import { TreeGroup } from './tree-group'
 
@@ -336,6 +336,7 @@ describe('TreeGroup', () => {
     async function withDragging(dragging: null | string, run: () => void) {
       await act(async () => {
         $treeDragging.set(dragging)
+        $dropHint.set(dragging ? { kind: 'group', groupId: 'zone-a', groupIds: ['zone-a'], pos: 'left' } : null)
       })
 
       try {
@@ -343,6 +344,7 @@ describe('TreeGroup', () => {
       } finally {
         await act(async () => {
           $treeDragging.set(null)
+          $dropHint.set(null)
         })
       }
     }
@@ -364,7 +366,7 @@ describe('TreeGroup', () => {
       })
     })
 
-    it('lights a chat-strip zone for BOTH session and new-session drags, and only then', async () => {
+    it('lights the current chat-strip target for both session and new-session drags', async () => {
       disposePane = registry.register({
         area: 'panes',
         data: {},

@@ -53,7 +53,7 @@ export const deNotifications = {
   testSent:
     'Test gesendet. Wenn nichts erscheint, überprüfen Sie die Benachrichtigungsberechtigungen Ihres Betriebssystems und Fokus/Nicht stören.',
   testUnsupported: 'Dieses System unterstützt keine nativen Benachrichtigungen.',
-  muteSoundsTitle: 'Oberflächentöne stummschalten',
+  muteSoundsTitle: 'Töne und haptisches Feedback stummschalten',
   muteSoundsDesc:
     'Schaltet automatische Abschluss-, Aktivierungs- und Denktöne, haptisches Feedback und die Töne von Systembenachrichtigungen aus. Klangvorschauen und gesprochene Antworten werden weiterhin abgespielt.',
   completionSoundTitle: 'Abschluss-Sound',
