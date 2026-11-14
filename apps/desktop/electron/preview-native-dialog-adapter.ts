@@ -12,6 +12,7 @@ export interface PreviewNativeDialogRequest {
   message: string
   defaultText: string
   url: string
+  isCurrent: () => boolean
   respond: (accept: boolean, text?: string) => void
 }
 
@@ -28,10 +29,11 @@ interface NativeDialogInfo {
   frame: NativeDialogFrame
 }
 
-function dialogDetails(value: unknown): Omit<PreviewNativeDialogRequest, 'respond'> | undefined {
+function dialogDetails(value: unknown): Omit<PreviewNativeDialogRequest, 'respond' | 'isCurrent'> | undefined {
   if (!value || typeof value !== 'object') {
     return
   }
+
   const info = value as NativeDialogInfo
 
   if (
@@ -49,6 +51,7 @@ function dialogDetails(value: unknown): Omit<PreviewNativeDialogRequest, 'respon
     if (typeof info.frame.isDestroyed !== 'function' || typeof info.frame.detached !== 'boolean') {
       return
     }
+
     url = info.frame.url
   } catch {
     return
@@ -82,6 +85,7 @@ export function installPreviewNativeDialogAdapter(
   if (!isOwnedPreviewGuest(owner, guest)) {
     return
   }
+
   // The guarded Electron-internal event is intentionally absent from WebContents' public overloads.
   const events = guest as unknown as EventEmitter
   const listeners = events.listeners(CHANNEL)
@@ -89,12 +93,14 @@ export function installPreviewNativeDialogAdapter(
   if (listeners.length !== 1) {
     return
   }
+
   const original = listeners[0] as (...args: unknown[]) => unknown
   const source = Function.prototype.toString.call(original)
 
   if (!BUILTIN_MARKERS.every(marker => source.includes(marker))) {
     return
   }
+
   let disposed = false
 
   const adapter = function (this: WebContents, ...args: unknown[]) {
@@ -112,11 +118,13 @@ export function installPreviewNativeDialogAdapter(
       if (answered) {
         return
       }
+
       answered = true
 
       if (guest.isDestroyed()) {
         return
       }
+
       const allowed = !disposed && isOwnedPreviewGuest(owner, guest) && accept === true
       const frameState = dialogFrameState(frame, details.url)
 
@@ -124,12 +132,14 @@ export function installPreviewNativeDialogAdapter(
         if (frameState === 'changed') {
           callback(false, '')
         }
+
         throw new Error('The website dialog frame changed')
       }
 
       if (frameState === 'destroyed') {
         return
       }
+
       callback(allowed, allowed && details.type === 'prompt' ? (text ?? details.defaultText) : '')
     }
 
@@ -140,7 +150,7 @@ export function installPreviewNativeDialogAdapter(
     }
 
     try {
-      open({ ...details, respond })
+      open({ ...details, isCurrent: () => dialogFrameState(frame, details.url) === 'live', respond })
     } catch (error) {
       console.warn('Could not open Browser dialog', error)
       respond(false)
@@ -154,6 +164,7 @@ export function installPreviewNativeDialogAdapter(
     if (disposed) {
       return
     }
+
     disposed = true
     events.removeListener(CHANNEL, adapter)
     events.on(CHANNEL, original)

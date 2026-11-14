@@ -17,7 +17,7 @@ import { PreviewBrowserChooser, type PreviewUploadTarget } from './preview-brows
 import { type DownloadGrant, PreviewBrowserFiles } from './preview-browser-files'
 import { acquirePreviewGuestCdp, type PreviewGuestCdp } from './preview-guest-cdp'
 import { isOwnedPreviewGuest, watchNativePreviewOwner } from './preview-guest-owner'
-import { installPreviewNativeDialogAdapter } from './preview-native-dialog-adapter'
+import { installPreviewNativeDialogAdapter, type PreviewNativeDialogRequest } from './preview-native-dialog-adapter'
 
 const trackers = new WeakMap<WebContents, PreviewBrowserInteractions>()
 const SECRET_PROMPT = /password|passphrase|secret|verification|one.?time|authenticator|2fa|密码|验证码|口令/i
@@ -34,7 +34,7 @@ export class PreviewBrowserInteractions {
   private dialogDefaults = new Map<string, string>()
   private initialization?: Promise<void>
   private restoreNativeDialogs?: () => void
-  private nativeDialogResponses = new Map<string, (accept: boolean, text?: string) => void>()
+  private nativeDialogResponses = new Map<string, Pick<PreviewNativeDialogRequest, 'respond' | 'isCurrent'>>()
   private dialogBindings = new Map<string, { generation: number; sessionId?: string }>()
   private downloads: PreviewBrowserDownload[] = []
   private activeDownloads = new Map<string, { item: DownloadItem; automatic: boolean; reserved?: string }>()
@@ -66,7 +66,8 @@ export class PreviewBrowserInteractions {
         url: request.url,
         defaultPrompt: request.defaultText
       })
-      this.nativeDialogResponses.set(dialog.id, request.respond)
+
+      this.nativeDialogResponses.set(dialog.id, { respond: request.respond, isCurrent: request.isCurrent })
     })
     this.chooser = new PreviewBrowserChooser(this.cdp, chooser => {
       if (!this.disposed) {
@@ -77,7 +78,9 @@ export class PreviewBrowserInteractions {
     const navigate = () => this.retireDocument(true)
     const inPage = (_event: Electron.Event, _url: string, main: boolean) => this.retireDocument(main)
     const dispose = () => this.dispose()
-    const cancelDialogs = () => this.retireDialogs()
+    // Chromium emits a guest-wide reset when any child frame retires; another
+    // renderer can already have opened its next, still-live dialog by then.
+    const cancelDialogs = (info?: { resetState?: boolean }) => this.retireDialogs(info?.resetState === true)
     const dialogEvents = guest as unknown as EventEmitter
     dialogEvents.on('-cancel-dialogs', cancelDialogs)
     guest.on('did-navigate', navigate)
@@ -141,28 +144,47 @@ export class PreviewBrowserInteractions {
     if (dialogs) {
       this.retireDialogs()
     }
+
     this.chooser.retire()
     this.revokeFiles()
   }
 
-  private retireDialogs(): void {
-    this.cancelNativeDialogs()
+  private retireDialogs(staleFramesOnly = false): void {
+    const first = this.dialogs.find(dialog => dialog.state === 'pending')
+    const retired: Array<Pick<PreviewNativeDialogRequest, 'respond'>> = []
 
     for (const dialog of this.dialogs) {
-      if (dialog.state === 'pending') {
-        dialog.state = 'closed'
-        this.publishDialog(dialog)
+      const native = this.nativeDialogResponses.get(dialog.id)
+
+      if (dialog.state !== 'pending' || (staleFramesOnly && native?.isCurrent())) {
+        continue
+      }
+
+      this.nativeDialogResponses.delete(dialog.id)
+      this.dialogBindings.delete(dialog.id)
+      this.dialogDefaults.delete(dialog.id)
+      dialog.state = 'closed'
+      this.publishDialog(dialog)
+
+      if (native) {
+        retired.push(native)
       }
     }
 
-    this.dialogBindings.clear()
-    this.dialogDefaults.clear()
+    for (const native of retired) {
+      native.respond(false)
+    }
+
+    if (first?.state === 'closed') {
+      this.publishNextDialog()
+    }
   }
 
   private publishDialog(dialog: PreviewBrowserDialog, defaultText?: string): void {
     if (this.owner.isDestroyed() || this.guest.isDestroyed()) {
       return
     }
+
     this.owner.send('hermes:preview-browser-dialog', {
       webContentsId: this.guest.id,
       scope: this.scope,
@@ -186,8 +208,8 @@ export class PreviewBrowserInteractions {
     const pending = [...this.nativeDialogResponses.values()]
     this.nativeDialogResponses.clear()
 
-    for (const respond of pending) {
-      respond(false)
+    for (const native of pending) {
+      native.respond(false)
     }
   }
 
@@ -418,6 +440,7 @@ export class PreviewBrowserInteractions {
       if (preparedTicket) {
         this.files.cancelUpload(preparedTicket)
       }
+
       await this.cdp
         .sendCommand('Runtime.releaseObject', { objectId: target.objectId }, target.sessionId)
         .catch(releaseError => console.warn('Could not release Browser upload target', releaseError))
@@ -510,7 +533,7 @@ export class PreviewBrowserInteractions {
     }
 
     if (nativeResponse) {
-      this.respondNativeDialog(dialog, request, nativeResponse)
+      this.respondNativeDialog(dialog, request, nativeResponse.respond)
     } else if (dialog.type === 'beforeunload') {
       await this.cdp.sendCommand('Page.handleJavaScriptDialog', { accept: request.accept }, binding.sessionId)
       this.finishDialog(dialog, request.accept ? 'accepted' : 'dismissed')

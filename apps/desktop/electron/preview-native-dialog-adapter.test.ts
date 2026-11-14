@@ -65,6 +65,7 @@ it('routes the one owned native handler exactly once and restores it while stale
     defaultText: 'private default',
     url: 'https://child.example/form'
   })
+  expect(pending[0].isCurrent()).toBe(true)
   expect(guest.showMessageBox).not.toHaveBeenCalled()
   pending[0].respond(true)
   pending[0].respond(false)
@@ -86,9 +87,11 @@ it('routes the one owned native handler exactly once and restores it while stale
 
   const retiredFixture = fixture()
   let retiredRequest: PreviewNativeDialogRequest
+
   const retire = retiredFixture.install(request => {
     retiredRequest = request
   })!
+
   const retired = vi.fn()
   retiredFixture.guest.emit('-run-dialog', info, retired)
   retire()
@@ -131,9 +134,11 @@ it('pins the native frame and refuses accepted responses after navigation, detac
   for (const state of ['url', 'detached', 'destroyed'] as const) {
     const { guest, install } = fixture()
     let pending: PreviewNativeDialogRequest
+
     const dispose = install(request => {
       pending = request
     })!
+
     const frame = { url: 'https://child.example/form', detached: false, isDestroyed: () => false }
     const callback = vi.fn()
     guest.emit('-run-dialog', { ...info, frame }, callback)
@@ -149,6 +154,8 @@ it('pins the native frame and refuses accepted responses after navigation, detac
     if (state === 'destroyed') {
       frame.isDestroyed = () => true
     }
+
+    expect(pending!.isCurrent()).toBe(false)
     expect(() => pending!.respond(true, 'stale response')).toThrow('The website dialog frame changed')
     pending!.respond(false)
 
@@ -163,9 +170,11 @@ it('pins the native frame and refuses accepted responses after navigation, detac
 
   const { guest, install } = fixture()
   let pending: PreviewNativeDialogRequest
+
   const dispose = install(request => {
     pending = request
   })!
+
   const frame = { url: 'https://child.example/form', detached: false, isDestroyed: () => false }
   const callback = vi.fn()
   guest.emit('-run-dialog', { ...info, frame }, callback)

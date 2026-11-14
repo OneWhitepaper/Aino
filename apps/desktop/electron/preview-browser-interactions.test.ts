@@ -86,13 +86,20 @@ const request = (action: string, params: Record<string, unknown> = {}) =>
     { action, scope, ...params } as never
   )
 
-function nativeDialog(params: { type: string; url?: string; message: string; defaultPrompt?: string }) {
+function nativeDialog(params: {
+  type: string
+  url?: string
+  message: string
+  defaultPrompt?: string
+  isCurrent?: () => boolean
+}) {
   const respond = vi.fn()
   guest.emit('fixture:dialog', {
     type: params.type,
     message: params.message,
     defaultText: params.defaultPrompt ?? '',
     url: params.url ?? guest.getURL(),
+    isCurrent: params.isCurrent ?? (() => true),
     respond
   })
 
@@ -110,6 +117,7 @@ afterEach(async () => {
   if (!guest.destroyed) {
     await request('release')
   }
+
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -212,11 +220,13 @@ it('cancels an automatic download if its approved parent folder is replaced by a
 
 it('binds each response to one native dialog callback and retires it after navigation', async () => {
   await request('watch')
+
   const respond = nativeDialog({
     type: 'confirm',
     message: 'Continue embedded action?',
     url: 'https://embedded.example/'
   })
+
   const initial = (await request('dialog_status')).dialogs![0]
   await request('dialog_respond', { dialogId: initial.id, accept: false })
   expect(respond).toHaveBeenCalledWith(false, undefined)
@@ -261,6 +271,31 @@ it('keeps sibling frame dialogs queued with their own callbacks and defaults unt
   ])
   await expect(request('dialog_manual', { dialogId: pending[1].id, accept: true })).rejects.toThrow('no longer pending')
   expect(secondResponse).toHaveBeenCalledOnce()
+})
+
+it('keeps a live sibling dialog when Chromium resets a different frame and retires only the stale frame', async () => {
+  await request('watch')
+  let firstFrameCurrent = true
+  const first = nativeDialog({ type: 'prompt', message: 'Retiring frame', isCurrent: () => firstFrameCurrent })
+  const second = nativeDialog({ type: 'prompt', message: 'Live frame', defaultPrompt: 'live-private' })
+  const pending = (await request('dialog_status')).dialogs!
+  firstFrameCurrent = false
+  guest.emit('-cancel-dialogs', { resetState: true })
+  expect(first).toHaveBeenCalledExactlyOnceWith(false)
+  expect(second).not.toHaveBeenCalled()
+  expect((await request('dialog_status')).dialogs).toEqual([
+    expect.objectContaining({ id: pending[0].id, state: 'closed' }),
+    expect.objectContaining({ id: pending[1].id, state: 'pending' })
+  ])
+  expect(owner.send).toHaveBeenLastCalledWith(
+    'hermes:preview-browser-dialog',
+    expect.objectContaining({ dialog: expect.objectContaining({ id: pending[1].id }), defaultText: 'live-private' })
+  )
+  await request('dialog_manual', { dialogId: pending[1].id, accept: true })
+  expect(second).toHaveBeenCalledExactlyOnceWith(true, 'live-private')
+  const explicitlyCancelled = nativeDialog({ type: 'prompt', message: 'Explicit cancellation' })
+  guest.emit('-cancel-dialogs', { resetState: false })
+  expect(explicitlyCancelled).toHaveBeenCalledExactlyOnceWith(false)
 })
 
 it('releases and consumes only the cancelled upload ticket without setting input files', async () => {
