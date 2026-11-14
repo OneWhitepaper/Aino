@@ -124,7 +124,7 @@ import {
 } from './bootstrap-platform'
 import { decideBootstrapRepair } from './bootstrap-repair-guard'
 import { runBootstrap } from './bootstrap-runner'
-import { bootstrapSnapshot } from './bootstrap-state'
+import { bootstrapSnapshot, clampBootProgress } from './bootstrap-state'
 import {
   BROWSER_WINDOW_HEIGHT,
   BROWSER_WINDOW_MIN_HEIGHT,
@@ -2372,16 +2372,6 @@ function ensureWslWindowsFonts() {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function clampBootProgress(value) {
-  const numeric = Number(value)
-
-  if (!Number.isFinite(numeric)) {
-    return 0
-  }
-
-  return Math.max(0, Math.min(100, Math.round(numeric)))
 }
 
 function broadcastBootProgress() {

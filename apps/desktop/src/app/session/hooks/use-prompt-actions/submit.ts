@@ -277,6 +277,39 @@ function prepareSubmitInput(
   }
 }
 
+function buildSubmitContextText(atts: ComposerAttachment[], visibleText: string): string {
+  // atts may be the post-sync array, which can reintroduce holes; filter
+  // before touching a.refText / a.kind.
+  const present = atts.filter((a): a is ComposerAttachment => Boolean(a))
+
+  const contextRefs = present
+    .map(a => a.refText)
+    .filter(Boolean)
+    .join('\n')
+
+  // Terminal fences live inside visibleText (frozen above / at enqueue).
+  return (
+    [contextRefs, visibleText].filter(Boolean).join('\n\n') ||
+    (present.some(a => a.kind === 'image') ? 'What do you see in this image?' : '')
+  )
+}
+
+function requestDeferredCredentialSetup(fromQueue: boolean | undefined): boolean {
+  if (fromQueue) {
+    return false
+  }
+
+  const warning = consumePendingCredentialWarning()
+
+  if (!warning) {
+    return false
+  }
+
+  requestDesktopOnboarding(warning)
+
+  return true
+}
+
 function acceptsImageAttachments(
   guardSessionId: string | null,
   fromQueue: boolean | undefined,
@@ -403,23 +436,6 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
       let { attachmentRefs } = prepared
 
-      const buildContextText = (atts: ComposerAttachment[]): string => {
-        // atts may be the post-sync array, which can reintroduce holes; filter
-        // before touching a.refText / a.kind.
-        const present = atts.filter((a): a is ComposerAttachment => Boolean(a))
-
-        const contextRefs = present
-          .map(a => a.refText)
-          .filter(Boolean)
-          .join('\n')
-
-        // Terminal fences live inside visibleText (frozen above / at enqueue).
-        return (
-          [contextRefs, visibleText].filter(Boolean).join('\n\n') ||
-          (present.some(a => a.kind === 'image') ? 'What do you see in this image?' : '')
-        )
-      }
-
       // Queue drains fire on the busy→false settle edge, where busyRef (synced
       // from $busy by a separate effect) may still read true — honoring it would
       // bounce the drained send. The drain lock serializes them; the user path
@@ -464,14 +480,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       // the gateway said will fail. The draft
       // stays in the composer; once a provider is configured they just hit
       // Enter again.
-      if (!options?.fromQueue) {
-        const deferredCredentialWarning = consumePendingCredentialWarning()
-
-        if (deferredCredentialWarning) {
-          requestDesktopOnboarding(deferredCredentialWarning)
-
-          return false
-        }
+      if (requestDeferredCredentialSetup(options?.fromQueue)) {
+        return false
       }
 
       // Barged mid-speech (here or via the voice loop's VAD)? Flag the submit
@@ -1203,7 +1213,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // Images keep their inline bounded thumbnail — see optimisticAttachmentRef.
         attachmentRefs = syncedAttachments.map(optimisticAttachmentRef).filter((r): r is string => Boolean(r))
         rewriteOptimistic(liveSessionId, syncedAttachments)
-        const text = retained?.text ?? buildContextText(syncedAttachments)
+        const text = retained?.text ?? buildSubmitContextText(syncedAttachments, visibleText)
 
         // No pre-send stale-transcript guard (removed on main, fcfc5c66ede):
         // windows on one backend share the live session and turns are

@@ -1,13 +1,4 @@
-import {
-  forceRedraw,
-  type ScrollBoxHandle,
-  setDimFallbackColor,
-  useApp,
-  useHasSelection,
-  useSelection,
-  useStdout,
-  useTerminalTitle
-} from '@hermes/ink'
+import { forceRedraw, type ScrollBoxHandle, useApp, useStdout, useTerminalTitle } from '@hermes/ink'
 import { sharedControlParams } from '@hermes/shared/gateway-canonical'
 import type { SessionControlSnapshot } from '@hermes/shared/gateway-events'
 import type {
@@ -38,7 +29,7 @@ import { t } from '../i18n/runtime.js'
 import { useT } from '../i18n/useT.js'
 import { composerPromptWidth } from '../lib/inputMetrics.js'
 import { appendTranscriptMessage, capTranscriptHistory } from '../lib/messages.js'
-import { DEFAULT_VOICE_RECORD_KEY, isMac, type ParsedVoiceRecordKey } from '../lib/platform.js'
+import { DEFAULT_VOICE_RECORD_KEY, type ParsedVoiceRecordKey } from '../lib/platform.js'
 import { createResizeCoalescer } from '../lib/resizeCoalescer.js'
 import { asRpcResult, rpcErrorMessage } from '../lib/rpc.js'
 import { terminalParityHints } from '../lib/terminalParity.js'
@@ -54,7 +45,6 @@ import { createGatewayEventHandler } from './createGatewayEventHandler.js'
 import { createServerRequestHandler } from './createServerRequestHandler.js'
 import { createSlashHandler } from './createSlashHandler.js'
 import { planGatewayRecovery } from './gatewayRecovery.js'
-import { getInputSelection } from './inputSelectionStore.js'
 import { type GatewayRpc, type SlashHandler, type StateSetter, type TranscriptRow, type UiState } from './interfaces.js'
 import { applyLiveSessionRoster, requestLiveSessions } from './liveSessions.js'
 import { applyControlSnapshot } from './loopStatus.js'
@@ -86,6 +76,7 @@ import {
 } from './userMessages.js'
 import { useSessionLifecycle } from './useSessionLifecycle.js'
 import { useSubmission } from './useSubmission.js'
+import { useTerminalSelection } from './useTerminalSelection.js'
 
 const BRACKET_PASTE_ON = '\x1b[?2004h'
 const BRACKET_PASTE_OFF = '\x1b[?2004l'
@@ -393,61 +384,7 @@ export function useMainApp(gw: GatewayClient) {
   historyItemsRef.current = historyItems
   lastUserMsgRef.current = lastUserMsg
 
-  const hasSelection = useHasSelection()
-  const selection = useSelection()
-  const lastCopiedVersionRef = useRef(-1)
-
-  useEffect(() => {
-    selection.setSelectionBgColor(ui.theme.color.selectionBg)
-  }, [selection, ui.theme.color.selectionBg])
-
-  // Terminals that ignore SGR 2 (Apple_Terminal) get a literal color for
-  // `dim` instead. Feed it the theme's muted tone so dimmed spans stay in
-  // the palette — a hardcoded gray renders as a foreign foreground next to
-  // themed text on the same line.
-  useEffect(() => {
-    setDimFallbackColor(ui.theme.color.muted)
-  }, [ui.theme.color.muted])
-
-  // macOS Terminal.app does not forward Cmd+C to fullscreen TUIs that enable
-  // mouse tracking, so the only reliable native-feeling path is iTerm-style
-  // copy-on-select: once a drag creates a stable TUI selection, write it to
-  // the system clipboard while keeping the highlight visible.
-  //
-  // Subscribe directly via the ink selection bus (not useSyncExternalStore)
-  // so React doesn't re-render MainApp on every drag-move tick. The version
-  // ref de-dupes against re-entrant notifications.
-  useEffect(() => {
-    if (!isMac) {
-      return
-    }
-
-    return selection.subscribe(() => {
-      if (!selection.hasSelection()) {
-        return
-      }
-
-      const state = selection.getState() as { isDragging?: boolean } | null
-
-      if (state?.isDragging) {
-        return
-      }
-
-      const version = selection.version()
-
-      if (version === lastCopiedVersionRef.current) {
-        return
-      }
-
-      lastCopiedVersionRef.current = version
-      void selection.copySelectionNoClear()
-    })
-  }, [selection])
-
-  const clearSelection = useCallback(() => {
-    selection.clearSelection()
-    getInputSelection()?.collapseToEnd()
-  }, [selection])
+  const { clearSelection, hasSelection, selection } = useTerminalSelection(ui.theme.color)
 
   const composer = useComposerState({
     gw,

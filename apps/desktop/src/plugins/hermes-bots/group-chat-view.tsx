@@ -39,8 +39,6 @@ import {
 import type { ClipboardEvent, DragEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { avatarColor, botAppearance, BotFace } from './avatar'
-import { isBackfilledFacePng } from './avatar-image'
 import {
   groupCreationSource,
   groupDrivenByDesktop,
@@ -128,6 +126,7 @@ import {
   recordGroupOpenOrigin,
   restoreGroupComposerDraft
 } from './group-panes'
+import { RoomBotFace } from './group-room-avatar'
 import { ROOM_AVATAR_SIZE } from './group-room-ui'
 import { groupReplyMentionTag, sendToGroupChat, stopGroupThread } from './group-rounds'
 import { clearGroupClarify, renameGroupClarify } from './group-turns'
@@ -1434,22 +1433,6 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
     }
   }
 
-  // Same appearance pipeline as the roster: custom image/pet, else the deterministic shape+color face.
-  const speakerFace = (name: string, meta: BotMeta | null | undefined) => {
-    const appearance = botAppearance(name, meta)
-    const image = appearance.image ?? null
-
-    return (
-      <BotFace
-        color={avatarColor(appearance.color, name)}
-        image={image && !isBackfilledFacePng(image) ? image : null}
-        name={name}
-        shape={appearance.shape}
-        size={ROOM_AVATAR_SIZE}
-      />
-    )
-  }
-
   // One log entry, rendered exactly as before conversation folding existed.
   const renderEntry = (entry: GroupMessage, index: number) => {
     const isUser = entry.from.kind === 'user'
@@ -1475,7 +1458,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
         ? `${display}${entry.from.source ? `-${entry.from.source}` : ''} (@${botHandle(entry.from.name, member || undefined)})`
         : display
 
-    // Speaker avatar: same appearance pipeline as the roster (speakerFace).
+    // Speaker avatar: same appearance pipeline as the roster.
     // Source-qualified speakers use owner-aware botRosterMeta (#96432).
     // The user's own lines carry no avatar.
     return (
@@ -1486,7 +1469,7 @@ function LegacyGroupChatWorkspace({ group, members, onBack, mainTab, visible = t
               <Codicon name="account" />
             </span>
           ) : (
-            speakerFace(entry.from.name, meta)
+            <RoomBotFace meta={meta} name={entry.from.name} size={ROOM_AVATAR_SIZE} />
           )}
         </div>
         <div className="aino-group-message-main">

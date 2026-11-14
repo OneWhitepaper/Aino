@@ -3,7 +3,7 @@
 import './preview-mind'
 
 import { useStore } from '@nanostores/react'
-import type { ComponentProps, PointerEvent as ReactPointerEvent } from 'react'
+import type { ComponentProps, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { requestComposerAttachImages, requestComposerFocus, requestComposerInsert } from '@/app/chat/composer/focus'
@@ -306,6 +306,68 @@ function previewPartitionForTab(sessionId: null | string | undefined, tabId?: nu
   return previewPartitionForProfile(sessionProfile ?? previewTabOwnerProfile(tabId))
 }
 
+/** Transfers restore the current page, including its latest SPA route. */
+function usePersistBrowserLocation(
+  tabId: string | undefined,
+  kind: PreviewTarget['kind'],
+  liveUrlRef: RefObject<string>
+) {
+  useEffect(() => {
+    if (kind !== 'url' || !tabId) {
+      return
+    }
+
+    const persist = () => {
+      const page = $browserPages.get()[tabId]
+      commitBrowserTabLocation(tabId, page?.url || liveUrlRef.current, page?.title)
+    }
+
+    window.addEventListener('pagehide', persist)
+
+    return () => {
+      window.removeEventListener('pagehide', persist)
+      persist()
+    }
+  }, [tabId, kind, liveUrlRef])
+}
+
+interface PreviewAddressHeaderProps {
+  currentUrl: string
+  isRemoteHtmlTarget: boolean
+  previewLabel: string
+  target: PreviewTarget
+}
+
+function PreviewAddressHeader({ currentUrl, isRemoteHtmlTarget, previewLabel, target }: PreviewAddressHeaderProps) {
+  const { t } = useI18n()
+  const copy = t.preview.web
+
+  return (
+    <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
+      <div className="min-w-0 flex-1">
+        <Tip label={copy.openTarget(currentUrl)}>
+          <a
+            className="pointer-events-auto inline max-w-full truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
+            href={isRemoteHtmlTarget ? undefined : currentUrl}
+            onClick={event => {
+              if (isRemoteHtmlTarget) {
+                event.preventDefault()
+                void openPreviewTargetInBrowser(target).catch(error =>
+                  notifyError(new Error(localizedPreviewError(t, error)), t.preview.unavailable)
+                )
+              }
+            }}
+            rel="noreferrer"
+            target={isRemoteHtmlTarget ? undefined : '_blank'}
+          >
+            {previewLabel || copy.fallbackTitle}
+          </a>
+        </Tip>
+      </div>
+    </div>
+  )
+}
+
 export function PreviewPane({
   embedded = false,
   onClose,
@@ -377,26 +439,7 @@ export function PreviewPane({
     }
   }
 
-  // Hand the live address to storage when this guest is about to go away
-  // (pop-out, dock-back, tab close). The other renderer builds from
-  // `target.url`; without this it would reopen the tab's original page.
-  useEffect(() => {
-    if (target.kind !== 'url' || !tabId) {
-      return
-    }
-
-    const persist = () => {
-      const page = $browserPages.get()[tabId]
-      commitBrowserTabLocation(tabId, page?.url || liveUrlRef.current, page?.title)
-    }
-
-    window.addEventListener('pagehide', persist)
-
-    return () => {
-      window.removeEventListener('pagehide', persist)
-      persist()
-    }
-  }, [tabId, target.kind])
+  usePersistBrowserLocation(tabId, target.kind, liveUrlRef)
 
   const isRemoteHtml = isRemoteHtmlTarget && renderMode !== 'source' && Boolean(target.dataUrl)
 
@@ -1486,28 +1529,12 @@ export function PreviewPane({
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {!embedded && (
-          <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
-            <div className="min-w-0 flex-1">
-              <Tip label={copy.openTarget(currentUrl)}>
-                <a
-                  className="pointer-events-auto inline max-w-full truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
-                  href={isRemoteHtmlTarget ? undefined : currentUrl}
-                  onClick={event => {
-                    if (isRemoteHtmlTarget) {
-                      event.preventDefault()
-                      void openPreviewTargetInBrowser(target).catch(error =>
-                        notifyError(new Error(localizedPreviewError(t, error)), t.preview.unavailable)
-                      )
-                    }
-                  }}
-                  rel="noreferrer"
-                  target={isRemoteHtmlTarget ? undefined : '_blank'}
-                >
-                  {previewLabel || copy.fallbackTitle}
-                </a>
-              </Tip>
-            </div>
-          </div>
+          <PreviewAddressHeader
+            currentUrl={currentUrl}
+            isRemoteHtmlTarget={isRemoteHtmlTarget}
+            previewLabel={previewLabel}
+            target={target}
+          />
         )}
 
         {canRenderHtmlFile && renderMode !== 'source' && (

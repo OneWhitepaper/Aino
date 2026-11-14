@@ -790,6 +790,45 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
     }
   }
 
+  const clearLockTarget = () => {
+    retire(spec => spec.kind === 'lock')
+    holder.aimed = null
+  }
+
+  const drawStrobe = (field: Element[]) => {
+    // Fixed draw order keeps the burst deterministic while varying gaps and clump sizes.
+    let seed = 0
+
+    const roll = () => {
+      const noise = Math.sin(++seed * 78.233) * 43758.5453
+
+      return noise - Math.floor(noise)
+    }
+
+    if (still) {
+      // Without animation delays, drawing the burst would expose every mark at once.
+      outline(field, 'candidate', () => 0)
+
+      return
+    }
+
+    for (let at = 0; at < burst;) {
+      const clump = roll() < 0.62 ? 1 : roll() < 0.7 ? 2 : 3
+
+      for (let k = 0; k < clump; k++) {
+        // Replacement is deliberate: a burst can revisit the same control.
+        const el = field[Math.floor(roll() * field.length)]
+        const seen = spot(el)
+
+        if (seen.width >= 1 && seen.height >= 1) {
+          add({ a: el, beat: at, kind: 'flash', label: sniff(el), life: blink + roll() * flick })
+        }
+      }
+
+      at += roll() < 0.85 ? tempo + roll() * tempo * 2 : gasp + roll() * gasp
+    }
+  }
+
   // ── THE PAGE'S PROSE ──────────────────────────────────────────────────────
 
   /** Every block of text on screen, in document order.
@@ -1020,8 +1059,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
     // own clock underneath this one — several sweeps' worth of boxes on screen
     // at once is the readout, not a glitch, and they stay honest because every
     // one of them is still tracking its own element.
-    retire(spec => spec.kind === 'lock')
-    holder.aimed = null
+    clearLockTarget()
     // Scattered, not top-to-bottom. A document-order cascade reads as a wipe
     // passing over the page; firing all over it at once reads as the whole page
     // being taken in at once, which is what actually happened. Deterministic, so
@@ -1038,8 +1076,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
     // top to bottom, so the cue does too, and the two are told apart at a
     // glance. Timed off where a block SITS rather than its index, so two
     // columns light together and the beam stays straight.
-    retire(spec => spec.kind === 'lock')
-    holder.aimed = null
+    clearLockTarget()
     outline(
       text,
       'candidate',
@@ -1052,45 +1089,8 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
     // sweep can't say this: it puts the field up as one picture and holds it.
     // The whole burst is scheduled here in one pass, because the alternative is
     // a bridge round-trip per box, and at ~100ms each the rhythm is the latency.
-    retire(spec => spec.kind === 'lock')
-    holder.aimed = null
-
-    // Deterministic — the same page strobes the same way twice — but with a
-    // fresh draw per call rather than one hash of the index, so the gaps, the
-    // clump sizes and the picks are independent of each other. Read in a fixed
-    // order below: reordering these calls changes the sequence.
-    let seed = 0
-
-    const roll = () => {
-      const noise = Math.sin(++seed * 78.233) * 43758.5453
-
-      return noise - Math.floor(noise)
-    }
-
-    if (still) {
-      // Nothing about a strobe survives reduced motion, and the timed fallback
-      // is worse than useless here: with no animation to hold a mark invisible
-      // through its delay, every box in the burst would paint at once. Show the
-      // field it was going to rattle through instead.
-      outline(field, 'candidate', () => 0)
-    } else {
-      for (let at = 0; at < burst;) {
-        const clump = roll() < 0.62 ? 1 : roll() < 0.7 ? 2 : 3
-
-        for (let k = 0; k < clump; k++) {
-          // Drawn WITH replacement: hitting the same box twice in a run is the
-          // point, not a flaw in the shuffle.
-          const el = field[Math.floor(roll() * field.length)]
-          const seen = spot(el)
-
-          if (seen.width >= 1 && seen.height >= 1) {
-            add({ a: el, beat: at, kind: 'flash', label: sniff(el), life: blink + roll() * flick })
-          }
-        }
-
-        at += roll() < 0.85 ? tempo + roll() * tempo * 2 : gasp + roll() * gasp
-      }
-    }
+    clearLockTarget()
+    drawStrobe(field)
   } else if (stage === 'strike') {
     add({ a: target as Element, kind: 'hit' })
   } else {
