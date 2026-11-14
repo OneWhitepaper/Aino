@@ -46,7 +46,8 @@ const readState = guest => guest.executeJavaScript(`JSON.stringify({ nonce, draf
 
 async function assertRetainedState(guest, expected, originalScroll) {
   const { scroll: actualScroll, ...actualState } = JSON.parse(await readState(guest))
-  const { scroll: _expectedScroll, ...expectedState } = JSON.parse(expected)
+  const expectedState = JSON.parse(expected)
+  delete expectedState.scroll
   assert.deepEqual(actualState, expectedState)
   const pixelRatio = await guest.executeJavaScript('devicePixelRatio')
   assert.ok(Number.isFinite(pixelRatio) && pixelRatio > 0)
