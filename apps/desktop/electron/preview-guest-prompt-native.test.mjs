@@ -39,6 +39,18 @@ process.env.HERMES_RUNTIME_DIR = join(runtime, 'runtime')
 app.commandLine.appendSwitch('site-per-process')
 const watchdog = setTimeout(() => { console.error('Frame prompt proof exceeded 40 seconds'); app.exit(1) }, 40_000)
 
+async function frameReceipts(guest) {
+  const deadline = Date.now() + 5000
+  let receipts
+  do {
+    receipts = await guest.executeJavaScript('receipts')
+    if (receipts.length === 4) return receipts
+    // A native callback can finish before an OOPIF postMessage reaches its parent.
+    await new Promise(resolve => setTimeout(resolve, 5))
+  } while (Date.now() < deadline)
+  throw new Error('Child frames did not deliver their prompt results: ' + JSON.stringify(receipts))
+}
+
 async function run() {
   const bundle = join(runtime, 'interactions.mjs')
   await build({ stdin: { contents: `export * from './preview-browser-interactions.ts';export * from './preview-guest-owner.ts'`, resolveDir: fileURLToPath(new URL('.', import.meta.url)) }, outfile: bundle, bundle: true, platform: 'node', format: 'esm', external: ['electron'] })
@@ -116,7 +128,7 @@ async function run() {
     await guest.loadURL(`http://127.0.0.1:${port}/`)
     await Promise.all(responses)
     if (respondError) throw respondError
-    const receipts = await guest.executeJavaScript('receipts')
+    const receipts = await frameReceipts(guest)
     const frames = guest.mainFrame.framesInSubtree.map(frame => ({ url: frame.url, process_id: frame.processId }))
     console.log(JSON.stringify({ observed, receipts, frames }))
     assert.deepEqual(observed.map(item => item.name).sort(), ['oopif', 'same', 'sandbox'])
