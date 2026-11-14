@@ -6,11 +6,13 @@ export function installPreviewGuestPrompt(): void {
     const frame = document.createElement('iframe')
     frame.hidden = true
     document.documentElement.appendChild(frame)
+
     try {
       return frame.contentWindow!.prompt.apply(window, args)
     } finally {
       frame.remove()
     }
   }
+
   Object.defineProperty(window, 'prompt', { configurable: true, writable: true, value: restore })
 }

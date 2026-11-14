@@ -53,9 +53,7 @@ async function initializeFrame(connection: Connection, sessionId: string): Promi
       await connection.debugger.sendCommand('Target.setAutoAttach', frameAutoAttach, sessionId)
     } finally {
       if (connection.live) {
-        await connection.debugger
-          .sendCommand('Runtime.runIfWaitingForDebugger', {}, sessionId)
-          .catch(() => undefined)
+        await connection.debugger.sendCommand('Runtime.runIfWaitingForDebugger', {}, sessionId).catch(() => undefined)
       }
     }
   })()

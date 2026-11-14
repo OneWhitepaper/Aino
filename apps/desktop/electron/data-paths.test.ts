@@ -26,6 +26,7 @@ test('default data roots append the suffix literally on each platform', (): void
     const home: string = platform === 'win32' ? 'C:\\Users\\test' : '/home/test'
     const local: string = paths.join(home, 'AppData', 'Local')
     const userData: string = paths.join(home, 'app-data', 'Hermes')
+
     const base: string =
       platform === 'win32' ? paths.join(local, brand.homeDirName) : paths.join(home, `.${brand.homeDirName}`)
 

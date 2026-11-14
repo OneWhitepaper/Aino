@@ -43,6 +43,7 @@ async function loadRoom(): Promise<Room> {
     import('./group-chat-view'),
     import('./shared')
   ])
+
   shared.setPluginCtx(scriptedStorage(gateway.storage))
 
   return { chat, gateway, view }

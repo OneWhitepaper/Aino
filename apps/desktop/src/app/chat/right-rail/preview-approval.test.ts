@@ -4,7 +4,9 @@ import { beginPreviewApproval } from './preview-approval'
 import type { PreviewDriveGuest } from './preview-drive-channels'
 
 const original = window.hermesDesktop
-afterEach(() => { window.hermesDesktop = original })
+afterEach(() => {
+  window.hermesDesktop = original
+})
 
 function fixture() {
   const native = {
@@ -17,7 +19,10 @@ function fixture() {
   }
 
   window.hermesDesktop = { ...original, ...native }
-  const guest = Object.assign(document.createElement('div'), { getWebContentsId: () => 7, getZoomFactor: () => 1.25 }) as PreviewDriveGuest
+  const guest = Object.assign(document.createElement('div'), {
+    getWebContentsId: () => 7,
+    getZoomFactor: () => 1.25
+  }) as PreviewDriveGuest
 
   return { guest, native }
 }

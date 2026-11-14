@@ -18,7 +18,9 @@ vi.mock('./preview-native-dialog-adapter', () => ({
   installPreviewNativeDialogAdapter: (_owner: unknown, guest: EventEmitter, open: (...args: unknown[]) => void) => {
     guest.on('fixture:dialog', open)
 
-    return () => { guest.removeListener('fixture:dialog', open) }
+    return () => {
+      guest.removeListener('fixture:dialog', open)
+    }
   }
 }))
 
@@ -86,7 +88,13 @@ const request = (action: string, params: Record<string, unknown> = {}) =>
 
 function nativeDialog(params: { type: string; url?: string; message: string; defaultPrompt?: string }) {
   const respond = vi.fn()
-  guest.emit('fixture:dialog', { type: params.type, message: params.message, defaultText: params.defaultPrompt ?? '', url: params.url ?? guest.getURL(), respond })
+  guest.emit('fixture:dialog', {
+    type: params.type,
+    message: params.message,
+    defaultText: params.defaultPrompt ?? '',
+    url: params.url ?? guest.getURL(),
+    respond
+  })
 
   return respond
 }
@@ -99,7 +107,9 @@ beforeEach(async () => {
   admitPreviewGuestSession(guest.session as unknown as Session)
 })
 afterEach(async () => {
-  if (!guest.destroyed) {await request('release')}
+  if (!guest.destroyed) {
+    await request('release')
+  }
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -202,7 +212,11 @@ it('cancels an automatic download if its approved parent folder is replaced by a
 
 it('binds each response to one native dialog callback and retires it after navigation', async () => {
   await request('watch')
-  const respond = nativeDialog({ type: 'confirm', message: 'Continue embedded action?', url: 'https://embedded.example/' })
+  const respond = nativeDialog({
+    type: 'confirm',
+    message: 'Continue embedded action?',
+    url: 'https://embedded.example/'
+  })
   const initial = (await request('dialog_status')).dialogs![0]
   await request('dialog_respond', { dialogId: initial.id, accept: false })
   expect(respond).toHaveBeenCalledWith(false, undefined)
@@ -223,15 +237,21 @@ it('keeps sibling frame dialogs queued with their own callbacks and defaults unt
   expect(owner.send.mock.calls.filter(([channel]) => channel === 'hermes:preview-browser-dialog')).toEqual([
     ['hermes:preview-browser-dialog', expect.objectContaining({ dialog: pending[0], defaultText: 'first-private' })]
   ])
-  guest.debugger.emit('message', {}, 'Page.frameNavigated', { frame: { id: 'sibling', url: 'https://sibling.example/' } })
+  guest.debugger.emit('message', {}, 'Page.frameNavigated', {
+    frame: { id: 'sibling', url: 'https://sibling.example/' }
+  })
   guest.debugger.emit('message', {}, 'Page.frameDetached', { frameId: 'sibling', reason: 'remove' })
   expect(firstResponse).not.toHaveBeenCalled()
   expect(secondResponse).not.toHaveBeenCalled()
   await request('dialog_manual', { dialogId: pending[0].id, accept: true })
   expect(firstResponse).toHaveBeenCalledExactlyOnceWith(true, 'first-private')
-  expect(owner.send).toHaveBeenLastCalledWith('hermes:preview-browser-dialog', expect.objectContaining({
-    dialog: pending[1], defaultText: 'second-private'
-  }))
+  expect(owner.send).toHaveBeenLastCalledWith(
+    'hermes:preview-browser-dialog',
+    expect.objectContaining({
+      dialog: pending[1],
+      defaultText: 'second-private'
+    })
+  )
   guest.emit('-cancel-dialogs')
   guest.emit('-cancel-dialogs')
   expect(secondResponse).toHaveBeenCalledExactlyOnceWith(false)
@@ -254,20 +274,27 @@ it('releases and consumes only the cancelled upload ticket without setting input
   expect(guest.debugger.sendCommand.mock.calls.some(([method]) => method === 'DOM.setFileInputFiles')).toBe(false)
 })
 
-
 it('disposes an already destroyed guest without reading its invalid native session or debugger accessors', async () => {
   const session = guest.session
   const debuggerClient = guest.debugger
-  Object.defineProperty(guest, 'session', { get: () => {
-    if (guest.destroyed) {throw new Error('Object has been destroyed')}
+  Object.defineProperty(guest, 'session', {
+    get: () => {
+      if (guest.destroyed) {
+        throw new Error('Object has been destroyed')
+      }
 
-    return session
-  } })
-  Object.defineProperty(guest, 'debugger', { get: () => {
-    if (guest.destroyed) {throw new Error('Object has been destroyed')}
+      return session
+    }
+  })
+  Object.defineProperty(guest, 'debugger', {
+    get: () => {
+      if (guest.destroyed) {
+        throw new Error('Object has been destroyed')
+      }
 
-    return debuggerClient
-  } })
+      return debuggerClient
+    }
+  })
   await request('watch')
   guest.destroyed = true
   expect(() => guest.emit('destroyed')).not.toThrow()

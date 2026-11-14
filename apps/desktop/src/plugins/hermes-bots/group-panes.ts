@@ -185,6 +185,7 @@ export function recordGroupOpenOrigin(
     views: groupOpenOrigins.get(group)?.views,
     ...(context.route ? { route: { ...context.route } } : {})
   }
+
   groupOpenOrigins.set(group, opened)
 }
 

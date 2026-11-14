@@ -113,6 +113,7 @@ it('restores a cold bot model owner and rebinds it before the first prompt', asy
     if (method === 'prompt.submit') {
       return { status: 'accepted' } as never
     }
+
     throw new Error(`Unexpected request: ${method}`)
   })
   const states = installTile()

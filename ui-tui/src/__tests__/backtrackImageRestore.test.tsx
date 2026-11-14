@@ -63,6 +63,7 @@ async function editTwoImagePrompt() {
   }
 
   const stdout = Object.assign(new PassThrough(), { columns: 80, isTTY: false, rows: 24 })
+
   const instance = renderSync(<Harness />, {
     patchConsole: false,
     stdin: new PassThrough() as any,

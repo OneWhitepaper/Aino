@@ -458,6 +458,7 @@ describe('platform auth ownership', () => {
       if (path === '/api/v1/auth/logout') {
         return errorEnvelope(503, 'REVOCATION_UNAVAILABLE')
       }
+
       throw new Error(`unexpected ${path}`)
     })
 
@@ -479,6 +480,7 @@ describe('platform auth ownership', () => {
       if (path === '/api/v1/user/profile') {
         return okProfile(2, 'new')
       }
+
       throw new Error(`unexpected ${path}`)
     })
 
@@ -876,6 +878,7 @@ describe('platform auth ownership', () => {
         if (body.totp_code === '000000') {
           return errorEnvelope(401, 'INVALID_TOTP_CODE')
         }
+
         profile = 'new'
 
         return okTokens('new')
@@ -1030,6 +1033,7 @@ describe('platform auth ownership', () => {
       if (path === '/api/v1/auth/refresh') {
         return okTokens('new')
       }
+
       throw new Error(`unexpected ${path}`)
     })
 
@@ -1098,6 +1102,7 @@ async function servePlatform(
     for await (const chunk of req) {
       chunks.push(Buffer.from(chunk))
     }
+
     const body = chunks.length > 0 ? JSON.parse(Buffer.concat(chunks).toString()) : {}
 
     const result = await handler({

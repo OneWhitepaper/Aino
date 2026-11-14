@@ -193,8 +193,15 @@ export async function createPlatformDraft(
   }
 }
 
-export async function clearPlatformSession(owner: SessionOwnerScope, sessionId: string, purpose: PlatformModelPurpose = 'chat'): Promise<void> {
-  await window.hermesDesktop?.platformModels?.clear({ ...target(owner, sessionId), ...(purpose === 'image' ? { purpose } : {}) })
+export async function clearPlatformSession(
+  owner: SessionOwnerScope,
+  sessionId: string,
+  purpose: PlatformModelPurpose = 'chat'
+): Promise<void> {
+  await window.hermesDesktop?.platformModels?.clear({
+    ...target(owner, sessionId),
+    ...(purpose === 'image' ? { purpose } : {})
+  })
 }
 
 async function conversationSelection(sessionId: string, request: Request): Promise<ConversationModelRow | null> {

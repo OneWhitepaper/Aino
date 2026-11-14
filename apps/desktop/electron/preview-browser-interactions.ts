@@ -54,11 +54,18 @@ export class PreviewBrowserInteractions {
   ) {
     this.cdp = acquirePreviewGuestCdp(owner, guest)
     this.restoreNativeDialogs = installPreviewNativeDialogAdapter(owner, guest, request => {
-      if (this.disposed) { request.respond(false);
+      if (this.disposed) {
+        request.respond(false)
 
- return }
+        return
+      }
 
-      const dialog = this.openDialog({ type: request.type, message: request.message, url: request.url, defaultPrompt: request.defaultText })
+      const dialog = this.openDialog({
+        type: request.type,
+        message: request.message,
+        url: request.url,
+        defaultPrompt: request.defaultText
+      })
       this.nativeDialogResponses.set(dialog.id, request.respond)
     })
     this.chooser = new PreviewBrowserChooser(this.cdp, chooser => {
@@ -78,7 +85,9 @@ export class PreviewBrowserInteractions {
     guest.once('destroyed', dispose)
     owner.once('destroyed', dispose)
     this.cleanup.push(
-      () => { dialogEvents.removeListener('-cancel-dialogs', cancelDialogs) },
+      () => {
+        dialogEvents.removeListener('-cancel-dialogs', cancelDialogs)
+      },
       () => guest.removeListener('did-navigate', navigate),
       () => guest.removeListener('did-navigate-in-page', inPage),
       () => guest.removeListener('destroyed', dispose),
@@ -129,7 +138,9 @@ export class PreviewBrowserInteractions {
   private retireDocument(dialogs = false): void {
     this.generation++
 
-    if (dialogs) {this.retireDialogs()}
+    if (dialogs) {
+      this.retireDialogs()
+    }
     this.chooser.retire()
     this.revokeFiles()
   }
@@ -149,9 +160,14 @@ export class PreviewBrowserInteractions {
   }
 
   private publishDialog(dialog: PreviewBrowserDialog, defaultText?: string): void {
-    if (this.owner.isDestroyed() || this.guest.isDestroyed()) {return}
+    if (this.owner.isDestroyed() || this.guest.isDestroyed()) {
+      return
+    }
     this.owner.send('hermes:preview-browser-dialog', {
-      webContentsId: this.guest.id, scope: this.scope, dialog: { ...dialog }, defaultText
+      webContentsId: this.guest.id,
+      scope: this.scope,
+      dialog: { ...dialog },
+      defaultText
     })
   }
 
@@ -170,7 +186,9 @@ export class PreviewBrowserInteractions {
     const pending = [...this.nativeDialogResponses.values()]
     this.nativeDialogResponses.clear()
 
-    for (const respond of pending) {respond(false)}
+    for (const respond of pending) {
+      respond(false)
+    }
   }
 
   private openDialog(params: Record<string, unknown>, sessionId?: string, publish = true): PreviewBrowserDialog {
@@ -196,12 +214,16 @@ export class PreviewBrowserInteractions {
 
     this.dialogs.push(dialog)
     this.dialogBindings.set(dialog.id, { generation: this.generation, sessionId })
-    this.dialogs = [...this.dialogs.filter(item => item.state !== 'pending').slice(-HISTORY_LIMIT),
-      ...this.dialogs.filter(item => item.state === 'pending')]
+    this.dialogs = [
+      ...this.dialogs.filter(item => item.state !== 'pending').slice(-HISTORY_LIMIT),
+      ...this.dialogs.filter(item => item.state === 'pending')
+    ]
 
     // Page.enable observes Blink dialogs; the guest preload restores Electron's disabled native prompt.
     // A separate IPC notification does not need to run JavaScript in the blocked guest.
-    if (publish && !alreadyPending) {this.publishDialog(dialog, this.dialogDefaults.get(dialog.id))}
+    if (publish && !alreadyPending) {
+      this.publishDialog(dialog, this.dialogDefaults.get(dialog.id))
+    }
 
     return dialog
   }
@@ -209,11 +231,15 @@ export class PreviewBrowserInteractions {
   private rememberTargetUrl(params: Record<string, unknown>): void {
     const target = params.targetInfo as { targetId?: string; type?: string; url?: string } | undefined
 
-    if (target?.type === 'iframe' && target.targetId && target.url) {this.frameUrls.set(target.targetId, target.url)}
+    if (target?.type === 'iframe' && target.targetId && target.url) {
+      this.frameUrls.set(target.targetId, target.url)
+    }
   }
 
   private message(method: string, params: Record<string, unknown>, sessionId?: string): void {
-    if (method === 'Target.attachedToTarget' || method === 'Target.targetInfoChanged') {this.rememberTargetUrl(params)}
+    if (method === 'Target.attachedToTarget' || method === 'Target.targetInfoChanged') {
+      this.rememberTargetUrl(params)
+    }
 
     if (method === 'Page.frameNavigated') {
       this.rememberFrameUrls({ frame: params.frame })
@@ -243,7 +269,9 @@ export class PreviewBrowserInteractions {
     if (method === 'Page.javascriptDialogOpening' && (!this.restoreNativeDialogs || params.type === 'beforeunload')) {
       this.openDialog(params, sessionId, Boolean(this.restoreNativeDialogs))
     } else if (method === 'Page.javascriptDialogClosed') {
-      const pending = this.dialogs.findLast(dialog => dialog.state === 'pending' && (dialog.type === 'beforeunload' || !this.restoreNativeDialogs))
+      const pending = this.dialogs.findLast(
+        dialog => dialog.state === 'pending' && (dialog.type === 'beforeunload' || !this.restoreNativeDialogs)
+      )
 
       if (pending) {
         pending.state = params.result === true ? 'accepted' : 'dismissed'
@@ -387,8 +415,11 @@ export class PreviewBrowserInteractions {
         upload: { state: 'prepared', paths: prepared.paths, filenames: prepared.filenames }
       }
     } catch (error) {
-      if (preparedTicket) {this.files.cancelUpload(preparedTicket)}
-      await this.cdp.sendCommand('Runtime.releaseObject', { objectId: target.objectId }, target.sessionId)
+      if (preparedTicket) {
+        this.files.cancelUpload(preparedTicket)
+      }
+      await this.cdp
+        .sendCommand('Runtime.releaseObject', { objectId: target.objectId }, target.sessionId)
         .catch(releaseError => console.warn('Could not release Browser upload target', releaseError))
       throw error
     }
@@ -430,7 +461,9 @@ export class PreviewBrowserInteractions {
   private publishNextDialog(): void {
     const next = this.dialogs.find(dialog => dialog.state === 'pending')
 
-    if (next) {this.publishDialog(next, this.dialogDefaults.get(next.id))}
+    if (next) {
+      this.publishDialog(next, this.dialogDefaults.get(next.id))
+    }
   }
 
   private finishDialog(dialog: PreviewBrowserDialog, state: PreviewBrowserDialog['state']): void {
@@ -441,8 +474,11 @@ export class PreviewBrowserInteractions {
     this.publishNextDialog()
   }
 
-  private respondNativeDialog(dialog: PreviewBrowserDialog, request: PreviewBrowserInteractionRequest,
-    respond: (accept: boolean, text?: string) => void): void {
+  private respondNativeDialog(
+    dialog: PreviewBrowserDialog,
+    request: PreviewBrowserInteractionRequest,
+    respond: (accept: boolean, text?: string) => void
+  ): void {
     this.nativeDialogResponses.delete(dialog.id)
 
     try {
@@ -460,7 +496,12 @@ export class PreviewBrowserInteractions {
     const binding = this.dialogBindings.get(request.dialogId ?? '')
     const nativeResponse = this.nativeDialogResponses.get(request.dialogId ?? '')
 
-    if (!dialog || !binding || (!nativeResponse && binding.generation !== this.generation) || typeof request.accept !== 'boolean') {
+    if (
+      !dialog ||
+      !binding ||
+      (!nativeResponse && binding.generation !== this.generation) ||
+      typeof request.accept !== 'boolean'
+    ) {
       throw new Error('The named dialog is no longer pending')
     }
 
@@ -577,10 +618,14 @@ export class PreviewBrowserInteractions {
 
   private dialogStatus(): PreviewBrowserInteractionResult {
     return {
-      success: true, url: this.guest.getURL(),
+      success: true,
+      url: this.guest.getURL(),
       dialog_control: this.dialogControl(),
-      note: this.restoreNativeDialogs ? undefined : 'Automated dialog control is unavailable in this Electron build. Use the website system dialog manually.',
-      dialogs: this.dialogs.map(dialog => ({ ...dialog })), file_chooser: this.chooser.status()
+      note: this.restoreNativeDialogs
+        ? undefined
+        : 'Automated dialog control is unavailable in this Electron build. Use the website system dialog manually.',
+      dialogs: this.dialogs.map(dialog => ({ ...dialog })),
+      file_chooser: this.chooser.status()
     }
   }
 

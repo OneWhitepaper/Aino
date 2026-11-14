@@ -19,6 +19,7 @@ import {
 import { WINDOWS_NO_REPARSE_PS } from './windows-runtime-command'
 
 const python = process.env.HERMES_TEST_PYTHON || process.env.HERMES_PYTHON || 'python'
+
 const runtime = {
   os: 'Windows',
   arch: 'AMD64',
@@ -26,6 +27,7 @@ const runtime = {
   hermesPath: 'C:\\hermes\\bin\\hermes.exe',
   python: 'C:\\runtime\\python.exe'
 }
+
 const bootstrap = "import os, sys, runpy; runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
 
 function streamed(command: string) {
@@ -77,6 +79,7 @@ test('held marker stops launcher imports and unrecognized runtime capabilities f
       if (script.includes('.hermes-update-in-progress')) {
         return 'HELD'
       }
+
       imported = true
 
       throw new Error('must not import')
@@ -118,6 +121,7 @@ test('atomic spawn streams its whole script and explicitly pipes Unicode caller 
     profile: 'bob',
     hermesPath: 'C:\\用户\\hermes.exe'
   })
+
   let observed = ''
 
   const ssh = {
@@ -163,6 +167,7 @@ test('Connect refuses an older helper before token upload or backend spawn on a 
       if (script.includes("'inspect'")) {
         return JSON.stringify({ supported: true, path: runtime.hermesPath })
       }
+
       writes += 1
 
       throw new Error('write must not be reached')
@@ -197,6 +202,7 @@ test('inventory reads profiles and install identity through the runtime helper a
       if (script.includes('.hermes-update-in-progress')) {
         return 'CLEAR'
       }
+
       assert.match(script, /'--run-module' 'hermes_cli\.windows_ssh_runtime' 'inventory'/)
 
       return JSON.stringify({ profiles: ['default', 'bob'], installId: 'A'.repeat(32) })
@@ -237,8 +243,10 @@ test.runIf(Boolean(process.env.HERMES_TEST_PWSH))(
     const tools = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-outer-powershell-'))
     const marker = 'HERMES_LOCAL_OUTER_SHELL_OK_用户'
     const payload = encodedPowerShell(`Write-Output '${marker}'`)
+
     const old =
       'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command [ScriptBlock]::Create([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))).Invoke()'
+
     fs.symlinkSync(pwsh, path.join(tools, 'powershell.exe'))
 
     try {
@@ -308,6 +316,7 @@ test.runIf(Boolean(process.env.HERMES_TEST_PWSH))(
     try {
       const file = path.join(root, 'linked', 'leaf').replace(/'/g, "''")
       const program = `${WINDOWS_NO_REPARSE_PS};Assert-NoReparse '${file}' $false`
+
       const result = spawnSync(pwsh, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedPowerShell(program)], {
         encoding: 'utf8',
         timeout: 20000

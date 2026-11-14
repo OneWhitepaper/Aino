@@ -64,6 +64,7 @@ export function installBrowserDesktopBridge(): boolean {
   const relays: BrowserSavedConnections | null = savedConnectionsServed()
     ? createBrowserSavedConnections({ api, bootstrap })
     : null
+
   const bootstrapFor = (connectionId?: null | string) => relays?.bootstrapFor(connectionId) ?? bootstrap
   const activeConnectionId = () => $connection.get()?.connectionId ?? LOCAL_CONNECTION_ID
 

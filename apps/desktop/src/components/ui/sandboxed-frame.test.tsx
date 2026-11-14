@@ -250,6 +250,7 @@ describe('SandboxedFrame in the Webapp', () => {
 
     window.document.body.append(host)
     host.attachShadow({ mode: 'open' }).append(mount)
+
     // jsdom gives an iframe inside a shadow root no window.
     const windows = vi
       .spyOn(HTMLIFrameElement.prototype, 'contentWindow', 'get')

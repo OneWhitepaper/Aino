@@ -12,7 +12,9 @@ import { authorizeNativePreviewPopout, registerNativePreviewIpc } from './previe
 const websiteDialog = vi.hoisted(() => ({ pending: false }))
 vi.mock('./preview-browser-interactions', () => ({
   assertPreviewBrowserDialogResolved: () => {
-    if (websiteDialog.pending) {throw new Error('Resolve the website dialog before moving this Browser tab')}
+    if (websiteDialog.pending) {
+      throw new Error('Resolve the website dialog before moving this Browser tab')
+    }
   }
 }))
 
@@ -32,13 +34,20 @@ class Contents extends EventEmitter {
   viewportWidth = 600
   contentWidth = 0
   guestWindow: { __hermesAnnotate?: { teardown: () => void } | null; __hermesAnnotateSession?: number } = {}
-  executeJavaScript = vi.fn(async (code: string) => runInNewContext(code, {
-    window: this.guestWindow,
-    innerWidth: this.viewportWidth / this.zoom,
-    document: { documentElement: { scrollWidth: Math.max(this.contentWidth, this.viewportWidth / this.zoom) }, body: null }
-  }))
+  executeJavaScript = vi.fn(async (code: string) =>
+    runInNewContext(code, {
+      window: this.guestWindow,
+      innerWidth: this.viewportWidth / this.zoom,
+      document: {
+        documentElement: { scrollWidth: Math.max(this.contentWidth, this.viewportWidth / this.zoom) },
+        body: null
+      }
+    })
+  )
   getZoomFactor = () => this.zoom
-  setZoomFactor = vi.fn((factor: number) => { this.zoom = factor })
+  setZoomFactor = vi.fn((factor: number) => {
+    this.zoom = factor
+  })
   setZoomMode = vi.fn()
   isAudioMuted = () => false
   send = vi.fn()
@@ -50,21 +59,30 @@ class Contents extends EventEmitter {
     goBack: vi.fn(),
     goForward: vi.fn()
   }
-  loadURL = vi.fn(async (url: string) => { this.url = url })
+  loadURL = vi.fn(async (url: string) => {
+    this.url = url
+  })
   close = vi.fn(() => {
     this.destroyed = true
     this.emit('destroyed')
   })
 
-  constructor(private kind = 'window') { super() }
+  constructor(private kind = 'window') {
+    super()
+  }
 }
 
 class View {
   webContents = new Contents('browserView')
   bounds = { x: 0, y: 0, width: 0, height: 0 }
   visible = false
-  setBounds = (bounds: typeof this.bounds) => { this.bounds = bounds; this.webContents.viewportWidth = bounds.width }
-  setVisible = (visible: boolean) => { this.visible = visible }
+  setBounds = (bounds: typeof this.bounds) => {
+    this.bounds = bounds
+    this.webContents.viewportWidth = bounds.width
+  }
+  setVisible = (visible: boolean) => {
+    this.visible = visible
+  }
 }
 
 class Window extends EventEmitter {
@@ -73,21 +91,35 @@ class Window extends EventEmitter {
   isDestroyed = () => this.webContents.destroyed
   getContentSize = () => [1200, 800]
   contentView = {
-    addChildView: (view: View) => { this.views.add(view) },
-    removeChildView: (view: View) => { this.views.delete(view) }
+    addChildView: (view: View) => {
+      this.views.add(view)
+    },
+    removeChildView: (view: View) => {
+      this.views.delete(view)
+    }
   }
   close = () => {
-    const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+    const event = {
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true
+      }
+    }
     this.emit('close', event)
 
-    if (!event.defaultPrevented) {this.webContents.close()}
+    if (!event.defaultPrevented) {
+      this.webContents.close()
+    }
   }
 }
 
 const bounds = { x: 400, y: 80, width: 600, height: 600 }
 
 const request: NativePreviewMountRequest = {
-  tabId: 'tab-one', partition: 'persist:hermes-preview-worker', url: 'https://example.com/start', bounds
+  tabId: 'tab-one',
+  partition: 'persist:hermes-preview-worker',
+  url: 'https://example.com/start',
+  bounds
 }
 
 let source: Window
@@ -99,10 +131,17 @@ let sends: Map<string, (...args: any[]) => any>
 let dispose: () => void
 let windows: Window[]
 
-const invoke = (name: string, owner: Window, ...args: unknown[]) => handlers.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
-const send = (name: string, owner: Window, ...args: unknown[]) => sends.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
+const invoke = (name: string, owner: Window, ...args: unknown[]) =>
+  handlers.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
+const send = (name: string, owner: Window, ...args: unknown[]) =>
+  sends.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
 const mount = (owner: Window, options = request): NativePreviewSnapshot => invoke('mount', owner, options)
-const authorize = () => authorizeNativePreviewPopout(source.webContents as unknown as WebContents, popup as unknown as BrowserWindow, request.tabId)
+const authorize = () =>
+  authorizeNativePreviewPopout(
+    source.webContents as unknown as WebContents,
+    popup as unknown as BrowserWindow,
+    request.tabId
+  )
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -114,20 +153,26 @@ beforeEach(() => {
   handlers = new Map()
   sends = new Map()
   windows = [source, popup, foreign]
-  dispose = registerNativePreviewIpc({
-    handle: (name, handler) => handlers.set(name, handler),
-    on: (name, handler) => { sends.set(name, handler) }
-  } as unknown as IpcMain, {
-    fromWebContents: contents => windows.find(window => window.webContents === contents as unknown as Contents) as unknown as BrowserWindow,
-    resolvePartition: partition => partition + '-account-A',
-    createView: () => {
-      const view = new View()
-      admitPreviewGuestSession(view.webContents.session)
-      created.push(view)
+  dispose = registerNativePreviewIpc(
+    {
+      handle: (name, handler) => handlers.set(name, handler),
+      on: (name, handler) => {
+        sends.set(name, handler)
+      }
+    } as unknown as IpcMain,
+    {
+      fromWebContents: contents =>
+        windows.find(window => window.webContents === (contents as unknown as Contents)) as unknown as BrowserWindow,
+      resolvePartition: partition => partition + '-account-A',
+      createView: () => {
+        const view = new View()
+        admitPreviewGuestSession(view.webContents.session)
+        created.push(view)
 
-      return view as unknown as WebContentsView
+        return view as unknown as WebContentsView
+      }
     }
-  })
+  )
 })
 
 afterEach(() => {
@@ -166,36 +211,51 @@ it('keeps the unchanged page usable when a navigation becomes a download, withou
   guest.emit('did-start-navigation', {}, 'https://example.com/early-download', false, true)
   guest.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'https://example.com/early-download', true)
   guest.emit('did-stop-loading')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) })
+  )
   guest.emit('dom-ready')
   guest.emit('did-start-navigation', {}, 'https://example.com/report.txt', false, true)
   guest.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'https://example.com/report.txt', true)
   guest.emit('did-stop-loading')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true, loadFailure: undefined }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true, loadFailure: undefined }) })
+  )
   guest.emit('did-start-navigation', {}, 'https://example.com/new-document', false, true)
   guest.url = 'https://example.com/new-document'
   guest.emit('did-navigate', {}, guest.url)
   guest.emit('did-stop-loading')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) })
+  )
   guest.emit('dom-ready')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true }) })
+  )
   guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true, url: guest.url + '#draft' })
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true }) })
+  )
   guest.isLoadingMainFrame.mockReturnValue(true)
   guest.emit('did-stop-loading')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false }) })
+  )
   guest.isLoadingMainFrame.mockReturnValue(false)
   guest.emit('did-fail-load', {}, -118, 'ERR_CONNECTION_TIMED_OUT', 'https://example.com/failed', true)
   guest.emit('did-stop-loading')
-  expect(source.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ snapshot: expect.objectContaining({ ready: false,
-      loadFailure: expect.objectContaining({ code: -118 }) }) }))
+  expect(source.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({
+      snapshot: expect.objectContaining({ ready: false, loadFailure: expect.objectContaining({ code: -118 }) })
+    })
+  )
 })
 
 it('moves one page through pop-out and close-to-dock without loading the saved URL or losing live state', () => {
@@ -223,7 +283,9 @@ it('moves one page through pop-out and close-to-dock without loading the saved U
   invoke('release', source, first.token)
   send('layout', source, first.token, bounds, false)
   expect(view.visible).toBe(true)
-  expect(() => invoke('command', source, first.token, 'sendInputEvent', [{ type: 'char', keyCode: 'x' }])).toThrow('does not belong')
+  expect(() => invoke('command', source, first.token, 'sendInputEvent', [{ type: 'char', keyCode: 'x' }])).toThrow(
+    'does not belong'
+  )
   state.unsaved = 'Edited in popup'
   popup.close()
   expect(view.webContents.close).not.toHaveBeenCalled()
@@ -252,8 +314,13 @@ it('fits an overflowing desktop document and preserves explicit page zoom throug
   await Promise.resolve()
   expect(guest.zoom).toBeCloseTo(0.6)
   expect(guest.setZoomMode).toHaveBeenCalledWith('isolated')
-  expect(source.webContents.send).toHaveBeenCalledWith('hermes:preview-native:event',
-    expect.objectContaining({ type: 'page-zoom-changed', snapshot: expect.objectContaining({ zoom: 0.6, zoomMode: 'fit' }) }))
+  expect(source.webContents.send).toHaveBeenCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({
+      type: 'page-zoom-changed',
+      snapshot: expect.objectContaining({ zoom: 0.6, zoomMode: 'fit' })
+    })
+  )
 
   await invoke('command', source, first.token, 'setPageZoom', [1.25])
   const state = guest.state
@@ -309,7 +376,11 @@ it('bounds abandoned handoffs, normal releases and account renderer reloads with
   expect(created[1].webContents.close).toHaveBeenCalledOnce()
 
   mount(source)
-  authorizeNativePreviewPopout(source.webContents as unknown as WebContents, foreign as unknown as BrowserWindow, request.tabId)
+  authorizeNativePreviewPopout(
+    source.webContents as unknown as WebContents,
+    foreign as unknown as BrowserWindow,
+    request.tabId
+  )
   mount(foreign)
   source.webContents.emit('did-start-navigation', { isMainFrame: true, isInPlace: false })
   expect(created[2].webContents.close).toHaveBeenCalledOnce()
@@ -322,25 +393,43 @@ it('routes live events to the current owner and releases held input when hidden 
   invoke('command', source, first.token, 'sendInputEvent', [{ type: 'keyDown', keyCode: 'Shift' }])
   send('layout', source, first.token, bounds, false)
   expect(view.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: 'keyUp', keyCode: 'Shift' })
-  expect(() => invoke('command', source, first.token, 'sendInputEvent', [{ type: 'char', keyCode: 'x' }])).toThrow('hidden')
+  expect(() => invoke('command', source, first.token, 'sendInputEvent', [{ type: 'char', keyCode: 'x' }])).toThrow(
+    'hidden'
+  )
   authorize()
   mount(popup)
   source.webContents.send.mockClear()
   popup.webContents.send.mockClear()
   view.webContents.emit('context-menu', {}, { x: 10, y: 20 })
-  expect(popup.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event', expect.objectContaining({ type: 'context-menu', params: expect.objectContaining({ x: 410, y: 100 }) }))
+  expect(popup.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ type: 'context-menu', params: expect.objectContaining({ x: 410, y: 100 }) })
+  )
   expect(source.webContents.send).not.toHaveBeenCalled()
-  view.webContents.emit('ipc-message', {}, 'hermes:preview-native:external', 'preview-open-external', ['file:///etc/passwd'])
+  view.webContents.emit('ipc-message', {}, 'hermes:preview-native:external', 'preview-open-external', [
+    'file:///etc/passwd'
+  ])
   expect(popup.webContents.send).toHaveBeenCalledTimes(1)
-  view.webContents.emit('ipc-message', {}, 'hermes:preview-native:external', 'preview-open-external', ['https://example.com/new'])
-  expect(popup.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event', expect.objectContaining({ type: 'ipc-message', channel: 'preview-open-external', args: ['https://example.com/new'] }))
+  view.webContents.emit('ipc-message', {}, 'hermes:preview-native:external', 'preview-open-external', [
+    'https://example.com/new'
+  ])
+  expect(popup.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({
+      type: 'ipc-message',
+      channel: 'preview-open-external',
+      args: ['https://example.com/new']
+    })
+  )
 })
 
 it('defers native focus until an overlay-hidden page is visible again', () => {
   const first = mount(source)
   const view = created[0]
   const focusedVisibility: boolean[] = []
-  view.webContents.focus.mockImplementation(() => { focusedVisibility.push(view.visible) })
+  view.webContents.focus.mockImplementation(() => {
+    focusedVisibility.push(view.visible)
+  })
   send('layout', source, first.token, bounds, false)
 
   invoke('command', source, first.token, 'focus', [])
@@ -369,7 +458,6 @@ it('retires pending focus when a hidden page moves to a different window', () =>
   expect(view.webContents.focus).toHaveBeenCalledOnce()
 })
 
-
 it('retains a failed main-frame load across transfer and clears it only on a new main-frame navigation', () => {
   mount(source)
   const view = created[0]
@@ -378,15 +466,24 @@ it('retains a failed main-frame load across transfer and clears it only on a new
   authorize()
   const moved = mount(popup)
   expect(moved.ready).toBe(false)
-  expect(moved.loadFailure).toEqual({ code: -118, description: 'ERR_CONNECTION_TIMED_OUT', url: 'https://example.com/unreachable' })
+  expect(moved.loadFailure).toEqual({
+    code: -118,
+    description: 'ERR_CONNECTION_TIMED_OUT',
+    url: 'https://example.com/unreachable'
+  })
   view.webContents.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'https://example.com/unreachable', true)
   view.webContents.emit('did-start-navigation', { isMainFrame: false, isInPlace: false })
-  expect(popup.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event', expect.objectContaining({ snapshot: expect.objectContaining({ loadFailure: moved.loadFailure }) }))
+  expect(popup.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ loadFailure: moved.loadFailure }) })
+  )
   view.webContents.emit('did-start-navigation', { isMainFrame: true, isInPlace: false })
   view.webContents.emit('dom-ready')
-  expect(popup.webContents.send).toHaveBeenLastCalledWith('hermes:preview-native:event', expect.objectContaining({ snapshot: expect.objectContaining({ ready: true, loadFailure: undefined }) }))
+  expect(popup.webContents.send).toHaveBeenLastCalledWith(
+    'hermes:preview-native:event',
+    expect.objectContaining({ snapshot: expect.objectContaining({ ready: true, loadFailure: undefined }) })
+  )
 })
-
 
 it('caps parked tabs by the shared retention limit and closes a parked tab only for its source', () => {
   const ids: string[] = []
@@ -397,14 +494,20 @@ it('caps parked tabs by the shared retention limit and closes a parked tab only 
     windows.push(destination)
     mount(source, options)
     ids.push(options.tabId)
-    authorizeNativePreviewPopout(source.webContents as unknown as WebContents, destination as unknown as BrowserWindow, options.tabId)
+    authorizeNativePreviewPopout(
+      source.webContents as unknown as WebContents,
+      destination as unknown as BrowserWindow,
+      options.tabId
+    )
     mount(destination, options)
     destination.close()
   }
 
   expect(created[0].webContents.close).toHaveBeenCalledOnce()
 
-  for (const view of created.slice(1)) {expect(view.webContents.close).not.toHaveBeenCalled()}
+  for (const view of created.slice(1)) {
+    expect(view.webContents.close).not.toHaveBeenCalled()
+  }
   vi.advanceTimersByTime(120_000)
   expect(created[1].webContents.close).not.toHaveBeenCalled()
   expect(() => invoke('closeTab', foreign, ids[1])).toThrow('Cannot close')
@@ -426,7 +529,6 @@ it('keeps an active popup when its source window closes and disposes the orphan 
   popup.close()
   expect(view.webContents.close).toHaveBeenCalledOnce()
 })
-
 
 it('retires old annotation overlays and session counters after cancelling the old owner, without changing the page', () => {
   const first = mount(source)
@@ -460,27 +562,33 @@ it('does not queue an annotation teardown into a loading replacement document', 
   expect(guest.executeJavaScript).not.toHaveBeenCalled()
 })
 
-
 it('arms initial native page observation before loading a page that may open a dialog', async () => {
   dispose()
   let ready!: () => void
-  const preparation = new Promise<void>(resolve => { ready = resolve })
-  const prepare = vi.fn(() => preparation)
-  dispose = registerNativePreviewIpc({
-    handle: (name, handler) => handlers.set(name, handler),
-    on: (name, handler) => { sends.set(name, handler) }
-  } as unknown as IpcMain, {
-    fromWebContents: () => source as unknown as BrowserWindow,
-    resolvePartition: partition => partition,
-    createView: () => {
-      const view = new View()
-      admitPreviewGuestSession(view.webContents.session)
-      created.push(view)
-
-      return view as unknown as WebContentsView
-    },
-    preparePage: prepare
+  const preparation = new Promise<void>(resolve => {
+    ready = resolve
   })
+  const prepare = vi.fn(() => preparation)
+  dispose = registerNativePreviewIpc(
+    {
+      handle: (name, handler) => handlers.set(name, handler),
+      on: (name, handler) => {
+        sends.set(name, handler)
+      }
+    } as unknown as IpcMain,
+    {
+      fromWebContents: () => source as unknown as BrowserWindow,
+      resolvePartition: partition => partition,
+      createView: () => {
+        const view = new View()
+        admitPreviewGuestSession(view.webContents.session)
+        created.push(view)
+
+        return view as unknown as WebContentsView
+      },
+      preparePage: prepare
+    }
+  )
   mount(source)
   const guest = created[0].webContents
   expect(prepare).toHaveBeenCalledWith(source.webContents, guest, request.tabId)

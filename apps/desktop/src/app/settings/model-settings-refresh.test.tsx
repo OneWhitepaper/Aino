@@ -7,10 +7,9 @@ it('uses config-only main assignment until the catalog is ready without exposing
   const configured = { provider: 'custom:relay', model: 'my-model' }
   const applied = { provider: 'official', model: 'new-default' }
 
-  const { result, rerender } = renderHook(
-    ({ owner, main }) => useSettingsAuxiliaryData(owner, main),
-    { initialProps: { owner: 'account-a/default', main: null as typeof applied | null } }
-  )
+  const { result, rerender } = renderHook(({ owner, main }) => useSettingsAuxiliaryData(owner, main), {
+    initialProps: { owner: 'account-a/default', main: null as typeof applied | null }
+  })
 
   act(() => result.current.setAuxiliary({ main: configured, tasks: [] }))
   expect(result.current.mainModel).toEqual(configured)

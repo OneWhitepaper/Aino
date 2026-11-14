@@ -64,8 +64,8 @@ export function installPreviewGuestPreload({ app, accountPartition, preloadPath,
     }
 
     contents.on('will-attach-webview', (_attachEvent, webPreferences, params) => {
-      const partition = params.partition && isPreviewPartition(params.partition)
-        ? accountPartition(params.partition) : params.partition
+      const partition =
+        params.partition && isPreviewPartition(params.partition) ? accountPartition(params.partition) : params.partition
 
       applyPreviewGuestAttachPrefs(webPreferences, partition, preloadPath, sessionFor)
 

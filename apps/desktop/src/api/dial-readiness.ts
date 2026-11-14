@@ -54,6 +54,7 @@ export function remainingRequestBudget(deadline: number, signal?: AbortSignal): 
   if (deadline === Number.POSITIVE_INFINITY) {
     return 0
   }
+
   const remaining = deadline - Date.now()
 
   if (remaining <= 0) {
@@ -103,6 +104,7 @@ export class DialReadiness {
     if (dial.settled || dial.generation !== generation) {
       return
     }
+
     select()
     this.settle(dial)
   }
@@ -197,6 +199,7 @@ export class DialReadiness {
     if (dial.settled) {
       return
     }
+
     dial.settled = true
     clearTimeout(dial.timer)
 

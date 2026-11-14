@@ -28,6 +28,7 @@ function canonicalMessages(pages: readonly StoredTranscriptResult[] = []): Sessi
       pages.findLastIndex(page => page.reset)
     )
   )
+
   const rows = current.toReversed().flatMap(page => (page.available ? page.rows : []))
 
   return rows
@@ -105,6 +106,7 @@ export function useSubagentTranscriptSource({ row, parentRuntimeId, owner, live,
         if (isMissingRpcMethod(error)) {
           return false
         }
+
         throw error
       }
     },

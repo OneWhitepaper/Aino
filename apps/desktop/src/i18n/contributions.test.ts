@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { dropPlugin, publishPlugin } from '@/contrib/plugins-store'
 
-import {
-  localizedPaletteDetail,
-  localizedPaletteLabel,
-  localizedPaneTitle
-} from './contributions'
+import { localizedPaletteDetail, localizedPaletteLabel, localizedPaneTitle } from './contributions'
 import { en } from './en'
 import { zh } from './zh'
 

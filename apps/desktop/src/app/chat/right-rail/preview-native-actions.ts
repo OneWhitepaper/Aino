@@ -160,13 +160,17 @@ export function installPreviewNativeActions(
     const previousChooser = $previewWebsiteFileChoosers.get()[tabId]?.chooser.id
     void runner.nativeAction!({ action: 'dialog_status' })
       .then(async result => {
-        if (revision !== receiptRevision) {return}
+        if (revision !== receiptRevision) {
+          return
+        }
         const dialog = result.dialogs?.find(item => item.state === 'pending')
 
         if (dialog && lastId !== undefined) {
           const privateStatus = await runner.nativeAction!({ action: 'dialog_manual_status', dialogId: dialog.id })
 
-          if (revision !== receiptRevision) {return}
+          if (revision !== receiptRevision) {
+            return
+          }
           receive({ webContentsId: lastId, scope, dialog, defaultText: privateStatus.default_text })
         }
 

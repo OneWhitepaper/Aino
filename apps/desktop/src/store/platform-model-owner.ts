@@ -48,6 +48,7 @@ export function createPlatformModelOwner(
     if (pending && samePlatformAccount(snapshot, pending.snapshot)) {
       return pending.promise
     }
+
     result.set({ snapshot, data: { phase: 'loading', owner: null } })
 
     const promise = Promise.resolve()
@@ -60,6 +61,7 @@ export function createPlatformModelOwner(
         if (owner.user_id !== snapshot.account?.id || !owner.platform_origin) {
           throw new Error('platform_owner_mismatch')
         }
+
         result.set({ snapshot, data: { phase: 'ready', owner } })
       })
       .catch(() => {

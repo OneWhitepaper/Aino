@@ -99,6 +99,7 @@ describe('MarkdownTextContent remote images', () => {
         text={'Read [the release notes](https://example.com/notes?x=1 "Release notes").'}
       />
     )
+
     const link = await screen.findByRole('link', { name: 'the release notes' })
     expect(link.getAttribute('href')).toBe('https://example.com/notes?x=1')
     expect(view.container.querySelectorAll('a')).toHaveLength(1)
@@ -136,6 +137,7 @@ describe('MarkdownTextContent remote images', () => {
         text={`Open [the dashboard](${href}) or [the docs](https://example.com/docs).`}
       />
     )
+
     await screen.findByRole('link', { name: 'the docs' })
     expect(screen.getByText(/the dashboard/).closest('a')).toBeNull()
     expect(view.container.querySelectorAll('a')).toHaveLength(1)
@@ -144,6 +146,7 @@ describe('MarkdownTextContent remote images', () => {
   it('shows a foreign svg fence as its source instead of drawing it', async () => {
     const fence =
       '```svg\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><circle cx="2" cy="2" r="1"/></svg>\n```'
+
     // Positive control: ordinary chat draws the same fence.
     const ordinary = render(<MessageTextContent text={fence} />)
     await waitFor(() => expect(ordinary.container.querySelector('circle')).toBeTruthy())

@@ -260,9 +260,11 @@ it('prepares and persists the device key during login so the first later convers
 
 it('prepares only the new account key when switching accounts and rejects a late prior-login response', async () => {
   const f = await rig({ metadataOnly: true, warmLogin: true, delay: true })
+
   const first = f.auth
     .loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
     .catch(error => error)
+
   await f.ready
   expect(
     await f.auth.loginExisting({ email: 'other@example.com', password: 'password', remember: true })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { summarizeToolRun } from '@/components/assistant-ui/tool/run-summary'
+import { skillActivityTitle } from '@/components/assistant-ui/tool/skill-activity'
 import { upsertToolPart } from '@/lib/chat-messages'
 
 describe('D1 competing implementation contracts', () => {
@@ -18,7 +19,8 @@ describe('D1 competing implementation contracts', () => {
       isError: true
     }
 
-    expect(summarizeToolRun([part], false)).toContain('Loaded skill')
+    expect(summarizeToolRun([part], false).toLowerCase()).not.toContain('failed')
+    expect(skillActivityTitle(part, false)).toBe('Loaded skill: loaded-skill')
   })
   it('does not report a failed skill as loaded in the settled summary', () => {
     const summary = summarizeToolRun(

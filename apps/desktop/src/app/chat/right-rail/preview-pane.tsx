@@ -89,7 +89,8 @@ import { watchPreviewDocumentLifecycle } from './preview-script-runner'
 import { RealProfileConsentDialog } from './real-profile-consent-dialog'
 
 type PreviewWebview = HTMLElement &
-  PreviewNavigationSurface & PreviewZoomGuest & {
+  PreviewNavigationSurface &
+  PreviewZoomGuest & {
     canGoBack?: () => boolean
     canGoForward?: () => boolean
     closeDevTools?: () => void
@@ -341,7 +342,7 @@ export function PreviewPane({
   // the live address through this mirror instead of a stale closure.
   const targetUrlRef = useRef(target.url)
   targetUrlRef.current = target.url
-  const ownerSessionIdRef = useRef(sessionId)  // tab owner, read by the guest effect to resolve its partition
+  const ownerSessionIdRef = useRef(sessionId) // tab owner, read by the guest effect to resolve its partition
   ownerSessionIdRef.current = sessionId
   const [devtoolsOpen, setDevtoolsOpen] = useState(false)
   const [history, setHistory] = useState({ back: false, forward: false })
@@ -1408,7 +1409,17 @@ export function PreviewPane({
       disconnectNative ? disconnectNative() : webview.remove()
       setAnnotate(session => (session.mode ? { ...endAnnotateMode(session), stack: emptyAnnotateStack() } : session))
     }
-  }, [appendConsoleEntry, consoleState, copy, isRemoteHtml, isWebPreview, noteGuestReady, syncPageZoom, tabId, target.kind])
+  }, [
+    appendConsoleEntry,
+    consoleState,
+    copy,
+    isRemoteHtml,
+    isWebPreview,
+    noteGuestReady,
+    syncPageZoom,
+    tabId,
+    target.kind
+  ])
 
   // Steers the LIVE guest when the session opens a new URL (#120265): loadURL
   // keeps the webview instance (JS state, cookies, form data, scroll, refs,

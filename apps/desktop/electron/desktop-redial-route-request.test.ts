@@ -17,11 +17,14 @@ test('the REST redial re-ensures and forgets the route the failed request used',
   const fresh = { gatewayEndpoint: {}, home: 'work', live: true }
   const primary = { gatewayEndpoint: {}, home: 'default', live: true }
   const primaryPromise = Promise.resolve(primary)
+
   const pool = new Map([
     ['work', { connectionPromise: Promise.resolve(stale) }],
     ['default', { connectionPromise: primaryPromise }]
   ])
+
   const routes: string[] = []
+
   const ensure = vi.fn(async () => {
     const route = resolveProfileBackendRoute('work', write)
     routes.push(route.backend)
@@ -36,24 +39,28 @@ test('the REST redial re-ensures and forgets the route the failed request used',
 
     return pool.get('work')!.connectionPromise
   })
+
   const forget = vi.fn(async (failed: typeof stale) => {
     await forgetStalePooledGatewayDescriptor(pool, 'work', failed)
   })
+
   const sent: string[] = []
 
-  await expect(redialLocalGateway({
-    ensure,
-    forget,
-    use: async connection => {
-      if (!connection.live) {
-        throw new Error('Gateway ticket control socket missing')
+  await expect(
+    redialLocalGateway({
+      ensure,
+      forget,
+      use: async connection => {
+        if (!connection.live) {
+          throw new Error('Gateway ticket control socket missing')
+        }
+
+        sent.push(connection.home)
+
+        return connection
       }
-
-      sent.push(connection.home)
-
-      return connection
-    }
-  })).resolves.toBe(fresh)
+    })
+  ).resolves.toBe(fresh)
   expect(forget).toHaveBeenCalledExactlyOnceWith(stale)
   expect(routes).toEqual(['pool', 'pool'])
   expect(sent).toEqual(['work'])

@@ -88,6 +88,7 @@ function transport(members = [localA, localB], supported = true) {
     if (['groups.send', 'groups.retry', 'groups.approve', 'groups.stop'].includes(method)) {
       return { ok: true }
     }
+
     throw new Error(`Unexpected read ${method}`)
   })
 }
@@ -204,6 +205,7 @@ it.each(['groups.stop', 'groups.approve'])(
 it('approves the frozen task without resolving current defaults or changing its managed binding', async () => {
   io.resolve.mockRejectedValue(new Error('Current default was removed while approval was open'))
   const request = transport()
+
   const intent = {
     room_id: 'room-a',
     member_id: 'seat-a',
@@ -211,6 +213,7 @@ it('approves the frozen task without resolving current defaults or changing its 
     execution_generation: 1,
     choice: 'once'
   }
+
   await expect(execute(request, 'groups.approve', intent)).resolves.toEqual({ ok: true })
   expect(request).toHaveBeenCalledExactlyOnceWith('groups.approve', intent)
   expect(io.resolve).not.toHaveBeenCalled()
@@ -226,6 +229,7 @@ it('does not let an unrelated unavailable member block retry of the exact saved 
     return managed()
   })
   const request = transport()
+
   const intent = {
     room_id: 'room-a',
     member_id: 'seat-a',
@@ -233,6 +237,7 @@ it('does not let an unrelated unavailable member block retry of the exact saved 
     execution_generation: 1,
     choice: 'once'
   }
+
   await expect(execute(request, 'groups.retry', intent)).resolves.toEqual({ ok: true })
   expect(io.resolve.mock.calls.every(call => call[0].profile !== 'bot-b')).toBe(true)
   expect(request.mock.calls.at(-1)).toEqual(['groups.retry', intent])

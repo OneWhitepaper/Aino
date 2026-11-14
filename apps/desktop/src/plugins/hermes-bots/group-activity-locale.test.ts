@@ -27,9 +27,11 @@ it('reads the current language for activity, send errors and attachments with on
 
   for (locale of ['en', 'ar', 'ru']) {
     const translate = translateBotsIn(locale)
+
     const error = await readCanonicalGroupSend({ connectionId: '', profile: '', roomId: '' }).catch(
       (e: Error) => e.message
     )
+
     await filesToGroupAttachments([file])
     actual.push([
       groupActivityLabel({ at: 1, epoch: 0, kind: 'working', member: 'Helper' }),

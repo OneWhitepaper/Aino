@@ -243,6 +243,7 @@ export async function preparePluginGroupModels(
       const capabilities = await request<{ methods?: string[] }>('groups.capabilities', {
         profile: route.targetProfile
       })
+
       assertAccount()
       supported = capabilities.methods?.includes('groups.prepare_model') === true
       selectionsSupported = capabilities.methods?.includes('groups.model_respond') === true
@@ -293,6 +294,7 @@ export async function preparePluginGroupModels(
       resolved.platform.ownerUserId,
       resolved.platform.platformOrigin
     )
+
     assertAccount()
 
     const prepared = await request<PreparedModel>(
@@ -324,6 +326,7 @@ export async function preparePluginGroupModels(
         if (method !== 'session.managed_model_ticket') {
           throw new PlatformSelectionError('unsupported_gateway')
         }
+
         assertAccount()
 
         return prepared as T

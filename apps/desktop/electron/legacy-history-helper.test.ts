@@ -104,22 +104,40 @@ db.close()
     })
 
     expect(fs.statSync(backup.backupPath).isFile()).toBe(true)
+
     const later = await runLegacyHistoryHelper(runtime, {
-      ...input, action: 'remind', plan_id: inspection.planId, choice: 'later'
+      ...input,
+      action: 'remind',
+      plan_id: inspection.planId,
+      choice: 'later'
     })
+
     expect(later).toMatchObject({ ok: true, reminderKey: inspection.reminderKey, showReminder: false })
     expect(later.snoozedUntil).toBeGreaterThan(Date.now())
     const snoozed = await runLegacyHistoryHelper(runtime, { ...input, action: 'inspect' })
     expect(snoozed).toMatchObject({ owned: 1, unowned: 1, showReminder: false, reminderKey: inspection.reminderKey })
+
     const ignored = await runLegacyHistoryHelper(runtime, {
-      ...input, action: 'remind', plan_id: snoozed.planId, choice: 'ignore'
+      ...input,
+      action: 'remind',
+      plan_id: snoozed.planId,
+      choice: 'ignore'
     })
+
     expect(ignored).toMatchObject({ ok: true, showReminder: false, snoozedUntil: null })
-    expect(await runLegacyHistoryHelper(runtime, { ...input, action: 'inspect' }))
-      .toMatchObject({ owned: 0, unowned: 0, showReminder: false })
-    expect(await runLegacyHistoryHelper(runtime, {
-      ...input, action: 'prepare', plan_id: snoozed.planId, confirm_unowned: true
-    })).toMatchObject({ groups: [] })
+    expect(await runLegacyHistoryHelper(runtime, { ...input, action: 'inspect' })).toMatchObject({
+      owned: 0,
+      unowned: 0,
+      showReminder: false
+    })
+    expect(
+      await runLegacyHistoryHelper(runtime, {
+        ...input,
+        action: 'prepare',
+        plan_id: snoozed.planId,
+        confirm_unowned: true
+      })
+    ).toMatchObject({ groups: [] })
     expect(digest(sourceHome)).toBe(originalSource)
     expect(digest(targetHome)).toBe(originalTarget)
   } finally {

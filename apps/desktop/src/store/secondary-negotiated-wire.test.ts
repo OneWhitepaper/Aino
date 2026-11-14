@@ -57,6 +57,7 @@ class ReviewSocket extends EventTarget {
     if (this.readyState === ReviewSocket.CLOSED) {
       return
     }
+
     this.readyState = ReviewSocket.CLOSED
     this.dispatchEvent(new CloseEvent('close', { code: 1000 }))
   }
@@ -153,6 +154,7 @@ test('a real protocol readiness timeout is classified as a stalled dial', async 
   ReviewSocket.advertise = null
   const client = new HermesGateway()
   const connected = client.connect('wss://silent.example/api/ws?ticket=synthetic')
+
   const outcome = connected.then(
     () => null,
     error => error

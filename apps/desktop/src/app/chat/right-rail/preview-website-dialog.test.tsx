@@ -35,7 +35,9 @@ function pendingDialog(id: string, type: string, sensitive = false): PreviewBrow
 describe('website dialog keyboard and input lifecycle', () => {
   it('clears sensitive text for the next prompt and requires an explicit acceptance', async () => {
     const respond = vi.fn().mockResolvedValue(undefined)
-    $previewWebsiteDialogs.set({ [tabId]: { dialog: pendingDialog('secret', 'prompt', true), defaultText: 'private-default', respond } })
+    $previewWebsiteDialogs.set({
+      [tabId]: { dialog: pendingDialog('secret', 'prompt', true), defaultText: 'private-default', respond }
+    })
     render(<PreviewWebsiteDialog tabId={tabId} />)
     const secret = screen.getByLabelText('secret response', { selector: 'input' }) as HTMLInputElement
     expect(secret.type).toBe('password')

@@ -196,9 +196,11 @@ async function reconcileStuckWrites(group: string, previous: RosterRow[], stuck:
 
   for (const write of stuck) {
     const server = await readBotMetaFromServer(write.bot)
+
     const groups = server
       ? botGroups(server)
       : botGroups(groupMembershipPatch(botRosterMeta(write.bot, $botMeta.get()), group, write.enabled))
+
     await setLocalBotMeta(write.bot, { group: groups[0] || null, groups })
 
     const key = botRosterKey(write.bot)

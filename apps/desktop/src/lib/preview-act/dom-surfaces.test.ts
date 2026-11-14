@@ -133,11 +133,14 @@ describe('preview semantic DOM surfaces', () => {
     const link = document.getElementById('issue')!
     const overlay = document.getElementById('overlay')!
     vi.spyOn(link, 'getBoundingClientRect').mockReturnValue(box(20, 10, 120, 80))
-    vi.spyOn(link, 'getClientRects').mockReturnValue([box(20, 10, 120, 20), box(20, 70, 100, 20)] as unknown as DOMRectList)
+    vi.spyOn(link, 'getClientRects').mockReturnValue([
+      box(20, 10, 120, 20),
+      box(20, 70, 100, 20)
+    ] as unknown as DOMRectList)
     let coverAll = false
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
-      value: (_x: number, y: number) => coverAll || y < 35 ? overlay : link
+      value: (_x: number, y: number) => (coverAll || y < 35 ? overlay : link)
     })
 
     try {

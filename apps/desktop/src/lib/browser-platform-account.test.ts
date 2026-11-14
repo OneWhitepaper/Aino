@@ -142,6 +142,7 @@ function rig(
     if (url.endsWith('/auth/logout')) {
       return response({ success: true })
     }
+
     throw new Error(`Unexpected API call ${url}`)
   })
 
@@ -149,6 +150,7 @@ function rig(
     async (_url: string | URL | Request, _init?: RequestInit) =>
       new Response(JSON.stringify({ ticket: 'one-use-ticket' }))
   )
+
   vi.stubGlobal('fetch', gatewayFetch)
 
   const request = vi.fn(async (method: string, params: any) => {
@@ -166,9 +168,11 @@ function rig(
   })
 
   const close = vi.fn()
+
   const openGateway = vi.fn(
     async () => ({ request, close, connectionState: 'open' }) as unknown as JsonRpcGatewayClient
   )
+
   const confirmRemote = vi.fn(async () => true)
 
   const adapter = createBrowserPlatformBridge({
@@ -179,6 +183,7 @@ function rig(
   })
 
   disposers.push(adapter.dispose)
+
   const login = () =>
     adapter.bridge.platformAccount.loginExisting({
       email: 'test@example.com',
@@ -206,6 +211,7 @@ describe('browser Aino account and gateway authority', () => {
     await test.login()
     const snapshot = await test.bridge.platformAccount.status()
     const expected = { userId: snapshot.account!.id, mode: snapshot.mode, revision: snapshot.revision }
+
     const stale = {
       ...expected,
       [field]: field === 'userId' ? 'other-user' : field === 'mode' ? 'development' : expected.revision - 1
@@ -277,11 +283,13 @@ describe('browser Aino account and gateway authority', () => {
 
   it('does not finish a pending login after the user signs out during the CAPTCHA policy read', async () => {
     let release!: () => void
+
     const test = rig({
       delayCapabilities: new Promise<void>(resolve => {
         release = resolve
       })
     })
+
     const login = test.login()
     await vi.waitFor(() => expect(test.apiCalls.some(call => call.url.endsWith('/settings/public'))).toBe(true))
     await test.bridge.platformAccount.logout()
@@ -348,11 +356,13 @@ describe('browser Aino account and gateway authority', () => {
 
   it('rejects an account generation change during lease acquisition without sending its key', async () => {
     let release!: () => void
+
     const test = rig({
       delayLease: new Promise<void>(resolve => {
         release = resolve
       })
     })
+
     await test.login()
     const result = test.bind()
     await vi.waitFor(() => expect(test.apiCalls.some(call => call.url.endsWith('/desktop/credentials'))).toBe(true))

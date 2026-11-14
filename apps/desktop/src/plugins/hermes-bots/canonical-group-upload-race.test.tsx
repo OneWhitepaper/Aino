@@ -57,9 +57,11 @@ it('holds Send until the selected attachment is committed, then sends it with th
 
     return method === 'groups.send' ? { client_event_id: params.event_id, accepted: true } : {}
   })
+
   const view = render(
     <CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'upload-race' }} />
   )
+
   await screen.findByText('Room')
   await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false))
   fireEvent.change(view.container.querySelector('input[type=file]')!, {

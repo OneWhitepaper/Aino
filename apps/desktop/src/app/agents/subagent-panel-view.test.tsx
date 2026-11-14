@@ -124,6 +124,7 @@ it.each(['conversation', 'workspace'])(
       storedId: 'member-history',
       owner: { connectionId: 'remote', profile: 'member' }
     }
+
     state.history = [
       {
         id: 'member-call',

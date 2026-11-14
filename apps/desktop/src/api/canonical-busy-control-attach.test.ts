@@ -34,6 +34,7 @@ test.each(controls)(
         if (frame.method !== 'client.capabilities') {
           frames.push(frame)
         }
+
         const profile = String(frame.params.profile)
         const generation = profile === 'alpha' ? (dial === 1 ? 7 : 11) : 29
 

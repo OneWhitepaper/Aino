@@ -8,17 +8,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getGlobalModelOptions,
-  saveHermesConfig,
-  setModelAssignment
-} from '@/hermes'
-import type {
-  AuxiliaryTaskAssignment,
-  MoaConfigResponse,
-  ModelAssignmentRequest,
-  StaleAuxAssignment
-} from '@/hermes'
+import { getGlobalModelOptions, saveHermesConfig, setModelAssignment } from '@/hermes'
+import type { AuxiliaryTaskAssignment, MoaConfigResponse, ModelAssignmentRequest, StaleAuxAssignment } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { modelSourceCopy } from '@/i18n/model-source'
 import { isCodeSkewRestartRequired } from '@/lib/code-skew-error'
@@ -416,7 +407,9 @@ export function ModelSettings({
       },
       onFailure: error => setCaughtError(error, m.loadFailed)
     }).catch(error => {
-      if (isCurrent()) { setCaughtError(error, m.loadFailed) }
+      if (isCurrent()) {
+        setCaughtError(error, m.loadFailed)
+      }
     })
 
     if (isCurrent()) {

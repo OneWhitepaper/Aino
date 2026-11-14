@@ -58,9 +58,11 @@ describe('Markdown source in a reply', () => {
 
   it('keeps nested code examples and inline backticks intact in the copied document', async () => {
     const document = '# 使用说明\n\nUse ``a ` b``.\n\n```ts\nconst model = "ready";\n```\n\n- **保留**：原始源码\n'
+
     const { container } = render(
       <MarkdownTextContent isRunning={false} text={`\`\`\`\`markdown\n${document}\`\`\`\``} />
     )
+
     const card = container.querySelector<HTMLElement>('[data-slot="code-card"]')
 
     expect(container.querySelectorAll('[data-slot="code-card"]')).toHaveLength(1)

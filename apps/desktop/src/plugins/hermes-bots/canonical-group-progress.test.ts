@@ -4,6 +4,7 @@ import type { CanonicalGroupEvent } from './canonical-group-history'
 import { canonicalCompletedReplies } from './canonical-group-progress'
 
 const binding = { connectionId: 'local', profile: 'default', roomId: 'room' }
+
 const source: CanonicalGroupEvent = {
   seq: 1,
   room_id: 'room',
@@ -11,7 +12,9 @@ const source: CanonicalGroupEvent = {
   kind: 'message.user',
   payload: { text: 'Review', thread_id: 'thread' }
 }
+
 const coordinates = { discussion_event_id: 'user-one', thread_id: 'thread', member_id: 'reviewer', task_id: 'task-one' }
+
 const message: CanonicalGroupEvent = {
   seq: 2,
   room_id: 'room',
@@ -20,6 +23,7 @@ const message: CanonicalGroupEvent = {
   actor: { kind: 'member', id: 'reviewer' },
   payload: { ...coordinates, text: 'Done' }
 }
+
 const settled: CanonicalGroupEvent = {
   seq: 3,
   room_id: 'room',
@@ -58,11 +62,13 @@ it('starts a fresh count for a newer user message in the same thread', () => {
 
 it('omits a single-message total while multiple threads are unfinished, then follows the remaining thread', () => {
   const other = { ...source, seq: 4, event_id: 'user-two', payload: { ...source.payload, thread_id: 'another-thread' } }
+
   const ended: CanonicalGroupEvent = {
     seq: 5,
     kind: 'room.activity',
     payload: { discussion_event_id: 'user-two', thread_id: 'another-thread', status: 'settled' }
   }
+
   expect(canonicalCompletedReplies([source, message, settled, other], binding)).toBeUndefined()
   expect(canonicalCompletedReplies([source, message, settled, other, ended], binding)).toBe(1)
 })

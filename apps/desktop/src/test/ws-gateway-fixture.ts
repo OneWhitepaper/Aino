@@ -45,6 +45,7 @@ export async function shut(client: HermesGateway, server: FixtureServer): Promis
   for (const socket of server.clients) {
     socket.terminate()
   }
+
   await new Promise<void>(resolve => server.close(() => resolve()))
 }
 

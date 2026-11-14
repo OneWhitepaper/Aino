@@ -320,10 +320,12 @@ it.each([
 // AM4: the same reasons and codes also follow a committed user event, without `admitted: false`.
 it('explains a model preparation failure beside the retained draft instead of blaming the gateway', async () => {
   const hint = 'The selected model is unavailable. Choose an available model and send again.'
+
   const failure = Object.assign(new Error(hint), {
     code: 'model_unavailable',
     data: { admitted: false, preparation_message: hint }
   })
+
   const binding = { connectionId: 'local', profile: 'team', roomId: 'model-not-ready' }
   room((params, attempt) => (attempt === 1 ? Promise.reject(failure) : receipt(params)))
   const scope = await openRoom(binding)

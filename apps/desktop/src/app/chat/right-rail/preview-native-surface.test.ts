@@ -2,16 +2,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { deferred } from '@/test/deferred'
 
-import type {
-  NativePreviewBridge,
-  NativePreviewEvent,
-  NativePreviewSnapshot
-} from '../../../../shared/preview-native'
+import type { NativePreviewBridge, NativePreviewEvent, NativePreviewSnapshot } from '../../../../shared/preview-native'
 
 import type { PreviewInputEvent } from './preview-input'
 import { watchNativePreviewPlacement } from './preview-native-placement'
 import { connectNativePreviewSurface, createNativePreviewSurface } from './preview-native-surface'
-import { isSamePreviewDocument, previewScriptRunnerFor, registerPreviewScriptRunner, watchPreviewDocumentLifecycle } from './preview-script-runner'
+import {
+  isSamePreviewDocument,
+  previewScriptRunnerFor,
+  registerPreviewScriptRunner,
+  watchPreviewDocumentLifecycle
+} from './preview-script-runner'
 
 vi.mock('./preview-native-placement', () => ({ watchNativePreviewPlacement: vi.fn(() => vi.fn()) }))
 
@@ -83,7 +84,13 @@ function setup() {
     return cleanup
   }
 
-  return { bridge, connect, listeners, surface, receive: (event: NativePreviewEvent) => listeners.forEach(fn => fn(event)) }
+  return {
+    bridge,
+    connect,
+    listeners,
+    surface,
+    receive: (event: NativePreviewEvent) => listeners.forEach(fn => fn(event))
+  }
 }
 
 beforeEach(() => vi.mocked(watchNativePreviewPlacement).mockClear())
@@ -107,8 +114,11 @@ it('attaches the existing native document snapshot without navigating it again',
   await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce())
 
   expect(bridge.mount).toHaveBeenCalledExactlyOnceWith({
-    tabId: 'tab-one', partition: 'persist:hermes-preview-work', url: 'https://example.com',
-    bounds: { x: 0, y: 0, width: 1, height: 1 }, visible: false
+    tabId: 'tab-one',
+    partition: 'persist:hermes-preview-work',
+    url: 'https://example.com',
+    bounds: { x: 0, y: 0, width: 1, height: 1 },
+    visible: false
   })
   expect(surface.getWebContentsId()).toBe(81)
   expect(surface.getURL()).toBe('https://example.com/form?existing=1')
@@ -130,13 +140,21 @@ it('updates history and forwards document events only from the current mount tok
   surface.addEventListener('did-navigate-in-page', navigation)
   connect()
   await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce())
-  receive({ token: 'previous-mount', type: 'did-navigate-in-page', url: 'https://wrong.example',
-    snapshot: { ...snapshot('previous-mount'), url: 'https://wrong.example', forward: true } })
+  receive({
+    token: 'previous-mount',
+    type: 'did-navigate-in-page',
+    url: 'https://wrong.example',
+    snapshot: { ...snapshot('previous-mount'), url: 'https://wrong.example', forward: true }
+  })
   expect(surface.getURL()).toBe('https://example.com/form?existing=1')
   expect(navigation).toHaveBeenCalledOnce()
 
-  receive({ token: 'mount-1', type: 'did-navigate-in-page', url: 'https://example.com/back',
-    snapshot: { ...snapshot(), url: 'https://example.com/back', title: 'Back page', back: false, forward: true } })
+  receive({
+    token: 'mount-1',
+    type: 'did-navigate-in-page',
+    url: 'https://example.com/back',
+    snapshot: { ...snapshot(), url: 'https://example.com/back', title: 'Back page', back: false, forward: true }
+  })
   receive({ token: 'mount-1', type: 'dom-ready' })
   expect(surface.getURL()).toBe('https://example.com/back')
   expect(surface.getTitle()).toBe('Back page')
@@ -147,7 +165,8 @@ it('updates history and forwards document events only from the current mount tok
   await surface.goBack()
   await surface.loadURL('https://example.com/explicit-navigation')
   expect(bridge.command.mock.calls).toEqual([
-    ['mount-1', 'goBack', []], ['mount-1', 'loadURL', ['https://example.com/explicit-navigation']]
+    ['mount-1', 'goBack', []],
+    ['mount-1', 'loadURL', ['https://example.com/explicit-navigation']]
   ])
 })
 
@@ -179,8 +198,13 @@ it('restores the retained document runner after an attachment download without r
   await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce())
   const before = previewScriptRunnerFor('tab-one')!
 
-  receive({ token: 'mount-1', type: 'did-start-navigation', isMainFrame: true, isInPlace: false,
-    snapshot: { ...snapshot(), ready: false, loading: true } })
+  receive({
+    token: 'mount-1',
+    type: 'did-start-navigation',
+    isMainFrame: true,
+    isInPlace: false,
+    snapshot: { ...snapshot(), ready: false, loading: true }
+  })
   expect(previewScriptRunnerFor('tab-one')).toBeNull()
   receive({ token: 'mount-1', type: 'did-stop-loading', snapshot: snapshot() })
   expect(previewScriptRunnerFor('tab-one')?.runner).toBe(before.runner)
@@ -189,8 +213,13 @@ it('restores the retained document runner after an attachment download without r
   receive({ token: 'mount-1', type: 'did-stop-loading', snapshot: snapshot() })
   expect(ready).toHaveBeenCalledTimes(2)
 
-  receive({ token: 'mount-1', type: 'did-start-navigation', isMainFrame: true, isInPlace: false,
-    snapshot: { ...snapshot(), ready: false, loading: true } })
+  receive({
+    token: 'mount-1',
+    type: 'did-start-navigation',
+    isMainFrame: true,
+    isInPlace: false,
+    snapshot: { ...snapshot(), ready: false, loading: true }
+  })
   receive({ token: 'mount-1', type: 'did-stop-loading', snapshot: { ...snapshot(), ready: false } })
   expect(previewScriptRunnerFor('tab-one')).toBeNull()
   expect(ready).toHaveBeenCalledTimes(2)
@@ -224,7 +253,9 @@ it('waits for native input and propagates a rejected stale mount command to its 
   const key: PreviewInputEvent = { type: 'keyDown', keyCode: 'Enter' }
   void surface.sendInputEvent(key)
   let finished = false
-  const settling = surface.settleInput().then(() => { finished = true })
+  const settling = surface.settleInput().then(() => {
+    finished = true
+  })
   await Promise.resolve()
   expect(finished).toBe(false)
   input.resolve(undefined)
@@ -262,9 +293,14 @@ it('restores the failed page snapshot with its error details instead of announci
   connect()
   await vi.waitFor(() => expect(failed).toHaveBeenCalledOnce())
 
-  expect(failed).toHaveBeenCalledWith(expect.objectContaining({
-    errorCode: failure.code, errorDescription: failure.description, validatedURL: failure.url, isMainFrame: true
-  }))
+  expect(failed).toHaveBeenCalledWith(
+    expect.objectContaining({
+      errorCode: failure.code,
+      errorDescription: failure.description,
+      validatedURL: failure.url,
+      isMainFrame: true
+    })
+  )
   expect(order).toEqual(['navigate', 'stop', 'failure'])
   expect(surface.getURL()).toBe(failure.url)
   expect(ready).not.toHaveBeenCalled()

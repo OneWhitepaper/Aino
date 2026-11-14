@@ -33,6 +33,7 @@ export function parseTurnMetrics(value: unknown): TurnMetrics | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
+
   const raw = value as Record<string, unknown>
   const metrics: TurnMetrics = {}
 

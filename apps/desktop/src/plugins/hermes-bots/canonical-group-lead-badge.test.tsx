@@ -42,6 +42,7 @@ afterEach(() => {
 
 it('badges the room lead on its header chip when the room routes through a lead', async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'lead-room' }
+
   const members = [
     { member_id: 'ada', profile: 'ada', handle: 'ada', display_name: 'Ada' },
     { member_id: 'linus', profile: 'linus', handle: 'linus', display_name: 'Linus' }

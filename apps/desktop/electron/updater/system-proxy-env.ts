@@ -118,10 +118,12 @@ function noProxyEnv(
   isWindows: boolean
 ): { env: NodeJS.ProcessEnv; added: string[] } {
   const userValues = valuesAnyCase(userEnv, 'no_proxy')
+
   const entries = userValues
     .join(',')
     .split(',')
     .map((entry: string): string => entry.trim())
+
   const value = [...new Set([...entries.filter(Boolean), ...LOCAL_BYPASS, ...direct])].join(',')
   const env: NodeJS.ProcessEnv = {}
   const added: string[] = []

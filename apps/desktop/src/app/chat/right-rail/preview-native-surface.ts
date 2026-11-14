@@ -8,7 +8,12 @@ import type {
 import { runPreviewGuestScript } from './preview-drive-channels'
 import { watchNativePreviewPlacement } from './preview-native-placement'
 
-export function createPreviewGuestSurface(tabId: string | undefined, partition: string, url: string, browser: boolean): HTMLElement {
+export function createPreviewGuestSurface(
+  tabId: string | undefined,
+  partition: string,
+  url: string,
+  browser: boolean
+): HTMLElement {
   return browser && tabId && window.hermesDesktop?.nativePreview
     ? createNativePreviewSurface(tabId, partition, url)
     : document.createElement('webview')
@@ -64,7 +69,9 @@ export function createNativePreviewSurface(tabId: string, partition: string, url
     stopPlacement?.()
     // Mount can finish after its React pane unmounts. Release its exact token,
     // never the tab id now potentially attached to another window.
-    void start?.then(attached => bridge.release(attached.token)).catch(error => console.error('Browser release failed', error))
+    void start
+      ?.then(attached => bridge.release(attached.token))
+      .catch(error => console.error('Browser release failed', error))
     element.remove()
   }
 
@@ -107,70 +114,100 @@ export function createNativePreviewSurface(tabId: string, partition: string, url
       bridge = window.hermesDesktop!.nativePreview!
       stopEvents = bridge.onEvent(receive)
       start = bridge.mount({
-        tabId, partition, url,
+        tabId,
+        partition,
+        url,
         bounds: { x: 0, y: 0, width: 1, height: 1 },
         visible: false
       })
-      void start.then(attached => {
-        if (disposed) {
-          return
-        }
+      void start
+        .then(attached => {
+          if (disposed) {
+            return
+          }
 
-        state = attached
-        stopPlacement = watchNativePreviewPlacement(element, bridge, attached.token)
-        dispatch('did-navigate-in-page', { url: attached.url })
-        dispatch(attached.loading ? 'did-start-loading' : 'did-stop-loading')
+          state = attached
+          stopPlacement = watchNativePreviewPlacement(element, bridge, attached.token)
+          dispatch('did-navigate-in-page', { url: attached.url })
+          dispatch(attached.loading ? 'did-start-loading' : 'did-stop-loading')
 
-        if (attached.loadFailure) {
-          dispatch('did-fail-load', {
-            errorCode: attached.loadFailure.code, errorDescription: attached.loadFailure.description,
-            validatedURL: attached.loadFailure.url, isMainFrame: true
-          })
-        } else if (attached.ready) {
-          dispatch('dom-ready')
-        }
-      }).catch(error => {
-        if (!disposed) {
-          dispatch('did-fail-load', { errorDescription: String(error), isMainFrame: true, validatedURL: url })
-        }
-      })
+          if (attached.loadFailure) {
+            dispatch('did-fail-load', {
+              errorCode: attached.loadFailure.code,
+              errorDescription: attached.loadFailure.description,
+              validatedURL: attached.loadFailure.url,
+              isMainFrame: true
+            })
+          } else if (attached.ready) {
+            dispatch('dom-ready')
+          }
+        })
+        .catch(error => {
+          if (!disposed) {
+            dispatch('did-fail-load', { errorDescription: String(error), isMainFrame: true, validatedURL: url })
+          }
+        })
 
       return forget
     }
   })
 
-  const commands = ['loadURL', 'reload', 'reloadIgnoringCache', 'goBack', 'goForward', 'focus',
-    'sendInputEvent', 'openDevTools', 'closeDevTools', 'copy', 'cut', 'paste', 'selectAll',
-    'inspectElement', 'replaceMisspelling', 'setAudioMuted'] as const
+  const commands = [
+    'loadURL',
+    'reload',
+    'reloadIgnoringCache',
+    'goBack',
+    'goForward',
+    'focus',
+    'sendInputEvent',
+    'openDevTools',
+    'closeDevTools',
+    'copy',
+    'cut',
+    'paste',
+    'selectAll',
+    'inspectElement',
+    'replaceMisspelling',
+    'setAudioMuted'
+  ] as const
 
   for (const name of commands) {
-    Object.assign(element, { [name]: (...args: unknown[]) => {
-      const pending = command(name, ...args)
+    Object.assign(element, {
+      [name]: (...args: unknown[]) => {
+        const pending = command(name, ...args)
 
-      if (name === 'sendInputEvent') {
-        pendingInput.add(pending)
-        void pending.then(() => pendingInput.delete(pending), error => {
-          pendingInput.delete(pending)
-          inputError = error
-        })
+        if (name === 'sendInputEvent') {
+          pendingInput.add(pending)
+          void pending.then(
+            () => pendingInput.delete(pending),
+            error => {
+              pendingInput.delete(pending)
+              inputError = error
+            }
+          )
+        }
+
+        if (name === 'setAudioMuted' && state) {
+          state = { ...state, muted: Boolean(args[0]) }
+        }
+
+        // Most of the webview interface is synchronous. Keep rejected stale commands
+        // observed while loadURL still returns its promise to the navigation handler.
+        if (name !== 'loadURL') {
+          void pending.catch(error => console.error('Browser command failed', error))
+        }
+
+        return pending
       }
-
-      if (name === 'setAudioMuted' && state) {
-        state = { ...state, muted: Boolean(args[0]) }
-      }
-
-      // Most of the webview interface is synchronous. Keep rejected stale commands
-      // observed while loadURL still returns its promise to the navigation handler.
-      if (name !== 'loadURL') {
-        void pending.catch(error => console.error('Browser command failed', error))
-      }
-
-      return pending
-    } })
+    })
   }
 
-  element.addEventListener('devtools-opened', () => { element.dataset.devtools = 'true' })
-  element.addEventListener('devtools-closed', () => { element.dataset.devtools = 'false' })
+  element.addEventListener('devtools-opened', () => {
+    element.dataset.devtools = 'true'
+  })
+  element.addEventListener('devtools-closed', () => {
+    element.dataset.devtools = 'false'
+  })
 
   return element
 }

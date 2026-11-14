@@ -17,6 +17,7 @@ const ready = (profile: string) => ({
 })
 
 const mini = (profile = 'default') => peerTargetKey({ connectionId: 'mini', targetProfile: profile })
+
 const targets = new Map([
   [mini(), ready('default')],
   [mini('coder'), ready('coder')]
@@ -108,6 +109,7 @@ it.each([false, true])('names the first lender that is missing something once ev
     PEER_HOME,
     states
   )
+
   expect(plan.engine).toBe('unavailable')
   expect(plan.connectionId).toBe(reverse ? 'nas' : 'mini')
 })

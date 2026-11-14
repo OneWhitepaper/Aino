@@ -153,6 +153,7 @@ describe('RemoteSessionCookieStore', () => {
     const accountA = store.scope(partitionA)
     accountA.record(gateway, 'hermes_session=private-alpha; Path=/')
     let deliver!: (value: Array<{ name: string; value: string }>) => void
+
     const pending = accountA.captureFromJar(
       gateway,
       () =>

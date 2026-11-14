@@ -48,6 +48,7 @@ it.each([32, 1_048_576])('uploads all %i bytes using the canonical owner method'
     if (method !== 'groups.attachment.upload') {
       throw new Error('Unknown gateway method')
     }
+
     expect(params).toMatchObject({ profile: binding.profile, room_id: binding.roomId, name: file.name })
     const decoded = Uint8Array.from(atob(params.data_base64), value => value.charCodeAt(0))
     expect(Buffer.from(decoded).equals(Buffer.from(bytes))).toBe(true)
@@ -64,11 +65,13 @@ it.each([32, 1_048_576])('uploads all %i bytes using the canonical owner method'
   })
   const changed = vi.fn()
   const submit = vi.fn(event => event.preventDefault())
+
   const view = render(
     <form onSubmit={submit}>
       <CanonicalGroupAttachments attachments={[]} binding={binding} disabled={false} onChange={changed} />
     </form>
   )
+
   fireEvent.click(screen.getByRole('button', { name: 'Attach files' }))
   fireEvent.change(view.container.querySelector('input')!, { target: { files: [file] } })
   await waitFor(() => expect(changed).toHaveBeenCalledWith([uploaded]), { timeout: 2000 })
@@ -84,6 +87,7 @@ it('downloads only the selected committed attachment from its captured owner', a
     name: 'report.bin',
     mime: 'application/octet-stream'
   }
+
   const save = vi.fn().mockResolvedValue(undefined)
   const observed = observeDownloads()
   window.hermesDesktop = { saveImageBuffer: save } as unknown as typeof window.hermesDesktop
@@ -93,6 +97,7 @@ it('downloads only the selected committed attachment from its captured owner', a
     if (method !== 'groups.attachment.download') {
       throw new Error('Unknown gateway method')
     }
+
     expect(params).toEqual({
       profile: binding.profile,
       room_id: binding.roomId,
@@ -104,11 +109,13 @@ it('downloads only the selected committed attachment from its captured owner', a
   })
   const submit = vi.fn(event => event.preventDefault())
   const changed = vi.fn()
+
   const view = render(
     <form onSubmit={submit}>
       <CanonicalGroupAttachments attachments={[attachment]} binding={binding} disabled={false} readOnly />
     </form>
   )
+
   fireEvent.click(screen.getByRole('button', { name: /^Download\b/ }))
   await waitFor(() => expect(observed.downloads).toHaveLength(1))
   await expectDownloaded(observed, new Uint8Array([0, 1, 2, 255]), attachment.name, attachment.mime)
@@ -134,6 +141,7 @@ it('keeps draft attachments after a failed upload and allows another upload atte
   const file = new File(['draft'], added.name, { type: added.mime })
   const changed = vi.fn()
   request.mockRejectedValueOnce(new Error('Upload interrupted'))
+
   const view = render(
     <CanonicalGroupAttachments attachments={[existing]} binding={binding} disabled={false} onChange={changed} />
   )

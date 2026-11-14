@@ -41,6 +41,7 @@ import { CANONICAL_GROUP_CAPABILITIES } from './canonical-group-contract-test-ut
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
 
 const binding = { connectionId: 'owner-a', profile: 'reviewer', roomId: 'room-one' }
+
 const attachment = {
   attachment_id: 'att_00000000000000000000000000000001',
   kind: 'file',
@@ -48,6 +49,7 @@ const attachment = {
   mime: 'text/plain',
   size: 1
 }
+
 const originalDesktop = window.hermesDesktop
 afterEach(() => {
   cleanup()
@@ -63,9 +65,11 @@ function setup() {
   const cache = vi.fn().mockResolvedValue('/private/composer-images/not-a-user-download')
   window.hermesDesktop = { saveImageBuffer: cache } as unknown as typeof window.hermesDesktop
   let release!: (value: unknown) => void
+
   const held = new Promise(resolve => {
     release = resolve
   })
+
   request.mockImplementation(async (_route, method) => {
     if (method === 'groups.capabilities') {
       return CANONICAL_GROUP_CAPABILITIES
@@ -92,6 +96,7 @@ function setup() {
     if (method === 'groups.attachment.download') {
       return held
     }
+
     throw new Error(`Unexpected method ${method}`)
   })
 

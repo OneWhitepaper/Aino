@@ -58,6 +58,7 @@ describe('native preview input across DOM surfaces', () => {
       '<iframe title="Cross-origin content"></iframe>'
     Object.defineProperty(document.querySelector('iframe')!, 'contentDocument', { value: null })
     const button = document.querySelector('button')!
+
     const ref = wire(button, event => {
       if (event.type === 'mouseDown') {
         button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))

@@ -10,6 +10,7 @@ export function addressedGroupMentionText(identities: GroupMentionIdentity[]) {
       if (typeof child !== 'string') {
         return child
       }
+
       const projected = projectGroupMentions(child, identities)
       const parts: ReactNode[] = []
       let last = 0
@@ -94,6 +95,7 @@ export function readableGroupMentionSearch(text: string, identities: GroupMentio
       if (marker) {
         fence = { marker: marker[0], length: marker.length }
       }
+
       result += line
 
       continue

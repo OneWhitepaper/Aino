@@ -56,11 +56,13 @@ export async function requestPluginProfileCreate<T>(
   if (!samePlatformAccount(catalog.account.get(), account)) {
     throw new PlatformSelectionError('platform_account_changed')
   }
+
   const owner = catalog.owner.state.get().owner
 
   if (!owner || owner.user_id !== account.account.id) {
     return send()
   }
+
   const connection = route.connectionId ? { connectionId: route.connectionId } : {}
   const destination = platformDefaultScope({ ...connection, profile: name })
   const cloneFrom = typeof params.clone_from === 'string' ? params.clone_from.trim() : ''
@@ -77,6 +79,7 @@ export async function requestPluginProfileCreate<T>(
   if (!samePlatformAccount(catalog.account.get(), account)) {
     throw new PlatformSelectionError('platform_account_changed')
   }
+
   const result = await send()
   const created = result as { ok?: boolean; name?: string } | null
 

@@ -53,6 +53,7 @@ it('binds on the owning chat socket before exposing a ready draft and keeps keys
     if (method === 'session.managed_model_ticket') {
       return { managed_model_binding: 1, session_ticket: 'ticket' }
     }
+
     throw new Error('unexpected request')
   })
 
@@ -134,6 +135,7 @@ it('closes a created draft instead of binding it to a newer same-user authority'
     if (method === 'session.managed_model_ticket') {
       throw new Error('must not mint a newer authority ticket')
     }
+
     throw new Error(`unexpected ${method}`)
   })
 
@@ -204,6 +206,7 @@ it.each([false, true])(
       if (method === 'session.close') {
         return {}
       }
+
       throw new Error(`unexpected ${method}`)
     })
 

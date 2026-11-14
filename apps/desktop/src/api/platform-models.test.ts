@@ -19,6 +19,7 @@ it('uses the native trusted binding before requesting another renderer session t
     remember_state: 'encrypted',
     error: null
   }
+
   const bind = vi.fn(async () => ({
     ok: true as const,
     ready: true as const,
@@ -26,6 +27,7 @@ it('uses the native trusted binding before requesting another renderer session t
     billing_source: 'aino' as const,
     expires_at: null
   }))
+
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
     value: {
@@ -67,6 +69,7 @@ it('ignores an old failed turn after reauthorization and a new binding replaced 
     model_identity_ready: true,
     model_identity_version: 2
   }
+
   const credentialRejected = vi.fn(async () => undefined)
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,

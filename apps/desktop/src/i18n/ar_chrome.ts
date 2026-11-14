@@ -41,7 +41,7 @@ export const arChrome = {
     openStarmap: 'فتح خريطة الذاكرة',
     enterHud: 'وضع HUD',
     exitHud: 'إنهاء وضع HUD',
-    resetHudLayout: 'إعادة تعيين حجم HUD وموضعه',
+    resetHudLayout: 'إعادة تعيين حجم HUD وموضعه'
   },
   keybinds: {
     title: 'اختصارات لوحة المفاتيح',

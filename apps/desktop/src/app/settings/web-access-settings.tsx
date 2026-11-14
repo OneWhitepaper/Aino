@@ -325,6 +325,7 @@ function WebAccessForm({ owner, queryKey, readAt, status, w }: FormProps): React
 
   const start = () =>
     void run('start', () => startWebAccess(mode, mode === 'public' ? publicUrl.trim() : undefined, owner))
+
   const stop = () => void run('stop', () => stopWebAccess(owner))
   // A saved change the gateway has not applied yet: restart it, and nothing else.
   const restart = () => void run('restart', () => restartWebAccess(owner))

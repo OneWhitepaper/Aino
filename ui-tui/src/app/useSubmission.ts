@@ -316,6 +316,7 @@ export function useSubmission(opts: UseSubmissionOptions) {
         if (!staged) {
           return
         }
+
         staged.controlMethod ??= mode === 'steer' ? 'session.steer' : 'session.redirect'
         staged.executionGeneration ??= executionGeneration
         staged.attachments ??= item.attachments
@@ -541,6 +542,7 @@ export function useSubmission(opts: UseSubmissionOptions) {
         if (!staged) {
           return
         }
+
         patchUiState({ busy: true })
         const item = staged.value
 

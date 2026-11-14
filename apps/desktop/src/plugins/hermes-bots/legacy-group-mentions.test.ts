@@ -43,6 +43,7 @@ it('binds clipboard scope to the room, exact source and addresses while ignoring
 it('rejects unbound readable names and stale recipients but preserves aliases resolved by the existing legacy parser', () => {
   const unresolved = (text: string, seated = members) =>
     unresolvedLegacyGroupMentions(text, seated, {}, '所有成员', '你')
+
   expect(unresolved('@测试 请回复')).toHaveLength(1)
   expect(unresolved('＠测试 请回复')).toHaveLength(1)
   expect(unresolved('@build-a 请回复')).toEqual([])

@@ -85,7 +85,13 @@ import { installApplicationMenuAfterFirstWindow } from './application-menu-start
 import { stopBackendChild as stopBackendChildImpl, waitForBackendExit } from './backend-child'
 import { execText, isPidOnlyStartMarker, processStartMarker, REAP_PROBE_TIMEOUT_MS } from './backend-claim'
 import { createBackendConnectionState } from './backend-connection-state'
-import { assertDescriptorStillOwned, forgetFailedDescriptor, forgetStalePooledGatewayDescriptor, forgetStalePrimaryGatewayDescriptor, newPoolEntry } from './backend-descriptor-cache'
+import {
+  assertDescriptorStillOwned,
+  forgetFailedDescriptor,
+  forgetStalePooledGatewayDescriptor,
+  forgetStalePrimaryGatewayDescriptor,
+  newPoolEntry
+} from './backend-descriptor-cache'
 import { BackendDialClaims } from './backend-dial-claim'
 import { buildDesktopBackendEnv, profileBackendParentEnv } from './backend-env'
 import { isReauthRequiredError, waitForHermesReady } from './backend-health'
@@ -4945,31 +4951,46 @@ const legacyHistoryRecovery = createLegacyHistoryRecovery({
     }
 
     return {
-      sourceHome: INSTALLATION_HOME, targetHome: workspace.home, userData: app.getPath('userData'),
-      origin: platformOrigin.origin, owner: { ...expectedOwner },
-      isCurrent: () => accountDataReady() && activeAccountWorkspace.key === workspace.key &&
+      sourceHome: INSTALLATION_HOME,
+      targetHome: workspace.home,
+      userData: app.getPath('userData'),
+      origin: platformOrigin.origin,
+      owner: { ...expectedOwner },
+      isCurrent: () =>
+        accountDataReady() &&
+        activeAccountWorkspace.key === workspace.key &&
         matchesAccountWindowOwner(platformAuth.snapshot(), expectedOwner)
     }
   },
   run: async (input, scope) => {
     const backend = await ensureRuntime(await resolveHermesBackend([]), () => {
-      if (!scope.isCurrent()) { throw new Error('platform_account_changed') }
+      if (!scope.isCurrent()) {
+        throw new Error('platform_account_changed')
+      }
     })
 
     const runtime = await ticketRuntimeFor(backend)
 
-    if (!scope.isCurrent()) { throw new Error('platform_account_changed') }
+    if (!scope.isCurrent()) {
+      throw new Error('platform_account_changed')
+    }
 
     return runLegacyHistoryHelper({ ...runtime, cwd: backend.root || resolveHermesCwd() }, input)
   },
   request: async (profile, requestPath, body, scope) => {
-    if (!scope.isCurrent()) { throw new Error('platform_account_changed') }
+    if (!scope.isCurrent()) {
+      throw new Error('platform_account_changed')
+    }
     const local = readDesktopConnectionsRegistry().connections.find(connection => connection.kind === 'local')
 
-    if (!local) { throw new Error('history_local_connection_required') }
+    if (!local) {
+      throw new Error('history_local_connection_required')
+    }
     const descriptor = await ensureRegistryBackend(local.id, profile)
 
-    if (!scope.isCurrent() || descriptor.mode !== 'local') { throw new Error('platform_account_changed') }
+    if (!scope.isCurrent() || descriptor.mode !== 'local') {
+      throw new Error('platform_account_changed')
+    }
     const scoped = `${requestPath}?profile=${encodeURIComponent(profile)}`
 
     return fetchJsonForBackend(descriptor, scoped, { method: body === undefined ? 'GET' : 'POST', body })
@@ -5003,9 +5024,13 @@ function isPackagedInstallPath(dir) {
 
 function resolveHermesCwd() {
   return resolveWorkspaceCwd({
-    defaultProjectDir: readDefaultProjectDir(), accountHome: ACCOUNT_SCOPED ? HERMES_HOME : undefined,
-    isPackaged: IS_PACKAGED, sourceRepoRoot: SOURCE_REPO_ROOT, home: app.getPath('home'),
-    directoryExists, isPackagedInstallPath
+    defaultProjectDir: readDefaultProjectDir(),
+    accountHome: ACCOUNT_SCOPED ? HERMES_HOME : undefined,
+    isPackaged: IS_PACKAGED,
+    sourceRepoRoot: SOURCE_REPO_ROOT,
+    home: app.getPath('home'),
+    directoryExists,
+    isPackagedInstallPath
   })
 }
 
@@ -7397,6 +7422,7 @@ function applySecretStorageEncryption(on: boolean) {
           if (!needsDecrypt(secret)) {
             return secret
           }
+
           const plaintext = decryptDesktopSecret(secret)
 
           if (!plaintext) {
@@ -15273,25 +15299,31 @@ async function dispatchRegistryApiRequest(
   // SSH tunnel / remote dashboard. A passive read never dials, so it stays
   // OUT of the claim: an interactive open coalescing onto an in-flight
   // passive read would otherwise inherit its "no warm backend" rejection.
-  const ensure = () => request?.passive
-    ? ensureRegistryBackend(registryConnectionId, routeProfile, '', { passive: true })
-    : backendDialClaims.run(backendScopeKey(registryConnectionId, routeProfile), () =>
-        ensureRegistryBackend(registryConnectionId, routeProfile)
-      )
+  const ensure = () =>
+    request?.passive
+      ? ensureRegistryBackend(registryConnectionId, routeProfile, '', { passive: true })
+      : backendDialClaims.run(backendScopeKey(registryConnectionId, routeProfile), () =>
+          ensureRegistryBackend(registryConnectionId, routeProfile)
+        )
 
   const connection: any = await ensure()
 
   const requestPath = pathForRegistryBackendRequest(request.path, requestProfile, connection, request?.method || 'GET')
 
-  const send = current => fetchJsonForBackend(current, requestPath, {
-    method: request?.method,
-    body: request?.body,
-    upload: request?.upload,
-    timeoutMs: resolveTimeoutMs(request?.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
-  })
+  const send = current =>
+    fetchJsonForBackend(current, requestPath, {
+      method: request?.method,
+      body: request?.body,
+      upload: request?.upload,
+      timeoutMs: resolveTimeoutMs(request?.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
+    })
 
   const response = connection.gatewayEndpoint
-    ? await redialLocalGateway({ ensure, forget: failed => forgetRegistryLocalGatewayDescriptor(registryConnectionId, routeProfile, failed), use: send })
+    ? await redialLocalGateway({
+        ensure,
+        forget: failed => forgetRegistryLocalGatewayDescriptor(registryConnectionId, routeProfile, failed),
+        use: send
+      })
     : await send(connection)
 
   desktopProfilePreferences.afterProfileRequest(registryConnectionId, request, response, connection.mode)
@@ -15515,7 +15547,10 @@ registerNativePreviewIpc(ipcMain, {
   },
   createView: partition => {
     const webPreferences: Electron.WebPreferences = {
-      partition, contextIsolation: true, nodeIntegration: false, sandbox: true,
+      partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
       additionalArguments: ['--aino-native-preview']
     }
 
@@ -16944,8 +16979,17 @@ app.whenReady().then(() => {
     registerDeepLinkProtocol()
   }
 
-  installPreviewGuestEscapeHatch({ app, fromWebContents: BrowserWindow.fromWebContents, onClose: sendClosePreviewRequested })
-  installPreviewGuestPreload({ app, accountPartition, preloadPath: PREVIEW_GUEST_PRELOAD_PATH, sessionFor: p => session.fromPartition(p) })
+  installPreviewGuestEscapeHatch({
+    app,
+    fromWebContents: BrowserWindow.fromWebContents,
+    onClose: sendClosePreviewRequested
+  })
+  installPreviewGuestPreload({
+    app,
+    accountPartition,
+    preloadPath: PREVIEW_GUEST_PRELOAD_PATH,
+    sessionFor: p => session.fromPartition(p)
+  })
 
   ensureWslWindowsFonts()
   configureSpellChecker()

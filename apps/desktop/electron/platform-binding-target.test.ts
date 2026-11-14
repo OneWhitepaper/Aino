@@ -142,6 +142,7 @@ it('opens native controller sockets with fresh private tickets for the selected 
     for (const socket of wss.clients) {
       socket.terminate()
     }
+
     await new Promise<void>(r => wss.close(() => r()))
     await new Promise<void>(r => server.close(() => r()))
   }

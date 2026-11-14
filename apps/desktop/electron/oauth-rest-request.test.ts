@@ -170,6 +170,7 @@ test('cookie recovery cannot clear, log in or replay after its account scope ret
     const scope = store.scope('persist:oauth-account-alpha')
     const events: string[] = []
     let finishLogin!: () => void
+
     const login = new Promise<void>(resolve => {
       finishLogin = resolve
     })
@@ -267,6 +268,7 @@ test('native auth resolution cannot start cookie fallback after its account reti
     } else {
       resolveNative(null)
     }
+
     await rejection
     expect(calls).toEqual([])
   }

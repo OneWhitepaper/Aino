@@ -227,7 +227,7 @@ function PaneClippedContent({
       )}
       // The browser header starts at this pane's top edge. Its labels must
       // use the window's chrome space above it, rather than flip into the page.
-      collisionBoundary={collisionBoundary ?? (browserToolbar ? undefined : pane ?? undefined)}
+      collisionBoundary={collisionBoundary ?? (browserToolbar ? undefined : (pane ?? undefined))}
       collisionPadding={collisionPadding}
       data-slot="tooltip-content"
       // Radix's `collisionPadding` also insets the hide middleware's clip box, so

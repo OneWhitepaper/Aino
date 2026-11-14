@@ -63,12 +63,14 @@ it('uses a single host title for a legacy main workspace and restores its own ti
     }
   })
   const onBack = vi.fn()
+
   const view = render(
     <>
       <h1>Legacy team</h1>
       <GroupChatWorkspace group="Legacy team" mainTab members={[]} onBack={onBack} />
     </>
   )
+
   await screen.findByText('Legacy reply')
   expect(screen.getAllByRole('heading', { name: 'Legacy team' })).toHaveLength(1)
   expect(screen.getByRole('region', { name: 'Legacy team' })).toBeTruthy()

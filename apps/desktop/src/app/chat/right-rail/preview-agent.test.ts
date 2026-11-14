@@ -32,7 +32,11 @@ function browser() {
   const tabId = $rightRailActiveTabId.get()!
   const runner: PreviewScriptRunner = async code => await new Function('return ' + code)()
   runner.capture = async () => screenshot(800, 600)
-  runner.beginApproval = async () => ({ validate: async () => {}, input: { focus: () => {}, send }, release: async () => {} })
+  runner.beginApproval = async () => ({
+    validate: async () => {},
+    input: { focus: () => {}, send },
+    release: async () => {}
+  })
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
   cleanups.push(registerPreviewInput(tabId, { focus: () => {}, send }))
 
@@ -54,8 +58,11 @@ it('releases and rejects native approval invalidated behind an opaque target bef
   const release = vi.fn(async () => {})
   const runner: PreviewScriptRunner = async code => await new Function('return ' + code)()
   runner.beginApproval = async () => ({
-    validate: async () => { throw new Error('Embedded target changed') },
-    input: { focus: () => {}, send }, release
+    validate: async () => {
+      throw new Error('Embedded target changed')
+    },
+    input: { focus: () => {}, send },
+    release
   })
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
   const result = runPreviewAgentAction({ kind: 'click', selector: '#buy', tabId })
@@ -73,7 +80,9 @@ async function accept() {
 it('refuses a target changed by hover before offering approval or clicking', async () => {
   const tabId = browser()
   send.mockImplementation(event => {
-    if (event.type === 'mouseMove') {document.querySelector('#buy')!.textContent = 'Pay another recipient'}
+    if (event.type === 'mouseMove') {
+      document.querySelector('#buy')!.textContent = 'Pay another recipient'
+    }
   })
   const result = await runPreviewAgentAction({ kind: 'click', selector: '#buy', tabId })
   expect(result).toMatchObject({ success: false, error: expect.stringContaining('positioning the pointer') })
@@ -338,7 +347,11 @@ describe('preview agent observation and control', () => {
     const tabId = browser()
     let captures = 0
     const runner: PreviewScriptRunner = async code => await new Function('return ' + code)()
-    runner.beginApproval = async () => ({ validate: async () => {}, input: { focus: () => {}, send }, release: async () => {} })
+    runner.beginApproval = async () => ({
+      validate: async () => {},
+      input: { focus: () => {}, send },
+      release: async () => {}
+    })
 
     runner.capture = async () => {
       if (++captures === 2) {

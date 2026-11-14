@@ -166,10 +166,7 @@ describe('streaming into a settled transcript', () => {
       // useSessionStateCache reconciles each frame against the published view
       // before the runtime sees it. Measuring only the raw stream array misses
       // history churn introduced at that boundary.
-      published = preserveLocalAssistantErrors(
-        [...settled, prompt, text('a-live', 'assistant', body, true)],
-        published
-      )
+      published = preserveLocalAssistantErrors([...settled, prompt, text('a-live', 'assistant', body, true)], published)
 
       return published
     }

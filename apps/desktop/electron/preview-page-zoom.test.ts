@@ -7,15 +7,29 @@ function page(contentWidth = 0) {
   let factor = 1
   let eligible = true
   const changed = vi.fn()
+
   const guest = {
     getZoomFactor: () => factor,
-    setZoomFactor: vi.fn((next: number) => {factor = next}),
+    setZoomFactor: vi.fn((next: number) => {
+      factor = next
+    }),
     setZoomMode: vi.fn(),
     executeJavaScript: vi.fn(async () => ({ viewport: width / factor, width: Math.max(width / factor, contentWidth) }))
   }
+
   const zoom = createPreviewPageZoom(guest, { width: () => width, canFit: () => eligible, changed })
 
-  return { guest, zoom, changed, resize(next: number) {width = next}, allow(next: boolean) {eligible = next} }
+  return {
+    guest,
+    zoom,
+    changed,
+    resize(next: number) {
+      width = next
+    },
+    allow(next: boolean) {
+      eligible = next
+    }
+  }
 }
 
 it('fits fixed desktop overflow without compounding zoom on subsequent measurements or resize', async () => {
@@ -65,7 +79,11 @@ it('holds manual intent across resize and navigation until the user explicitly r
 it('does not fit while hidden or awaiting approval, including a read already in flight', async () => {
   const { guest, zoom, allow } = page(1000)
   let finish!: (value: { viewport: number; width: number }) => void
-  guest.executeJavaScript.mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+  guest.executeJavaScript.mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
   const pending = zoom.refresh()
   allow(false)
   finish({ viewport: 600, width: 1000 })
@@ -81,7 +99,11 @@ it('does not fit while hidden or awaiting approval, including a read already in 
 it('discards delayed page widths after a newer manual choice, page or owner replaces them', async () => {
   const { guest, zoom } = page(1000)
   let finish!: (value: { viewport: number; width: number }) => void
-  guest.executeJavaScript.mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+  guest.executeJavaScript.mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
   const pending = zoom.refresh()
   await zoom.set(1.25)
   finish({ viewport: 600, width: 1000 })
@@ -89,7 +111,11 @@ it('discards delayed page widths after a newer manual choice, page or owner repl
   expect(guest.getZoomFactor()).toBe(1.25)
   expect(zoom.mode).toBe('manual')
   await zoom.set('fit')
-  guest.executeJavaScript.mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+  guest.executeJavaScript.mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
   const obsolete = zoom.refresh()
   zoom.invalidate(true)
   finish({ viewport: 1000, width: 6000 })

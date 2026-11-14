@@ -1797,10 +1797,10 @@ export function isPaneVisible(paneId: string): boolean {
 
   return Boolean(
     group &&
-      !group.minimized &&
+    !group.minimized &&
     workspaceActivePane(group, workspaceShownPaneIds(group.panes.filter(id => !$hiddenTreePanes.get().has(id)))) ===
       paneId &&
-      !(side && $collapsedTreeSides.get().has(side))
+    !(side && $collapsedTreeSides.get().has(side))
   )
 }
 

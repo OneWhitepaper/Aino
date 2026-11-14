@@ -33,6 +33,7 @@ const { FakeWebSocket } = vi.hoisted(() => {
       if (this.readyState !== FakeWebSocket.OPEN) {
         throw new Error('socket not open')
       }
+
       this.sent.push(payload)
       const frame = JSON.parse(payload)
 
@@ -51,6 +52,7 @@ const { FakeWebSocket } = vi.hoisted(() => {
       if (this.readyState === FakeWebSocket.CLOSED) {
         return
       }
+
       this.readyState = FakeWebSocket.CLOSED
       this.emit('close', { code })
     }
@@ -86,10 +88,12 @@ import { useSessionLifecycle } from '../app/useSessionLifecycle.js'
 import { GatewayClient } from '../gatewayClient.js'
 
 const noop = () => {}
+
 const QUESTIONS = [
   { qid: 'q0', question: 'Colour?', choices: ['red', 'blue'] },
   { qid: 'q1', question: 'Size?', choices: ['S', 'L'] }
 ]
+
 const BATCH = { id: 'srq-batch1', method: 'clarify', params: { session_id: 'a', questions: QUESTIONS } }
 let subscriptions = 0
 
@@ -155,12 +159,14 @@ const ticks = async () => {
 
 it('a reconnect keeps an open clarify batch on screen with its locked answer; a cancel held behind the snapshot still closes it', async () => {
   vi.useFakeTimers()
+
   const gw = new GatewayClient(async () => ({
     url: 'ws://gateway.test/api/ws',
     protocols: [],
     instance_id: 'owner',
     profile_id: 'fixture'
   }))
+
   const recoverSidRef = { current: 'a' as null | string }
   let lifecycle!: ReturnType<typeof useSessionLifecycle>
 
@@ -184,11 +190,13 @@ it('a reconnect keeps an open clarify batch on screen with its locked answer; a 
       voice: { setProcessing: noop, setRecording: noop, setVoiceEnabled: noop }
     } as any)
   )
+
   // As useMainApp wires them: the request handler, and the exit handler of an attached socket.
   const onServerRequest = createServerRequestHandler({
     ringPromptBell: noop,
     setStatus: status => patchUiState({ status })
   })
+
   gw.on('request', request => {
     if (!onServerRequest(request)) {
       request.fail(-32601, 'unhandled')
@@ -254,23 +262,21 @@ it('a reconnect keeps an open clarify batch on screen with its locked answer; a 
     // snapshot's fence) beats the resume reply, is held, and must still close the restored form.
     lifecycle.resumeById('a')
     await vi.advanceTimersByTimeAsync(0)
-    FakeWebSocket.instances
-      .at(-1)!
-      .message(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'event',
-          params: {
-            type: 'request.cancel',
-            session_id: 'a',
-            replay_epoch: 'r1',
-            seq: 11,
-            authority_epoch: 1,
-            execution_generation: 4,
-            payload: { id: 'srq-batch1', method: 'clarify', reason: 'resolved' }
-          }
-        })
-      )
+    FakeWebSocket.instances.at(-1)!.message(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'event',
+        params: {
+          type: 'request.cancel',
+          session_id: 'a',
+          replay_epoch: 'r1',
+          seq: 11,
+          authority_epoch: 1,
+          execution_generation: 4,
+          payload: { id: 'srq-batch1', method: 'clarify', reason: 'resolved' }
+        }
+      })
+    )
     await ticks()
     expect($overlayState.get().clarify).toBeNull()
     expect(hasOpenServerRequest('srq-batch1')).toBe(false)

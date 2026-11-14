@@ -171,6 +171,7 @@ class TicketBridge {
     if (this.closed) {
       return
     }
+
     this.closed = true
     clearTimeout(this.idleTimer)
 
@@ -325,6 +326,7 @@ export function createGatewayTicketResolver(resolveBackend: () => Promise<Resolv
           if (cached === flight) {
             cached = undefined
           }
+
           throw error
         })
 

@@ -63,6 +63,7 @@ const members = [
 ]
 
 const binding = { roomId: 'room-1', profile: 'ada', connectionId: 'local' }
+
 const assignment = (payload: Record<string, unknown>) => ({
   seq: 4,
   event_id: 'dassign:x',

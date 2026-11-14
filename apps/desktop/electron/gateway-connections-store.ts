@@ -760,6 +760,7 @@ export function createGatewayConnectionsStore(deps: GatewayConnectionsStoreDeps)
           if (deps.secretStorage) {
             next.secretStorage = deps.secretStorage()
           }
+
           next.revision += 1
           replaceDoc(tokensFile, next, read.corrupt, tokensOurs)
         }
@@ -926,6 +927,7 @@ export function createGatewayConnectionsStore(deps: GatewayConnectionsStoreDeps)
           if (deps.secretStorage) {
             doc.secretStorage = deps.secretStorage()
           }
+
           doc.revision += 1
           replaceDoc(tokensFile, doc, corrupt, stillOurs)
         })

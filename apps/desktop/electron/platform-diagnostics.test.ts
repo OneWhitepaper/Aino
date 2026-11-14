@@ -44,6 +44,7 @@ describe('Aino authenticated diagnostic uploads', () => {
       origin: 'https://api.agentera.com.cn',
       fetchImpl
     })
+
     const result = await client.uploadDiagnostics('private-token', bundle())
     expect(result.id).toBe(id)
     expect(fetchImpl).toHaveBeenCalledOnce()
@@ -59,11 +60,13 @@ describe('Aino authenticated diagnostic uploads', () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 307, headers: { location: 'https://portal.nousresearch.com' } }))
+
     const client = createPlatformClient({
       validateDiagnostics: validateDiagnosticBundle,
       origin: 'https://api.agentera.com.cn',
       fetchImpl
     })
+
     await expect(client.uploadDiagnostics('private-token', bundle())).rejects.toThrow('redirect_rejected')
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
@@ -89,6 +92,7 @@ describe('Aino authenticated diagnostic uploads', () => {
         origin: 'https://api.agentera.com.cn',
         fetchImpl
       })
+
       const ordinary = client.profile('private-token').catch(error => error.code)
 
       await vi.advanceTimersByTimeAsync(10_000)
@@ -107,6 +111,7 @@ describe('Aino authenticated diagnostic uploads', () => {
 
   it('rejects unredacted, malformed and oversized bundles before network I/O', async () => {
     const fetchImpl = vi.fn()
+
     const client = createPlatformClient({
       validateDiagnostics: validateDiagnosticBundle,
       origin: 'https://api.agentera.com.cn',
@@ -175,8 +180,10 @@ describe('Aino authenticated diagnostic uploads', () => {
 
     ipc.registerWindow(win)
     const event = { sender, senderFrame: frame }
+
     const call = async (input: unknown, source = event) =>
       unwrapPlatformAccountIpc(await handlers.get('aino:platform-diagnostics:upload')!(source, input))
+
     const owner = { expected_user_id: '17', expected_generation: auth.generation(), bundle_base64: bundle() }
     await expect(call(owner, { ...event, senderFrame: { url: 'https://untrusted.test/' } })).rejects.toMatchObject({
       code: 'unauthorized_platform_ipc'

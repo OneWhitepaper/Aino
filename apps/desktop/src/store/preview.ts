@@ -781,9 +781,11 @@ export function adoptPersistedBrowserTab(tabId: string, rehome = true) {
 
       if (persisted?.target.kind === 'url') {
         if (!rehome) {
-          tabsByProfile[key] = (tabsByProfile[key] ?? []).map(tab => tab.id === tabId
-            ? { ...tab, target: { ...tab.target, url: persisted.target.url, label: persisted.target.label } }
-            : tab)
+          tabsByProfile[key] = (tabsByProfile[key] ?? []).map(tab =>
+            tab.id === tabId
+              ? { ...tab, target: { ...tab.target, url: persisted.target.url, label: persisted.target.label } }
+              : tab
+          )
 
           return
         }
@@ -1274,7 +1276,9 @@ function closeRightRailTabs(requestedIds: ReadonlySet<string>, discard = false) 
 
   for (const tabId of tabIds) {
     forgetBrowserPage(tabId)
-    void window.hermesDesktop?.nativePreview?.closeTab(tabId).catch(error => console.error('Browser close failed', error))
+    void window.hermesDesktop?.nativePreview
+      ?.closeTab(tabId)
+      .catch(error => console.error('Browser close failed', error))
   }
 
   $previewTabs.set(next)

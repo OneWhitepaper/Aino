@@ -95,6 +95,7 @@ export function useGroupMethods(route: { connectionId: string; profile: string }
     if (answered || !visible || (onForeground(connectionId) && (host.state?.gateway?.get() ?? 'open') !== 'open')) {
       return
     }
+
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
     void canonicalGroupRequest<unknown>(route, 'groups.capabilities').then(
@@ -330,6 +331,7 @@ export function groupCreationEngine(
   if (groupSelectionElsewhere(selection, connectionId)) {
     return { engine: 'elsewhere', reason: 'other_connection' }
   }
+
   const seatable = groupSeatableProfiles(snapshot)
 
   if (
@@ -374,6 +376,7 @@ function peerCreationPlan(
   if (!route) {
     return { engine: 'unavailable', reason: 'route_unavailable', ...location }
   }
+
   const target = targets.get(peerTargetKey(route))
 
   if (!target) {
@@ -410,14 +413,17 @@ export async function revalidateGroupCreation(
   if (!capability || capability.source !== source || !sourceCurrent()) {
     throw new Error(unavailable)
   }
+
   const snapshot = await canonicalGroupRequest<unknown>(route, 'groups.capabilities')
 
   if (groupExecutionMode(snapshot) !== capability.mode) {
     throw new Error(unavailable)
   }
+
   const targets = groupSeatsPeers(snapshot)
     ? await readPeerTargets(selection, route.connectionId)
     : new Map<string, PeerTargetState>()
+
   const plan = groupCreationEngine(groupExecutionMode(snapshot), selection, route.connectionId, snapshot, targets)
 
   if (!sourceCurrent() || plan.engine !== expected || !['gateway', 'gateway-peer'].includes(plan.engine)) {

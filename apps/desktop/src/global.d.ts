@@ -21,7 +21,12 @@ import type {
   PlatformDiagnosticsBridge,
   PlatformModelsBridge
 } from '../shared/platform-contract'
-import type { PreviewBrowserDialog, PreviewBrowserFileChooser, PreviewBrowserInteractionRequest, PreviewBrowserInteractionResult } from '../shared/preview-browser-interactions'
+import type {
+  PreviewBrowserDialog,
+  PreviewBrowserFileChooser,
+  PreviewBrowserInteractionRequest,
+  PreviewBrowserInteractionResult
+} from '../shared/preview-browser-interactions'
 import type { NativePreviewBridge } from '../shared/preview-native'
 
 import type { PreviewInputEvent } from './app/chat/right-rail/preview-input'
@@ -418,13 +423,21 @@ declare global {
         viewport?: { height: number; width: number }
         webContentsId: number
       }) => Promise<string>
-      previewBrowserInteraction?: (webContentsId: number,
+      previewBrowserInteraction?: (
+        webContentsId: number,
         request: PreviewBrowserInteractionRequest
       ) => Promise<PreviewBrowserInteractionResult>
-      onPreviewFileChooser?: (callback: (event: { webContentsId: number; scope: string;
-        chooser: PreviewBrowserFileChooser }) => void) => () => void
-      onPreviewBrowserDialog?: (callback: (event: { webContentsId: number; scope: string;
-        dialog: PreviewBrowserDialog; defaultText?: string }) => void) => () => void
+      onPreviewFileChooser?: (
+        callback: (event: { webContentsId: number; scope: string; chooser: PreviewBrowserFileChooser }) => void
+      ) => () => void
+      onPreviewBrowserDialog?: (
+        callback: (event: {
+          webContentsId: number
+          scope: string
+          dialog: PreviewBrowserDialog
+          defaultText?: string
+        }) => void
+      ) => () => void
       savePastedText: (text: string) => Promise<string>
       saveClipboardImage: () => Promise<string>
       getPathForFile: (file: File) => string

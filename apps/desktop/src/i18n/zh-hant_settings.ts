@@ -1903,8 +1903,8 @@ export const zhHantSettings = {
         code === 'captcha_browser_unavailable'
           ? '目前站點需要透過 Aino 桌面端完成人機驗證，請開啟桌面端登入。'
           : code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
-          ? `請求過於頻繁，請在 ${retryAfter} 秒後重試。`
-          : '帳戶請求失敗，請重試。',
+            ? `請求過於頻繁，請在 ${retryAfter} 秒後重試。`
+            : '帳戶請求失敗，請重試。',
       errors: {
         invalid_identifier: '請輸入有效的電子郵件或手機號碼。',
         missing_code: '請先取得驗證碼，再輸入以登入。',

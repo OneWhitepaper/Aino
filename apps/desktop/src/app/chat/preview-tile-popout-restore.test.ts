@@ -17,7 +17,9 @@ async function setup() {
   const preview = await import('@/store/preview')
   const session = await import('@/store/session')
 
-  let dockBack: (tabId: string) => void = () => { throw new Error('Pop-out listener was not registered') }
+  let dockBack: (tabId: string) => void = () => {
+    throw new Error('Pop-out listener was not registered')
+  }
   vi.stubGlobal('hermesDesktop', {
     onBrowserPopoutClosed: callback => {
       dockBack = callback
@@ -30,11 +32,18 @@ async function setup() {
     registry.register({ id, area: 'panes', data: { toolPanel: true, placement: 'right' }, render: () => null })
   }
 
-  registry.register({ id: 'workspace', area: 'panes', data: { placement: 'main', uncloseable: true }, render: () => null })
-  tree.declareDefaultTree(model.split('row', [
-    model.group(['workspace'], { id: 'main' }),
-    model.group(['files', 'terminal'], { id: 'tools', toolPanel: true })
-  ]))
+  registry.register({
+    id: 'workspace',
+    area: 'panes',
+    data: { placement: 'main', uncloseable: true },
+    render: () => null
+  })
+  tree.declareDefaultTree(
+    model.split('row', [
+      model.group(['workspace'], { id: 'main' }),
+      model.group(['files', 'terminal'], { id: 'tools', toolPanel: true })
+    ])
+  )
   tree.hydrateContributedPanes()
   const { watchPreviewTiles } = await import('./preview-tile')
   watchPreviewTiles()

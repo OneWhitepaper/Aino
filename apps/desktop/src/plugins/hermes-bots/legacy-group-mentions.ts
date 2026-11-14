@@ -59,12 +59,14 @@ export function legacyGroupRecipientNames(
   if (addressed.everyone || !addressed.mentioned.size) {
     return allMembers
   }
+
   const counts = new Map<string, number>()
 
   for (const member of members) {
     if (!addressed.mentioned.has(groupMemberKey(member))) {
       continue
     }
+
     const name = displayName(member, botRosterMeta(member, meta))
     counts.set(name, (counts.get(name) || 0) + 1)
   }

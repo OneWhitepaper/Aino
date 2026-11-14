@@ -15,7 +15,10 @@ vi.mock('@/api/sessions', () => ({ deleteSession: vi.fn(async () => ({ ok: true 
 vi.mock('@/api/platform-session-binding', () => ({ clearPlatformSession: vi.fn(async () => {}) }))
 vi.mock('@/store/gateway', () => ({ retainGatewayForAgent: vi.fn(async () => vi.fn()) }))
 
-afterEach(() => { vi.clearAllMocks(); vi.restoreAllMocks() })
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+})
 
 const route = { connectionId: 'local', profile: 'new-bot', targetProfile: 'writer' }
 
@@ -26,7 +29,9 @@ it('binds a temporary hidden image session on the captured route and cleans it a
   const wire = vi.fn(async (method: string) => {
     calls.push(method)
 
-    return method === 'session.create' ? { session_id: 'avatar', stored_session_id: 'avatar' } : { success: true, image: 'picture' }
+    return method === 'session.create'
+      ? { session_id: 'avatar', stored_session_id: 'avatar' }
+      : { success: true, image: 'picture' }
   })
 
   const account = platformSnapshot()
@@ -34,16 +39,36 @@ it('binds a temporary hidden image session on the captured route and cleans it a
   vi.mocked(preparePlatformImageSession).mockImplementationOnce(async (_owner, sid, request) => {
     await request('session.managed_model_ticket', { session_id: sid, purpose: 'image' }, 10_000)
   })
-  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000))
-    .resolves.toMatchObject({ success: true })
-  expect(wire).toHaveBeenNthCalledWith(1, 'session.create', expect.objectContaining({ hidden: true, source: 'desktop', profile: 'writer' }))
-  expect(preparePlatformImageSession).toHaveBeenCalledWith(
-    { connectionId: 'local', profile: 'new-bot', targetProfile: 'writer' }, 'avatar', expect.any(Function), true
+  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000)).resolves.toMatchObject({
+    success: true
+  })
+  expect(wire).toHaveBeenNthCalledWith(
+    1,
+    'session.create',
+    expect.objectContaining({ hidden: true, source: 'desktop', profile: 'writer' })
   )
-  expect(wire).toHaveBeenLastCalledWith('image.generate', { prompt: 'robot', session_id: 'avatar', profile: 'writer' }, 90_000)
-  expect(wire).toHaveBeenCalledWith('session.managed_model_ticket', { session_id: 'avatar', purpose: 'image', profile: 'writer' }, 10_000)
+  expect(preparePlatformImageSession).toHaveBeenCalledWith(
+    { connectionId: 'local', profile: 'new-bot', targetProfile: 'writer' },
+    'avatar',
+    expect.any(Function),
+    true
+  )
+  expect(wire).toHaveBeenLastCalledWith(
+    'image.generate',
+    { prompt: 'robot', session_id: 'avatar', profile: 'writer' },
+    90_000
+  )
+  expect(wire).toHaveBeenCalledWith(
+    'session.managed_model_ticket',
+    { session_id: 'avatar', purpose: 'image', profile: 'writer' },
+    10_000
+  )
   expect(deleteSession).toHaveBeenCalledWith('avatar', { connectionId: 'local', profile: 'writer' })
-  expect(clearPlatformSession).toHaveBeenCalledWith({ connectionId: 'local', profile: 'new-bot', targetProfile: 'writer' }, 'avatar', 'image')
+  expect(clearPlatformSession).toHaveBeenCalledWith(
+    { connectionId: 'local', profile: 'new-bot', targetProfile: 'writer' },
+    'avatar',
+    'image'
+  )
   expect(calls).toEqual(['session.create', 'session.managed_model_ticket', 'image.generate'])
 })
 
@@ -53,8 +78,9 @@ it('does not start an image operation when authorization fails and still cleans 
   vi.spyOn(platformModelCatalog().account, 'get').mockReturnValue(account)
   vi.mocked(preparePlatformImageSession).mockRejectedValueOnce(new Error('not_authenticated'))
   const wire = vi.fn(async () => ({ session_id: 'temporary', stored_session_id: 'temporary' }))
-  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000))
-    .rejects.toThrow('not_authenticated')
+  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000)).rejects.toThrow(
+    'not_authenticated'
+  )
   expect(wire).toHaveBeenCalledTimes(1)
   expect(deleteSession).toHaveBeenCalledOnce()
 })
@@ -74,14 +100,17 @@ it('discards an old account image result and cleans its authority after an accou
   vi.spyOn(platformModelCatalog().account, 'get').mockImplementation(() => account)
 
   const wire = vi.fn(async (method: string) => {
-    if (method === 'session.create') { return { session_id: 'previous-account' } }
+    if (method === 'session.create') {
+      return { session_id: 'previous-account' }
+    }
     account = platformSnapshot('user-b')
 
     return { success: true, image: 'old-account-image' }
   })
 
-  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000))
-    .rejects.toMatchObject({ code: 'platform_account_changed' })
+  await expect(requestPluginImageGeneration(route, wire as never, { prompt: 'robot' }, 90_000)).rejects.toMatchObject({
+    code: 'platform_account_changed'
+  })
   expect(clearPlatformSession).toHaveBeenCalledWith(expect.anything(), 'previous-account', 'image')
   expect(deleteSession).toHaveBeenCalledOnce()
 })

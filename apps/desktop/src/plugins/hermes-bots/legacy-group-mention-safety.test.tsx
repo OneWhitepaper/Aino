@@ -96,9 +96,11 @@ afterEach(cleanup)
 
 it('guards both native submit paths without clearing the drafts and permits a validated legacy alias', async () => {
   render(<GroupChatWorkspace group="Safety" members={members} />)
+
   const main = (await screen.findByRole('textbox', {
     name: botsText().group.messageRoom('Safety')
   })) as HTMLTextAreaElement
+
   fireEvent.change(main, { target: { value: '@未关联成员 保留这段草稿' } })
   expect((screen.getByRole('button', { name: botsText().group.newThread }) as HTMLButtonElement).disabled).toBe(true)
   fireEvent.keyDown(main, { key: 'Enter' })
@@ -121,9 +123,11 @@ it('guards both native submit paths without clearing the drafts and permits a va
 
 it('checks the live room membership at submit and reports an invalid clipboard binding', async () => {
   render(<GroupChatWorkspace group="Safety" members={members} />)
+
   const main = (await screen.findByRole('textbox', {
     name: botsText().group.messageRoom('Safety')
   })) as HTMLTextAreaElement
+
   fireEvent.change(main, { target: { value: '@build-a 给原成员的消息' } })
   // A source update can land between the last render and an Enter event.
   $groupChats.get().Safety.members = [members[1], { name: 'new-member', handle: 'new-member' }]

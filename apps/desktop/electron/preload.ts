@@ -71,7 +71,8 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     }
   },
   legacyHistoryRecovery: {
-    inspect: async expectedOwner => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:inspect', expectedOwner)),
+    inspect: async expectedOwner =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:inspect', expectedOwner)),
     restore: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:restore', input)),
     remind: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:remind', input))
   },
@@ -488,15 +489,20 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   },
   saveImageBuffer: (data, ext, name) => ipcRenderer.invoke('hermes:saveImageBuffer', { data, ext, name }),
   capturePreview: payload => ipcRenderer.invoke('hermes:capturePreview', payload),
-  previewBrowserInteraction: (webContentsId, request) => ipcRenderer.invoke('hermes:preview-browser-interaction', webContentsId, request),
+  previewBrowserInteraction: (webContentsId, request) =>
+    ipcRenderer.invoke('hermes:preview-browser-interaction', webContentsId, request),
   onPreviewFileChooser: callback => {
     const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => callback(payload)
     ipcRenderer.on('hermes:preview-file-chooser', handler)
-    return () => { ipcRenderer.removeListener('hermes:preview-file-chooser', handler) }
+
+    return () => {
+      ipcRenderer.removeListener('hermes:preview-file-chooser', handler)
+    }
   },
   onPreviewBrowserDialog: callback => {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('hermes:preview-browser-dialog', listener)
+
     return () => ipcRenderer.removeListener('hermes:preview-browser-dialog', listener)
   },
   savePastedText: text => ipcRenderer.invoke('hermes:savePastedText', { text }),

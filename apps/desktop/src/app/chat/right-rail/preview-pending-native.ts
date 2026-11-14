@@ -19,7 +19,9 @@ function pendingReceipt(result: PreviewActResult): PreviewActResult | null {
     url: result.url,
     dialogs: result.dialogs?.filter(dialog => dialog.state === 'pending'),
     file_chooser: result.file_chooser?.state === 'pending' ? result.file_chooser : undefined,
-    note: result.note ?? 'The action opened a native dialog or file chooser. Do not repeat the action. Use dialog_status and respond to the pending request before continuing.'
+    note:
+      result.note ??
+      'The action opened a native dialog or file chooser. Do not repeat the action. Use dialog_status and respond to the pending request before continuing.'
   }
 }
 
@@ -53,7 +55,9 @@ export async function observeAfterPreviewInput<T>(
       file_chooser: chooser && chooser !== previousChooser ? chooser.chooser : undefined
     })
 
-    if (result) {prompt.resolve(result)}
+    if (result) {
+      prompt.resolve(result)
+    }
 
     return result
   }

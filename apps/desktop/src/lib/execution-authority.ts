@@ -25,6 +25,7 @@ function executionStamp(event?: ExecutionStampedEvent): { epoch: string; generat
   const rawEpoch = event?.authority_epoch
   const epoch = typeof rawEpoch === 'number' && Number.isSafeInteger(rawEpoch) ? String(rawEpoch) : rawEpoch
   const generation = event?.execution_generation
+
   const versioned =
     typeof epoch === 'string' &&
     epoch.length > 0 &&
@@ -69,6 +70,7 @@ function fencedByPrevious(
   if (type !== 'session.info' && type !== 'message.start') {
     return true
   }
+
   previous.retiredEpochs.add(previous.epoch)
 
   return false
@@ -89,6 +91,7 @@ function acceptUnstampedLifecycle(
   if (!previous) {
     return true
   }
+
   const payload = event?.payload as Record<string, unknown> | undefined
   // The owner's idle snapshot (queue, revision) carries the session's last generation in its
   // payload; only an older owner's is stale.
@@ -127,6 +130,7 @@ export function acceptExecutionEvent(
   if (!stamp) {
     return acceptUnstampedLifecycle(previous, type, event)
   }
+
   const { epoch, generation } = stamp
   const terminal = type === 'message.complete' || type === 'message.error' || payload?.running === false
 

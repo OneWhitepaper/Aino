@@ -59,16 +59,26 @@ it('inspects and dismisses an initial dialog while the document is loading witho
   )
 })
 
-
 it('releases an exact prepared upload ticket when its confirmation is denied', async () => {
   newBrowserTab()
   const tabId = $rightRailActiveTabId.get()!
   const runner: PreviewScriptRunner = async () => undefined
-  runner.nativeAction = vi.fn(async request => request.action === 'upload_prepare'
-    ? { success: true, ticket: 'prepared-upload', upload: { state: 'prepared' as const, paths: ['/fixture.txt'], filenames: ['fixture.txt'] } }
-    : { success: true })
+  runner.nativeAction = vi.fn(async request =>
+    request.action === 'upload_prepare'
+      ? {
+          success: true,
+          ticket: 'prepared-upload',
+          upload: { state: 'prepared' as const, paths: ['/fixture.txt'], filenames: ['fixture.txt'] }
+        }
+      : { success: true }
+  )
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
-  const result = runPreviewNativeFeatureAction({ kind: 'upload_files', chooserId: 'native-chooser', paths: ['/fixture.txt'], tabId })
+  const result = runPreviewNativeFeatureAction({
+    kind: 'upload_files',
+    chooserId: 'native-chooser',
+    paths: ['/fixture.txt'],
+    tabId
+  })
   await vi.waitFor(() => expect($confirmRequest.get()).not.toBeNull())
   settleConfirm(false)
   expect(await result).toMatchObject({ success: false })
@@ -76,19 +86,31 @@ it('releases an exact prepared upload ticket when its confirmation is denied', a
   expect(vi.mocked(runner.nativeAction).mock.calls.some(([request]) => request.action === 'upload_commit')).toBe(false)
 })
 
-
 it('releases a preparation that finishes after the requesting action is aborted', async () => {
   newBrowserTab()
   const tabId = $rightRailActiveTabId.get()!
   const controller = new AbortController()
-  const prepared = Promise.withResolvers<{ success: boolean; ticket: string; upload: { state: 'prepared'; paths: string[]; filenames: string[] } }>()
+  const prepared = Promise.withResolvers<{
+    success: boolean
+    ticket: string
+    upload: { state: 'prepared'; paths: string[]; filenames: string[] }
+  }>()
   const runner: PreviewScriptRunner = async () => undefined
-  runner.nativeAction = vi.fn(async request => request.action === 'upload_prepare' ? prepared.promise : { success: true })
+  runner.nativeAction = vi.fn(async request =>
+    request.action === 'upload_prepare' ? prepared.promise : { success: true }
+  )
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
-  const result = runPreviewNativeFeatureAction({ kind: 'upload_files', chooserId: 'native-chooser', paths: ['/fixture.txt'], tabId }, controller.signal)
+  const result = runPreviewNativeFeatureAction(
+    { kind: 'upload_files', chooserId: 'native-chooser', paths: ['/fixture.txt'], tabId },
+    controller.signal
+  )
   await vi.waitFor(() => expect(runner.nativeAction).toHaveBeenCalled())
   controller.abort()
-  prepared.resolve({ success: true, ticket: 'late-upload', upload: { state: 'prepared', paths: ['/fixture.txt'], filenames: ['fixture.txt'] } })
+  prepared.resolve({
+    success: true,
+    ticket: 'late-upload',
+    upload: { state: 'prepared', paths: ['/fixture.txt'], filenames: ['fixture.txt'] }
+  })
   expect(await result).toMatchObject({ success: false })
   expect(runner.nativeAction).toHaveBeenCalledWith({ action: 'upload_cancel', ticket: 'late-upload' })
   expect($confirmRequest.get()).toBeNull()

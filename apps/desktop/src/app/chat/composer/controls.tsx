@@ -212,11 +212,7 @@ export function ComposerControls({
             onMouseDown={keepEditorFocus}
             type="submit"
           >
-            {showStop ? (
-              <Pause className="size-4" />
-            ) : (
-              <Codicon name="arrow-up" size="0.875rem" />
-            )}
+            {showStop ? <Pause className="size-4" /> : <Codicon name="arrow-up" size="0.875rem" />}
           </Button>
         </Tip>
       )}

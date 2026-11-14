@@ -77,6 +77,7 @@ export async function refreshPluginSessionAfterOpen(
   if (!options.awaitHydration || (!options.forceResume && surfaceHealthy)) {
     return
   }
+
   const tileDelegate = existingTileDelegate(storedSessionId)
 
   if (tileDelegate) {

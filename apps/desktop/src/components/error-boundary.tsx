@@ -89,6 +89,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const assistantUiLookupRace =
       this.props.label === 'root' &&
       (isTransientAssistantUiLookupError(error) || isTransientRendererCompositionError(error))
+
     const portalTeardownRace = isTransientPortalUnmountError(error)
 
     if ((assistantUiLookupRace || portalTeardownRace) && this.takeAutoRecoveryAttempt()) {
@@ -97,6 +98,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         : isTransientRendererCompositionError(error)
           ? 'renderer composition'
           : 'assistant-ui lookup'
+
       console.warn(`${tag} auto-recovering from ${race} render race`, error.message)
       this.autoRecoveryPending = true
       this.scheduleAutoRecovery()

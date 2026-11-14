@@ -106,6 +106,7 @@ afterEach(() => {
 })
 
 const sender = {} as Electron.WebContents
+
 const SESSION = {
   name: 'sid',
   value: 'secret-value',

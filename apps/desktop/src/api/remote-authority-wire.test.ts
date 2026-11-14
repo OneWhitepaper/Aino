@@ -124,6 +124,7 @@ test.each(['abort', 'deadline', 'ready'] as const)('a request waiting for public
       ready = true
       socket.send(readyFrame())
     }
+
     socket.on('message', bytes => {
       const frame = JSON.parse(bytes.toString())
       sent.push({ method: frame.method, afterReady: ready })
@@ -157,6 +158,7 @@ test.each(['abort', 'deadline', 'ready'] as const)('a request waiting for public
     if (exit === 'abort') {
       controller.abort()
     }
+
     await expect(waiting).rejects.toThrow(
       exit === 'abort' ? /abort/i : /^request timed out after \d+s: session\.create$/
     )
@@ -225,6 +227,7 @@ test.each(['refused', 'closed before ready'] as const)(
     if (failure === 'refused') {
       await new Promise<void>(resolve => server.close(() => resolve()))
     }
+
     const client = new HermesGateway()
 
     try {
@@ -277,9 +280,11 @@ test('state subscribers hear open only after readiness', async () => {
   })
   const client = new HermesGateway()
   const heard: string[] = []
+
   const off = client.onState(state => {
     heard.push(state)
   })
+
   const opened = transportOpened(client)
   const connected = client.connect(publicUrl(server))
 
@@ -306,9 +311,11 @@ test('a never-ready peer closes without ever reporting open', async () => {
   })
   const client = new HermesGateway()
   const heard: string[] = []
+
   const off = client.onState(state => {
     heard.push(state)
   })
+
   const opened = transportOpened(client)
   const connected = expect(client.connect(publicUrl(server))).rejects.toThrow('before protocol readiness')
 
@@ -336,6 +343,7 @@ test('the first ready frame latches the wire for its connection', async () => {
       if (frame.method === 'session.create') {
         creates.push(frame.params)
       }
+
       reply(socket, frame)
     })
   })

@@ -50,6 +50,7 @@ export function readPendingSubmissions(session: string): Record<string, PendingS
     if (!key?.startsWith(ENTRY_PREFIX)) {
       continue
     }
+
     const [owner, id] = parse(key.slice(ENTRY_PREFIX.length), [] as unknown[])
     const entry = parse<null | PendingSubmission>(window.localStorage.getItem(key), null)
 
@@ -65,6 +66,7 @@ export function readPendingSubmissions(session: string): Record<string, PendingS
  *  last observed): the ones whose owner may have moved on while no window was watching. */
 export function journaledPendingSessions(): string[] {
   const sessions = new Set<string>()
+
   const unsettled = (entry: null | PendingSubmission | undefined) =>
     Boolean(entry?.status && entry.status !== 'retired')
 
@@ -82,6 +84,7 @@ export function journaledPendingSessions(): string[] {
     if (!key?.startsWith(ENTRY_PREFIX)) {
       continue
     }
+
     const [owner] = parse(key.slice(ENTRY_PREFIX.length), [] as unknown[])
 
     if (
@@ -129,6 +132,7 @@ function writeEntries(
     for (const [id, entry] of Object.entries(after)) {
       window.localStorage.setItem(entryKey(session, id), JSON.stringify(entry))
     }
+
     delete legacy[session]
 
     if (Object.keys(legacy).length) {

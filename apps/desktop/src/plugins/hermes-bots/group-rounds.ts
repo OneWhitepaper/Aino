@@ -890,6 +890,7 @@ export function sendToGroupChat(
   if (group.startsWith('canonical:')) {
     throw new Error('This group chat runs on its gateway')
   }
+
   const trimmed = String(text || '').trim()
 
   if (rejectGroupSlashCommand(trimmed)) {

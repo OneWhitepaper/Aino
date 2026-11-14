@@ -16,7 +16,11 @@ function browser(onSend?: (event: PreviewInputEvent, tabId: string) => void) {
   newBrowserTab()
   const tabId = $rightRailActiveTabId.get()!
   const runner: PreviewScriptRunner = async code => new Function('return ' + code)()
-  runner.beginApproval = async () => ({ validate: async () => {}, input: activePreviewInput()!, release: async () => {} })
+  runner.beginApproval = async () => ({
+    validate: async () => {},
+    input: activePreviewInput()!,
+    release: async () => {}
+  })
 
   runner.capture = async () => {
     const bytes = new Uint8Array(24)

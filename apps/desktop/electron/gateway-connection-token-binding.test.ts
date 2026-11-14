@@ -51,6 +51,7 @@ const set = (access: string) => ({
   provider: 'p',
   userId: 'u'
 })
+
 const mac = (url: string) => ({ id: 'mac-mini', kind: 'remote', label: 'Mac mini', url, authMode: 'oauth' }) as any
 
 test('a re-pointed or removed-and-re-added connection never loads the old gateway’s sign-in', () => {

@@ -88,6 +88,7 @@ describe('touch styles', () => {
   it('makes paragraphs and code inside clickable assistant rows selectable only in the browser-hosted Desktop', () => {
     const messageText =
       /\[data-slot='aui_assistant-message-content'\]\s+(?::is\([^)]*\b(?:p|pre|code)\b[^)]*\)|(?:p|pre|code)\b)/
+
     const selectors = ruleSelectors(STYLES).filter(selector => messageText.test(selector))
 
     expect(selectors.length).toBeGreaterThan(0)

@@ -151,7 +151,9 @@ describe('publishWorkspaceGeometry', () => {
       expect(document.documentElement.style.getPropertyValue('--workspace-left')).toBe('420px')
       expect(document.documentElement.style.getPropertyValue('--workspace-right')).toBe('320px')
     } finally {
-      if (dragging) { endSashDrag() }
+      if (dragging) {
+        endSashDrag()
+      }
       dispose()
     }
 

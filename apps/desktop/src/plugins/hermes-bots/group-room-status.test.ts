@@ -90,6 +90,7 @@ it('tracks the round while members work and says how the discussion ended', () =
     ...events,
     { seq: 9, kind: 'room.activity', payload: { discussion_event_id: 'd', ...payload } }
   ]
+
   expect(roomCycle(end({ status: 'settled' }), [], 3)).toEqual({ kind: 'settled' })
   expect(roomCycle(end({ status: 'bounded', reason_code: 'max_rounds' }), [], 3)).toEqual({ kind: 'bounded' })
   expect(roomCycle([...events, { seq: 9, kind: 'room.stop_requested', payload: {} }], [], 3)).toEqual({

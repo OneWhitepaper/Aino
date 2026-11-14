@@ -89,21 +89,25 @@ function peerCatalogProblem(
 /** `groups.capabilities` of the gateway lending `profile`: whether it can seat that Bot here. */
 export function peerTargetState(value: unknown, profile: string): PeerTargetState {
   const answer: Answer = value && typeof value === 'object' ? (value as Answer) : {}
+
   const gateway =
     typeof answer.authority_gateway_id === 'string' && answer.authority_gateway_id
       ? answer.authority_gateway_id
       : undefined
+
   const listed = (field: unknown, name: string | number) => Array.isArray(field) && field.includes(name)
   const refused = (reason: string): PeerTargetState => ({ ready: false, reason, ...(gateway ? { gateway } : {}) })
 
   if (!listed(answer.methods, 'groups.peer.invite')) {
     return refused('peer_invite_unsupported')
   }
+
   const link = answer.room_link
 
   if (link?.enabled !== true) {
     return refused(typeof link?.reason === 'string' && link.reason ? link.reason : 'room_link_unavailable')
   }
+
   const catalog = link.catalog ?? {}
 
   const problem = peerCatalogProblem(catalog, gateway, profile)
@@ -163,9 +167,11 @@ export function usePeerTargets(
   }
 
   const epoch = useGatewayActivationEpoch()
+
   const key = JSON.stringify(
     [...routes.values()].map(route => [route.connectionId, route.mode, route.profile, route.targetProfile]).sort()
   )
+
   const [read, setRead] = useState<{ key: string; epoch: number; states: ReadonlyMap<string, PeerTargetState> } | null>(
     null
   )
@@ -174,6 +180,7 @@ export function usePeerTargets(
     if (!active) {
       return
     }
+
     let cancelled = false
     const states = new Map<string, PeerTargetState>()
     setRead({ key, epoch, states })
@@ -193,6 +200,7 @@ export function usePeerTargets(
           if (cancelled) {
             return
           }
+
           states.set(peerTargetKey({ connectionId, targetProfile }), state)
           setRead({ key, epoch, states: new Map(states) })
         })
@@ -363,6 +371,7 @@ async function invitedAndRegistered(home: CanonicalGroupBinding, room: RoomAutho
         ) {
           return
         }
+
         throw new PeerJoinError('registration_unconfirmed')
       }
 
@@ -416,6 +425,7 @@ export async function createGroupAcrossConnections(
     if (!own || !target?.ready) {
       return undefined
     }
+
     seats.push({ route: own, renewal: target.renewal, gateway: target.gateway })
 
     return target
@@ -441,6 +451,7 @@ export async function createGroupAcrossConnections(
   // picked for that gateway and profile.
   const unjoined = await joinAll(room.members.filter(pinned), member => {
     const pin = pinned(member)!
+
     const seat = seats.find(
       ({ gateway, route: own }) => gateway === pin.installation_id && own.targetProfile === pin.profile
     )
@@ -621,11 +632,13 @@ export async function startAgainWithout(
   )
 
   registerCanonicalGroup(binding, next, { created: true })
+
   const replacement: CanonicalGroupBinding = {
     connectionId: binding.connectionId,
     profile: binding.profile,
     roomId: next.room_id
   }
+
   const unjoined = await joinAll(next.members.filter(pinned), member => rejoinPeer(replacement, next, member, roster))
 
   // An unreachable member keeps the original beside its replacement; retain the reason for the UI.
@@ -650,6 +663,7 @@ const renewing = new Map<string, Map<string, Promise<void>>>()
 /** For a member whose last renewal found no connection to its gateway: the roster's other connections
  *  then. Its connection may just not have loaded, so a roster with another one tries it again at once. */
 const missedWith = new Map<string, ReadonlySet<string>>()
+
 const roomKey = (binding: CanonicalGroupBinding) =>
   JSON.stringify([binding.connectionId, binding.profile, binding.roomId])
 
@@ -681,6 +695,7 @@ export function renewPeers(
   if (!reach.size) {
     return
   }
+
   const now = Date.now()
   const inRoom = renewing.get(roomKey(binding)) ?? new Map<string, Promise<void>>()
   renewing.set(roomKey(binding), inRoom)
@@ -723,6 +738,7 @@ export function peerRenewalSettled(binding: CanonicalGroupBinding, timeoutMs = S
   if (!inFlight.length) {
     return Promise.resolve()
   }
+
   let timer: ReturnType<typeof setTimeout> | undefined
 
   return Promise.race([
@@ -848,6 +864,7 @@ export function peerJoinText(error: unknown, name: string, labels: PeerLabels): 
   if (Object.hasOwn(PEER_SETUP_TEXT, reason)) {
     return fill(labels.peerJoinFailed, { name, reason: labels[PEER_SETUP_TEXT[reason]] })
   }
+
   const detail = typeof refusal?.data?.detail === 'string' && refusal.data.detail ? refusal.data.detail : reason
 
   return fill(labels.peerJoinFailed, { name, reason: detail })

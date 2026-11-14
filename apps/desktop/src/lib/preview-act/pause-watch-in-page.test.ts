@@ -52,9 +52,16 @@ it('resolves pending cosmetic animation pauses synchronously without a rendering
 
   const animation = {
     playState: 'running',
-    get currentTime() {return time},
-    set currentTime(value: number) {time = value; pending = false},
-    pause() {pending = true},
+    get currentTime() {
+      return time
+    },
+    set currentTime(value: number) {
+      time = value
+      pending = false
+    },
+    pause() {
+      pending = true
+    },
     play: vi.fn()
   }
 

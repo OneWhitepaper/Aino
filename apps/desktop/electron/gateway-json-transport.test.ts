@@ -21,6 +21,7 @@ async function withServer(handler: http.RequestListener, run: (origin: string) =
 
 test('private and public JSON requests use current scoped headers and keep credentials separate', async () => {
   let account = 'alpha'
+
   const transport = createGatewayJsonTransport({
     home: () => '/unused',
     headersForRemoteRequest: () => ({ 'X-Account': account })

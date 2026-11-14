@@ -58,6 +58,7 @@ export function createBrowserPlatformBridge(options: {
       if (options.confirmRemote) {
         return options.confirmRemote(host)
       }
+
       const prompt = platformBindingPrompt(getRuntimeI18nLocale(), host)
 
       return confirm({
@@ -195,6 +196,7 @@ export function createBrowserPlatformBridge(options: {
           if (!popup) {
             throw new PlatformClientError('checkout_popup_blocked')
           }
+
           popup.opener = null
           popup.location.replace(url)
         }
@@ -235,6 +237,7 @@ export async function openBrowserPlatformGateway(wsUrl: string) {
       if (!ticket || !url.searchParams.has('native_dial')) {
         throw new Error('Gateway ticket required')
       }
+
       url.searchParams.delete('ticket')
 
       return new WebSocket(url.toString(), ['hermes-gateway-v1', `hermes-gateway-ticket.${ticket}`])

@@ -15,9 +15,12 @@ async function setup() {
     { id: 'workspace', area: 'panes', data: { placement: 'main', uncloseable: true }, render: () => null },
     { id: 'files', area: 'panes', data: { placement: 'right', toolPanel: true }, render: () => null }
   ])
-  tree.$layoutTree.set(model.split('row', [
-    model.group(['workspace']), model.group(['files'], { id: 'tools', toolPanel: true, minimized: true })
-  ]))
+  tree.$layoutTree.set(
+    model.split('row', [
+      model.group(['workspace']),
+      model.group(['files'], { id: 'tools', toolPanel: true, minimized: true })
+    ])
+  )
 
   return { tree, summary, dispose: bindSummaryPanelVisibility() }
 }
@@ -36,7 +39,9 @@ it('folds summary when tools open, permits explicit reopening, and restores summ
     h.tree.setTreeGroupMinimized('tools', true)
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(true)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })
 
 it('does not reopen summary on a new draft or a background layout refresh', async () => {
@@ -50,7 +55,9 @@ it('does not reopen summary on a new draft or a background layout refresh', asyn
     h.tree.$layoutTree.set(structuredClone(h.tree.$layoutTree.get()))
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(false)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })
 
 it('keeps a fresh draft quiet when its previous session tools leave in the same turn', async () => {
@@ -66,7 +73,9 @@ it('keeps a fresh draft quiet when its previous session tools leave in the same 
     h.tree.removeTreePane('files')
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(false)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })
 
 it('preserves the summary choice while restoring a different interface layout', async () => {
@@ -83,7 +92,9 @@ it('preserves the summary choice while restoring a different interface layout', 
     setInterfaceMode('advanced')
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(true)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })
 
 it('follows the visible narrow overlay rather than its saved docked expansion', async () => {
@@ -99,7 +110,9 @@ it('follows the visible narrow overlay rather than its saved docked expansion', 
     $narrowOverlayPaneIds.set(new Set())
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(true)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })
 
 it('ignores transient visibility gaps while preview contributions are reconciled', async () => {
@@ -112,5 +125,7 @@ it('ignores transient visibility gaps while preview contributions are reconciled
     h.tree.restoreTreePane('files')
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(false)
-  } finally { h.dispose() }
+  } finally {
+    h.dispose()
+  }
 })

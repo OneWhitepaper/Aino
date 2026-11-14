@@ -67,10 +67,12 @@ it('finds a gateway room by its seated member current source-owned name', () => 
   const member = { member_id: 'member-1', profile: 'encoded-name', handle: 'frozen-handle', display_name: 'Old name' }
   const room = { ...gatewayRoom, members: [member] }
   const roster = [{ name: 'encoded-name', connectionId: 'local', sourceScoped: true }]
+
   const allMeta = {
     'local::encoded-name': { title: 'Current teammate' },
     'foreign::encoded-name': { title: 'Foreign teammate' }
   }
+
   expect(
     derive({ roster, allMeta, gatewayRooms: [room], query: 'Current teammate' }).sortedGroupRows.map(row => row.name)
   ).toEqual(['Team'])

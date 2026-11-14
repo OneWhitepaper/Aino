@@ -85,6 +85,7 @@ export function memberStatusText(status: MemberStatus, labels: RoomStatusLabels)
   if (status.kind === 'working' || status.kind === 'stalled') {
     const elapsed =
       status.kind === 'working' && status.elapsedS !== undefined ? formatElapsed(status.elapsedS) : undefined
+
     const lead =
       status.kind === 'stalled' ? fill(labels.statusStalled, { time: formatElapsed(status.quietS ?? 0) }) : ''
 

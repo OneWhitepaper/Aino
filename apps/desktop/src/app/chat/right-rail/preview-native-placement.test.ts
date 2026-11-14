@@ -49,7 +49,8 @@ it.each(['data-pane-hidden', 'inert'])('keeps a retained native page off screen 
 })
 
 it.each([{ display: 'none' }, { visibility: 'hidden' }, { opacity: '0' }])(
-  'honors hidden ancestor styles %j without destroying the retained surface', style => {
+  'honors hidden ancestor styles %j without destroying the retained surface',
+  style => {
     const { element, pane } = surface()
     Object.assign(pane.style, style)
     expect(nativePreviewPlacement(element).visible).toBe(false)
@@ -93,7 +94,7 @@ it('lets a resize gesture pass over the native guest until the pointer guard is 
 
 function placementWatcher() {
   const { element } = surface()
-  Object.assign(element, {getWebContentsId: () => 41})
+  Object.assign(element, { getWebContentsId: () => 41 })
   const captures = [deferred<string>(), deferred<string>()]
   const decoded: Array<ReturnType<typeof deferred<void>>> = []
   const frames = new Map<number, FrameRequestCallback>()
@@ -103,20 +104,31 @@ function placementWatcher() {
 
     return nextFrame
   })
-  vi.stubGlobal('cancelAnimationFrame', (id: number) => {frames.delete(id)})
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
-  vi.stubGlobal('Image', class {
-    src = ''
-    decode = () => {
-      const ready = deferred<void>()
-      decoded.push(ready)
-
-      return ready.promise
-    }
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    frames.delete(id)
   })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  vi.stubGlobal(
+    'Image',
+    class {
+      src = ''
+      decode = () => {
+        const ready = deferred<void>()
+        decoded.push(ready)
+
+        return ready.promise
+      }
+    }
+  )
   const capturePreview = vi.fn().mockReturnValueOnce(captures[0].promise).mockReturnValueOnce(captures[1].promise)
-  window.hermesDesktop = {...originalDesktop, capturePreview}
-  const bridge = {layout: vi.fn()} as unknown as NativePreviewBridge
+  window.hermesDesktop = { ...originalDesktop, capturePreview }
+  const bridge = { layout: vi.fn() } as unknown as NativePreviewBridge
   const stop = watchNativePreviewPlacement(element, bridge, 'current-token')
   cleanups.push(stop)
 
@@ -137,11 +149,11 @@ function placementWatcher() {
     return node
   }
 
-  return {element, bridge, capturePreview, captures, decoded, flush, overlay, stop}
+  return { element, bridge, capturePreview, captures, decoded, flush, overlay, stop }
 }
 
 it('keeps the live native page until a tooltip backdrop is captured and decoded, then retains it while restoring', async () => {
-  const {element, bridge, captures, decoded, flush, overlay} = placementWatcher()
+  const { element, bridge, captures, decoded, flush, overlay } = placementWatcher()
   await flush()
   const tip = overlay('tooltip-content')
   await flush()
@@ -163,7 +175,7 @@ it('keeps the live native page until a tooltip backdrop is captured and decoded,
 })
 
 it('does not hide the page or publish a stale capture when a tooltip closes before its capture returns', async () => {
-  const {element, bridge, captures, decoded, flush, overlay} = placementWatcher()
+  const { element, bridge, captures, decoded, flush, overlay } = placementWatcher()
   await flush()
   const tip = overlay('tooltip-content')
   await flush()
@@ -177,7 +189,7 @@ it('does not hide the page or publish a stale capture when a tooltip closes befo
 })
 
 it('hides immediately for a blocking modal even while its replacement image is still unavailable', async () => {
-  const {bridge, captures, flush, overlay} = placementWatcher()
+  const { bridge, captures, flush, overlay } = placementWatcher()
   await flush()
   overlay('dialog-overlay')
   await flush()
@@ -188,7 +200,7 @@ it('hides immediately for a blocking modal even while its replacement image is s
 })
 
 it('ignores an old decode after tooltip replacement and never paints after watcher disposal', async () => {
-  const {element, bridge, captures, decoded, flush, overlay, stop} = placementWatcher()
+  const { element, bridge, captures, decoded, flush, overlay, stop } = placementWatcher()
   await flush()
   const first = overlay('tooltip-content')
   await flush()

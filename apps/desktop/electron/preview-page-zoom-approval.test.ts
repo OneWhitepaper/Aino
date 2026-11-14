@@ -5,22 +5,43 @@ import { expect, it, vi } from 'vitest'
 
 import { createPreviewApproval } from './preview-approval'
 import { admitPreviewGuestSession, registerNativePreviewGuest } from './preview-guest-owner'
-import { armPreviewGuestApproval, beginPreviewGuestActivity, endPreviewGuestActivity, hasPreviewGuestApproval } from './preview-guest-throttle'
+import {
+  armPreviewGuestApproval,
+  beginPreviewGuestActivity,
+  endPreviewGuestActivity,
+  hasPreviewGuestApproval
+} from './preview-guest-throttle'
 
 vi.mock('./preview-approval', () => ({ createPreviewApproval: vi.fn() }))
 
 it('blocks automatic fitting from approval preparation through release using the exact existing guest lease', async () => {
   const session = {} as Session
   admitPreviewGuestSession(session)
-  const owner = Object.assign(new EventEmitter(), { getType: () => 'window', isDestroyed: () => false }) as unknown as WebContents
-  const guest = Object.assign(new EventEmitter(), {
-    session, getType: () => 'browserView', isDestroyed: () => false,
-    getBackgroundThrottling: () => true, setBackgroundThrottling: vi.fn()
+  const owner = Object.assign(new EventEmitter(), {
+    getType: () => 'window',
+    isDestroyed: () => false
   }) as unknown as WebContents
+
+  const guest = Object.assign(new EventEmitter(), {
+    session,
+    getType: () => 'browserView',
+    isDestroyed: () => false,
+    getBackgroundThrottling: () => true,
+    setBackgroundThrottling: vi.fn()
+  }) as unknown as WebContents
+
   const unregister = registerNativePreviewGuest(guest, owner)
   const release = vi.fn(async () => {})
-  let finish!: (value: { validate: () => Promise<void>; send: () => Promise<void>; release: () => Promise<void> }) => void
-  vi.mocked(createPreviewApproval).mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+  let finish!: (value: {
+    validate: () => Promise<void>
+    send: () => Promise<void>
+    release: () => Promise<void>
+  }) => void
+  vi.mocked(createPreviewApproval).mockReturnValueOnce(
+    new Promise(resolve => {
+      finish = resolve
+    })
+  )
   const token = beginPreviewGuestActivity(owner, guest, () => () => {})
 
   try {

@@ -110,6 +110,7 @@ export class OauthLoginFlights {
     for (const flight of this.inFlight.values()) {
       flight.cancel()
     }
+
     this.inFlight.clear()
     this.failures.clear()
   }
@@ -146,6 +147,7 @@ export class OauthLoginFlights {
 
     const generation = this.generation
     let cancel!: () => void
+
     const cancelled = new Promise<never>((_resolve, reject) => {
       cancel = () => reject(new NativeAuthChangedError())
     })
@@ -155,6 +157,7 @@ export class OauthLoginFlights {
         if (generation !== this.generation) {
           throw new NativeAuthChangedError()
         }
+
         this.failures.delete(key)
 
         return value

@@ -58,38 +58,55 @@ describe('legacy chat recovery', () => {
   it('persists a reminder choice for the captured account without importing any records', async () => {
     const h = harness()
     h.run.mockResolvedValueOnce({ ok: true, reminderKey: 'batch', showReminder: false, snoozedUntil: null })
-    await expect(h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'ignore' })).resolves.toMatchObject({
-      reminderKey: 'batch', showReminder: false
+    await expect(
+      h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'ignore' })
+    ).resolves.toMatchObject({
+      reminderKey: 'batch',
+      showReminder: false
     })
-    expect(h.run).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      action: 'remind', plan_id: 'plan', choice: 'ignore',
-      owner: { platform_origin: 'https://api.example', user_id: '10' }
-    }), expect.anything())
+    expect(h.run).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        action: 'remind',
+        plan_id: 'plan',
+        choice: 'ignore',
+        owner: { platform_origin: 'https://api.example', user_id: '10' }
+      }),
+      expect.anything()
+    )
     expect(h.request).not.toHaveBeenCalled()
   })
 
   it('rejects invalid reminder choices and stale account results', async () => {
     const h = harness()
-    await expect(h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'delete' as any }))
-      .rejects.toThrow('invalid_platform_input')
+    await expect(
+      h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'delete' as any })
+    ).rejects.toThrow('invalid_platform_input')
     expect(h.run).not.toHaveBeenCalled()
     h.run.mockImplementationOnce(async () => {
       h.changeAccount()
+
       return { ok: true, showReminder: false }
     })
-    await expect(h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'later' }))
-      .rejects.toThrow('platform_account_changed')
+    await expect(h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'later' })).rejects.toThrow(
+      'platform_account_changed'
+    )
     expect(h.request).not.toHaveBeenCalled()
   })
 
   it('serializes reminder writes behind inspection and excludes concurrent imports', async () => {
     const h = harness()
     let release!: (value: unknown) => void
-    h.run.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    h.run.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          release = resolve
+        })
+    )
     const inspection = h.controller.inspect(h.owner)
     const reminder = h.controller.remind({ expectedOwner: h.owner, planId: 'plan', choice: 'later' })
-    await expect(h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false }))
-      .rejects.toThrow('history_recovery_busy')
+    await expect(
+      h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false })
+    ).rejects.toThrow('history_recovery_busy')
     expect(h.run).toHaveBeenCalledTimes(1)
     release({ planId: 'plan' })
     await inspection
@@ -177,7 +194,12 @@ describe('legacy chat recovery', () => {
   it('starts a fresh inspection after credential readiness advances the account revision', async () => {
     const h = harness()
     let release!: (value: unknown) => void
-    h.run.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    h.run.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          release = resolve
+        })
+    )
     const oldScan = h.controller.inspect(h.owner)
     h.changeAccount()
     const fresh = h.controller.inspect({ ...h.owner, revision: 2 })

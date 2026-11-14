@@ -10,6 +10,7 @@ let nextPort = 4100
 function defaultBackend(profiles: unknown) {
   const calls = { ensure: 0, list: 0 }
   const port = nextPort++
+
   const base = {
     baseUrl: `http://127.0.0.1:${port}`,
     wsUrl: `ws://127.0.0.1:${port}/api/ws?token=t`,

@@ -35,12 +35,17 @@ export async function preparePlatformImageSession(
         : undefined
 
     const rawImage = config.image_gen
-    const image = rawImage && typeof rawImage === 'object' && !Array.isArray(rawImage) ? rawImage as Record<string, unknown> : null
+    const image =
+      rawImage && typeof rawImage === 'object' && !Array.isArray(rawImage)
+        ? (rawImage as Record<string, unknown>)
+        : null
 
     // An explicit exclusion and a non-managed backend both skip chat's optional
     // preparation, but an avatar request must fail before spending a request.
     if ((Array.isArray(disabled) ? disabled : [disabled]).includes('image_gen') || image?.provider !== 'aino') {
-      if (required) { throw new PlatformSelectionError('model_unavailable') }
+      if (required) {
+        throw new PlatformSelectionError('model_unavailable')
+      }
 
       return
     }
@@ -75,7 +80,9 @@ export async function preparePlatformImageSession(
       'image'
     )
   } catch (error) {
-    if (required) { throw error }
+    if (required) {
+      throw error
+    }
     notify({
       id: `aino-image-binding:${captured.key}:${sessionId}`,
       kind: 'warning',

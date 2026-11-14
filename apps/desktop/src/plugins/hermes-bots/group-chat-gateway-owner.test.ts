@@ -141,6 +141,7 @@ it('round trips the gateway owner through real writes, hydration, membership edi
   } catch {
     /* UI surfaces are outside this storage fixture. */
   }
+
   await vi.waitFor(() => expect($groupChats.get().Mixed?.engine).toEqual(engine))
   await setGroupChatMembers('Mixed', [
     { name: 'alpha', connectionId: 'owner' },
@@ -163,6 +164,7 @@ it('round trips the gateway owner through real writes, hydration, membership edi
   } catch {
     /* UI surfaces are outside this storage fixture. */
   }
+
   await vi.waitFor(() => expect($groupChats.get()['Gateway rename']?.engine).toEqual(engine))
   expect($groupChats.get()['Held Desktop'].holds).toEqual(holds)
   expect($groupChats.get()['Held Desktop'].sessionOwners).toEqual(sessionOwners)
@@ -250,6 +252,7 @@ it('keeps gateway ownership through a real rename mirror tombstone and storage r
   } catch {
     /* UI surfaces are outside this storage fixture. */
   }
+
   await vi.waitFor(() => expect($groupChats.get().Renamed?.log).toHaveLength(1))
   expect($groupChats.get().Team?.engine).toEqual(engine)
   expect($groupChats.get().Ordinary).toBeUndefined()

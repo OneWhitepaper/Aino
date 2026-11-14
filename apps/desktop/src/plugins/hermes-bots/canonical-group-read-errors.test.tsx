@@ -84,11 +84,13 @@ it.each(timeoutAdvice)(
 
 it('says a Retry was refused because the bot may still be working, not its reason code', async () => {
   locale.value = 'en'
+
   const room = {
     room_id: 'busy',
     name: 'Busy',
     members: [{ member_id: 'a', profile: 'a', handle: 'a', display_name: 'Ada' }]
   }
+
   const action = { kind: 'retry', task_id: 't', member_id: 'a', execution_generation: 1 }
 
   answerGroupRequests(request, {

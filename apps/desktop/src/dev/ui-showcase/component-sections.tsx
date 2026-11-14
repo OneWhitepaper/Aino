@@ -219,7 +219,9 @@ function InputsSection({ onNotice }: SectionProps) {
             event.preventDefault()
             setError(!name.trim())
 
-            if (name.trim()) {onNotice(`「${name.trim()}」已保存到演示中`)}
+            if (name.trim()) {
+              onNotice(`「${name.trim()}」已保存到演示中`)
+            }
           }}
         >
           <label className="ui-lab-field" htmlFor="ui-lab-bot-name">

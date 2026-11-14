@@ -148,8 +148,9 @@ export async function runPreviewNativeFeatureAction(
         guard()
       } catch (error) {
         if (request.action === 'upload_prepare' && result.ticket) {
-          await binding.runner.nativeAction!({ action: 'upload_cancel', ticket: result.ticket })
-            .catch(releaseError => console.warn('Could not release Browser upload authorization', releaseError))
+          await binding.runner.nativeAction!({ action: 'upload_cancel', ticket: result.ticket }).catch(releaseError =>
+            console.warn('Could not release Browser upload authorization', releaseError)
+          )
         }
 
         throw error
@@ -187,9 +188,22 @@ export async function runPreviewNativeFeatureAction(
       throw new Error('Unknown native browser operation')
     }
 
-    return { ...(await handler({ action, owner, signal, guard, native, approve, cancelUpload: async ticket => {
-      await binding.runner.nativeAction!({ action: 'upload_cancel', ticket }).catch(error => console.warn('Could not release Browser upload authorization', error))
-    } })), tab_id: binding.tabId }
+    return {
+      ...(await handler({
+        action,
+        owner,
+        signal,
+        guard,
+        native,
+        approve,
+        cancelUpload: async ticket => {
+          await binding.runner.nativeAction!({ action: 'upload_cancel', ticket }).catch(error =>
+            console.warn('Could not release Browser upload authorization', error)
+          )
+        }
+      })),
+      tab_id: binding.tabId
+    }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   } finally {

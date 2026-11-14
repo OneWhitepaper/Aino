@@ -37,11 +37,17 @@ class Contents extends EventEmitter {
       this.debugger.emit('detach')
     },
     sendCommand: vi.fn(async (method: string) => {
-      if (method === 'DOM.resolveNode') {return { object: { objectId: 'hidden-input' } }}
+      if (method === 'DOM.resolveNode') {
+        return { object: { objectId: 'hidden-input' } }
+      }
 
-      if (method === 'DOM.describeNode') {return { node: { localName: 'input', attributes: ['type', 'file'] } }}
+      if (method === 'DOM.describeNode') {
+        return { node: { localName: 'input', attributes: ['type', 'file'] } }
+      }
 
-      if (method === 'Runtime.callFunctionOn') {return { result: { value: true } }}
+      if (method === 'Runtime.callFunctionOn') {
+        return { result: { value: true } }
+      }
 
       return {}
     })

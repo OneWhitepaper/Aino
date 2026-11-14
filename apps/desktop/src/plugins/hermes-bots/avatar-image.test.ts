@@ -55,7 +55,11 @@ describe('avatar image generation', () => {
     hostMock.request.mockResolvedValue({ success: true, image: 'https://fixture.invalid/avatar.png' })
 
     await expect(generateAvatarFromPrompt('a small fox')).resolves.toBe('https://fixture.invalid/avatar.png')
-    expect(hostMock.request).toHaveBeenCalledWith('image.generate', { prompt: 'a small fox', aspect_ratio: 'square' }, IMAGE_GENERATE_TIMEOUT_MS)
+    expect(hostMock.request).toHaveBeenCalledWith(
+      'image.generate',
+      { prompt: 'a small fox', aspect_ratio: 'square' },
+      IMAGE_GENERATE_TIMEOUT_MS
+    )
   })
 })
 

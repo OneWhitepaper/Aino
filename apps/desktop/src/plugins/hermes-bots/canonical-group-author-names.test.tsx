@@ -70,8 +70,10 @@ it('uses the current primary bot identity instead of a room’s frozen upstream 
 
 it('uses the same live author for a transcript highlight and its search count', () => {
   const event = message()
+
   const nameFor = (seat: CanonicalRoomMember) =>
     canonicalMemberName(seat, binding, $lastRoster.get(), $botMeta.get(), 'local')
+
   const { container } = render(
     <CanonicalGroupHistory binding={binding} events={[event]} members={[member]} searchQuery="测试助手" />
   )
@@ -106,6 +108,7 @@ it('reads an encoded speaker from its own connection rather than a same-profile 
     { name: profile, connectionId: 'local', display_name: '本机测试助手' },
     { name: profile, connectionId: 'studio', remoteSource: true, sourceScoped: true, display_name: '工作室测试助手' }
   ])
+
   const { container } = render(
     <CanonicalGroupHistory binding={{ ...binding, connectionId: 'studio' }} events={[message()]} members={[member]} />
   )
@@ -117,6 +120,7 @@ it('reads an encoded speaker from its own connection rather than a same-profile 
 it('does not borrow another connection name after the original connection roster disappears', () => {
   $lastRoster.set([{ name: profile, connectionId: 'local', display_name: '另一连接的助手' }])
   const savedMember = { ...member, display_name: '工作室保存的助手' }
+
   const { container } = render(
     <CanonicalGroupHistory
       binding={{ ...binding, connectionId: 'studio' }}
@@ -165,6 +169,7 @@ it('uses the readable live name for failed-work notices as well as the message h
     kind: 'turn.failed',
     payload: { member_id: profile, reason: 'Try again later.' }
   }
+
   const { container } = render(<CanonicalGroupHistory binding={binding} events={[event]} members={[member]} />)
 
   expect(container.querySelector('summary')?.textContent).toContain('测试助手')

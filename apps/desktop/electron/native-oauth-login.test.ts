@@ -203,6 +203,7 @@ test('runNativeLogin cancellation leaves no listener or browser launch, includin
       tokens => tokens,
       error => error
     )
+
     controller.abort()
 
     try {
@@ -222,6 +223,7 @@ test('runNativeLogin cancellation rejects while token exchange is pending and ig
   const controller = new AbortController()
   let authorizeUrl = ''
   let releaseToken!: (body: unknown) => void
+
   const token = new Promise(resolve => {
     releaseToken = resolve
   })
@@ -243,6 +245,7 @@ test('runNativeLogin cancellation rejects while token exchange is pending and ig
     tokens => tokens,
     error => error
   )
+
   const expectedState = new URL(authorizeUrl).searchParams.get('state')!
   state.hitCallback(`code=old-account-code&state=${encodeURIComponent(expectedState)}`)
   controller.abort()

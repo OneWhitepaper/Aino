@@ -228,9 +228,11 @@ async function resolveWindowsLauncher(ssh: any, runtime: any) {
     if (TRANSPORT_KINDS.has(cause?.kind)) {
       throw cause
     }
+
     const error: any = new Error(
       'Refresh the remote Windows Hermes launcher: its boot-selecting runtime could not be resolved.'
     )
+
     error.kind = 'update-required'
     error.cause = cause
     throw error
@@ -787,6 +789,7 @@ async function connectWindowsRemote(deps) {
     const error: any = new Error(
       'The remote Windows SSH helper must be updated with boot-selecting runtime ownership support before connecting.'
     )
+
     error.kind = 'update-required'
     throw error
   }
@@ -795,6 +798,7 @@ async function connectWindowsRemote(deps) {
     const error: any = new Error(
       `Update ${PRODUCT_NAME} on the remote Windows host before connecting with Desktop SSH.`
     )
+
     error.kind = 'update-required'
     throw error
   }

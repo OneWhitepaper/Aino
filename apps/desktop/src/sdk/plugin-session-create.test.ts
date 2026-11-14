@@ -645,6 +645,7 @@ it.each(['other-connection', 'explicit-unavailable', 'provider-source'])(
         owner.platform_origin
       )
     }
+
     if (scenario === 'provider-source') {
       io.globalModel.mockImplementation(async (scope: { profile: string }) =>
         scope.profile === 'default' ? { model: 'custom-model', provider: 'custom' } : { model: '', provider: '' }

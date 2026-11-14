@@ -6,7 +6,9 @@ import { redialLocalGateway } from './local-gateway'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>(next => { resolve = next })
+  const promise = new Promise<T>(next => {
+    resolve = next
+  })
 
   return { promise, resolve }
 }
@@ -31,18 +33,19 @@ test('late failures from the old primary join one replacement without evicting i
     return state.getPromise()!
   }
 
-  const dial = (failure?: Promise<void>) => redialLocalGateway({
-    ensure,
-    forget: failed => forgetStalePrimaryGatewayDescriptor(state, failed).then(() => undefined),
-    use: async connection => {
-      if (connection.gatewayEndpoint === stale.gatewayEndpoint) {
-        await failure
-        throw new Error('Gateway ticket control socket missing')
-      }
+  const dial = (failure?: Promise<void>) =>
+    redialLocalGateway({
+      ensure,
+      forget: failed => forgetStalePrimaryGatewayDescriptor(state, failed).then(() => undefined),
+      use: async connection => {
+        if (connection.gatewayEndpoint === stale.gatewayEndpoint) {
+          await failure
+          throw new Error('Gateway ticket control socket missing')
+        }
 
-      return connection
-    }
-  })
+        return connection
+      }
+    })
 
   const late = dial(lateFailure.promise)
   const pending = dial(pendingFailure.promise)

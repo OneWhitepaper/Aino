@@ -132,8 +132,21 @@ export function parsePreviewKey(key: string): { keyCode: string; modifiers?: str
   const modifiers = parts.map(part => aliases.get(part.toLowerCase()) || '')
 
   const named = [
-    'Enter', 'Escape', 'Tab', 'Space', 'Backspace', 'Delete', 'Insert', 'Home', 'End',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown',
+    'Enter',
+    'Escape',
+    'Tab',
+    'Space',
+    'Backspace',
+    'Delete',
+    'Insert',
+    'Home',
+    'End',
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+    'PageUp',
+    'PageDown',
     ...Array.from({ length: 24 }, (_, index) => `F${index + 1}`)
   ]
 

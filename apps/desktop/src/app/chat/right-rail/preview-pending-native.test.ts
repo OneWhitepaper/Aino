@@ -60,7 +60,9 @@ it.each(['dialog', 'chooser'])(
     let afterInputScripts = 0
 
     const runner: PreviewScriptRunner = async (code, signal) => {
-      if (!clicks) {return new Function('return ' + code)()}
+      if (!clicks) {
+        return new Function('return ' + code)()
+      }
       afterInputScripts++
 
       return new Promise((_resolve, reject) =>
@@ -88,7 +90,9 @@ it.each(['dialog', 'chooser'])(
       registerPreviewInput(tabId, {
         focus: () => {},
         send: event => {
-          if (event.type === 'mouseUp') {clicks++}
+          if (event.type === 'mouseUp') {
+            clicks++
+          }
         }
       })
     )
@@ -112,7 +116,9 @@ it('returns the notification receipt when a dialog opens after the initial nativ
   let statusRead = false
 
   const runner: PreviewScriptRunner = async (code, signal) => {
-    if (!clicks) {return new Function('return ' + code)()}
+    if (!clicks) {
+      return new Function('return ' + code)()
+    }
     expect(statusRead).toBe(true)
     $previewWebsiteDialogs.set({ [tabId]: { dialog: pendingDialog, respond: async () => {} } })
 
@@ -132,7 +138,9 @@ it('returns the notification receipt when a dialog opens after the initial nativ
     registerPreviewInput(tabId, {
       focus: () => {},
       send: event => {
-        if (event.type === 'mouseUp') {clicks++}
+        if (event.type === 'mouseUp') {
+          clicks++
+        }
       }
     })
   )

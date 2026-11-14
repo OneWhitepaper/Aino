@@ -68,6 +68,7 @@ test('a reopened sibling chat delivers retained questions before returning and r
     for (const socket of server.clients) {
       socket.terminate()
     }
+
     await new Promise<void>(resolve => server.close(() => resolve()))
   }
 })
@@ -115,9 +116,11 @@ test('a canonical clarify prompt drives the question card and its lock answers o
   const client = new HermesGateway()
   let delivered: any
   let received!: () => void
+
   const ready = new Promise<void>(resolve => {
     received = resolve
   })
+
   client.onRequest(request => {
     delivered = request
     received()
@@ -145,6 +148,7 @@ test('a canonical clarify prompt drives the question card and its lock answers o
     for (const socket of server.clients) {
       socket.terminate()
     }
+
     await new Promise<void>(resolve => server.close(() => resolve()))
   }
 })

@@ -120,6 +120,7 @@ function PeerJoinRows({
     if (!removing) {
       return
     }
+
     const attemptKey = peerJoinKey(binding, removing.member_id)
     const intent = intents[attemptKey]?.payload ? intents[attemptKey] : (intents[attemptKey] = {})
 
@@ -157,6 +158,7 @@ function PeerJoinRows({
     if (!mounted.current) {
       return
     }
+
     setRemoving(null)
     onReplaced?.(key)
   }

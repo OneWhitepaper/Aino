@@ -716,7 +716,7 @@ export const zhOverrides = {
     openStarmap: '打开记忆图谱',
     enterHud: 'HUD 模式',
     exitHud: '退出 HUD 模式',
-    resetHudLayout: '重置 HUD 大小和位置',
+    resetHudLayout: '重置 HUD 大小和位置'
   },
 
   keybinds: {

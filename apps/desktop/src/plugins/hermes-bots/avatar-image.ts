@@ -113,7 +113,7 @@ export async function generateAvatarImage(
 
   return generateAvatarFromPrompt(
     `Cute minimal robot avatar for an AI agent named "${who}". ` +
-    'Friendly simple mascot face, bold flat vector style, solid color background, centered, no text.'
+      'Friendly simple mascot face, bold flat vector style, solid color background, centered, no text.'
   )
 }
 

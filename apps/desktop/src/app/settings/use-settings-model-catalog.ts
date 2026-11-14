@@ -67,9 +67,12 @@ export function useSettingsModelCatalog(profile?: string) {
       const incoming = next as SettingsModelCatalog
 
       // A config-only read can publish between queryFn's return and the cache commit.
-      return replaceEqualDeep(previous, before && before.mainRevision > incoming.mainRevision
-        ? { ...incoming, main: before.main, mainRevision: before.mainRevision }
-        : incoming)
+      return replaceEqualDeep(
+        previous,
+        before && before.mainRevision > incoming.mainRevision
+          ? { ...incoming, main: before.main, mainRevision: before.mainRevision }
+          : incoming
+      )
     }
   })
 

@@ -195,14 +195,23 @@ async function prepareApprovalTarget(ctx: OperationContext, point?: { x: number;
   const { action, signal, owner, guard } = ctx
   const input = activePreviewInput(owner)
 
-  if (!input) {throw new Error('Native browser input is unavailable. Use manual control.')}
+  if (!input) {
+    throw new Error('Native browser input is unavailable. Use manual control.')
+  }
 
   if (point) {
     input.send({ type: 'mouseMove', ...point })
   } else if (action.ref || action.selector) {
-    const result = await actOnActivePreview({ kind: 'hover', ref: action.ref, selector: action.selector }, signal, owner, guard)
+    const result = await actOnActivePreview(
+      { kind: 'hover', ref: action.ref, selector: action.selector },
+      signal,
+      owner,
+      guard
+    )
 
-    if (!result.success) {throw new Error(result.error || 'The browser target could not be prepared.')}
+    if (!result.success) {
+      throw new Error(result.error || 'The browser target could not be prepared.')
+    }
   }
 
   await input.settle?.()

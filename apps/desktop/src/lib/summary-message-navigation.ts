@@ -45,6 +45,7 @@ export async function navigateToSummaryMessage(
   if (!node.hasAttribute('tabindex')) {
     node.tabIndex = -1
   }
+
   node.scrollIntoView({ block: 'center', behavior: 'smooth' })
   node.focus({ preventScroll: true })
   node.dataset.summaryTarget = ''

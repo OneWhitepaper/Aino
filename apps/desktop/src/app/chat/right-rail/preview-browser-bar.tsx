@@ -117,9 +117,10 @@ export function previewBrowserWindowActions(url: string, kind: PreviewTarget['ki
   return {
     onOpenExternal: externalOpenerFor(url),
     onPopIn: isBrowserWindow() ? () => window.close() : undefined,
-    onPopOut: kind !== 'url' || isBrowserWindow() || !tabId || !canOpenBrowserWindow()
-      ? undefined
-      : () => popOutBrowserTab(tabId)
+    onPopOut:
+      kind !== 'url' || isBrowserWindow() || !tabId || !canOpenBrowserWindow()
+        ? undefined
+        : () => popOutBrowserTab(tabId)
   }
 }
 

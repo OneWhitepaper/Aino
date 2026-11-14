@@ -6,12 +6,14 @@ import { createStaleGatewayRestarter } from './local-gateway'
 // same stale code are two processes; the second must be restarted too, not attached as-is.
 test('a second owner on the same stale code is restarted, while a served sibling shares its multiplexer restart', async () => {
   const restarted: string[] = []
+
   const restart = createStaleGatewayRestarter(
     async owner => {
       restarted.push(owner)
     },
     () => undefined
   )
+
   const stale = { gateway: 'old', client: 'new' }
 
   const owner = (profile_id: string, control_home: null | string = null) => ({
@@ -34,12 +36,14 @@ test('a second owner on the same stale code is restarted, while a served sibling
 
 test('switching accounts recovers each account home even when both use the default profile', async () => {
   const restarted: string[] = []
+
   const restart = createStaleGatewayRestarter(
     async owner => {
       restarted.push(owner)
     },
     () => undefined
   )
+
   const stale = { gateway: 'old', client: 'new' }
 
   const owner = (home: string) => ({
@@ -69,10 +73,12 @@ test('switching accounts recovers each account home even when both use the defau
 
 test('a pending restart is shared only by profiles belonging to the same owner home', async () => {
   const finish: Array<() => void> = []
+
   const restart = createStaleGatewayRestarter(
     () => new Promise(resolve => finish.push(resolve)),
     () => undefined
   )
+
   const stale = { gateway: 'old', client: 'new' }
 
   const owner = (profile_id: string, control_home?: string) => ({

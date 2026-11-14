@@ -13,6 +13,7 @@ const catalog = vi.hoisted(() => {
     mode: 'platform',
     model_identity_ready: false
   }
+
   const state: { phase: string; models: PlatformModel[] } = { phase: 'ready', models: [] }
 
   return {

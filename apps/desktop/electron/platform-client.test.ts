@@ -151,6 +151,7 @@ describe('platform client', () => {
     })
 
     const client = createPlatformClient({ origin, allowInsecureLoopback: true })
+
     const page = await client.listUsage('fixture-access', {
       page: 1,
       page_size: 50,
@@ -159,6 +160,7 @@ describe('platform client', () => {
       timezone: 'Asia/Shanghai',
       start_date: '2026-09-16'
     })
+
     expect(page.items[0].actual_cost_decimal).toBe('0.00000001')
     expect(page.items[0]).not.toHaveProperty('api_key')
     expect(page.items[0]).not.toHaveProperty('actual_cost')

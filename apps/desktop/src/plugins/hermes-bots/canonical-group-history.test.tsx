@@ -58,6 +58,7 @@ import { CANONICAL_GROUP_CAPABILITIES } from './canonical-group-contract-test-ut
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
 
 const binding = { connectionId: 'original-owner', profile: 'reviewer', roomId: 'room-one' }
+
 const manifest = {
   attachment_id: 'att_00000000000000000000000000000001',
   kind: 'file',
@@ -65,6 +66,7 @@ const manifest = {
   mime: 'text/plain',
   size: 1
 }
+
 const originalDesktop = window.hermesDesktop
 afterEach(() => {
   cleanup()
@@ -119,6 +121,7 @@ it('keeps a committed file downloadable in history after Send clears the compose
     if (method === 'groups.attachment.download') {
       return { ...manifest, event_id: params.event_id, data_base64: 'QQ==' }
     }
+
     throw new Error(`Unexpected method ${method}`)
   })
   const view = render(<CanonicalGroupWorkspace binding={binding} />)
@@ -184,6 +187,7 @@ it('binds user/member history downloads to their real event and refuses missing 
     if (method === 'groups.attachment.download') {
       return { ...manifest, event_id: params.event_id, data_base64: 'QQ==' }
     }
+
     throw new Error(`Unexpected method ${method}`)
   })
   render(<CanonicalGroupWorkspace binding={binding} />)

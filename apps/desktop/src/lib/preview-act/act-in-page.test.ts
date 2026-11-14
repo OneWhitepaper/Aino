@@ -673,7 +673,11 @@ describe('type', () => {
 
     const result = inventory(holder)
     expect(result.elements).toEqual([expect.objectContaining({ label: 'Filter issues', selector: '#filter' })])
-    const typed = actInPage(document, holder, { kind: 'type', ref: result.elements![0].ref, text: 'is:issue is:open bug' })
+    const typed = actInPage(document, holder, {
+      kind: 'type',
+      ref: result.elements![0].ref,
+      text: 'is:issue is:open bug'
+    })
 
     expect(typed.success).toBe(true)
     expect(document.getElementById('filter')!.textContent).toBe('is:issue is:open bug')

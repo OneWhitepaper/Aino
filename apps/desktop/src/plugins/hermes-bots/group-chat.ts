@@ -817,6 +817,7 @@ export function mergeRemoteGroupChatSnapshotIntoRooms(
     ) {
       continue
     }
+
     const remoteRevision = Math.max(0, Number(projected.revision || 0))
     const localRevision = Math.max(0, Number(existing.syncRevision || 0))
 

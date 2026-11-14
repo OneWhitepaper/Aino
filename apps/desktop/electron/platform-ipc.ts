@@ -1,4 +1,8 @@
-import type { LegacyHistoryBridge, LegacyHistoryReminderInput, LegacyHistoryRestoreInput } from '../shared/legacy-history-recovery'
+import type {
+  LegacyHistoryBridge,
+  LegacyHistoryReminderInput,
+  LegacyHistoryRestoreInput
+} from '../shared/legacy-history-recovery'
 import type { PlatformAuth } from '../shared/platform-auth'
 import { PlatformClientError } from '../shared/platform-client'
 import type {
@@ -334,7 +338,9 @@ export function registerPlatformIpc({
           const result = await handler(value)
 
           return { ok: true, value: result }
-        } catch (error) { return { ok: false, error: safeIpcError(error) } }
+        } catch (error) {
+          return { ok: false, error: safeIpcError(error) }
+        }
       })
     }
   }
@@ -608,7 +614,9 @@ export function registerPlatformIpc({
     },
     unregisterWindow,
     dispose() {
-      for (const method of ['inspect', 'restore', 'remind']) { ipc.removeHandler?.(`aino:legacy-history:${method}`) }
+      for (const method of ['inspect', 'restore', 'remind']) {
+        ipc.removeHandler?.(`aino:legacy-history:${method}`)
+      }
 
       for (const name of Object.keys(deviceMethods)) {
         ipc.removeHandler?.(`aino:platform-devices:${name}`)

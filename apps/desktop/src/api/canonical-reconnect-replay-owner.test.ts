@@ -36,6 +36,7 @@ test.each(['native', 'public'] as const)(
 
     const calls: any[] = []
     const peers: any[] = []
+
     const push = (peer: any, event: unknown) =>
       peer.send(JSON.stringify({ jsonrpc: '2.0', method: 'event', params: event }))
 
@@ -100,6 +101,7 @@ test.each(['native', 'public'] as const)(
           }
         })
       )
+
       peers[0].terminate()
       await closed
 
@@ -119,6 +121,7 @@ test.each(['native', 'public'] as const)(
       for (const peer of server.clients) {
         peer.terminate()
       }
+
       await new Promise<void>(resolve => server.close(() => resolve()))
     }
   }

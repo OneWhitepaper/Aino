@@ -8,6 +8,7 @@ import type { SubmissionDestination } from './submission-destination'
 type Journal = typeof PreparedSubmissions
 
 const realStorage = window.localStorage
+
 const installStorage = (storage: Storage) =>
   Object.defineProperty(window, 'localStorage', { configurable: true, value: storage })
 
@@ -22,6 +23,7 @@ const LEGACY_KEY = 'hermes.desktop.preparedSubmissions.v1'
 const owner = { connectionId: 'local', profile: 'default' }
 const destination = { scopeKey: 'webapp::default' } as SubmissionDestination
 const intent = (text: string) => preparedSubmissionKey('stored', destination, text, [])
+
 const entry = (id: string, text: string): PreparedSubmission => ({
   id,
   text,
@@ -29,6 +31,7 @@ const entry = (id: string, text: string): PreparedSubmission => ({
   params: { submission_id: id },
   owner
 })
+
 const legacySend = (text: string) => ({ key: intent(text), entry: entry(`${text} id`, text) })
 
 // One browser tab: its own module instance over its own view of the origin's storage, which the
@@ -101,6 +104,7 @@ test('two tabs upgrading at once: each legacy entry they retire stays retired, e
     'acked in B',
     'unconfirmed in B'
   ].map(legacySend)
+
   const legacy = Object.fromEntries([untouched, ackedInA, ackedInB, unconfirmedInB].map(send => [send.key, send.entry]))
   const shared = new Map([[LEGACY_KEY, JSON.stringify(legacy)]])
   // Both tabs load the new build over the same blob; neither sees the other's writes until it flushes.
@@ -115,8 +119,10 @@ test('two tabs upgrading at once: each legacy entry they retire stays retired, e
   b.flush()
 
   const reloaded = await openTab(shared)
+
   const adopt = (send: ReturnType<typeof legacySend>) =>
     reloaded.run(journal => journal.adoptPreparedSubmission(send.key, send.entry.id))
+
   expect(await adopt(ackedInA)).toBeUndefined()
   expect(await adopt(ackedInB)).toBeUndefined()
   expect(await adopt(untouched)).toEqual(untouched)

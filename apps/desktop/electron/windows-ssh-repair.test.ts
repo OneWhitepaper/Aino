@@ -76,11 +76,13 @@ test('Windows roster and install id never dispatch POSIX syntax or hide a failed
   assert.deepEqual(await listRemoteHermesProfiles(ssh, runtime), ['default', 'bob'])
   assert.equal(await readRemoteInstallId(ssh, runtime), 'a'.repeat(32))
   assert.ok(calls.length > 0)
+
   const failed = {
     exec: async () => {
       throw new Error('fixture disconnected')
     }
   }
+
   await assert.rejects(() => listRemoteHermesProfiles(failed, runtime))
 })
 
@@ -196,6 +198,7 @@ test.runIf(process.platform === 'win32')(
     fs.mkdirSync(path.join(home, 'bin'))
     fs.writeFileSync(path.join(home, 'bin', 'hermes.cmd'), '@echo off\r\n')
     const system = process.env.SystemRoot || 'C:\\Windows'
+
     const env = {
       ...process.env,
       HERMES_HOME: home,

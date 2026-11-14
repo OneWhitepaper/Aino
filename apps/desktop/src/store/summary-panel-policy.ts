@@ -3,7 +3,11 @@ import { computed } from 'nanostores'
 import { $narrowOverlayPaneIds } from '@/components/pane-shell/narrow-overlay-state'
 import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import {
-  $collapsedTreeSides, $dismissedPanes, $hiddenTreePanes, $layoutTree, $narrowViewport,
+  $collapsedTreeSides,
+  $dismissedPanes,
+  $hiddenTreePanes,
+  $layoutTree,
+  $narrowViewport,
   isPaneVisible
 } from '@/components/pane-shell/tree/store'
 import { isRestoredToolPanelGroup } from '@/components/pane-shell/tree/tool-panel-policy'
@@ -15,10 +19,19 @@ import { $summaryOpen } from './summary'
 
 /** Read the actual tool host, including mirrored layouts and narrow overlays. */
 export const $toolPanelVisible = computed(
-  [$layoutTree, $collapsedTreeSides, $dismissedPanes, $hiddenTreePanes, $registryVersion,
-    $narrowViewport, $narrowOverlayPaneIds],
+  [
+    $layoutTree,
+    $collapsedTreeSides,
+    $dismissedPanes,
+    $hiddenTreePanes,
+    $registryVersion,
+    $narrowViewport,
+    $narrowOverlayPaneIds
+  ],
   (tree, _collapsed, _dismissed, _hidden, _version, narrow, overlays) => {
-    if (!tree) { return false }
+    if (!tree) {
+      return false
+    }
     const panes = registry.getArea('panes')
     const paneFor = (id: string) => panes.find(pane => pane.id === id)
 
@@ -41,15 +54,21 @@ export function bindSummaryPanelVisibility(): () => void {
     // Restoration ends synchronously, before this batch's microtask runs.
     quietBatch ||= modeLayout.restoring
 
-    if (queued) { return }
+    if (queued) {
+      return
+    }
     queued = true
     queueMicrotask(() => {
       queued = false
 
-      if (!active) { return }
+      if (!active) {
+        return
+      }
       const shown = $toolPanelVisible.get()
 
-      if (shown !== previous && !quietBatch) { $summaryOpen.set(!shown) }
+      if (shown !== previous && !quietBatch) {
+        $summaryOpen.set(!shown)
+      }
       previous = shown
       quietBatch = false
     })
@@ -64,5 +83,9 @@ export function bindSummaryPanelVisibility(): () => void {
     settle()
   })
 
-  return () => { active = false; stopPanel(); stopDraft() }
+  return () => {
+    active = false
+    stopPanel()
+    stopDraft()
+  }
 }

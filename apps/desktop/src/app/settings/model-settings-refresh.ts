@@ -44,24 +44,37 @@ export async function refreshModelSettingsData(options: ModelSettingsRefresh): P
 
   // This endpoint resolves context capabilities against the provider. Its result enriches
   // the configured assignment, but the fast config-only reads below own page readiness.
-  void getGlobalModelInfo(options.profile).then(info => {
-    if (options.isCurrent()) {
-      replaceMain(info)
-      options.onReady()
-    }
-  }).catch(failed)
+  void getGlobalModelInfo(options.profile)
+    .then(info => {
+      if (options.isCurrent()) {
+        replaceMain(info)
+        options.onReady()
+      }
+    })
+    .catch(failed)
 
   await Promise.allSettled([
-    options.refreshCatalog().then(() => {
-      if (options.isCurrent()) { options.onReady() }
-    }).catch(failed),
-    getAuxiliaryModels(options.profile).then(auxiliary => {
-      if (!options.isCurrent()) { return }
-      options.onAuxiliary(auxiliary)
-      options.onReady()
-    }).catch(failed),
+    options
+      .refreshCatalog()
+      .then(() => {
+        if (options.isCurrent()) {
+          options.onReady()
+        }
+      })
+      .catch(failed),
+    getAuxiliaryModels(options.profile)
+      .then(auxiliary => {
+        if (!options.isCurrent()) {
+          return
+        }
+        options.onAuxiliary(auxiliary)
+        options.onReady()
+      })
+      .catch(failed),
     getMoaModels(options.profile).then(moa => {
-      if (options.isCurrent() && moa) { options.onMoa(moa) }
+      if (options.isCurrent() && moa) {
+        options.onMoa(moa)
+      }
     })
   ])
 }

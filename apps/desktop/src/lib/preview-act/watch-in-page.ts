@@ -190,7 +190,9 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   const busy = 25
   const state = win.__hermesWatch || (win.__hermesWatch = {})
 
-  if (state.paused) {return}
+  if (state.paused) {
+    return
+  }
 
   // One row per kind of mark. `life` is how long it stays up; 0 means it stays
   // until the agent takes it down, which is the whole difference between a mark
@@ -595,7 +597,9 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
       if (state.paused) {
         const expired = (state.expired ??= []) as HTMLElement[]
         expired.push(cell)
-      } else {cell.remove()}
+      } else {
+        cell.remove()
+      }
     }, life + beat)
 
     // A mark comes and goes as ONE thing, so what fades is the CELL — which owns

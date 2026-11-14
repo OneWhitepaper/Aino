@@ -134,6 +134,7 @@ it('keeps start, ticket, native binding, resume and late lifecycle calls on the 
   setSessionOwnerHint('focused-chat', { connectionId: 'wrong-device', profile: 'work' })
   $layoutTree.set(group(['session-tile:focused-chat'], { id: 'focus', active: 'session-tile:focused-chat' }))
   $activeTreeGroup.set('focus')
+
   const ambient = vi.fn(async () => {
     throw new Error('ambient is not onboarding owner')
   })
@@ -169,6 +170,7 @@ it('keeps start, ticket, native binding, resume and late lifecycle calls on the 
   const resume = vi.fn(async (id: string) => {
     $selectedStoredSessionId.set(id)
   })
+
   expect(await startOnboarding(dispatch, resume, { owner })).toBe(true)
   expect(ensureGatewayAgent).toHaveBeenCalledWith('remote-owner', 'default')
   expect(desktopSessionCreateParams).toHaveBeenCalledWith('', owner, 'default', false)

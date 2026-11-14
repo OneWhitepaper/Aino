@@ -35,6 +35,7 @@ vi.mock('./group-chat-parts', async importOriginal => ({
 
 const roster: RosterRow[] = [{ name: 'default', connectionId: 'local' }, peerRosterRow('mini', 'Mac Mini')]
 const link = (reason: string) => ({ ...MINI, room_link: { enabled: false, reason } })
+
 const catalog = (change: Record<string, unknown>) => ({
   ...MINI,
   room_link: { ...MINI.room_link, catalog: { ...MINI.room_link.catalog, ...change } }
@@ -116,6 +117,7 @@ it.each(Object.keys(CANONICAL_GROUP_LOCALES) as Array<keyof typeof CANONICAL_GRO
       expect(text, `${locale} ${code}`).not.toMatch(rawCode)
       expect(text, `${locale} ${code}`).not.toMatch(/\{(?:connection|reason)\}/)
       texts.set(key, text)
+
       // A Retry that meets the same known refusal gives the same advice, in the room (a pinned member
       // whose computer no longer speaks its protocol keeps the room's own "settings changed" copy).
       const joined =

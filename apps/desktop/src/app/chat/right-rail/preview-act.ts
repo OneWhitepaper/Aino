@@ -721,7 +721,6 @@ async function driveAction(
 }
 
 function nativeInputResult(after: Trip, action: PreviewActAction, acted: string): PreviewActResult {
-
   // The action itself already happened as real input, so a page that will not
   // answer the read-back is a page that navigated — never a failed click.
   if (after.kind !== 'answered') {

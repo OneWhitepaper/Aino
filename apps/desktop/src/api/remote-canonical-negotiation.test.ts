@@ -107,6 +107,7 @@ test.each([{}, { session_authority: false }, { session_authority: 'true' }])(
         if (frame.method === 'session.create') {
           creates.push(frame.params)
         }
+
         reply(socket, frame)
       })
       socket.send(readyFrame(canonical ? { session_authority: true } : advertisement))
@@ -141,6 +142,7 @@ test.each(['viewer', 'peer'] as const)(
     })
     const client = new HermesGateway()
     const opened = transportOpened(client)
+
     const rejected = expect(client.connect(publicUrl(server))).rejects.toThrow(
       `${PRODUCT_NAME} gateway connection closed before protocol readiness`
     )
@@ -153,6 +155,7 @@ test.each(['viewer', 'peer'] as const)(
       } else {
         peer?.terminate()
       }
+
       await rejected
     } finally {
       await shut(client, server)

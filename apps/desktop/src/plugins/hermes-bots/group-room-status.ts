@@ -47,11 +47,13 @@ export const STALL_AFTER_S = 120
 
 const TERMINAL_KINDS = new Set(['turn.settled', 'turn.failed', 'turn.cancelled', 'turn.deferred'])
 const str = (value: unknown) => (typeof value === 'string' ? value : '')
+
 const firstLine = (text: string) =>
   text
     .split('\n')
     .map(line => line.trim())
     .find(Boolean) ?? ''
+
 const threadOf = (event: RoomLogEvent) => str(event.payload.thread_id)
 const isUserMessage = (event: RoomLogEvent) => event.kind === 'message.user' || event.kind === 'message'
 
@@ -270,10 +272,13 @@ export function roomCycle(
   // One thread owns the strip, so its round and the names beside it agree: the focused thread when it has
   // running work, else a thread that does, else the focused thread's queued work.
   const isLive = (row: RoomMemberActivity) => row.status !== 'queued'
+
   const inThread = (thread: string | undefined) =>
     rows.filter(row => row.thread_id !== undefined && row.thread_id === thread)
+
   const inFocus = inThread(focus)
   const running = rows.find(row => isLive(row) && row.thread_id !== undefined)?.thread_id
+
   const owning = inFocus.some(isLive)
     ? inFocus
     : running !== undefined
@@ -281,14 +286,18 @@ export function roomCycle(
       : inFocus.length
         ? inFocus
         : rows
+
   const rounds = owning
     .map(row => row.round_index)
     .filter((index): index is number => typeof index === 'number' && Number.isInteger(index) && index >= 0)
+
   const thread = owning.find(row => row.thread_id !== undefined)?.thread_id ?? focus
   const live = owning.filter(isLive).map(row => row.member_id)
+
   const current = rounds.length
     ? Math.max(...rounds)
     : guessedRound(events, thread === undefined ? undefined : discussions.get(thread), live)
+
   const max = typeof maxRounds === 'number' && maxRounds > 0 ? maxRounds : undefined
 
   return { kind: 'working', round: current + 1, maxRounds: max, members: live }

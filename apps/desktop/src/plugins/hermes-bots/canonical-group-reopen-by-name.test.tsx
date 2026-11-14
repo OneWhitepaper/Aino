@@ -50,6 +50,7 @@ const roster = [
   { name: 'alpha', connectionId: 'local' },
   { name: 'beta', connectionId: 'local' }
 ]
+
 const members = roster.map(m => ({ member_id: m.name, profile: m.name, handle: m.name }))
 const original = { room_id: 'room-original', name: 'Team', members }
 
@@ -174,6 +175,7 @@ it('fails closed with a retry when the room lookup fails: retry, never mint', as
       fireEvent.click(start)
     })
   }
+
   expect(methods()).not.toContain('groups.create')
 
   fail = false
@@ -282,10 +284,13 @@ it('a name resolved on one connection does not open that room from another conne
 
 it('a late lookup from a superseded connection does not publish its room', async () => {
   let releaseA: (value: unknown) => void = () => undefined
+
   const pendingA = new Promise(resolve => {
     releaseA = resolve
   })
+
   routedGateway(route => (route.connectionId === 'local' ? pendingA : { rooms: [], next_offset: null }))
+
   const view = await act(async () =>
     render(<GroupChatWorkspace group="Team" members={roster} route={{ connectionId: 'local', profile: 'default' }} />)
   )
@@ -388,10 +393,12 @@ it.each([
       rooms: [original, { ...original, room_id: savedOwner.roomId, name: roomKey }],
       next_offset: null
     }))
+
     const mixed = [
       { name: 'alpha', connectionId: 'local' },
       { name: 'default', connectionId: 'remote', remoteSource: true }
     ]
+
     const view = await act(async () => render(<GroupChatWorkspace group={group} members={mixed} origin={origin} />))
     expect(request.mock.calls.find(call => call[1] === 'groups.list')?.[0]).toMatchObject({
       connectionId: expected.connectionId,

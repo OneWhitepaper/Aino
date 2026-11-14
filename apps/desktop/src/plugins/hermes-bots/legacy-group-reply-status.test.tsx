@@ -41,6 +41,7 @@ it('keeps a member question honest and removes the progress controls after settl
   const { rerender } = render(
     <LegacyGroupReplyStatus activity={activity} allMeta={meta} onStop={vi.fn()} room={room} waitingForAnswer />
   )
+
   expect(screen.getByRole('status').textContent).not.toContain('Replying')
   rerender(
     <LegacyGroupReplyStatus

@@ -57,6 +57,7 @@ it('keeps the configured model when the bounded backend probe returns its fallba
     value => ({ value }),
     error => ({ error })
   )
+
   await vi.advanceTimersByTimeAsync(5_100)
   await expect(result).resolves.toEqual({ value: assignment })
 })

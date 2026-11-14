@@ -6,6 +6,7 @@ const doubles = vi.hoisted(() => ({
   request: vi.fn(),
   capture: undefined as ReturnType<typeof captureGroupRequests> | undefined
 }))
+
 vi.mock('@hermes/plugin-sdk', async () => {
   const { captureGroupRequests } = await import('./canonical-group-contract-test-utils')
   doubles.capture = captureGroupRequests(doubles.request)
@@ -111,6 +112,7 @@ it('checks each request against the standalone server too', () => {
     method: 'groups.retry',
     params: { room_id: 'room', member_id: 'alice', task_id: 'task', execution_generation: 7, profile: 'team' }
   }
+
   expect(standaloneGroupProblems(retry)).toEqual([])
   expect(standaloneGroupProblems({ method: 'groups.state', params: { room_id: 'room', undeclared: true } })).toEqual([
     'groups.state.undeclared'

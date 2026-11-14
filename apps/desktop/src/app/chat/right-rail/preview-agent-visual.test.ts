@@ -82,7 +82,8 @@ describe('browser action confirmation boundaries', () => {
       document.body.innerHTML = '<span id="action">Preview</span><div id="host"></div>'
       const host = document.getElementById('host')!
       const root = shadow ? host.attachShadow({ mode: 'open' }) : document.body
-      root.innerHTML = '<span id="object">record</span><span id="action">Delete</span>' +
+      root.innerHTML =
+        '<span id="object">record</span><span id="action">Delete</span>' +
         '<button id="target" type="button" aria-labelledby="action object"><svg /></button>'
       const action = { kind: 'click', selector: '#target' }
       const target = await inspectPreviewAction(async script => new Function(`return ${script}`)(), action)

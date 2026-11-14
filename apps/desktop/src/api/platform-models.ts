@@ -49,6 +49,7 @@ const SAFE_PLATFORM_BINDING_DIAGNOSTIC_CODES = new Set([
 function bindingDiagnosticCode(error: unknown): string {
   const record =
     error && typeof error === 'object' ? (error as { code?: unknown; data?: unknown; message?: unknown }) : {}
+
   const data = record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : {}
   const nested = data.error && typeof data.error === 'object' ? (data.error as Record<string, unknown>) : {}
   const candidates = [record.code, data.reason, data.code, nested.reason, nested.code, record.message]

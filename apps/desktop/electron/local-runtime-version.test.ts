@@ -78,9 +78,11 @@ describe('local client version source', (): void => {
 
         for (const _call of ['first', 'cached']) {
           let timerFired = false
+
           const timer = setTimeout(() => {
             timerFired = true
           }, 10)
+
           const startedAt: number = Date.now()
           const pending: Promise<string> = resolveLocalRuntimeVersion(root, home, { isWindows: false })
 

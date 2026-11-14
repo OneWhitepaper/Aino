@@ -15,7 +15,10 @@
 
 import type { PreviewOwner } from '@/store/preview-ownership'
 
-import type { PreviewBrowserInteractionRequest, PreviewBrowserInteractionResult } from '../../../../shared/preview-browser-interactions'
+import type {
+  PreviewBrowserInteractionRequest,
+  PreviewBrowserInteractionResult
+} from '../../../../shared/preview-browser-interactions'
 
 import { activePreviewTabFor } from './preview-active-tab'
 import type { PreviewApproval } from './preview-approval'
@@ -27,8 +30,10 @@ export interface PreviewScriptRunner {
   capture?: (signal?: AbortSignal) => Promise<string>
   /** Keep the same guest awake between a driven action's script/input trips. */
   withActivity?: <T>(operation: () => Promise<T>, signal?: AbortSignal) => Promise<T>
-  nativeAction?: (request: Omit<PreviewBrowserInteractionRequest, 'scope'>,
-    signal?: AbortSignal) => Promise<PreviewBrowserInteractionResult>
+  nativeAction?: (
+    request: Omit<PreviewBrowserInteractionRequest, 'scope'>,
+    signal?: AbortSignal
+  ) => Promise<PreviewBrowserInteractionResult>
   setNativeAuthority?: (owner?: PreviewOwner) => void
   beginApproval?: (signal?: AbortSignal) => Promise<PreviewApproval>
 }

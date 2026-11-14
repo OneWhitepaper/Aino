@@ -7,8 +7,14 @@ import { isSessionStripPane } from '../store'
 const TAB_STRIP_HEIGHT = 28
 
 /** App-owned secondary headers share one CSS band at every window scale. */
-export function panelHeaderHeight(titlebarHeight: number, stripHeight: number | string, belowControls: boolean): number | string {
-  if (!belowControls) { return titlebarHeight }
+export function panelHeaderHeight(
+  titlebarHeight: number,
+  stripHeight: number | string,
+  belowControls: boolean
+): number | string {
+  if (!belowControls) {
+    return titlebarHeight
+  }
 
   return typeof stripHeight === 'number' ? titlebarHeight + stripHeight : `calc(${titlebarHeight}px + ${stripHeight})`
 }

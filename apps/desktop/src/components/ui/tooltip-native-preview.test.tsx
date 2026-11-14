@@ -15,12 +15,13 @@ async function hoverGlyph(browserToolbar: boolean) {
       return new DOMRect(280, 90, 600, 600)
     }
 
-    return this.tagName === 'BUTTON'
-      ? new DOMRect(300, 100, 24, 24)
-      : new DOMRect(0, 0, 1024, 768)
+    return this.tagName === 'BUTTON' ? new DOMRect(300, 100, 24, 24) : new DOMRect(0, 0, 1024, 768)
   })
 
-  for (const [name, size] of [['clientWidth', 1024], ['clientHeight', 768]] as const) {
+  for (const [name, size] of [
+    ['clientWidth', 1024],
+    ['clientHeight', 768]
+  ] as const) {
     vi.spyOn(Element.prototype, name, 'get').mockReturnValue(size)
   }
 
@@ -29,7 +30,9 @@ async function hoverGlyph(browserToolbar: boolean) {
       <div data-tree-group="browser">
         <div data-preview-toolbar={browserToolbar ? '' : undefined}>
           <PaneStripGlyph icon={<span />} label="Annotate page" onSelect={() => {}} />
-          <Tip label="Saved logins" placement="toolbar"><button>Vault</button></Tip>
+          <Tip label="Saved logins" placement="toolbar">
+            <button>Vault</button>
+          </Tip>
         </div>
       </div>
     </RootTooltipProvider>

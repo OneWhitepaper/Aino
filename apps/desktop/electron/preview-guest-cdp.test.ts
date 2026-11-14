@@ -22,7 +22,9 @@ class Contents extends EventEmitter {
       this.debugger.emit('detach')
     }),
     sendCommand: vi.fn(async (method: string, _params?: unknown, _sessionId?: string): Promise<any> => {
-      if (method === 'Target.attachToTarget') {return { sessionId: 'shared-child' }}
+      if (method === 'Target.attachToTarget') {
+        return { sessionId: 'shared-child' }
+      }
 
       return {}
     })

@@ -60,6 +60,7 @@ it('applies a conversation selection on its existing session before binding and 
     if (method === 'config.get') {
       return { value: null }
     }
+
     throw new Error(`Unexpected ${method}`)
   })
 
@@ -103,6 +104,7 @@ it('refuses a saved selection from another account without changing or binding t
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: desktop })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   await platformModelCatalog().load()
+
   const request = vi.fn(async () => ({
     selection: {
       model_id: 'deepseek',
@@ -110,6 +112,7 @@ it('refuses a saved selection from another account without changing or binding t
       owner: { user_id: 'user-b', platform_origin: 'https://aino.test' }
     }
   }))
+
   await expect(
     preparePlatformSessionRequest('bot', 'session.summary', { session_id: 'live' }, request as never)
   ).rejects.toMatchObject({ code: 'platform_account_changed' })
@@ -121,6 +124,7 @@ it('retries the accepted target after a binding failure without repeating a comm
   const account = platformSnapshot()
   const owner = { user_id: 'user-a', platform_origin: 'https://aino.test' }
   let committed = false
+
   const bind = vi
     .fn()
     .mockResolvedValueOnce({ ok: false, error: { code: 'gateway_binding_failed' } })
@@ -158,6 +162,7 @@ it('retries the accepted target after a binding failure without repeating a comm
     if (method === 'session.managed_model_ticket') {
       return { managed_model_binding: 1, session_ticket: 'ticket' }
     }
+
     throw new Error(`Unexpected ${method}`)
   })
 

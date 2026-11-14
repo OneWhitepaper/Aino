@@ -68,6 +68,7 @@ beforeEach(() => {
     if (method === 'groups.capabilities') {
       return { driver: true, persistent_process: true, seatable_profiles: ['alpha', 'beta'] }
     }
+
     throw new Error(`Unexpected RPC: ${method}`)
   })
   Element.prototype.scrollIntoView = vi.fn()
@@ -81,6 +82,7 @@ afterEach(() => {
 
 it('Manage members offers the seatable rows plus the current members, never a route-disagreeing row', async () => {
   $lastRoster.set([alpha, beta, remote('scout'), spoofed])
+
   const { baseElement } = render(
     <GroupMemberPicker group="Core" members={[alpha, remote('scout')]} onClose={vi.fn()} open />
   )
@@ -101,6 +103,7 @@ it('Manage members offers the seatable rows plus the current members, never a ro
 it('Manage members will not uncheck a member whose machine is offline, and says why', async () => {
   const homelab: RosterRow = { ...remote('scout'), connectionLabel: 'Homelab', sourceReachable: false }
   $lastRoster.set([alpha, beta, homelab])
+
   const { baseElement } = render(
     <GroupMemberPicker group="Core" members={[alpha, beta, homelab]} onClose={vi.fn()} open />
   )
@@ -170,6 +173,7 @@ it('New Group Chat is disabled, with the reason, when every seatable bot is on o
     remote('scout'),
     remote('scribe')
   ])
+
   const note = botsText().crossGateway.selectionElsewhere('Other box')
 
   const item = await screen.findByRole('menuitem', { name: new RegExp(botsText().group.newTitle) })

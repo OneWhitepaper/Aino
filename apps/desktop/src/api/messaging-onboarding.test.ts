@@ -32,8 +32,12 @@ it('keeps QR cleanup and activation on the original owner after switching connec
 
 it('requests guarded activation when saving instead of rebuilding busy secondary profiles', async () => {
   await updateMessagingPlatform('qqbot', { enabled: false }, 'worker')
-  expect(api).toHaveBeenCalledWith(expect.objectContaining({
-    body: { enabled: false, apply_live: true }, profile: 'worker',
-    path: '/api/messaging/platforms/qqbot', method: 'PUT'
-  }))
+  expect(api).toHaveBeenCalledWith(
+    expect.objectContaining({
+      body: { enabled: false, apply_live: true },
+      profile: 'worker',
+      path: '/api/messaging/platforms/qqbot',
+      method: 'PUT'
+    })
+  )
 })

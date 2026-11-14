@@ -187,6 +187,7 @@ it('drops a status read that resolves after the view switched sessions, without 
 
   let focused = 'b'
   let reply!: (value: unknown) => void
+
   const gw = {
     isCanonical: true,
     request: vi.fn(

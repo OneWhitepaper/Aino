@@ -31,6 +31,7 @@ export function useCanonicalGroupSendRecovery(props: RecoveryProps) {
     if (!pending || blocked || snapshot || capturePending.current || !isCurrent()) {
       return
     }
+
     capturePending.current = true
     setCapturing(true)
 

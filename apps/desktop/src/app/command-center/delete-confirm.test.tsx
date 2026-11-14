@@ -99,6 +99,7 @@ describe('Command Center session delete confirmation (#99410)', () => {
       .fn()
       .mockRejectedValueOnce(new Error('Storage is read only'))
       .mockResolvedValue(undefined)
+
     renderCommandCenter(onDeleteSession)
     fireEvent.click(await screen.findByRole('button', { name: 'Delete session' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))

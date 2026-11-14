@@ -18,6 +18,7 @@ import type { RosterRow } from './types'
 
 const localDefault = { name: 'default' } as RosterRow
 const scribe = { name: 'scribe' } as RosterRow
+
 const homelabDefault = {
   name: 'default',
   connectionId: 'homelab',
@@ -25,6 +26,7 @@ const homelabDefault = {
   remoteSource: true,
   sourceScoped: true
 } as RosterRow
+
 const remoteLine = { from: { kind: 'member' as const, name: 'default', source: 'Homelab' } }
 const localLine = { from: { kind: 'member' as const, name: 'default' } }
 

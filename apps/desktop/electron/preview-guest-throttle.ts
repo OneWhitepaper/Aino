@@ -172,7 +172,10 @@ export function beginPreviewGuestActivity(
 
     const discard = () => {
       for (const id of group) {
-        void leases.get(id)?.approval?.release().catch(error => console.warn('Could not restore browser approval overlay', error))
+        void leases
+          .get(id)
+          ?.approval?.release()
+          .catch(error => console.warn('Could not restore browser approval overlay', error))
         leases.get(id)?.cancelled.abort(new Error('Preview guest is unavailable'))
         leases.delete(id)
       }
@@ -236,8 +239,13 @@ function approvalLease(owner: WebContents, token: number) {
 export async function armPreviewGuestApproval(owner: WebContents, token: number): Promise<void> {
   const lease = approvalLease(owner, token)
 
-  if (lease.approval) {throw new Error('Browser approval is already armed')}
-  if (lease.approvalPending) {throw new Error('Browser approval is already being prepared')}
+  if (lease.approval) {
+    throw new Error('Browser approval is already armed')
+  }
+
+  if (lease.approvalPending) {
+    throw new Error('Browser approval is already being prepared')
+  }
   lease.approvalPending = true
   let approval: Awaited<ReturnType<typeof createPreviewApproval>>
 
@@ -258,15 +266,23 @@ export async function armPreviewGuestApproval(owner: WebContents, token: number)
 export async function validatePreviewGuestApproval(owner: WebContents, token: number): Promise<void> {
   const lease = approvalLease(owner, token)
 
-  if (!lease.approval) {throw new Error('Browser approval observation is unavailable')}
+  if (!lease.approval) {
+    throw new Error('Browser approval observation is unavailable')
+  }
   await lease.approval.validate()
   approvalLease(owner, token)
 }
 
-export async function sendPreviewGuestApprovedInput(owner: WebContents, token: number, input: Electron.MouseInputEvent | Electron.KeyboardInputEvent | Electron.MouseWheelInputEvent): Promise<void> {
+export async function sendPreviewGuestApprovedInput(
+  owner: WebContents,
+  token: number,
+  input: Electron.MouseInputEvent | Electron.KeyboardInputEvent | Electron.MouseWheelInputEvent
+): Promise<void> {
   const lease = approvalLease(owner, token)
 
-  if (!lease.approval) {throw new Error('Browser approval observation is unavailable')}
+  if (!lease.approval) {
+    throw new Error('Browser approval observation is unavailable')
+  }
   await lease.approval.send(input)
 }
 

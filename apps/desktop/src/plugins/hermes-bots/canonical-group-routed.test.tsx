@@ -102,6 +102,7 @@ const ev = (
 
 const userMsg = (seq: number, thread = T) =>
   ev(seq, 'message.user', { text: 'hi', thread_id: thread }, { kind: 'user', id: 'desktop' })
+
 const memberMsg = (seq: number, discussion = D) =>
   ev(
     seq,
@@ -109,10 +110,13 @@ const memberMsg = (seq: number, discussion = D) =>
     { text: `reply ${seq}`, discussion_event_id: discussion, thread_id: T },
     { kind: 'member', id: 'm-ada' }
   )
+
 const bounded = (seq: number) =>
   ev(seq, 'room.activity', { status: 'bounded', reason_code: 'max_messages', thread_id: T, discussion_event_id: D })
+
 const continued = (seq: number, grant = 1) =>
   ev(seq, 'room.continued', { discussion_event_id: D, thread_id: T, grant }, { kind: 'gateway' })
+
 const pausedLog = [userMsg(1), memberMsg(2), memberMsg(3), memberMsg(4, 'other'), bounded(5)]
 
 const renderHistory = (events: CanonicalGroupEvent[], pause?: Record<string, unknown>) =>
@@ -146,6 +150,7 @@ it('says everyone was assigned, and says plainly when the router fell back to ev
       members={members}
     />
   )
+
   expect(screen.getByTestId('room-routed').textContent).toBe('Assigned to everyone')
   rerender(
     <CanonicalGroupRoutedRow
@@ -247,6 +252,7 @@ it("an unrelated thread's user message does not retire the pause", () => {
 it('reads every pause of a long log in one pass with the same answers per row', () => {
   const other = (seq: number) =>
     ev(seq, 'room.activity', { status: 'bounded', thread_id: 'thread-2', discussion_event_id: 'evt-2' })
+
   const log = [
     ...pausedLog,
     continued(6),
@@ -258,6 +264,7 @@ it('reads every pause of a long log in one pass with the same answers per row', 
     continued(12, 2),
     bounded(13)
   ]
+
   const reads = new Map(pausedDiscussions(log, 5))
   expect([...reads.entries()]).toEqual([
     [5, { count: 2, actionable: false }],

@@ -125,6 +125,7 @@ describe('positional right-side toggle', () => {
 
   it.each([false, true])('reports and restores a hidden nested Files tool group (flipped: %s)', flipped => {
     $panesFlipped.set(flipped)
+
     const workspace = split('column', [
       group(['workspace']),
       group(['files', 'terminal'], { id: 'tools', toolPanel: true })

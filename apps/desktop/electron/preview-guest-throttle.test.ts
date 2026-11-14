@@ -164,11 +164,13 @@ describe('preview script activity', () => {
       guest.isLoadingMainFrame.mockReturnValue(true)
       const pending = executePreviewGuestScript(owner, beginPreviewGuestActivity(owner, guest, hold), 'queued')
       const rejected = expect(pending).rejects.toThrow('unavailable')
+
       if (reason === 'detached') {
         setNativePreviewOwner(guest, null)
       } else {
         unregister()
       }
+
       await rejected
       guest.emit('did-stop-loading')
       expect(guest.executeJavaScript).not.toHaveBeenCalled()

@@ -83,7 +83,9 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
     mutating = true
 
     try {
-      if (inspection) { await inspection.promise }
+      if (inspection) {
+        await inspection.promise
+      }
       assertCurrent(scope)
       const result: LegacyHistoryResult = { imported: 0, skipped: 0, conflicts: 0, profiles: 0 }
       const backedUp = new Set<string>()
@@ -182,15 +184,23 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
 
       const key = JSON.stringify(scope.owner)
 
-      if (inspection?.key === key) { return inspection.promise }
+      if (inspection?.key === key) {
+        return inspection.promise
+      }
       const previous = inspection?.promise
 
       const pending = (async () => {
         // Credential readiness can advance the same account's revision while a scan is in flight.
-        if (previous) { await previous.catch(() => undefined) }
+        if (previous) {
+          await previous.catch(() => undefined)
+        }
 
         return helper(scope, 'inspect')
-      })().finally(() => { if (inspection?.promise === pending) { inspection = null } })
+      })().finally(() => {
+        if (inspection?.promise === pending) {
+          inspection = null
+        }
+      })
 
       inspection = { key, promise: pending }
 
@@ -200,17 +210,25 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
     async remind(input: LegacyHistoryReminderInput): Promise<LegacyHistoryReminderResult> {
       const scope = capture(input.expectedOwner)
 
-      if (mutating) { throw new Error('history_recovery_busy') }
+      if (mutating) {
+        throw new Error('history_recovery_busy')
+      }
+
       if (typeof input.planId !== 'string' || !input.planId || !['later', 'ignore'].includes(input.choice)) {
         throw new Error('invalid_platform_input')
       }
 
       mutating = true
+
       try {
-        if (inspection) { await inspection.promise }
+        if (inspection) {
+          await inspection.promise
+        }
 
         return await helper(scope, 'remind', { plan_id: input.planId, choice: input.choice })
-      } finally { mutating = false }
+      } finally {
+        mutating = false
+      }
     }
   }
 }

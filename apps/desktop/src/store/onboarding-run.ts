@@ -289,6 +289,7 @@ async function readAndStart(
       params,
       NO_DEADLINE
     )
+
     disarm()
 
     const managedEligible =

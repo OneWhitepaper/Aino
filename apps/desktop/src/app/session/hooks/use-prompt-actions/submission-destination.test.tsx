@@ -149,6 +149,7 @@ describe('submission intent destinations', () => {
   it('retains exact canonical image parameters and identity through ambiguous submit and remount', async () => {
     const { deps, requestGateway } = setup()
     $connection.set({ connectionId: 'local', wsUrl: 'ws://localhost/ws?native_dial=1' } as never)
+
     const image = {
       id: 'image-retry',
       kind: 'image' as const,
@@ -156,6 +157,7 @@ describe('submission intent destinations', () => {
       path: '/owner/cache/images/exact.png',
       mime: 'image/png'
     }
+
     deps.syncAttachmentsForSubmit.mockResolvedValue({ sessionId: 'runtime-a', attachments: [image] } as never)
     requestGateway.mockRejectedValueOnce(new Error('connection closed'))
     let hook = renderHook(() => useSubmitPrompt(deps))
@@ -393,6 +395,7 @@ describe('submission intent destinations', () => {
         if (mode === 'lost-legacy') {
           expect(attempts).toHaveLength(2)
         }
+
         const identified = attempts.filter(call => call[1]?.submission_id)
         expect(new Set(identified.map(call => call[1]?.submission_id)).size).toBe(1)
         expect(attempts.filter(call => !call[1]?.submission_id)).toHaveLength(mode === 'lost-legacy' ? 1 : 0)

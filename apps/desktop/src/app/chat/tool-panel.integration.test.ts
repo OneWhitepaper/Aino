@@ -63,7 +63,9 @@ describe('unified tool panel', () => {
     const id = preview.$previewTabs.get()[0]!.id
     preview.setPreviewTabPinned(id, true)
     tree.setTreeGroupMinimized('tools', true)
-    preview.$previewTabs.set(preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Updated label' } })))
+    preview.$previewTabs.set(
+      preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Updated label' } }))
+    )
     expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBe(true)
     session.$selectedStoredSessionId.set(null)
     expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.minimized).toBe(true)
@@ -128,7 +130,9 @@ describe('unified tool panel', () => {
     })
     preview.openPreview(fileTarget)
     tree.restoreTreePane('terminal')
-    preview.$previewTabs.set(preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Saved' } })))
+    preview.$previewTabs.set(
+      preview.$previewTabs.get().map(tab => ({ ...tab, target: { ...tab.target, label: 'Saved' } }))
+    )
     expect(model.findGroup(tree.$layoutTree.get()!, 'tools')?.active).toBe('terminal')
     const id = preview.$previewTabs.get()[0]!.id
     preview.openPreview(fileTarget)

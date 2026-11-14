@@ -113,6 +113,7 @@ export function groupHeaderPresentation({
     })
 
   const singleSessionHeader = hideSessionTabStrip
+
   // Workspace ownership survives conversation scoping: bots and groups hide
   // the ordinary workspace tab, but still occupy its primary window zone.
   const titleInWindowBar =

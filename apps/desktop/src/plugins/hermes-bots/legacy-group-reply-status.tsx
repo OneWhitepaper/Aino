@@ -28,12 +28,15 @@ export function LegacyGroupReplyStatus({
   if (!room.running) {
     return null
   }
+
   const thread = activity.at(-1)?.thread
   const current = activity.filter(event => event.thread === thread)
   const latestByMember = new Map(current.filter(event => event.member).map(event => [event.member, event]))
   const queued = [...latestByMember.values()].filter(event => event.kind === 'queued').length
+
   const replied = new Set(current.filter(event => event.kind === 'replied').map(event => `${event.member}:${event.at}`))
     .size
+
   const member = room.turn
   const appearance = member ? botAppearance(member.name, botRosterMeta(member, allMeta)) : undefined
 

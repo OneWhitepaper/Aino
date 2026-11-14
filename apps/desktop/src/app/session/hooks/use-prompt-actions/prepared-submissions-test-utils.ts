@@ -54,6 +54,7 @@ export function storageView(shared: Map<string, string>) {
         shared.set(key, value)
       }
     }
+
     written.clear()
   }
 

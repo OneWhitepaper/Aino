@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 const streamdown = vi.hoisted(() =>
   vi.fn(({ children }: { children: ReactNode }) => <div data-testid="streamdown">{children}</div>)
 )
+
 vi.mock('@hermes/plugin-sdk', async () => ({
   ...(await (await import('./group-test-utils')).pluginSdkMock({})),
   Button: () => null,

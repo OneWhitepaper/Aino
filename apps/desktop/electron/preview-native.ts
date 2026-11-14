@@ -250,7 +250,12 @@ class NativePreviewService {
       return
     }
 
-    page.owner.send(PREFIX + 'event', { ...detail, token: page.token, type, snapshot: snapshot(page) } satisfies NativePreviewEvent)
+    page.owner.send(PREFIX + 'event', {
+      ...detail,
+      token: page.token,
+      type,
+      snapshot: snapshot(page)
+    } satisfies NativePreviewEvent)
   }
 
   private listen(page: NativePage, emitter: EventEmitter, type: string, handler: (...args: any[]) => void): () => void {
@@ -291,7 +296,9 @@ class NativePreviewService {
       this.emit(page, 'did-stop-loading')
       void page.zoom.refresh()
     })
-    this.listen(page, guest, 'did-finish-load', () => {void page.zoom.refresh()})
+    this.listen(page, guest, 'did-finish-load', () => {
+      void page.zoom.refresh()
+    })
     this.listen(page, guest, 'page-title-updated', (_event, title) => this.emit(page, 'page-title-updated', { title }))
     this.listen(page, guest, 'did-start-navigation', (event, url, isInPlace, isMainFrame) => {
       const detail = {
@@ -316,14 +323,21 @@ class NativePreviewService {
     this.listen(page, guest, 'did-navigate-in-page', (_event, url, isMainFrame) => {
       this.emit(page, 'did-navigate-in-page', { url, isMainFrame })
 
-      if (isMainFrame !== false) {page.zoom.invalidate(true); void page.zoom.refresh()}
+      if (isMainFrame !== false) {
+        page.zoom.invalidate(true)
+        void page.zoom.refresh()
+      }
     })
     this.listen(page, guest, 'did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (isMainFrame !== false && errorCode !== -3) {
         documentReady = false
         page.ready = false
         page.zoom.invalidate(true)
-        page.loadFailure = { code: errorCode, description: errorDescription || 'Page could not be loaded', url: validatedURL || guest.getURL() }
+        page.loadFailure = {
+          code: errorCode,
+          description: errorDescription || 'Page could not be loaded',
+          url: validatedURL || guest.getURL()
+        }
       }
 
       this.emit(page, 'did-fail-load', { errorCode, errorDescription, validatedURL, isMainFrame })
@@ -334,15 +348,19 @@ class NativePreviewService {
         message: event.message ?? message,
         line: event.lineNumber ?? line,
         sourceId: event.sourceId ?? sourceId
-      }))
+      })
+    )
     this.listen(page, guest, 'context-menu', (_event, params) =>
-      this.emit(page, 'context-menu', { params: guestContext(params, page.bounds) }))
+      this.emit(page, 'context-menu', { params: guestContext(params, page.bounds) })
+    )
     this.listen(page, guest, 'ipc-message', (_event, channel, ...args) => {
       if (channel === PREFIX + 'external') {
         this.external(page, args[0], args[1])
       }
     })
-    this.listen(page, guest, 'render-process-gone', (_event, details) => this.emit(page, 'render-process-gone', details))
+    this.listen(page, guest, 'render-process-gone', (_event, details) =>
+      this.emit(page, 'render-process-gone', details)
+    )
     this.listen(page, guest, 'destroyed', () => this.disposePage(page))
   }
 
@@ -451,10 +469,16 @@ class NativePreviewService {
 
   private create(sender: WebContents, request: NativePreviewMountRequest, partition: string): NativePage {
     const view = this.deps.createView(partition)
+
     const zoom = createPreviewPageZoom(view.webContents, {
       width: () => page.bounds.width,
-      canFit: () => page.ready && page.visible && Boolean(page.owner) && !view.webContents.isDestroyed() &&
-        !view.webContents.isLoadingMainFrame() && !hasPreviewGuestApproval(view.webContents),
+      canFit: () =>
+        page.ready &&
+        page.visible &&
+        Boolean(page.owner) &&
+        !view.webContents.isDestroyed() &&
+        !view.webContents.isLoadingMainFrame() &&
+        !hasPreviewGuestApproval(view.webContents),
       changed: () => this.emit(page, 'page-zoom-changed')
     })
 
@@ -486,7 +510,13 @@ class NativePreviewService {
     return page
   }
 
-  private attach(page: NativePage, owner: WebContents, window: BrowserWindow, bounds: NativePreviewBounds, visible: boolean): void {
+  private attach(
+    page: NativePage,
+    owner: WebContents,
+    window: BrowserWindow,
+    bounds: NativePreviewBounds,
+    visible: boolean
+  ): void {
     clearTimeout(page.timer)
     const previous = page.owner
     this.tokens.delete(page.token)
@@ -522,7 +552,13 @@ class NativePreviewService {
   mount(sender: WebContents, request: NativePreviewMountRequest): NativePreviewSnapshot {
     const window = this.host(sender)
 
-    if (!request || typeof request.tabId !== 'string' || !request.tabId || request.tabId.length > 512 || !isPreviewPartition(request.partition)) {
+    if (
+      !request ||
+      typeof request.tabId !== 'string' ||
+      !request.tabId ||
+      request.tabId.length > 512 ||
+      !isPreviewPartition(request.partition)
+    ) {
       throw new Error('Invalid native Browser tab or partition')
     }
 
@@ -568,14 +604,23 @@ class NativePreviewService {
         return snapshot(page)
       }
 
-      void this.deps.preparePage(sender, initial.view.webContents, initial.tabId).then(() => {
-        if (!initial.view.webContents.isDestroyed()) {return initial.view.webContents.loadURL(url)}
-      }).catch(error => {
-        if (!initial.view.webContents.isDestroyed()) {
-          initial.loadFailure = { description: String(error), url }
-          this.emit(initial, 'did-fail-load', { errorDescription: String(error), validatedURL: url, isMainFrame: true })
-        }
-      })
+      void this.deps
+        .preparePage(sender, initial.view.webContents, initial.tabId)
+        .then(() => {
+          if (!initial.view.webContents.isDestroyed()) {
+            return initial.view.webContents.loadURL(url)
+          }
+        })
+        .catch(error => {
+          if (!initial.view.webContents.isDestroyed()) {
+            initial.loadFailure = { description: String(error), url }
+            this.emit(initial, 'did-fail-load', {
+              errorDescription: String(error),
+              validatedURL: url,
+              isMainFrame: true
+            })
+          }
+        })
     }
 
     return snapshot(page)
@@ -660,39 +705,43 @@ class NativePreviewService {
     page.awaitingPopup = true
     this.armHandoff(page)
     const popupCleanup: Array<() => void> = []
-    popupCleanup.push(this.listen(page, popup, 'close', (event: Electron.Event) => {
-      if (page.owner === popup.webContents) {
-        try {
-          assertPreviewBrowserDialogResolved(page.view.webContents)
-        } catch {
-          // Preserve the blocking dialog and its exact native callback until answered.
-          event.preventDefault()
+    popupCleanup.push(
+      this.listen(page, popup, 'close', (event: Electron.Event) => {
+        if (page.owner === popup.webContents) {
+          try {
+            assertPreviewBrowserDialogResolved(page.view.webContents)
+          } catch {
+            // Preserve the blocking dialog and its exact native callback until answered.
+            event.preventDefault()
 
+            return
+          }
+
+          this.park(page)
+        }
+      })
+    )
+    popupCleanup.push(
+      this.listen(page, popup.webContents, 'destroyed', () => {
+        popupCleanup.splice(0).forEach(cleanup => cleanup())
+
+        if (page.popup !== popup && page.owner !== popup.webContents) {
           return
         }
 
-        this.park(page)
-      }
-    }))
-    popupCleanup.push(this.listen(page, popup.webContents, 'destroyed', () => {
-      popupCleanup.splice(0).forEach(cleanup => cleanup())
+        page.popup = null
+        page.awaitingPopup = false
+        clearTimeout(page.timer)
 
-      if (page.popup !== popup && page.owner !== popup.webContents) {
-        return
-      }
-
-      page.popup = null
-      page.awaitingPopup = false
-      clearTimeout(page.timer)
-
-      if (page.owner === popup.webContents || !page.owner) {
-        if (page.source && !page.source.isDestroyed()) {
-          this.park(page)
-        } else {
-          this.disposePage(page)
+        if (page.owner === popup.webContents || !page.owner) {
+          if (page.source && !page.source.isDestroyed()) {
+            this.park(page)
+          } else {
+            this.disposePage(page)
+          }
         }
-      }
-    }))
+      })
+    )
   }
 
   closeTab(sender: WebContents, tabId: string): void {

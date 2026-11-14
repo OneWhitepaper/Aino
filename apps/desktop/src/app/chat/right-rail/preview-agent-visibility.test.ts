@@ -26,7 +26,11 @@ function browser() {
   newBrowserTab()
   const tabId = $rightRailActiveTabId.get()!
   const runner: PreviewScriptRunner = async code => await new Function('return ' + code)()
-  runner.beginApproval = async () => ({ validate: async () => {}, input: { focus: () => {}, send }, release: async () => {} })
+  runner.beginApproval = async () => ({
+    validate: async () => {},
+    input: { focus: () => {}, send },
+    release: async () => {}
+  })
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
   cleanups.push(registerPreviewInput(tabId, { focus: () => {}, send }))
   cleanups.push(

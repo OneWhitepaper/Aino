@@ -207,7 +207,12 @@ describe('titlebar reservation lifecycle', () => {
     expect(reservation('left')).toBe('310px')
 
     fireEvent.click(screen.getByText('Settings'))
-    expect(globalThis.document.querySelector('[data-titlebar-cluster="left"]')).toBeNull()
+    const historyCluster = screen.getByRole('button', { name: 'Back' }).closest('[data-titlebar-cluster="left"]')
+    expect(historyCluster).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Forward' }).closest('[data-titlebar-cluster="left"]')).toBe(
+      historyCluster
+    )
+    expect(screen.queryByText('Openplanet')).toBeNull()
     expect(
       screen.getByRole('button', { name: 'Notifications and status' }).closest('[data-titlebar-cluster="right"]')
     ).not.toBeNull()

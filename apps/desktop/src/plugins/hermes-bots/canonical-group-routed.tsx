@@ -26,6 +26,7 @@ export function CanonicalGroupRoutedRow({
   const labels = useCanonicalGroupLabels()
   const roster = new Map(members.map(member => [member.member_id, member]))
   const payload = event.payload as { member_ids?: unknown; everyone?: boolean; fallback?: boolean }
+
   const ids = Array.isArray(payload.member_ids)
     ? payload.member_ids.filter((id): id is string => typeof id === 'string')
     : []
@@ -156,11 +157,13 @@ export function pausedDiscussions(
   // A Stop, or a newer user message in its thread, after the discussion's own message fences it for
   // good, even one older than the cap notice (the gateway refuses that Continue).
   const lastStop = ordered.reduce((seq, event) => (event.kind === 'room.stop_requested' ? event.seq : seq), 0)
+
   const sourceSeq = new Map(
     ordered.flatMap(event =>
       event.kind === 'message.user' && event.event_id ? [[event.event_id, event.seq] as const] : []
     )
   )
+
   const lastUserInThread = new Map(
     ordered.flatMap(event =>
       event.kind === 'message.user' && typeof event.payload.thread_id === 'string'
@@ -168,6 +171,7 @@ export function pausedDiscussions(
         : []
     )
   )
+
   const result = new Map<number, CanonicalPausedDiscussion>()
 
   for (const event of ordered) {

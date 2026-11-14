@@ -15,7 +15,11 @@ import { isBrowserWindow, windowBrowserTabId } from '@/store/windows'
 
 import { activePreviewTabFor } from './preview-active-tab'
 import { previewControlEpoch } from './preview-agent-control'
-import { type ActivePreviewScriptRunner, isSamePreviewDocument, isSamePreviewNativeRunner } from './preview-script-runner'
+import {
+  type ActivePreviewScriptRunner,
+  isSamePreviewDocument,
+  isSamePreviewNativeRunner
+} from './preview-script-runner'
 
 export interface PreviewPageState {
   url: string
@@ -68,7 +72,12 @@ export function assertPreviewVisible(tabId: string): void {
 }
 
 /** Switching away permanently retires this operation, even after switching back. */
-export function bindPreviewTarget(binding: ActivePreviewScriptRunner, owner?: PreviewOwner, requireVisible = false, nativeOnly = false) {
+export function bindPreviewTarget(
+  binding: ActivePreviewScriptRunner,
+  owner?: PreviewOwner,
+  requireVisible = false,
+  nativeOnly = false
+) {
   let changed = false
   let hidden = false
 

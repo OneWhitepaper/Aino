@@ -302,7 +302,8 @@ function restoreDockedBrowserTab(tabId: string): void {
   markBrowserTabPopped(tabId, false)
 
   if (
-    wasPopped && tab?.target.kind === 'url' &&
+    wasPopped &&
+    tab?.target.kind === 'url' &&
     currentSessionId(tab.sessionId) === currentSessionId($focusedStoredSessionId.get()) &&
     $visiblePreviewTabs.get().some(item => item.id === tabId)
   ) {

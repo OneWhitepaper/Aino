@@ -51,6 +51,7 @@ function replySource(ordered: CanonicalGroupEvent[]): CanonicalGroupEvent | unde
   if (latest && (!latest.event_id || !latest.payload.thread_id)) {
     return undefined
   }
+
   const source = pending.size ? [...pending.values()][0] : latest
 
   if (!source?.event_id || !source.payload.thread_id) {
@@ -71,12 +72,14 @@ function completedRepliesForSource(ordered: CanonicalGroupEvent[], source: Canon
   const messages = new Map(
     related.filter(event => event.kind === 'message.member' && event.event_id).map(event => [event.event_id, event])
   )
+
   const replies = new Set<string>()
 
   for (const event of related) {
     if (event.kind !== 'turn.settled' || event.payload.passed !== false) {
       continue
     }
+
     const message = messages.get(event.payload.message_event_id)
 
     if (

@@ -185,7 +185,10 @@ export function endSashDrag() {
 const sashDragging = () => sashDragDepth > 0
 
 function publishWorkspaceEdges(target: HTMLElement, left: number, right: number): void {
-  for (const [name, value] of [['--workspace-left', left], ['--workspace-right', right]] as const) {
+  for (const [name, value] of [
+    ['--workspace-left', left],
+    ['--workspace-right', right]
+  ] as const) {
     const px = `${value}px`
 
     if (target.style.getPropertyValue(name) !== px) {

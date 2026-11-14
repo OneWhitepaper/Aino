@@ -148,6 +148,7 @@ describe('platform account IPC', () => {
       if (change === 'mode') {
         f.snapshot.mode = 'production'
       }
+
       // The renderer has not received the new native snapshot yet.
       await expect(f.invoke('logout', expected)).rejects.toMatchObject({ code: 'platform_account_changed' })
       expect(f.auth.logout).not.toHaveBeenCalled()

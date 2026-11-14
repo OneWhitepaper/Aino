@@ -24,6 +24,7 @@ beforeEach(() => {
   for (const directory of [accountA, accountB, folderA, folderB]) {
     fs.mkdirSync(directory, { recursive: true })
   }
+
   fs.writeFileSync(path.join(folderA, 'note.txt'), 'Account A private note')
   fs.writeFileSync(path.join(folderB, 'note.txt'), 'Account B private note')
   active = accountA
@@ -99,11 +100,13 @@ test('a queued grant mutation stays with its original account after the active d
   active = accountA
   expect(await files.grants('notebook')).toEqual([])
   expect(await files.grants('sketchbook')).toEqual([(grantedA as { folder: PluginFolderGrant }).folder])
+
   const fresh = createPluginFiles({
     userDataDir: () => active,
     protectedRoots: () => [],
     trashItem: async () => undefined
   })
+
   expect(await fresh.grants('notebook')).toEqual([])
   active = accountB
   expect(await fresh.grants('notebook')).toEqual([b])

@@ -8,10 +8,14 @@ export function registerPreviewBrowserInteractionsIpc(): void {
   ipcMain.handle(
     'hermes:preview-browser-interaction',
     (event, id: unknown, request: PreviewBrowserInteractionRequest) => {
-      if (!Number.isSafeInteger(id)) {throw new Error('Invalid Browser page')}
+      if (!Number.isSafeInteger(id)) {
+        throw new Error('Invalid Browser page')
+      }
       const guest = webContents.fromId(id as number)
 
-      if (!guest) {throw new Error('Browser page is no longer available')}
+      if (!guest) {
+        throw new Error('Browser page is no longer available')
+      }
 
       return runPreviewBrowserInteraction(event.sender, guest, request)
     }

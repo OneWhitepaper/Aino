@@ -8,6 +8,7 @@ function applyReceipt(state: ClientSessionState, update: PendingReplyBilling): C
   if (index < 0) {
     return undefined
   }
+
   const message = state.messages[index]
   const current = message.turnMetrics!.billing!
 
@@ -56,6 +57,7 @@ export function receiveReplyBilling(
   if (applied) {
     return applied
   }
+
   const previous = state.pendingReplyBilling?.[billing.turn_id]
 
   if (
@@ -89,6 +91,7 @@ export function flushReplyBilling(state: ClientSessionState): ClientSessionState
     if (!applied) {
       continue
     }
+
     const pending = { ...applied.pendingReplyBilling }
     delete pending[turn]
     next = { ...applied, pendingReplyBilling: pending }

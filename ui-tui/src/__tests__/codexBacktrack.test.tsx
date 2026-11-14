@@ -180,6 +180,7 @@ describe('composer hint', () => {
 
 function slashHarness(messages: unknown[] = rows) {
   const gw = gateway(messages)
+
   const composer = {
     appendPaste: vi.fn(async () => {}),
     appendText: vi.fn(),
@@ -188,6 +189,7 @@ function slashHarness(messages: unknown[] = rows) {
     enqueue: vi.fn(),
     setInput: vi.fn()
   }
+
   const send = vi.fn()
   const sys = vi.fn()
 
@@ -422,11 +424,13 @@ describe('RewindBrowse keys', () => {
       onPaste: vi.fn(),
       onType: vi.fn()
     }
+
     const manyTargets = Array.from({ length: 12 }, (_, i) => ({
       rowId: 100 + 2 * i,
       text: `PROMPT ${i + 1}`,
       turn: i + 1
     }))
+
     const stdin = new FakeInput()
     const stdout = Object.assign(new PassThrough(), { columns: 100, isTTY: false, rows: 24 })
     let screen = ''
@@ -622,11 +626,13 @@ describe('native pager paging', () => {
       onPaste: vi.fn(),
       onType: vi.fn()
     }
+
     const manyTargets = Array.from({ length: 30 }, (_, i) => ({
       rowId: 100 + 2 * i,
       text: `PROMPT ${i + 1}`,
       turn: i + 1
     }))
+
     const stdin = new FakeInput()
     const stdout = Object.assign(new PassThrough(), { columns: 100, isTTY: false, rows: 24 })
     const frames: string[] = []
