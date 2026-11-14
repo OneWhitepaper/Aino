@@ -71,6 +71,12 @@ export async function inspectPreviewAction(
       var control = el.closest('button,input,select,textarea,a[href],label,[role="button"],[role="link"]');
       if (control) el = control.tagName === 'LABEL' && control.control ? control.control : control;
     }
+    if (el && el.ownerDocument.defaultView) {
+      // Hidden native guests can defer hover styles past input/capture receipts.
+      // Resolve the actual target's computed style and geometry before naming it.
+      void el.ownerDocument.defaultView.getComputedStyle(el).opacity;
+      el.getBoundingClientRect();
+    }
     var form = el ? (el.form || (el.closest ? el.closest('form') : null)) : null;
     var naming = (${namingKit.toString()})(el ? el.ownerDocument : document);
     // A button value is its caption; a data-entry value is not its approval label.

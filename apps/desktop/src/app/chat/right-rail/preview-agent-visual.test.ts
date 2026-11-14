@@ -77,6 +77,45 @@ describe('browser action confirmation boundaries', () => {
     expect(sensitivePreviewAction(action, target)).toBe(true)
   })
 
+  it('reads the target after resolving its pending computed hover style and layout', async () => {
+    document.body.innerHTML = '<button id="target" type="button">Delete old record</button>'
+    const button = document.getElementById('target')!
+    const hitTest = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => button })
+    const computed = window.getComputedStyle.bind(window)
+
+    const styleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation(element => {
+      const style = computed(element)
+
+      return new Proxy(style, {
+        get(target, key) {
+          if (element === button && key === 'opacity') {
+            button.textContent = 'Delete current record'
+          }
+
+          return Reflect.get(target, key)
+        }
+      })
+    })
+
+    try {
+      const target = await inspectPreviewAction(
+        async script => new Function(`return ${script}`)(),
+        { kind: 'click' },
+        { x: 20, y: 20 }
+      )
+      expect(target.label).toBe('Delete current record')
+    } finally {
+      styleSpy.mockRestore()
+
+      if (hitTest) {
+        Object.defineProperty(document, 'elementFromPoint', hitTest)
+      } else {
+        delete (document as unknown as Record<string, unknown>).elementFromPoint
+      }
+    }
+  })
+
   it('joins aria-labelledby IDs in order within the target document or shadow root', async () => {
     for (const shadow of [false, true]) {
       document.body.innerHTML = '<span id="action">Preview</span><div id="host"></div>'
