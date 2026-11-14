@@ -25,18 +25,19 @@ function browser() {
     setBackgroundThrottling: vi.fn(),
     getURL: () => 'https://fixture.test/',
     isLoadingMainFrame: () => false,
-    executeJavaScript: vi.fn(() => input.promise)
+    capturePage: vi.fn(() => input.promise)
   })
 
   const token = beginPreviewGuestActivity(owner as never, guest as never, () => () => {})
 
-  return { owner: owner as never, token, input }
+  return { owner: owner as never, token, input, guest }
 }
 
 it('binds the approval snapshot only after pending native input has rendered', async () => {
-  const { owner, token, input } = browser()
+  const { owner, token, input, guest } = browser()
   const pending = armPreviewGuestApproval(owner, token)
   await Promise.resolve()
+  expect(guest.capturePage).toHaveBeenCalledWith(undefined, { stayHidden: true })
   expect(fixture.create).not.toHaveBeenCalled()
   input.resolve()
   await pending

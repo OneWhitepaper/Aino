@@ -1,7 +1,5 @@
 import type { Session, WebContents } from 'electron'
 
-import { settlePreviewInputInPage } from '../shared/preview-settle-input'
-
 import { createPreviewApproval } from './preview-approval'
 import { admitPreviewGuestSession, isOwnedPreviewGuest, watchNativePreviewOwner } from './preview-guest-owner'
 
@@ -253,9 +251,9 @@ export async function armPreviewGuestApproval(owner: WebContents, token: number)
   let approval: Awaited<ReturnType<typeof createPreviewApproval>>
 
   try {
-    // sendInputEvent queues input; a script/timer receipt alone can still precede
-    // Chromium's hover/style update. Bind the full snapshot after its next render.
-    await executePreviewActivityScript(owner, token, `(${settlePreviewInputInPage.toString()})(document)`)
+    // A script/timer receipt can precede Chromium's hover/style update. Request
+    // a compositor frame without showing hidden windows before binding the DOM.
+    await executePreviewActivity(owner, token, guest => guest.capturePage(undefined, { stayHidden: true }))
     approval = await createPreviewApproval(owner, lease.guest)
   } finally {
     lease.approvalPending = false
@@ -299,14 +297,18 @@ export async function sendPreviewGuestApprovedInput(
  * does not guarantee they settle when that document disappears. */
 export async function executePreviewGuestScript(owner: WebContents, token: number, code: string): Promise<unknown> {
   try {
-    return await executePreviewActivityScript(owner, token, code)
+    return await executePreviewActivity(owner, token, guest => guest.executeJavaScript(code))
   } finally {
     await endPreviewGuestActivity(owner, token)
   }
 }
 
 /** Approval preparation retains the lease that will validate and deliver its input. */
-async function executePreviewActivityScript(owner: WebContents, token: number, code: string): Promise<unknown> {
+async function executePreviewActivity(
+  owner: WebContents,
+  token: number,
+  operation: (guest: WebContents) => Promise<unknown>
+): Promise<unknown> {
   const lease = leases.get(token)
 
   if (!lease || lease.owner !== owner || !isOwnedPreviewGuest(owner, lease.guest)) {
@@ -346,7 +348,7 @@ async function executePreviewActivityScript(owner: WebContents, token: number, c
     // Readiness and dispatch share this main-process turn. Keep the existing
     // structured-clone result contract; mainFrame.executeJavaScript converts
     // values such as Maps, Dates, typed arrays and undefined to JSON-like values.
-    return await Promise.race([guest.executeJavaScript(code), interrupted])
+    return await Promise.race([operation(guest), interrupted])
   } finally {
     signal.removeEventListener('abort', abort)
 
