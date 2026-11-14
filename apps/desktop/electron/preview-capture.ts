@@ -58,15 +58,44 @@ export async function captureOwnedPreviewContents(
   })
 
   try {
-    const image = await capturePreviewContents(guest, rect, viewport)
-
-    if (changedOwner || !isOwnedPreviewGuest(owner, guest)) {
-      throw new Error('Preview guest does not belong to this window')
-    }
-
-    return image
+    return await captureWithRecovery(owner, guest, rect, viewport, () => changedOwner)
   } finally {
     stopWatching()
+  }
+}
+
+async function captureWithRecovery(
+  owner: CaptureOwner,
+  guest: OwnedCaptureGuest,
+  rect: CaptureRect | undefined,
+  viewport: CaptureViewport | undefined,
+  changedOwner: () => boolean
+): Promise<string> {
+  const assertOwner = () => {
+    if (changedOwner() || !isOwnedPreviewGuest(owner, guest)) {
+      throw new Error('Preview guest does not belong to this window')
+    }
+  }
+
+  for (let attempt = 1; ; attempt++) {
+    assertOwner()
+
+    try {
+      const image = await capturePreviewContents(guest, rect, viewport)
+      assertOwner()
+
+      return image
+    } catch (error) {
+      assertOwner()
+
+      // A newly resized/attached compositor can have no Viz surface yet. Repeat
+      // only this native transient failure, with a fixed budget and the same owner.
+      if (!(error instanceof Error) || error.message !== 'UnknownVizError' || attempt === 3) {
+        throw error
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
   }
 }
 
