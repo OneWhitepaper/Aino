@@ -200,7 +200,7 @@
   "desktop.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1754,
+      "stable": 1846,
       "volatile": 1264
     },
     "tool_tokens": 12563,
