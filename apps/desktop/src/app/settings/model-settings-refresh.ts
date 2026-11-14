@@ -67,6 +67,7 @@ export async function refreshModelSettingsData(options: ModelSettingsRefresh): P
         if (!options.isCurrent()) {
           return
         }
+
         options.onAuxiliary(auxiliary)
         options.onReady()
       })

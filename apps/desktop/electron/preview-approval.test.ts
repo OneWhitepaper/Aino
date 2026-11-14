@@ -97,6 +97,7 @@ it('waits for Blink to acknowledge the prepared hover before taking the native b
       clickCount: 1
     } as never
   )
+
   await Promise.resolve()
   expect(fixture.cdp.sendCommand).toHaveBeenCalledExactlyOnceWith('Input.dispatchMouseEvent', {
     type: 'mouseMoved',

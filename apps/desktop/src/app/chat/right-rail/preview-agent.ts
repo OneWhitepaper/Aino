@@ -217,6 +217,7 @@ async function prepareApprovalTarget(
       if (event.type === 'mouseMove') {
         pointer = { x: event.x, y: event.y }
       }
+
       input.send(event)
     }
   }

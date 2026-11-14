@@ -105,6 +105,7 @@ class Window extends EventEmitter {
         this.defaultPrevented = true
       }
     }
+
     this.emit('close', event)
 
     if (!event.defaultPrevented) {
@@ -133,9 +134,12 @@ let windows: Window[]
 
 const invoke = (name: string, owner: Window, ...args: unknown[]) =>
   handlers.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
+
 const send = (name: string, owner: Window, ...args: unknown[]) =>
   sends.get(`hermes:preview-native:${name}`)!({ sender: owner.webContents }, ...args)
+
 const mount = (owner: Window, options = request): NativePreviewSnapshot => invoke('mount', owner, options)
+
 const authorize = () =>
   authorizeNativePreviewPopout(
     source.webContents as unknown as WebContents,
@@ -508,6 +512,7 @@ it('caps parked tabs by the shared retention limit and closes a parked tab only 
   for (const view of created.slice(1)) {
     expect(view.webContents.close).not.toHaveBeenCalled()
   }
+
   vi.advanceTimersByTime(120_000)
   expect(created[1].webContents.close).not.toHaveBeenCalled()
   expect(() => invoke('closeTab', foreign, ids[1])).toThrow('Cannot close')
@@ -565,9 +570,11 @@ it('does not queue an annotation teardown into a loading replacement document', 
 it('arms initial native page observation before loading a page that may open a dialog', async () => {
   dispose()
   let ready!: () => void
+
   const preparation = new Promise<void>(resolve => {
     ready = resolve
   })
+
   const prepare = vi.fn(() => preparation)
   dispose = registerNativePreviewIpc(
     {

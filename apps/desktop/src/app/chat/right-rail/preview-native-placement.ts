@@ -27,6 +27,7 @@ export function nativePreviewPlacement(element: HTMLElement): {
 } {
   const rect = element.getBoundingClientRect()
   const zoom = window.hermesDesktop?.zoom?.factor?.() || 1
+
   let visible =
     element.isConnected && rect.width > 0 && rect.height > 0 && !element.closest('[data-pane-hidden], [inert]')
 
@@ -82,6 +83,7 @@ export function watchNativePreviewPlacement(
         if (stopped || captureEpoch !== epoch || !coveredBefore) {
           return
         }
+
         const decoded = new Image()
         decoded.src = image
         await decoded.decode()

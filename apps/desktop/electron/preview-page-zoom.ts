@@ -50,6 +50,7 @@ export function createPreviewPageZoom(
     if (!canFit()) {
       return Promise.resolve()
     }
+
     apply(fitFactor())
 
     if (measuring) {
@@ -74,6 +75,7 @@ export function createPreviewPageZoom(
         if (measure.width > measure.viewport + 2) {
           requiredWidth = measure.width
         }
+
         requiredWidth ??= 0
         apply(fitFactor())
       })
@@ -86,6 +88,7 @@ export function createPreviewPageZoom(
         if (measuring !== current) {
           return
         }
+
         measuring = undefined
 
         if (measureAgain) {

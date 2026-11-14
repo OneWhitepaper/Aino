@@ -32,6 +32,7 @@ export const $toolPanelVisible = computed(
     if (!tree) {
       return false
     }
+
     const panes = registry.getArea('panes')
     const paneFor = (id: string) => panes.find(pane => pane.id === id)
 
@@ -57,6 +58,7 @@ export function bindSummaryPanelVisibility(): () => void {
     if (queued) {
       return
     }
+
     queued = true
     queueMicrotask(() => {
       queued = false
@@ -64,11 +66,13 @@ export function bindSummaryPanelVisibility(): () => void {
       if (!active) {
         return
       }
+
       const shown = $toolPanelVisible.get()
 
       if (shown !== previous && !quietBatch) {
         $summaryOpen.set(!shown)
       }
+
       previous = shown
       quietBatch = false
     })

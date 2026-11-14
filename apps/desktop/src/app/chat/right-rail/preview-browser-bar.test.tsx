@@ -82,9 +82,11 @@ describe('normalizePreviewAddress', () => {
 describe('PreviewBrowserBar', () => {
   it('lets the user switch between fitting the page and its actual size without navigation', async () => {
     const onSetPageZoom = vi.fn()
+
     const rendered = render(
       <PreviewBrowserBar {...baseProps} onSetPageZoom={onSetPageZoom} pageZoom={0.67} pageZoomMode="fit" />
     )
+
     fireEvent.keyDown(screen.getByRole('button', { name: 'Page zoom: 67%' }), { key: 'ArrowDown' })
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Actual size (100%)' }))
     expect(onSetPageZoom).toHaveBeenLastCalledWith(1)

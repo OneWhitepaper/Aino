@@ -163,6 +163,7 @@ export function installPreviewNativeActions(
         if (revision !== receiptRevision) {
           return
         }
+
         const dialog = result.dialogs?.find(item => item.state === 'pending')
 
         if (dialog && lastId !== undefined) {
@@ -171,6 +172,7 @@ export function installPreviewNativeActions(
           if (revision !== receiptRevision) {
             return
           }
+
           receive({ webContentsId: lastId, scope, dialog, defaultText: privateStatus.default_text })
         }
 

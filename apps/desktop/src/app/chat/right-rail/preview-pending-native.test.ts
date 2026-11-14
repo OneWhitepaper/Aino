@@ -63,6 +63,7 @@ it.each(['dialog', 'chooser'])(
       if (!clicks) {
         return new Function('return ' + code)()
       }
+
       afterInputScripts++
 
       return new Promise((_resolve, reject) =>
@@ -119,6 +120,7 @@ it('returns the notification receipt when a dialog opens after the initial nativ
     if (!clicks) {
       return new Function('return ' + code)()
     }
+
     expect(statusRead).toBe(true)
     $previewWebsiteDialogs.set({ [tabId]: { dialog: pendingDialog, respond: async () => {} } })
 

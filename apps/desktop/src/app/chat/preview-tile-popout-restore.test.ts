@@ -20,6 +20,7 @@ async function setup() {
   let dockBack: (tabId: string) => void = () => {
     throw new Error('Pop-out listener was not registered')
   }
+
   vi.stubGlobal('hermesDesktop', {
     onBrowserPopoutClosed: callback => {
       dockBack = callback

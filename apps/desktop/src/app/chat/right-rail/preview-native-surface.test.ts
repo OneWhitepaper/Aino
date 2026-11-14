@@ -253,9 +253,11 @@ it('waits for native input and propagates a rejected stale mount command to its 
   const key: PreviewInputEvent = { type: 'keyDown', keyCode: 'Enter' }
   void surface.sendInputEvent(key)
   let finished = false
+
   const settling = surface.settleInput().then(() => {
     finished = true
   })
+
   await Promise.resolve()
   expect(finished).toBe(false)
   input.resolve(undefined)

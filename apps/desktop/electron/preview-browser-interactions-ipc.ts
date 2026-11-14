@@ -11,6 +11,7 @@ export function registerPreviewBrowserInteractionsIpc(): void {
       if (!Number.isSafeInteger(id)) {
         throw new Error('Invalid Browser page')
       }
+
       const guest = webContents.fromId(id as number)
 
       if (!guest) {

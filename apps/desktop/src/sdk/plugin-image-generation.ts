@@ -24,6 +24,7 @@ export async function requestPluginImageGeneration<T>(
   if (params.probe || params.session_id) {
     return send()
   }
+
   const catalog = platformModelCatalog()
   const account = catalog.account.get()
 
@@ -39,6 +40,7 @@ export async function requestPluginImageGeneration<T>(
   const config = await getHermesConfigRecord(scope, { includeDefaults: false })
   assertAccount()
   const rawImage = config.image_gen
+
   const image =
     rawImage && typeof rawImage === 'object' && !Array.isArray(rawImage) ? (rawImage as Record<string, unknown>) : null
 
@@ -70,11 +72,13 @@ export async function requestPluginImageGeneration<T>(
     assertAccount()
     await preparePlatformImageSession(owner, created.session_id, requestImageOwner, true)
     assertAccount()
+
     const result = await request<T>(
       'image.generate',
       { ...params, session_id: created.session_id, profile: route.targetProfile },
       timeoutMs
     )
+
     assertAccount()
 
     return result

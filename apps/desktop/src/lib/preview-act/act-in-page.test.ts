@@ -673,6 +673,7 @@ describe('type', () => {
 
     const result = inventory(holder)
     expect(result.elements).toEqual([expect.objectContaining({ label: 'Filter issues', selector: '#filter' })])
+
     const typed = actInPage(document, holder, {
       kind: 'type',
       ref: result.elements![0].ref,

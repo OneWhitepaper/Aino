@@ -17,6 +17,7 @@ vi.mock('./preview-approval', () => ({ createPreviewApproval: vi.fn() }))
 it('blocks automatic fitting from approval preparation through release using the exact existing guest lease', async () => {
   const session = {} as Session
   admitPreviewGuestSession(session)
+
   const owner = Object.assign(new EventEmitter(), {
     getType: () => 'window',
     isDestroyed: () => false
@@ -32,11 +33,13 @@ it('blocks automatic fitting from approval preparation through release using the
 
   const unregister = registerNativePreviewGuest(guest, owner)
   const release = vi.fn(async () => {})
+
   let finish!: (value: {
     validate: () => Promise<void>
     send: () => Promise<void>
     release: () => Promise<void>
   }) => void
+
   vi.mocked(createPreviewApproval).mockReturnValueOnce(
     new Promise(resolve => {
       finish = resolve

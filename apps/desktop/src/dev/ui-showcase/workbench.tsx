@@ -383,6 +383,7 @@ function DemoComposer({ onSend }: { onSend: (text: string) => void }) {
     if (!draft.trim()) {
       return
     }
+
     onSend(draft.trim())
     setDraft('')
     setAttachment(false)

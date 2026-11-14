@@ -40,6 +40,7 @@ export function previewApprovalFrames(cdp: PreviewGuestCdp, changed: () => void)
     if (initialized.has(key)) {
       return
     }
+
     await cdp.sendCommand('DOM.enable', {}, sessionId)
     await cdp.sendCommand('Page.enable', {}, sessionId)
     initialized.add(key)
@@ -64,20 +65,24 @@ export function previewApprovalFrames(cdp: PreviewGuestCdp, changed: () => void)
       if (visited.has(sessionId ?? '')) {
         continue
       }
+
       visited.add(sessionId ?? '')
       await initialize(sessionId)
       const tree = await cdp.sendCommand('Page.getFrameTree', {}, sessionId)
       const root = (await cdp.sendCommand('DOM.getDocument', { depth: -1, pierce: true }, sessionId)).root
+
       const result = await cdp.sendCommand(
         'DOMSnapshot.captureSnapshot',
         { computedStyles: APPROVAL_STYLES },
         sessionId
       )
+
       snapshots.push(result)
 
       for (const document of result.documents) {
         seenFrames.add(result.strings[document.frameId])
       }
+
       const targetInfos = (await cdp.sendCommand('Target.getTargets')).targetInfos as any[]
       const owned = new Set([...frameIds(tree.frameTree), ...nodeFrames(root)])
 
@@ -93,6 +98,7 @@ export function previewApprovalFrames(cdp: PreviewGuestCdp, changed: () => void)
         if (seenFrames.has(id)) {
           continue
         }
+
         pending.push(await cdp.attachOwnedFrame(id))
       }
     }

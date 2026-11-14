@@ -35,6 +35,7 @@ export async function preparePlatformImageSession(
         : undefined
 
     const rawImage = config.image_gen
+
     const image =
       rawImage && typeof rawImage === 'object' && !Array.isArray(rawImage)
         ? (rawImage as Record<string, unknown>)
@@ -83,6 +84,7 @@ export async function preparePlatformImageSession(
     if (required) {
       throw error
     }
+
     notify({
       id: `aino-image-binding:${captured.key}:${sessionId}`,
       kind: 'warning',

@@ -103,6 +103,7 @@ it('discards an old account image result and cleans its authority after an accou
     if (method === 'session.create') {
       return { session_id: 'previous-account' }
     }
+
     account = platformSnapshot('user-b')
 
     return { success: true, image: 'old-account-image' }

@@ -73,12 +73,14 @@ it('releases an exact prepared upload ticket when its confirmation is denied', a
       : { success: true }
   )
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
+
   const result = runPreviewNativeFeatureAction({
     kind: 'upload_files',
     chooserId: 'native-chooser',
     paths: ['/fixture.txt'],
     tabId
   })
+
   await vi.waitFor(() => expect($confirmRequest.get()).not.toBeNull())
   settleConfirm(false)
   expect(await result).toMatchObject({ success: false })
@@ -90,20 +92,24 @@ it('releases a preparation that finishes after the requesting action is aborted'
   newBrowserTab()
   const tabId = $rightRailActiveTabId.get()!
   const controller = new AbortController()
+
   const prepared = Promise.withResolvers<{
     success: boolean
     ticket: string
     upload: { state: 'prepared'; paths: string[]; filenames: string[] }
   }>()
+
   const runner: PreviewScriptRunner = async () => undefined
   runner.nativeAction = vi.fn(async request =>
     request.action === 'upload_prepare' ? prepared.promise : { success: true }
   )
   cleanups.push(registerPreviewScriptRunner(tabId, runner))
+
   const result = runPreviewNativeFeatureAction(
     { kind: 'upload_files', chooserId: 'native-chooser', paths: ['/fixture.txt'], tabId },
     controller.signal
   )
+
   await vi.waitFor(() => expect(runner.nativeAction).toHaveBeenCalled())
   controller.abort()
   prepared.resolve({

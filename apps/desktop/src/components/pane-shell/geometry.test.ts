@@ -154,6 +154,7 @@ describe('publishWorkspaceGeometry', () => {
       if (dragging) {
         endSashDrag()
       }
+
       dispose()
     }
 

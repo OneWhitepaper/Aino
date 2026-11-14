@@ -4971,16 +4971,19 @@ const legacyHistoryRecovery = createLegacyHistoryRecovery({
     if (!scope.isCurrent()) {
       throw new Error('platform_account_changed')
     }
+
     const local = readDesktopConnectionsRegistry().connections.find(connection => connection.kind === 'local')
 
     if (!local) {
       throw new Error('history_local_connection_required')
     }
+
     const descriptor = await ensureRegistryBackend(local.id, profile)
 
     if (!scope.isCurrent() || descriptor.mode !== 'local') {
       throw new Error('platform_account_changed')
     }
+
     const scoped = `${requestPath}?profile=${encodeURIComponent(profile)}`
 
     return fetchJsonForBackend(descriptor, scoped, { method: body === undefined ? 'GET' : 'POST', body })

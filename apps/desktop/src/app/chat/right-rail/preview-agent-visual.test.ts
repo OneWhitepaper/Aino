@@ -104,6 +104,7 @@ describe('browser action confirmation boundaries', () => {
         { kind: 'click' },
         { x: 20, y: 20 }
       )
+
       expect(target.label).toBe('Delete current record')
     } finally {
       styleSpy.mockRestore()

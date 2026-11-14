@@ -86,6 +86,7 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
       if (inspection) {
         await inspection.promise
       }
+
       assertCurrent(scope)
       const result: LegacyHistoryResult = { imported: 0, skipped: 0, conflicts: 0, profiles: 0 }
       const backedUp = new Set<string>()
@@ -187,6 +188,7 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
       if (inspection?.key === key) {
         return inspection.promise
       }
+
       const previous = inspection?.promise
 
       const pending = (async () => {
