@@ -94,7 +94,6 @@ interface SessionHeaderInput {
   workspacePage: boolean
   isEmpty: boolean
   verticalCollapse: boolean
-  editMode: boolean
   shown: readonly string[]
   headerVeto?: boolean
 }
@@ -108,7 +107,6 @@ export function sessionHeaderVisible({
   workspacePage,
   isEmpty,
   verticalCollapse,
-  editMode,
   shown,
   headerVeto
 }: SessionHeaderInput): boolean {
@@ -116,7 +114,6 @@ export function sessionHeaderVisible({
     !workspacePage &&
     !isEmpty &&
     !verticalCollapse &&
-    !editMode &&
     shown.length > 0 &&
     shown.every(isConversationPane) &&
     !headerVeto

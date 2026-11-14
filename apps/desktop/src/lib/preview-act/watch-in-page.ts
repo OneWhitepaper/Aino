@@ -190,6 +190,8 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   const busy = 25
   const state = win.__hermesWatch || (win.__hermesWatch = {})
 
+  if (state.paused) {return}
+
   // One row per kind of mark. `life` is how long it stays up; 0 means it stays
   // until the agent takes it down, which is the whole difference between a mark
   // that narrates an action and one that records a finding.
@@ -204,6 +206,17 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   const style = (el: Element, props: Record<string, string>) => {
     for (const name in props) {
       ;(el as HTMLElement).style.setProperty(name, props[name])
+    }
+  }
+
+  const raise = (host: HTMLElement) => {
+    // showPopover appends to the back of the top layer. Reassert after page
+    // dialogs; unsupported hosts keep the existing z-index fallback.
+    try {
+      host.hidePopover()
+      host.showPopover()
+    } catch {
+      // The fallback also covers a host detached during this stage.
     }
   }
 
@@ -285,8 +298,47 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
   const spot = (el: Element): WatchSpot => {
     const box = el.getBoundingClientRect()
+    const result = { height: box.height, left: box.left, top: box.top, width: box.width }
+    let owner = el.ownerDocument
 
-    return { height: box.height, left: box.left, top: box.top, width: box.width }
+    for (let depth = 0; owner !== doc && depth < 32; depth++) {
+      const frame = owner.defaultView?.frameElement as HTMLIFrameElement | null
+
+      if (!frame) {
+        break
+      }
+
+      const bounds = frame.getBoundingClientRect()
+      const scaleX = frame.offsetWidth ? bounds.width / frame.offsetWidth : 1
+      const scaleY = frame.offsetHeight ? bounds.height / frame.offsetHeight : 1
+      result.left = bounds.left + (frame.clientLeft + result.left) * scaleX
+      result.top = bounds.top + (frame.clientTop + result.top) * scaleY
+      result.width *= scaleX
+      result.height *= scaleY
+      owner = frame.ownerDocument
+    }
+
+    return result
+  }
+
+  const attached = (el: Element): boolean => {
+    let current: Element | null = el
+
+    for (let depth = 0; current && depth < 256; depth++) {
+      if (current.ownerDocument === doc && doc.contains(current)) {
+        return true
+      }
+
+      const root = current.getRootNode() as ShadowRoot
+      const owner: Document = current.ownerDocument
+
+      const frame: HTMLIFrameElement | null | undefined =
+        owner !== doc ? (owner.defaultView?.frameElement as HTMLIFrameElement | null) : null
+
+      current = root.nodeType === 11 && root.host ? root.host : frame?.contentDocument === owner ? frame : null
+    }
+
+    return false
   }
 
   const middle = (box: WatchSpot) => ({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
@@ -294,14 +346,6 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   // ── THE CURSOR ────────────────────────────────────────────────────────────
 
   const build = () => {
-    // A host from an earlier build of this function may still be on the page.
-    // Clear it out rather than stacking a second.
-    const stale = doc.querySelectorAll('hermes-watch')
-
-    for (let i = 0; i < stale.length; i++) {
-      stale[i].remove()
-    }
-
     const host = doc.createElement('hermes-watch')
 
     host.setAttribute('aria-hidden', 'true')
@@ -547,7 +591,12 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
     // Every transient leaves on a clock rather than on its animation, so the
     // reduced-motion path and the animated one retire in the same beat.
-    win.setTimeout(() => cell.remove(), life + beat)
+    win.setTimeout(() => {
+      if (state.paused) {
+        const expired = (state.expired ??= []) as HTMLElement[]
+        expired.push(cell)
+      } else {cell.remove()}
+    }, life + beat)
 
     // A mark comes and goes as ONE thing, so what fades is the CELL — which owns
     // the outline and the label both. Fading the skin instead left every tag
@@ -627,7 +676,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
       // A navigation or a re-render takes the element with it. The mark goes too
       // rather than hanging over whatever replaced it.
-      if (!doc.contains(mark.spec.a)) {
+      if (!attached(mark.spec.a)) {
         if (mark.cell) {
           mark.cell.remove()
         }
@@ -689,6 +738,8 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
     tick()
   }
+
+  state.pump = pump
 
   const add = (spec: WatchSpec) => marks.push({ spec })
 
@@ -840,6 +891,8 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
   if (state.tag !== stamp) {
     state.tag = stamp
+    // A website may use the same tag. Only retire the host this overlay built.
+    ;(state.parts as ReturnType<typeof build> | undefined)?.host.remove()
     state.parts = undefined
     // The pulse outlives an injection, so a rebuild has to stop the old one —
     // its ticks would keep firing against the overlay it was born in.
@@ -849,7 +902,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   const mounted = state.parts as ReturnType<typeof build> | undefined
   const target = holder.aimed
 
-  if (stage === 'clear' || stage === 'rest') {
+  if (['clear', 'rest'].includes(stage)) {
     hush()
 
     if (stage === 'rest') {
@@ -902,7 +955,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
       state.mind = win.setInterval(() => {
         const beat = state.pulse as (() => void) | undefined
 
-        if (beat) {
+        if (beat && !state.paused) {
           beat()
         }
       }, throb)
@@ -921,7 +974,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   }
 
   // These draw the whole field rather than one target.
-  const wide = stage === 'sweep' || stage === 'hold' || stage === 'strobe'
+  const wide = ['sweep', 'hold', 'strobe'].includes(stage)
   const field = holder.field && holder.field.length ? holder.field : holder.nodes || []
   // The read draws the page's PROSE instead. The two sets barely overlap: what
   // read_preview takes away is the text, and what the field is made of is the
@@ -931,7 +984,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
 
   // Nothing to draw on. Bail before building, so a stage with an empty set
   // never gets an overlay host grafted onto a page for nothing.
-  if (stage === 'read' ? !text.length : wide ? !field.length : !target || !doc.contains(target)) {
+  if (stage === 'read' ? !text.length : wide ? !field.length : !target || !attached(target)) {
     return
   }
 
@@ -940,15 +993,7 @@ export function watchInPage(doc: Document, holder: WatchHolder, stage: WatchStag
   state.parts = parts
   parts.nib.setAttribute('fill', ink)
 
-  // Re-assert on every stage: `showPopover` appends to the BACK of the top
-  // layer, so a dialog the page opened after us would otherwise cover the
-  // overlay for the rest of the session.
-  try {
-    ;(parts.host as HTMLElement & { hidePopover: () => void }).hidePopover()
-    ;(parts.host as HTMLElement & { showPopover: () => void }).showPopover()
-  } catch {
-    // No popover support, or the host is detached — the z-index fallback stands.
-  }
+  raise(parts.host)
 
   if (stage === 'pin') {
     // Pinning something already pinned relabels it, rather than stacking a

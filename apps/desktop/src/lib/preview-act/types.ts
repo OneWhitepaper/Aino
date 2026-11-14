@@ -10,6 +10,12 @@
  * working and nothing outside this directory needs to know they moved.
  */
 
+import type {
+  PreviewBrowserDialog,
+  PreviewBrowserDownload,
+  PreviewBrowserFileChooser
+} from '../../../shared/preview-browser-interactions'
+
 /** One interactable node, as the agent sees it. */
 export interface PreviewElement {
   /** Present and true only when the control is non-interactive right now. */
@@ -60,13 +66,49 @@ export interface PreviewActDelta {
 
 /** A normalized action. `kind` is the verb; the rest is per-verb payload. */
 export interface PreviewActAction {
+  /** Explicit browser target and observation returned by elements/screenshot. */
+  tabId?: string
+  observationId?: string
+  /** Pixel coordinates in the last screenshot, never app-window coordinates. */
+  coordinate?: [number, number]
+  toCoordinate?: [number, number]
+  /** Requests confirmation; callers can never use this to skip a check. */
+  sensitive?: boolean
+  dialogId?: string
+  accept?: boolean
+  promptText?: string
+  paths?: string[]
+  downloadId?: string
+  downloadPath?: string
+  chooserId?: string
   /** scroll distance in px. Defaults to ~90% of the viewport height. */
   amount?: number
   key?: string
   /** `pin`/`unpin`/`hold` never reach the engine — they resolve their targets
    *  through `locate`/`elements` and then talk to the overlay — but they arrive
    *  on the same wire. */
-  kind: 'click' | 'elements' | 'hold' | 'hover' | 'locate' | 'pin' | 'press' | 'scroll' | 'strobe' | 'type' | 'unpin'
+  kind:
+    | 'click'
+    | 'double_click'
+    | 'drag'
+    | 'elements'
+    | 'hold'
+    | 'hover'
+    | 'locate'
+    | 'pin'
+    | 'press'
+    | 'screenshot'
+    | 'scroll'
+    | 'strobe'
+    | 'tabs'
+    | 'select_tab'
+    | 'dialog_status'
+    | 'dialog_respond'
+    | 'upload_files'
+    | 'downloads_status'
+    | 'download_cancel'
+    | 'type'
+    | 'unpin'
   /** locate: also give the target keyboard focus, for a key press that must not
    *  be preceded by a click (which would activate the control instead). */
   focus?: boolean
@@ -86,6 +128,15 @@ export interface PreviewActAction {
 }
 
 export interface PreviewActResult {
+  file_chooser?: PreviewBrowserFileChooser
+  dialogs?: PreviewBrowserDialog[]
+  downloads?: PreviewBrowserDownload[]
+  upload?: { state: 'prepared' | 'completed'; paths: string[]; filenames: string[] }
+  tabs?: PreviewBrowserTabInfo[]
+  tab_id?: string
+  observation_id?: string
+  viewport?: { width: number; height: number }
+  image?: { data_url: string; width: number; height: number }
   /** What the action landed on, for the agent's own log. */
   acted?: string
   /** What moved since the last look. Present INSTEAD of `elements` once the
@@ -109,9 +160,19 @@ export interface PreviewActResult {
   url?: string
 }
 
+export interface PreviewBrowserTabInfo {
+  tab_id: string
+  title: string
+  url: string
+  selected: boolean
+  popped_out: boolean
+}
+
 /** One element the agent has a handle on, remembered across actions. */
 export interface PreviewActBinding {
   el: Element
+  /** Root that minted this binding; rebinding stays inside its frame/shadow tree. */
+  surface?: Node
   /** What it read as last time. Kept field by field rather than as one hash so
    *  a change can be reported as only the part that moved. */
   label: string

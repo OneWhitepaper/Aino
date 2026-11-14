@@ -253,6 +253,38 @@ describe('elements', () => {
     expect(inventory(holder).elements).toHaveLength(10)
     expect(actInPage(document, holder, { full: true, kind: 'elements', max: 3 }).elements).toHaveLength(3)
   })
+
+  it('warns about omitted controls in both full and delta inventories without raising the cap', () => {
+    const holder = page(Array.from({ length: 121 }, (_, i) => `<button>B${i}</button>`).join(''))
+    const capped = actInPage(document, holder, { full: true, kind: 'elements', max: 400 })
+
+    expect(capped.elements).toHaveLength(120)
+    expect(capped.note).toMatch(/capped at 120/i)
+    expect(capped.note).toMatch(/scroll.*elements/i)
+    expect(capped.note).toMatch(/does not mean.*absent/i)
+    expect(inventory(holder).note).toBe(capped.note)
+
+    document.body.lastElementChild!.remove()
+
+    expect(actInPage(document, holder, { full: true, kind: 'elements' }).note).toBeUndefined()
+  })
+
+  it('makes controls past the cap discoverable after earlier controls scroll above the viewport', () => {
+    const holder = page(Array.from({ length: 121 }, (_, i) => `<button data-row="${i}">B${i}</button>`).join(''))
+    let offset = 0
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const top = Number(this.getAttribute('data-row') ?? 0) * 40 - offset
+
+      return { bottom: top + 40, height: 40, left: 0, right: 40, top, width: 40, x: 0, y: top } as DOMRect
+    })
+
+    expect(inventory(holder).note).toMatch(/scroll.*elements/i)
+    offset = 120 * 40
+
+    const next = actInPage(document, holder, { full: true, kind: 'elements' })
+    expect(next.elements?.map(element => element.label)).toContain('B120')
+    expect(next.note).toBeUndefined()
+  })
 })
 
 // Re-sending the whole inventory after every click is what made a ten-step
@@ -634,6 +666,20 @@ describe('type', () => {
     expect(document.getElementById('editor')!.textContent).toBe('hello')
   })
 
+  it('discovers and types into a plaintext-only editor through its inventory ref', () => {
+    const holder = page('<div id="filter" contenteditable="plaintext-only" aria-label="Filter issues"></div>')
+    const input = vi.fn()
+    document.getElementById('filter')!.addEventListener('input', input)
+
+    const result = inventory(holder)
+    expect(result.elements).toEqual([expect.objectContaining({ label: 'Filter issues', selector: '#filter' })])
+    const typed = actInPage(document, holder, { kind: 'type', ref: result.elements![0].ref, text: 'is:issue is:open bug' })
+
+    expect(typed.success).toBe(true)
+    expect(document.getElementById('filter')!.textContent).toBe('is:issue is:open bug')
+    expect(input).toHaveBeenCalled()
+  })
+
   it('submits the owning form when asked', () => {
     const holder = page('<form id="f"><input id="q" placeholder="Search" /></form>')
     const ref = firstRef(holder)
@@ -657,6 +703,20 @@ describe('type', () => {
 })
 
 describe('press', () => {
+  it('refuses modifier combinations without a native channel instead of sending a literal synthetic key', () => {
+    const holder = page('<input id="q" placeholder="Search" value="original" />')
+    const field = document.getElementById('q') as HTMLInputElement
+    const keys = vi.fn()
+    field.addEventListener('keydown', keys)
+    const ref = firstRef(holder)
+    const result = actInPage(document, holder, { key: 'Meta+A', kind: 'press', ref })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/native.*input/i)
+    expect(keys).not.toHaveBeenCalled()
+    expect(field.value).toBe('original')
+  })
+
   it('sends the key to the target', () => {
     const holder = page('<input id="q" placeholder="Search" />')
     const ref = firstRef(holder)

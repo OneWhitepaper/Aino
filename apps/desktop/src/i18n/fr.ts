@@ -34,6 +34,7 @@ import { frUpdateChannel } from './fr_update_channel'
 import { homeGuidance } from './home-guidance'
 import { introFr } from './intro-fr'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
@@ -322,9 +323,9 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const frBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "Ouverture de la discussion de groupe…",
-    lookupFailed: "Impossible de retrouver ce groupe sur la passerelle. Réessayez.",
-    missing: "Cette discussion de groupe n’existe plus."
+    opening: 'Ouverture de la discussion de groupe…',
+    lookupFailed: 'Impossible de retrouver ce groupe sur la passerelle. Réessayez.',
+    missing: 'Cette discussion de groupe n’existe plus.'
   },
   notificationCenter: notificationCenterCopy['fr'],
   platformModels: {
@@ -885,9 +886,7 @@ const frBaseOverrides = {
     openStarmap: 'Ouvrir le graphe de mémoire',
     enterHud: 'Mode HUD',
     exitHud: 'Quitter le mode HUD',
-    resetHudLayout: 'Réinitialiser la taille et la position du HUD',
-    layoutEditor: 'Éditeur de disposition',
-    layoutEditorTitle: mod => `Éditeur de disposition — ${mod}-clic réinitialise la disposition`
+    resetHudLayout: 'Réinitialiser la taille et la position du HUD'
   },
   keybinds: {
     title: 'Raccourcis clavier',
@@ -1357,11 +1356,6 @@ const frBaseOverrides = {
       tabStripAuto: 'Automatique',
       tabStripAlways: 'Toujours',
       tabStripNever: 'Jamais',
-      appActionsTitle: "Actions de l'application",
-      appActionsDesc:
-        'Choisissez le côté de la barre de titre où placer Paramètres, Disposition et HUD. Le côté droit laisse de la place aux onglets à gauche.',
-      appActionsLeft: 'À gauche',
-      appActionsRight: 'À droite',
       terminalFontTitle: 'Police du terminal',
       terminalFontDesc:
         'Choisissez une police installée pour les terminaux Desktop. Les Nerd Fonts affichent correctement Powerlevel10k et les icônes du shell ; laissez vide pour utiliser JetBrains Mono intégré.',
@@ -2528,21 +2522,23 @@ const frBaseOverrides = {
       browserRealProfile: {
         label: 'Utiliser mon profil de navigateur réel',
         description:
-          'Copie les identifiants de connexion et les cookies de votre navigateur par défaut dans un instantané géré que l\'agent utilise pour naviguer, et connecte aussi le navigateur intégré avec eux. Votre profil actif n\'est jamais ouvert directement. S\'applique aux nouvelles sessions.',
+          "Copie les identifiants de connexion et les cookies de votre navigateur par défaut dans un instantané géré que l'agent utilise pour naviguer, et connecte aussi le navigateur intégré avec eux. Votre profil actif n'est jamais ouvert directement. S'applique aux nouvelles sessions.",
         enabledTitle: 'Navigation avec le profil réel activée',
         enabledMessage: 'Les nouvelles sessions utiliseront un instantané de votre profil de navigateur par défaut.',
         disabledTitle: 'Navigation avec le profil réel désactivée',
         disabledMessage:
-          'L\'instantané du profil sera supprimé et le navigateur intégré en sera déconnecté ; les nouvelles sessions utiliseront un navigateur vierge.',
+          "L'instantané du profil sera supprimé et le navigateur intégré en sera déconnecté ; les nouvelles sessions utiliseront un navigateur vierge.",
         failedSave: "Impossible d'enregistrer le paramètre du profil réel",
         reimportSignins: 'Réimporter les connexions',
         signinsImportedTitle: 'Connexions du navigateur intégré',
-        signinsImported: count => `Navigateur intégré connecté avec ${count} cookie${count === 1 ? '' : 's'} de votre profil de navigateur.`,
-        signinsRemote: 'Ce backend s\'exécute sur une autre machine, son profil de navigateur n\'est donc pas importé dans le navigateur intégré.',
-        signinsFailed: 'Impossible d\'importer les connexions dans le navigateur intégré',
+        signinsImported: count =>
+          `Navigateur intégré connecté avec ${count} cookie${count === 1 ? '' : 's'} de votre profil de navigateur.`,
+        signinsRemote:
+          "Ce backend s'exécute sur une autre machine, son profil de navigateur n'est donc pas importé dans le navigateur intégré.",
+        signinsFailed: "Impossible d'importer les connexions dans le navigateur intégré",
         prompt: {
           title: 'Restez connecté à vos sites',
-          body: 'Autorisez Hermes à naviguer avec un instantané de votre profil de navigateur par défaut afin que les sites s\'ouvrent avec vos sessions déjà connectées, pour l\'agent et dans le navigateur intégré.',
+          body: "Autorisez Hermes à naviguer avec un instantané de votre profil de navigateur par défaut afin que les sites s'ouvrent avec vos sessions déjà connectées, pour l'agent et dans le navigateur intégré.",
           bulletSnapshot: 'Les cookies et identifiants de connexion sont copiés dans un instantané géré.',
           bulletLiveProfile: "Votre profil de navigateur actif n'est jamais ouvert directement.",
           bulletLocal: 'Rien ne quitte cet ordinateur.',
@@ -3049,6 +3045,7 @@ const frBaseOverrides = {
   },
   messaging: {
     directory: messagingDirectory['fr'],
+    qrSetup: messagingOnboarding['fr'],
     search: 'Rechercher dans la messagerie...',
     statusFilter: {
       all: 'Tous',
@@ -3190,7 +3187,7 @@ const frBaseOverrides = {
       userIdPlaceholder: "Identifiant d'utilisateur Telegram",
       add: 'Ajouter',
       numericOnly: "Les identifiants d'utilisateurs Telegram autorisés doivent être numériques.",
-      saveAndRestart: 'Enregistrer et redémarrer',
+      saveAndRestart: 'Enregistrer et connecter',
       applying: 'Enregistrement…',
       pairingExpired: 'La liaison Telegram a expiré. Relancez une configuration par QR pour réessayer.',
       stillWaiting: detail => `Toujours en attente de Telegram. Nouvelle tentative après : ${detail}`,
@@ -3976,6 +3973,9 @@ const frBaseOverrides = {
     queueMessage: "Mettre le message en file d'attente",
     steer: "Diriger l'exécution en cours",
     redirect: "Rediriger l'exécution en cours",
+    pauseTask: 'Mettre la tâche en pause',
+    pausingTask: 'Mise en pause de la tâche…',
+    continuingTask: 'Reprise de la tâche…',
     stop: 'Arrêter',
     send: 'Envoyer',
     speaking: 'Parle',
@@ -5066,31 +5066,6 @@ const frBaseOverrides = {
     pluginDisabled: pluginId => `Plugin « ${pluginId} » désactivé`,
     pluginDisabledBody: 'Réactivez-le dans Paramètres → Plugins pour faire revenir le panneau.',
     missingPane: paneId => `panneau manquant : ${paneId}`,
-    editTitle: 'Mises en page',
-    editHint:
-      'Choisissez une mise en page ou faites glisser les panneaux entre les zones. Clic droit sur une zone pour la diviser.',
-    reset: 'Réinitialiser',
-    templates: 'Modèles',
-    custom: 'Personnalisé',
-    newGridLayout: 'Nouvelle mise en page en grille',
-    saveCurrentAs: "Enregistrer l'agencement actuel en tant que modèle",
-    nameLayoutPlaceholder: 'Nommez cette mise en page…',
-    deletePreset: name => `Supprimer ${name}`,
-    zoneEditorTitle: 'Éditeur de zones',
-    editorHintPre: 'clic pour diviser · ',
-    editorHintPost:
-      ' inverse la ligne · glisser sur les zones pour fusionner · glisser les bords partagés pour redimensionner',
-    templateColumns: 'Colonnes',
-    templateRows: 'Lignes',
-    templateGrid: 'Grille',
-    templatePriority: 'Priorité',
-    zoneTag: index => `zone ${index}`,
-    mergeZones: count => `Fusionner ${count} zones`,
-    customZoneName: count => `Personnalisé ${count}-zones`,
-    layoutNamePlaceholder: fallback => `Nom de la mise en page (${fallback})`,
-    saveApply: 'Enregistrer et appliquer',
-    notExpressible: "cet agencement s'entrelace (roue) — pas encore exprimable comme des divisions imbriquées",
-    zoneCount: count => `${count} zones`,
     tabCount: count => `${count} onglet${count === 1 ? '' : 's'}`,
     tabActions: title => `Actions pour ${title}`
   },

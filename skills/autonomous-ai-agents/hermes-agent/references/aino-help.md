@@ -39,6 +39,7 @@ third-party login or server availability still requires the appropriate live ser
 | Approval, secrets, external actions | `extensions-and-safety.md` | `handbook/references/security-privacy.md` |
 | Cron, gateway, messaging | `scheduling-and-gateway.md` | `handbook/references/background-systems.md`, `handbook/references/webhooks.md` |
 | Browser sign-in import and saved-login fill | `settings.md`, `files-and-panels.md` | `handbook/references/runtime-0231-additions.md` (browser/vault) |
+| Operate an in-app browser, switch tabs, double-click, dialogs, uploads/downloads | `files-and-panels.md` → “让 AI 操作当前网页” | Existing `drive_preview` action schema; new conversations load updated capabilities |
 | Members on another gateway and uncertain Stop | `conversations-and-collaboration.md` | `handbook/references/runtime-0231-additions.md` (groups) |
 | Plugin RPC, hooks, dynamic environment | `extensions-and-safety.md` | `handbook/references/runtime-0231-additions.md` (plugins) |
 | Read a stored or delegated transcript without running it | `files-and-panels.md` | `handbook/references/runtime-0231-additions.md` (stored reads) |

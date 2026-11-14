@@ -628,7 +628,13 @@ function CanonicalRoomView({
       : await withdrawCanonicalGroupSend(exact.binding, exact.params.event_id).catch(() => undefined)
 
     if (alive.current) {
-      settleUnsent(exact, words, left, labels.sendRefused)
+      const preparation = (error as { data?: { preparation_message?: unknown } } | null)?.data?.preparation_message
+      settleUnsent(
+        exact,
+        words,
+        left,
+        typeof preparation === 'string' && preparation.trim() ? preparation : labels.sendRefused
+      )
     }
 
     if (run.posted) {

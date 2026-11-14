@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { beginPreviewOperation, resumePreview } from './preview-agent-control'
 import { normalizePreviewAddress, PreviewBrowserBar } from './preview-browser-bar'
 
 const baseProps = {
@@ -79,6 +80,30 @@ describe('normalizePreviewAddress', () => {
 })
 
 describe('PreviewBrowserBar', () => {
+  it('lets the user switch between fitting the page and its actual size without navigation', async () => {
+    const onSetPageZoom = vi.fn()
+    const rendered = render(<PreviewBrowserBar {...baseProps} onSetPageZoom={onSetPageZoom} pageZoom={0.67} pageZoomMode="fit" />)
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Page zoom: 67%' }), { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Actual size (100%)' }))
+    expect(onSetPageZoom).toHaveBeenLastCalledWith(1)
+    rendered.rerender(<PreviewBrowserBar {...baseProps} onSetPageZoom={onSetPageZoom} pageZoom={1} pageZoomMode="manual" />)
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Page zoom: 100%' }), { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Fit width' }))
+    expect(onSetPageZoom).toHaveBeenLastCalledWith('fit')
+    expect(baseProps.onNavigate).not.toHaveBeenCalled()
+    expect(baseProps.onReload).not.toHaveBeenCalled()
+  })
+
+  it('offers user takeover for the operation in its browser tab', () => {
+    const operation = beginPreviewOperation('bar-operation', 'acting')
+    render(<PreviewBrowserBar {...baseProps} tabId="bar-operation" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }))
+    expect(operation.signal.aborted).toBe(true)
+    expect(screen.getByRole('button', { name: 'Return to AI' })).toBeTruthy()
+    operation.release()
+    resumePreview('bar-operation')
+  })
+
   it('disables back and forward when there is no history', () => {
     const rendered = render(<PreviewBrowserBar {...baseProps} />)
 

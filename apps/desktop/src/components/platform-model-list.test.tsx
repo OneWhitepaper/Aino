@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
@@ -258,6 +258,77 @@ function renderMenu(props: Partial<PlatformModelListProps> = {}) {
     </DropdownMenu>
   )
 }
+
+it.each(['picker', 'menu'] as const)(
+  'shows the account-effective multiplier in the %s model rows',
+  async presentation => {
+    const discounted = platformModel()
+    discounted.pricing.effective_user_rate = '0.2500'
+    discounted.pricing.group_peak = { start: '09:00', end: '18:00', multiplier: '2' }
+    const free = platformModel('free')
+    free.display_name = 'Free Model'
+    free.pricing.effective_user_rate = '0'
+    await installPlatform(async () => [discounted, free])
+
+    if (presentation === 'menu') {
+      renderMenu()
+    } else {
+      render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
+    }
+
+    const role = presentation === 'menu' ? 'menuitem' : 'option'
+    const row = await screen.findByRole(role, { name: /Fixture Model/ })
+    expect(within(row).getByText('0.25×')).toBeTruthy()
+    expect(within(row).getByLabelText('Account rate: 0.25×')).toBeTruthy()
+    expect(within(await screen.findByRole(role, { name: /Free Model/ })).getByText('0×')).toBeTruthy()
+  }
+)
+
+it('refreshes an expired account multiplier when the picker reopens while keeping a fresh catalog cached', async () => {
+  let clock = 100_000
+  const now = vi.spyOn(Date, 'now').mockImplementation(() => clock)
+  let rate = '0.5'
+
+  const list = vi.fn(async () => [
+    { ...platformModel(), pricing: { ...platformModel().pricing, effective_user_rate: rate } }
+  ])
+
+  try {
+    await installPlatform(list)
+    const first = render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
+    await screen.findByText('0.5×')
+    first.unmount()
+    const fresh = render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
+    await screen.findByText('0.5×')
+    expect(list).toHaveBeenCalledTimes(1)
+    fresh.unmount()
+
+    clock += 30_001
+    rate = '1.5'
+    render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
+    await screen.findByText('1.5×')
+    expect(list).toHaveBeenCalledTimes(2)
+  } finally {
+    now.mockRestore()
+  }
+})
+
+it('reloads account rates when the identity changes without a revision bump', async () => {
+  let rate = '0.5'
+  await installPlatform(async () => [
+    { ...platformModel(), pricing: { ...platformModel().pricing, effective_user_rate: rate } }
+  ])
+  render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
+  await screen.findByText('0.5×')
+  const account = window.hermesDesktop!.platformAccount
+  rate = '2.5'
+  account.status = async () => ({ ...platformSnapshot(), mode: 'production' })
+  await act(async () => {
+    await platformAccountActions(account).refresh()
+  })
+  await screen.findByText('2.5×')
+  expect(screen.queryByText('0.5×')).toBeNull()
+})
 
 it('uses the shared search in menu presentation without adding a second search or inline details', async () => {
   await installPlatform(async () => [

@@ -11,13 +11,14 @@
   container: aino-group-workspace / inline-size;
 }
 .aino-group-header {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
   gap: 12px;
   min-height: 72px;
   padding: 12px 28px;
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  border-bottom: 1px solid var(--ui-stroke-secondary);
   background: var(--ui-bg-elevated);
 }
 .aino-group-heading {
@@ -25,8 +26,8 @@
   min-width: 0;
 }
 .aino-group-header[data-main-tab='true'] {
-  height: var(--aino-tool-strip-height);
-  min-height: var(--aino-tool-strip-height);
+  height: var(--aino-band-row2);
+  min-height: var(--aino-band-row2);
   padding-block: 6px;
 }
 .aino-group-header[data-main-tab='true'] .aino-group-heading p {
@@ -116,15 +117,16 @@
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable both-edges;
 }
-.aino-group-messages,
 .aino-group-composer-zone {
   width: min(var(--aino-conversation-width), calc(100cqw - var(--aino-conversation-inset) * 2));
   margin-inline: max(var(--aino-conversation-inset), calc((100cqw - var(--aino-conversation-width)) / 2));
   padding-inline: 0;
 }
 .aino-group-messages {
-  /* Center within symmetric scrollbar gutters without overflowing the scrollport. */
+  /* A group keeps distinct left/right speakers across a wider conversation lane. */
+  width: min(1120px, calc(100cqw - var(--aino-conversation-inset) * 2));
   margin-inline: auto;
+  padding-inline: 0;
   padding-block: 36px 20px;
 }
 .aino-group-message {
@@ -153,7 +155,7 @@
 .aino-group-message-main {
   position: relative;
   min-width: 0;
-  max-width: min(calc(100% - 43px), 66ch);
+  max-width: min(calc(100% - 44px), 78%, 74ch);
 }
 .aino-group-message-meta {
   display: flex;
@@ -897,7 +899,7 @@
 }
 .aino-group-workspace ::selection,
 .aino-group-mention-popover ::selection {
-  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  background: var(--ui-selection-background);
 }
 .aino-group-workspace textarea {
   caret-color: var(--ui-text-primary);

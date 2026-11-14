@@ -717,8 +717,6 @@ export const zhOverrides = {
     enterHud: 'HUD 模式',
     exitHud: '退出 HUD 模式',
     resetHudLayout: '重置 HUD 大小和位置',
-    layoutEditor: '布局编辑器',
-    layoutEditorTitle: mod => `布局编辑器 — ${mod} 点击重置布局`
   },
 
   keybinds: {
@@ -1158,10 +1156,6 @@ export const zhOverrides = {
       tabStripAuto: '自动',
       tabStripAlways: '始终',
       tabStripNever: '从不',
-      appActionsTitle: '应用操作',
-      appActionsDesc: '设置、布局和 HUD 放在标题栏左侧还是右侧。选右侧可给标签留出左边空间。',
-      appActionsLeft: '左侧',
-      appActionsRight: '右侧',
       terminalFontTitle: '终端字体',
       terminalFontDesc:
         '选择已安装的字体用于桌面端终端。Nerd Font 可正确显示 Powerlevel10k 和 Shell 图标；留空则使用内置的 JetBrains Mono。',
@@ -3079,7 +3073,6 @@ export const zhOverrides = {
       viewLog: '操作日志'
     },
     contributedActions: {
-      layoutEditMode: '切换布局编辑模式',
       reloadPlugins: '重新加载桌面插件',
       resetLayout: '重置布局',
       toggleStatusbar: '切换状态栏',
@@ -3926,6 +3919,9 @@ export const zhOverrides = {
     steer: '引导当前运行',
     redirect: '重新定向当前运行',
     stop: '停止',
+    pauseTask: '暂停任务',
+    pausingTask: '正在暂停…',
+    continuingTask: '正在继续…',
     send: '发送',
     speaking: '讲话中',
     transcribing: '转写中',
@@ -5261,29 +5257,6 @@ export const zhOverrides = {
     pluginDisabled: pluginId => `插件“${pluginId}”已禁用`,
     pluginDisabledBody: '在 技能与工具 → 插件 中重新启用即可恢复面板。',
     missingPane: paneId => `缺少面板：${paneId}`,
-    editTitle: '布局',
-    editHint: '选择一个布局，或在区域之间拖动面板。',
-    reset: '重置',
-    templates: '模板',
-    custom: '自定义',
-    newGridLayout: '新建网格布局',
-    saveCurrentAs: '将当前排列保存为模板',
-    nameLayoutPlaceholder: '为布局命名…',
-    deletePreset: name => `删除 ${name}`,
-    zoneEditorTitle: '区域编辑器',
-    editorHintPre: '点击拆分 · ',
-    editorHintPost: ' 翻转分割线 · 拖过多个区域可合并 · 拖动共享边可调整大小',
-    templateColumns: '列',
-    templateRows: '行',
-    templateGrid: '网格',
-    templatePriority: '优先',
-    zoneTag: index => `区域 ${index}`,
-    mergeZones: count => `合并 ${count} 个区域`,
-    customZoneName: count => `自定义 ${count} 区`,
-    layoutNamePlaceholder: fallback => `布局名称（${fallback}）`,
-    saveApply: '保存并应用',
-    notExpressible: '此排列互相咬合（风车形）——暂无法表示为嵌套拆分',
-    zoneCount: count => `${count} 个区域`,
     tabCount: count => `${count} 个标签页`,
     paneTitles: {
       sessions: '会话',
@@ -5293,12 +5266,6 @@ export const zhOverrides = {
       logs: '日志'
     },
 
-    layoutTitles: {
-      default: '默认',
-      focus: '专注',
-      terminalDeck: '终端布局',
-      quad: '四宫格'
-    },
     tabActions: title => `${title} 的操作`
   },
 

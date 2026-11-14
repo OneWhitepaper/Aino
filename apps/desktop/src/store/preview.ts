@@ -746,8 +746,9 @@ export function commitBrowserTabLocation(tabId: string, url: string, title?: str
  *    later writes (address-bar navigation) in the OWNER's bucket — a splice
  *    would duplicate the tab into the primary profile's rail.
  *
- *  Reads every profile bucket plus the pre-scoping single-array shape. */
-export function adoptPersistedBrowserTab(tabId: string) {
+ *  `rehome: false` refreshes background metadata without taking this window
+ *  away from its current profile. Reads the legacy single-array shape too. */
+export function adoptPersistedBrowserTab(tabId: string, rehome = true) {
   if (!tabId) {
     return
   }
@@ -776,7 +777,17 @@ export function adoptPersistedBrowserTab(tabId: string) {
     }
 
     for (const [key, tabs] of buckets) {
-      if (tabs.some(tab => tab.id === tabId)) {
+      const persisted = tabs.find(tab => tab.id === tabId)
+
+      if (persisted?.target.kind === 'url') {
+        if (!rehome) {
+          tabsByProfile[key] = (tabsByProfile[key] ?? []).map(tab => tab.id === tabId
+            ? { ...tab, target: { ...tab.target, url: persisted.target.url, label: persisted.target.label } }
+            : tab)
+
+          return
+        }
+
         applyPreviewScope(key || 'default')
 
         return
@@ -809,12 +820,10 @@ export function popOutBrowserTab(tabId: string) {
     typeof document !== 'undefined' && document.activeElement instanceof Element ? document.activeElement : null
 
   rememberPreviewAnnotateDestination(tabId, capturePreviewAnnotateDestination(anchor))
-  markBrowserTabPopped(tabId, true)
   commitBrowserTabLocation(tabId, page?.url || tab.target.url, page?.title)
   void openBrowserInNewWindow(tabId).then(ok => {
-    if (!ok) {
-      markBrowserTabPopped(tabId, false)
-    }
+    // Main authorizes the destination before the source pane releases its native page.
+    markBrowserTabPopped(tabId, ok)
   })
 }
 
@@ -1265,6 +1274,7 @@ function closeRightRailTabs(requestedIds: ReadonlySet<string>, discard = false) 
 
   for (const tabId of tabIds) {
     forgetBrowserPage(tabId)
+    void window.hermesDesktop?.nativePreview?.closeTab(tabId).catch(error => console.error('Browser close failed', error))
   }
 
   $previewTabs.set(next)

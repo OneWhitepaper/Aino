@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { dropPlugin, publishPlugin } from '@/contrib/plugins-store'
 
 import {
-  localizedLayoutTitle,
   localizedPaletteDetail,
   localizedPaletteLabel,
   localizedPaneTitle
@@ -33,12 +32,6 @@ describe('core contribution display copy', () => {
     } finally {
       dropPlugin('hermes-bots')
     }
-  })
-
-  it('localizes built-in layout preset names while preserving custom names', () => {
-    expect(localizedLayoutTitle(zh, 'default', 'Default', undefined)).toBe('默认')
-    expect(localizedLayoutTitle(zh, 'terminal-deck', 'Terminal deck', 'core')).toBe('终端布局')
-    expect(localizedLayoutTitle(zh, 'user-layout', '我的布局', 'user')).toBe('我的布局')
   })
 
   it('resolves palette labels from the active locale and falls back for plugins', () => {

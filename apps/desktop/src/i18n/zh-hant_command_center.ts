@@ -215,7 +215,7 @@ export const zhHantCommandCenter = {
       userIdPlaceholder: 'Telegram 使用者 ID',
       add: '新增',
       numericOnly: '允許的 Telegram 使用者 ID 必須是數字。',
-      saveAndRestart: '儲存並重新啟動',
+      saveAndRestart: '儲存並連線',
       applying: '正在儲存…',
       pairingExpired: 'Telegram 配對已到期。請重新開始 QR 設定。',
       stillWaiting: detail => `仍在等待 Telegram。出錯後重試：${detail}`,

@@ -3,12 +3,12 @@ import { EventEmitter } from 'node:events'
 import type { Session, WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 
+import { isPreviewGuestSession, registerNativePreviewGuest, setNativePreviewOwner } from './preview-guest-owner'
 import {
   applyPreviewGuestAttachPrefs,
   beginPreviewGuestActivity,
   endPreviewGuestActivity,
   executePreviewGuestScript,
-  isPreviewGuestSession,
   isPreviewPartition,
   PREVIEW_GUEST_PARTITION,
   previewPartitionForProfile
@@ -76,7 +76,7 @@ describe('applyPreviewGuestAttachPrefs', () => {
 })
 
 function contents(
-  type: 'window' | 'webview',
+  type: 'window' | 'webview' | 'browserView',
   owner?: WebContents,
   session = {} as Session,
   { registerPreview = true }: { registerPreview?: boolean } = {}
@@ -122,6 +122,63 @@ function ownerFixture() {
 }
 
 describe('preview script activity', () => {
+  it('retires a native guest lease before the new window can operate the same page', async () => {
+    const { owner, hold } = ownerFixture()
+    const next = ownerFixture()
+    const session = {} as Session
+    applyPreviewGuestAttachPrefs({}, PREVIEW_GUEST_PARTITION, '/preload.js', () => session)
+    const guest = contents('browserView', undefined, session)
+    const unregister = registerNativePreviewGuest(guest, owner)
+
+    try {
+      guest.executeJavaScript.mockReturnValueOnce(new Promise(() => {}))
+      const first = beginPreviewGuestActivity(owner, guest, hold)
+      const second = beginPreviewGuestActivity(owner, guest, hold)
+      const pending = executePreviewGuestScript(owner, first, 'old window work')
+      const rejected = expect(pending).rejects.toThrow('unavailable')
+      setNativePreviewOwner(guest, next.owner)
+      await rejected
+      expect(owner.getBackgroundThrottling()).toBe(true)
+      expect(guest.getBackgroundThrottling()).toBe(true)
+      expect(() => beginPreviewGuestActivity(owner, guest, hold)).toThrow('belong')
+      await expect(executePreviewGuestScript(owner, second, 'stale lease')).rejects.toThrow('belong')
+      const active = beginPreviewGuestActivity(next.owner, guest, next.hold)
+      endPreviewGuestActivity(owner, active)
+      expect(next.owner.getBackgroundThrottling()).toBe(false)
+      endPreviewGuestActivity(next.owner, active)
+      expect(next.owner.getBackgroundThrottling()).toBe(true)
+    } finally {
+      unregister()
+    }
+  })
+
+  it.each(['detached', 'unregistered'])('rejects native guests and cancels queued scripts when %s', async reason => {
+    const { owner, hold } = ownerFixture()
+    const session = {} as Session
+    applyPreviewGuestAttachPrefs({}, PREVIEW_GUEST_PARTITION, '/preload.js', () => session)
+    const guest = contents('browserView', undefined, session)
+    expect(() => beginPreviewGuestActivity(owner, guest, hold)).toThrow('belong')
+    const unregister = registerNativePreviewGuest(guest, owner)
+
+    try {
+      guest.isLoadingMainFrame.mockReturnValue(true)
+      const pending = executePreviewGuestScript(owner, beginPreviewGuestActivity(owner, guest, hold), 'queued')
+      const rejected = expect(pending).rejects.toThrow('unavailable')
+      if (reason === 'detached') {
+        setNativePreviewOwner(guest, null)
+      } else {
+        unregister()
+      }
+      await rejected
+      guest.emit('did-stop-loading')
+      expect(guest.executeJavaScript).not.toHaveBeenCalled()
+      expect(owner.getBackgroundThrottling()).toBe(true)
+      expect(() => beginPreviewGuestActivity(owner, guest, hold)).toThrow('belong')
+    } finally {
+      unregister()
+    }
+  })
+
   it('releases the owner and listeners when the guest cannot be woken', () => {
     const { owner, hold } = ownerFixture()
     const guest = contents('webview', owner)

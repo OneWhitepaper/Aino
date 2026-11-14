@@ -12,6 +12,7 @@ import type { KeepAwakeMode } from '../electron/power-save'
 import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { WindowSizeMode } from '../electron/window-size-types'
+import type { LegacyHistoryBridge } from '../shared/legacy-history-recovery'
 import type {
   PlatformAccountBridge,
   PlatformAccountWindowOwner,
@@ -20,7 +21,10 @@ import type {
   PlatformDiagnosticsBridge,
   PlatformModelsBridge
 } from '../shared/platform-contract'
+import type { PreviewBrowserDialog, PreviewBrowserFileChooser, PreviewBrowserInteractionRequest, PreviewBrowserInteractionResult } from '../shared/preview-browser-interactions'
+import type { NativePreviewBridge } from '../shared/preview-native'
 
+import type { PreviewInputEvent } from './app/chat/right-rail/preview-input'
 import type { UiPreferencesBridge } from './lib/ui-preferences/sync'
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
@@ -44,6 +48,7 @@ declare global {
   interface Window {
     hermesDesktop: {
       platformAccount: PlatformAccountBridge
+      legacyHistoryRecovery?: LegacyHistoryBridge
       platformModels: PlatformModelsBridge
       platformBilling?: PlatformBillingBridge
       platformDevices?: PlatformDevicesBridge
@@ -131,6 +136,7 @@ declare global {
       // `tabId` is the `$previewTabs` id; closing the window fires
       // `onBrowserPopoutClosed` so the caller can dock the tab again.
       openBrowserWindow?: (tabId: string) => Promise<{ ok: boolean; error?: string }>
+      nativePreview?: NativePreviewBridge
       // Cross-window renderer relay (pop-out Browser ↔ chat windows). Electron
       // main relays opaque payloads to the other Hermes renderer windows;
       // renderer code keeps the destination exact and rejects anything not
@@ -412,6 +418,13 @@ declare global {
         viewport?: { height: number; width: number }
         webContentsId: number
       }) => Promise<string>
+      previewBrowserInteraction?: (webContentsId: number,
+        request: PreviewBrowserInteractionRequest
+      ) => Promise<PreviewBrowserInteractionResult>
+      onPreviewFileChooser?: (callback: (event: { webContentsId: number; scope: string;
+        chooser: PreviewBrowserFileChooser }) => void) => () => void
+      onPreviewBrowserDialog?: (callback: (event: { webContentsId: number; scope: string;
+        dialog: PreviewBrowserDialog; defaultText?: string }) => void) => () => void
       savePastedText: (text: string) => Promise<string>
       saveClipboardImage: () => Promise<string>
       getPathForFile: (file: File) => string
@@ -481,6 +494,9 @@ declare global {
       beginPreviewGuestActivity?: (webContentsId: number) => Promise<number>
       endPreviewGuestActivity?: (token: number) => Promise<void>
       executePreviewGuestScript?: (token: number, code: string) => Promise<unknown>
+      armPreviewApproval?: (token: number) => Promise<void>
+      validatePreviewApproval?: (token: number) => Promise<void>
+      sendPreviewApprovedInput?: (token: number, input: PreviewInputEvent) => Promise<void>
       openExternal: (url: string) => Promise<void>
       onExternalOpenFailed?: (callback: (payload: ExternalOpenFailedPayload) => void) => () => void
       /** The free tier's browser challenge (electron/challenge-window.ts): load

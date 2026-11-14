@@ -821,7 +821,7 @@ export const host = {
   ensureAgent: async (connectionId: null | string | undefined, profile: string): Promise<void> =>
     ensureGatewayAgent(connectionId ?? null, (profile ?? '').trim() || 'default'),
 
-  /** Session-list mutations (pin, reorder, colour) — see `./sessions`. */
+  /** Session-list mutations (pin, reorder) — see `./sessions`. */
   sessions: sessionsHost,
 
   /** Typed capabilities bridge — see `./bridge.ts`. `pluginDecisions` is
@@ -1622,7 +1622,7 @@ export {
  *  `APPEARANCE_AREAS.extra` to add controls at the end of the Appearance page.
  *  `ColorSwatches` is the app's own swatch grid (profile rail / project dialog
  *  look) — use it for colour picking instead of driving app widgets through
- *  React internals; pair it with `host.sessions.setColor` for session colours. */
+ *  React internals. */
 export { APPEARANCE_AREAS } from '@/app/settings/appearance-contrib'
 /** THE settings rows: `ListRow` is label + description with the control beside
  *  it (wide) or under it (narrow); `ToggleRow` is the one on/off row — a Switch,

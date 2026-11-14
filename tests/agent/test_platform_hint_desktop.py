@@ -94,6 +94,14 @@ class TestPlatformHintResolutionInStablePrompt:
         finally:
             db.close()
 
+    def test_visible_browser_guidance_reaches_desktop_sessions_with_deferred_tools(self):
+        stable = _stable_prompt(_make_agent(platform="desktop", deferred_tool_names={"desktop_preview", "drive_preview"}))
+
+        assert "visible in-app browser" in stable
+        assert "desktop_preview" in stable and "drive_preview" in stable
+        assert "tool_search" in stable and "tool_call" in stable
+        assert "browser_exec" in stable and "explicitly requests" in stable
+
     def test_embedded_tui_yields_tui_hint_with_clarifier(self, monkeypatch):
         monkeypatch.setenv("HERMES_DESKTOP", "1")
         monkeypatch.setenv("HERMES_DESKTOP_TERMINAL", "1")

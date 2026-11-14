@@ -33,7 +33,6 @@ import {
   insertAtGroup,
   isLayoutNode,
   type LayoutNode,
-  mergeZonesWithPane as mergeZonesWithPaneOp,
   migratePersistedTree,
   mirrorTreeHorizontal,
   movePane as movePaneOp,
@@ -54,6 +53,7 @@ import { FLOATING_PLACEMENT } from './renderer/floating-rect'
 import { tabStripVisibleForZone } from './renderer/strip-visibility'
 import {
   fallbackToolDockGroup,
+  foldNewToolPanelGroups,
   hostsPreviewToolTab,
   isRestoredToolPanelGroup,
   toolDockPosition,
@@ -1371,8 +1371,7 @@ export function adoptContributedPanes(): void {
     const target = findGroupOfPane(next, anchor ?? '')?.id
 
     if (target) {
-      // Silent adoption preserves the active tab and strip preference. Edge
-      // shares replay only against their recorded seam partner (#108679).
+      // Adoption preserves the user's tab; edge shares require their recorded seam partner (#108679).
       next =
         insertAtGroup(
           next,
@@ -1391,7 +1390,7 @@ export function adoptContributedPanes(): void {
   }
 
   if (next !== tree) {
-    commit(next)
+    commit(foldNewToolPanelGroups(tree, next, id => panes.find(pane => pane.id === id)))
   }
 
   // Minimize after the zone exists, only on first arrival: later boots keep
@@ -1612,33 +1611,6 @@ export function moveTreePanes(
     for (const paneId of paneIds) {
       markPaneUserPlaced(paneId)
     }
-  }
-}
-
-/**
- * Shift-drag span: merge the highlighted zones into one holding `paneId`. Falls
- * back to a single-zone move at `fallbackGroupId` when the set can't merge
- * (non-rectangular selection).
- */
-export function mergeTreeZones(groupIds: string[], paneId: string | readonly string[], fallbackGroupId: null | string) {
-  const tree = $layoutTree.get()
-
-  if (!tree) {
-    return
-  }
-
-  const paneIds = typeof paneId === 'string' ? [paneId] : paneId
-  const merged = mergeZonesWithPaneOp(tree, groupIds, paneId)
-
-  if (merged) {
-    commit(merged)
-    markActivePreset('custom')
-
-    for (const id of paneIds) {
-      markPaneUserPlaced(id)
-    }
-  } else if (fallbackGroupId) {
-    moveTreePanes(paneIds, { groupId: fallbackGroupId, pos: 'center' })
   }
 }
 

@@ -14,7 +14,8 @@ type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?:
 export async function preparePlatformImageSession(
   owner: SessionOwnerScope,
   sessionId: string,
-  request: Request
+  request: Request,
+  required = false
 ): Promise<void> {
   const captured = platformDefaultScope(profileScopeForSessionOwner(owner))
 
@@ -33,20 +34,14 @@ export async function preparePlatformImageSession(
         ? (agent as Record<string, unknown>).disabled_toolsets
         : undefined
 
-    // This is an explicit tool exclusion, never a guess from the user's wording.
-    if ((Array.isArray(disabled) ? disabled : [disabled]).includes('image_gen')) {
-      return
-    }
-
     const rawImage = config.image_gen
+    const image = rawImage && typeof rawImage === 'object' && !Array.isArray(rawImage) ? rawImage as Record<string, unknown> : null
 
-    if (!rawImage || typeof rawImage !== 'object' || Array.isArray(rawImage)) {
-      return
-    }
+    // An explicit exclusion and a non-managed backend both skip chat's optional
+    // preparation, but an avatar request must fail before spending a request.
+    if ((Array.isArray(disabled) ? disabled : [disabled]).includes('image_gen') || image?.provider !== 'aino') {
+      if (required) { throw new PlatformSelectionError('model_unavailable') }
 
-    const image = rawImage as Record<string, unknown>
-
-    if (image.provider !== 'aino') {
       return
     }
 
@@ -79,7 +74,8 @@ export async function preparePlatformImageSession(
       account ?? undefined,
       'image'
     )
-  } catch {
+  } catch (error) {
+    if (required) { throw error }
     notify({
       id: `aino-image-binding:${captured.key}:${sessionId}`,
       kind: 'warning',

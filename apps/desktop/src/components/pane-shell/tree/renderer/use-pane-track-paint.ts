@@ -35,8 +35,9 @@ function trackMotion(track: HTMLElement) {
 
     const frames = effect.getKeyframes()
     const end = frames.at(-1)
-    const axis = end?.width !== undefined ? 'width' : end?.height !== undefined ? 'height' : null
-    const target = axis ? Number.parseFloat(String(end?.[axis])) : Number.NaN
+    const paintOnly = track.dataset.toolTrackTo !== undefined
+    const axis = paintOnly || end?.width !== undefined ? 'width' : end?.height !== undefined ? 'height' : null
+    const target = Number.parseFloat(paintOnly ? track.dataset.toolTrackTo! : String(axis && end?.[axis]))
 
     // Vertical body height excludes the zone header. Keep its existing exit
     // behavior; only horizontal opening can use the track target verbatim.
@@ -44,7 +45,7 @@ function trackMotion(track: HTMLElement) {
       continue
     }
 
-    return { animation, axis, direction, effect, frames, target } as const
+    return { animation, axis, direction, effect, frames, target, paintOnly } as const
   }
 
   return null
@@ -69,6 +70,20 @@ function trackPaintState(before: TrackPlacement | null, placement: TrackPlacemen
   const edge = (opening && !before?.visible) || (closing && before?.visible)
 
   return { motion, opening, closing, edge }
+}
+
+function closingViewport(
+  element: HTMLElement,
+  placement: TrackPlacement,
+  axis: 'width' | 'height',
+  pin: { slot: HTMLElement; width: number } | null
+): number {
+  // The first opening can reverse before ResizeObserver records its kept size.
+  if (axis === 'width' && pin?.slot === placement.slot) {
+    return pin.width
+  }
+
+  return Number.parseFloat(element.style.getPropertyValue(`--pane-kept-${axis}`))
 }
 
 /** Keep native guest viewports steady while their track clips open or closed.
@@ -98,6 +113,10 @@ export function usePaneTrackPaint(ref: RefObject<HTMLElement | null>, placement:
         element.style[current.axis] = previous.current?.visible
           ? `anchor-size(${current.axis})`
           : `var(--pane-kept-${current.axis}, 0px)`
+      } else if (current?.axis === 'width') {
+        element.style.width = previous.current?.visible
+          ? 'var(--pane-track-width, anchor-size(width))'
+          : 'var(--pane-kept-width, 0px)'
       }
 
       if (pin && sameSlot) {
@@ -164,8 +183,9 @@ export function usePaneTrackPaint(ref: RefObject<HTMLElement | null>, placement:
       return
     }
 
-    const { animation, axis, direction, effect, frames } = motion
-    const viewport = opening ? motion.target : Number.parseFloat(element.style.getPropertyValue(`--pane-kept-${axis}`))
+    const { animation, axis, direction, effect, frames, paintOnly } = motion
+
+    const viewport = opening ? motion.target : closingViewport(element, placement, axis, pin)
 
     if (!(viewport > 0)) {
       return
@@ -181,15 +201,30 @@ export function usePaneTrackPaint(ref: RefObject<HTMLElement | null>, placement:
 
     if (axis === 'width') {
       element.style.setProperty('--pane-track-width', `${viewport}px`)
+
+      if (closing) {
+        element.style.width = `${viewport}px`
+      }
     } else {
       element.style.height = `${viewport}px`
     }
 
     const clip = element.animate(
-      frames.map(frame => {
-        const inset = Math.max(0, viewport - Number.parseFloat(String(frame[axis])))
+      frames.map((frame, index) => {
+        const size = paintOnly
+          ? Number(index === 0 ? track.dataset.toolTrackFrom : track.dataset.toolTrackTo)
+          : Number.parseFloat(String(frame[axis]))
 
-        return { clipPath: axis === 'width' ? `inset(0 ${inset}px 0 0)` : `inset(0 0 ${inset}px 0)` }
+        const inset = Math.max(0, viewport - size)
+
+        return {
+          clipPath:
+            axis === 'height'
+              ? `inset(0 0 ${inset}px 0)`
+              : track.dataset.toolTrackClipLeft === 'true'
+                ? `inset(0 0 0 ${inset}px)`
+                : `inset(0 ${inset}px 0 0)`
+        }
       }),
       { ...effect.getTiming(), fill: 'both' }
     )

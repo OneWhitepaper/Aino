@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type * as WindowsStore from '@/store/windows'
+import { deferred } from '@/test/deferred'
 
 const isBrowserWindow = vi.hoisted(() => vi.fn(() => false))
 const actOnActivePreview = vi.hoisted(() => vi.fn())
@@ -58,8 +59,8 @@ vi.mock('@/store/windows', async importOriginal => {
   }
 })
 
-vi.mock('./preview-act', () => ({
-  actOnActivePreview: (...args: unknown[]) => actOnActivePreview(...args)
+vi.mock('./preview-agent', () => ({
+  runPreviewAgentAction: (...args: unknown[]) => actOnActivePreview(...args)
 }))
 
 vi.mock('./preview-reader', () => ({
@@ -109,6 +110,7 @@ function installDesktopRelay() {
 
 describe('preview pop-out bridge', () => {
   afterEach(() => {
+    vi.useRealTimers()
     LoopbackChannel.listeners.clear()
     vi.resetModules()
     isBrowserWindow.mockReturnValue(false)
@@ -138,9 +140,132 @@ describe('preview pop-out bridge', () => {
     try {
       const result = await requestPopoutPreviewAct({ kind: 'click', ref: 'btn-1' })
 
-      expect(actOnActivePreview).toHaveBeenCalledWith({ kind: 'click', ref: 'btn-1' })
+      expect(actOnActivePreview).toHaveBeenCalledWith({ kind: 'click', ref: 'btn-1' }, expect.any(AbortSignal))
       expect(result).toEqual({ acted: 'click', success: true })
     } finally {
+      stop()
+    }
+  })
+
+  it('cancels only the forwarded action withdrawn by its chat window', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    const signals = new Map<string, AbortSignal>()
+    const second = deferred<{ success: boolean }>()
+    actOnActivePreview.mockImplementation(({ ref }: { ref: string }, signal: AbortSignal) => {
+      signals.set(ref, signal)
+
+      return ref === 'second'
+        ? second.promise
+        : new Promise(resolve => signal.addEventListener('abort', () => resolve({ success: false }), { once: true }))
+    })
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+    const controller = new AbortController()
+
+    try {
+      const first = requestPopoutPreviewAct({ kind: 'click', ref: 'first' }, undefined, controller.signal)
+      await vi.waitFor(() => expect(signals.has('first')).toBe(true))
+      const next = requestPopoutPreviewAct({ kind: 'click', ref: 'second' })
+      await vi.waitFor(() => expect([...signals.keys()]).toEqual(['first', 'second']))
+      controller.abort()
+      await expect(first).resolves.toBeNull()
+      expect(signals.get('first')!.aborted).toBe(true)
+      expect(signals.get('second')!.aborted).toBe(false)
+      second.resolve({ success: true })
+      await expect(next).resolves.toEqual({ success: true })
+    } finally {
+      stop()
+    }
+  })
+
+  it('never dispatches an action whose request was already cancelled', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+    const controller = new AbortController()
+    controller.abort()
+
+    try {
+      await expect(
+        requestPopoutPreviewAct({ kind: 'click', ref: 'first' }, undefined, controller.signal)
+      ).resolves.toBeNull()
+      expect(actOnActivePreview).not.toHaveBeenCalled()
+    } finally {
+      stop()
+    }
+  })
+
+  it('returns a claimed action failure without inviting a second execution', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    actOnActivePreview.mockRejectedValue(new Error('The target tab closed'))
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+
+    try {
+      await expect(requestPopoutPreviewAct({ kind: 'click', ref: 'Save' })).resolves.toEqual({
+        error: 'The target tab closed',
+        success: false
+      })
+    } finally {
+      stop()
+    }
+  })
+
+  it('allows an accepted action to wait for confirmation, then cancels on its bounded deadline', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    vi.useFakeTimers()
+    let received: AbortSignal | undefined
+    actOnActivePreview.mockImplementation(
+      (_action, signal: AbortSignal) =>
+        new Promise(resolve => {
+          received = signal
+          signal.addEventListener('abort', () => resolve({ success: false }), { once: true })
+        })
+    )
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+    let settled = false
+
+    try {
+      const pending = requestPopoutPreviewAct({ kind: 'click', ref: 'Pay', sensitive: true })
+      void pending.then(() => {
+        settled = true
+      })
+      await vi.advanceTimersByTimeAsync(20_100)
+      expect(received).toBeInstanceOf(AbortSignal)
+      expect(received!.aborted).toBe(false)
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(90_000)
+      await expect(pending).resolves.toMatchObject({ success: false, error: expect.stringContaining('timed out') })
+      expect(received!.aborted).toBe(true)
+    } finally {
+      stop()
+    }
+  })
+
+  it('aborts in-flight actions when their pop-out responder is removed', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    let received: AbortSignal | undefined
+    actOnActivePreview.mockImplementation(
+      (_action, signal: AbortSignal) =>
+        new Promise(resolve => {
+          received = signal
+          signal.addEventListener('abort', () => resolve({ success: false }), { once: true })
+        })
+    )
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+    const controller = new AbortController()
+
+    try {
+      const pending = requestPopoutPreviewAct({ kind: 'click', ref: 'first' }, undefined, controller.signal)
+      await vi.waitFor(() => expect(received).toBeInstanceOf(AbortSignal))
+      stop()
+      expect(received!.aborted).toBe(true)
+      await expect(pending).resolves.toEqual({ success: false })
+    } finally {
+      controller.abort()
       stop()
     }
   })
@@ -226,6 +351,25 @@ describe('preview pop-out bridge', () => {
     const { installPopoutPreviewResponder } = await import('./preview-popout-bridge')
 
     expect(installPopoutPreviewResponder()).not.toThrow()
+  })
+
+  it('leaves an explicitly targeted tab for the pop-out that actually hosts it', async () => {
+    isBrowserWindow.mockReturnValue(true)
+    actOnActivePreview.mockResolvedValue({ success: true })
+    window.history.replaceState(null, '', '/?win=browser&tab=url:browser-a')
+    const { installPopoutPreviewResponder, requestPopoutPreviewAct } = await import('./preview-popout-bridge')
+    const stop = installPopoutPreviewResponder()
+    vi.useFakeTimers()
+
+    try {
+      const pending = requestPopoutPreviewAct({ kind: 'click', ref: 'Save', tabId: 'url:browser-b' })
+      await vi.advanceTimersByTimeAsync(20_100)
+      await expect(pending).resolves.toBeNull()
+      expect(actOnActivePreview).not.toHaveBeenCalled()
+    } finally {
+      stop()
+      window.history.replaceState(null, '', '/')
+    }
   })
 
   // F5 (SECURITY): a Stop on the chat window must abort the pop-out's in-flight fill BEFORE it reaches

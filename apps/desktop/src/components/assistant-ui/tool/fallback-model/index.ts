@@ -212,7 +212,7 @@ const TOOL_META: Record<ToolTitleKey, ToolMetaSpec> = {
     icon: 'terminal',
     tone: 'terminal'
   },
-  todo: { icon: 'tools', tone: 'agent' },
+  todo: { icon: 'checklist', tone: 'agent' },
   vision_analyze: {
     icon: 'eye',
     tone: 'image'

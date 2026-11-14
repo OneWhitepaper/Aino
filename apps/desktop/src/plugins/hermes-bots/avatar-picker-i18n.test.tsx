@@ -52,6 +52,7 @@ vi.mock('./avatar', () => ({
 vi.mock('./avatar-image', () => ({
   $imagenAvailable: { get: () => imageState.value, set: (value: boolean) => (imageState.value = value) },
   generateAvatarImage: vi.fn(),
+  generateAvatarFromPrompt: vi.fn(async () => { throw new Error('头像生成失败') }),
   normalizeAvatarImage: vi.fn(async (value: string) => value),
   pickImageFromDevice: vi.fn(),
   probeImagen: vi.fn()

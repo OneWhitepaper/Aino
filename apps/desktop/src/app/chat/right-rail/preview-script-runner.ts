@@ -15,13 +15,22 @@
 
 import type { PreviewOwner } from '@/store/preview-ownership'
 
+import type { PreviewBrowserInteractionRequest, PreviewBrowserInteractionResult } from '../../../../shared/preview-browser-interactions'
+
 import { activePreviewTabFor } from './preview-active-tab'
+import type { PreviewApproval } from './preview-approval'
 
 /** Runs JS source in the pane's guest page, resolving its completion value. */
 export interface PreviewScriptRunner {
   (code: string, signal?: AbortSignal): Promise<unknown>
+  /** Capture the same guest's visible viewport through the native bridge. */
+  capture?: (signal?: AbortSignal) => Promise<string>
   /** Keep the same guest awake between a driven action's script/input trips. */
   withActivity?: <T>(operation: () => Promise<T>, signal?: AbortSignal) => Promise<T>
+  nativeAction?: (request: Omit<PreviewBrowserInteractionRequest, 'scope'>,
+    signal?: AbortSignal) => Promise<PreviewBrowserInteractionResult>
+  setNativeAuthority?: (owner?: PreviewOwner) => void
+  beginApproval?: (signal?: AbortSignal) => Promise<PreviewApproval>
 }
 
 export interface ActivePreviewScriptRunner {
@@ -30,7 +39,14 @@ export interface ActivePreviewScriptRunner {
   tabId: string
 }
 
+export interface PreviewLoadFailure {
+  code?: number
+  description: string
+  url: string
+}
+
 interface RegisteredRunner {
+  failure?: PreviewLoadFailure
   generation: number
   ready: boolean
   runner: PreviewScriptRunner
@@ -75,12 +91,38 @@ export function invalidatePreviewScriptRunner(tabId: string): void {
   }
 }
 
+/** Keep native/pane load failures on the existing tab registration, never in a second page registry. */
+export function setPreviewLoadFailure(tabId: string, failure: PreviewLoadFailure | null): void {
+  const registration = runners.get(tabId)
+
+  if (!registration) {
+    return
+  }
+
+  registration.failure = failure ?? undefined
+
+  if (failure) {
+    registration.ready = false
+    registration.generation = ++nextDocumentGeneration
+  }
+}
+
+export function previewLoadFailureFor(tabId: string): PreviewLoadFailure | undefined {
+  return runners.get(tabId)?.failure
+}
+
+export function previewLoadFailureMessage(failure: PreviewLoadFailure): string {
+  const code = failure.code === undefined ? '' : ` (${failure.code})`
+
+  return `Browser page failed to load: ${failure.description}${code} at ${failure.url}. This is a load failure, not a page still loading. Do not repeat observations expecting it to finish; report the failure or retry navigation when appropriate.`
+}
+
 /** Mark the live renderer as ready after Electron created its new document. */
 export function markPreviewDocumentReady(tabId: string): void {
   const registration = runners.get(tabId)
 
   if (registration) {
-    registration.ready = true
+    registration.ready = !registration.failure
     registration.generation = ++nextDocumentGeneration
   }
 }
@@ -95,19 +137,58 @@ export function watchPreviewDocumentLifecycle(target: EventTarget, tabId: string
   const onStartNavigation = (event: Event) => {
     const detail = event as Event & { isInPlace?: boolean; isMainFrame?: boolean }
 
-    if (detail.isMainFrame === true && detail.isInPlace !== true) {
-      invalidatePreviewScriptRunner(tabId)
+    if (detail.isMainFrame === true) {
+      setPreviewLoadFailure(tabId, null)
+
+      if (detail.isInPlace === true) {
+        // SPA/hash navigation has no later dom-ready event, but still retires
+        // an approval or screenshot bound to the previous page location.
+        markPreviewDocumentReady(tabId)
+      } else {
+        invalidatePreviewScriptRunner(tabId)
+      }
     }
   }
 
   const onReady = () => markPreviewDocumentReady(tabId)
 
+  const onPageZoom = () => {
+    const registration = runners.get(tabId)
+
+    if (registration) {
+      registration.generation = ++nextDocumentGeneration
+    }
+  }
+
+  const onFail = (event: Event) => {
+    const detail = event as Event & {
+      errorCode?: number
+      errorDescription?: string
+      isMainFrame?: boolean
+      validatedURL?: string
+    }
+
+    if (detail.isMainFrame === false || detail.errorCode === -3) {
+      return
+    }
+
+    setPreviewLoadFailure(tabId, {
+      code: detail.errorCode,
+      description: detail.errorDescription || 'Page could not be loaded',
+      url: detail.validatedURL || ''
+    })
+  }
+
   target.addEventListener('did-start-navigation', onStartNavigation)
   target.addEventListener('dom-ready', onReady)
+  target.addEventListener('page-zoom-changed', onPageZoom)
+  target.addEventListener('did-fail-load', onFail)
 
   return () => {
     target.removeEventListener('did-start-navigation', onStartNavigation)
     target.removeEventListener('dom-ready', onReady)
+    target.removeEventListener('page-zoom-changed', onPageZoom)
+    target.removeEventListener('did-fail-load', onFail)
   }
 }
 
@@ -123,6 +204,20 @@ export function resolveActivePreviewScriptRunner(owner?: PreviewOwner): ActivePr
   const tab = activePreviewTabFor(owner)
 
   return tab ? previewScriptRunnerFor(tab.id) : null
+}
+
+/** Native dialogs/download receipts remain reachable while JavaScript or navigation is suspended. */
+export function resolveActivePreviewNativeRunner(owner?: PreviewOwner): ActivePreviewScriptRunner | null {
+  const tab = activePreviewTabFor(owner)
+  const registration = tab && runners.get(tab.id)
+
+  return registration ? { generation: registration.generation, runner: registration.runner, tabId: tab!.id } : null
+}
+
+export function isSamePreviewNativeRunner(binding: ActivePreviewScriptRunner): boolean {
+  const registration = runners.get(binding.tabId)
+
+  return registration?.runner === binding.runner && registration.generation === binding.generation
 }
 
 /** True only while `binding`'s tab still shows the same document through the same runner. */

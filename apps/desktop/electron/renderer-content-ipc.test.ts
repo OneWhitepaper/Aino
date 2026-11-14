@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, Session } from 'electron'
 import { afterEach, expect, test, vi } from 'vitest'
 
 const native = vi.hoisted(() => ({
@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 }))
 
 import { createAccountWorkspaceIpc } from './account-workspace'
+import { applyPreviewGuestAttachPrefs, PREVIEW_GUEST_PARTITION } from './preview-guest-throttle'
 import { registerRendererContentIpc } from './renderer-content-ipc'
 
 class NativeIpc extends EventEmitter {
@@ -50,11 +51,13 @@ function setup() {
   scratch.push(root)
   const ipc = new NativeIpc()
   let account = 1
+
   const fence = createAccountWorkspaceIpc(
     ipc,
     id => id === account,
     () => true
   )
+
   const window = {} as BrowserWindow
   const points = new Map([[1, { x: 17, y: 29 }]])
 
@@ -116,4 +119,31 @@ test('async clipboard work remains drainable and context-menu commands stay with
   expect(sender.copy).toHaveBeenCalledOnce()
   expect(sender.copyImageAt).toHaveBeenCalledExactlyOnceWith(17, 29)
   expect(window).not.toHaveProperty('copy')
+})
+
+test('screenshot IPC only captures admitted preview guests owned by the sender', async () => {
+  const { ipc } = setup()
+  const sender = { id: 1, isDestroyed: () => false, getType: () => 'window' }
+  const session = {} as Session
+  applyPreviewGuestAttachPrefs({}, PREVIEW_GUEST_PARTITION, '/preload.js', () => session)
+
+  const guest = {
+    isDestroyed: () => false,
+    getType: () => 'webview',
+    hostWebContents: sender,
+    session,
+    capturePage: vi.fn(async () => ({ isEmpty: () => false, toPNG: () => Buffer.from('owned') }))
+  }
+
+  native.fromId.mockReturnValue(guest)
+  await expect(ipc.invoke('hermes:capturePreview', sender, { webContentsId: 71 })).resolves.toBe(
+    'data:image/png;base64,b3duZWQ='
+  )
+  expect(native.fromId).toHaveBeenCalledWith(71)
+  expect(guest.capturePage).toHaveBeenCalledOnce()
+
+  guest.capturePage.mockClear()
+  const otherWindow = { ...sender }
+  await expect(ipc.invoke('hermes:capturePreview', otherWindow, { webContentsId: 71 })).rejects.toThrow(/belong/)
+  expect(guest.capturePage).not.toHaveBeenCalled()
 })

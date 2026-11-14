@@ -110,8 +110,52 @@ export async function wheelBy(input: PreviewInputHandle, down: number): Promise<
   }
 }
 
-/** Send one key the long way round, so a page watching any of the three sees it. */
+/** Resolve only explicit modifier chords; ordinary text characters keep their spelling. */
+export function parsePreviewKey(key: string): { keyCode: string; modifiers?: string[] } {
+  if (key.length === 1 || !key.includes('+')) {
+    return { keyCode: key }
+  }
+
+  const aliases = new Map([
+    ['alt', 'alt'],
+    ['option', 'alt'],
+    ['cmd', 'meta'],
+    ['command', 'meta'],
+    ['meta', 'meta'],
+    ['ctrl', 'control'],
+    ['control', 'control'],
+    ['shift', 'shift']
+  ])
+
+  const parts = key.split('+').map(part => part.trim())
+  const last = parts.pop()!
+  const modifiers = parts.map(part => aliases.get(part.toLowerCase()) || '')
+
+  const named = [
+    'Enter', 'Escape', 'Tab', 'Space', 'Backspace', 'Delete', 'Insert', 'Home', 'End',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown',
+    ...Array.from({ length: 24 }, (_, index) => `F${index + 1}`)
+  ]
+
+  const keyCode = last.length === 1 ? last.toLowerCase() : named.find(name => name.toLowerCase() === last.toLowerCase())
+
+  if (!keyCode || modifiers.some(modifier => !modifier) || new Set(modifiers).size !== modifiers.length) {
+    throw new Error(
+      'Invalid key combination. Use modifiers followed by one key, for example Meta+A or Ctrl+Shift+ArrowLeft.'
+    )
+  }
+
+  return { keyCode, modifiers }
+}
+
+/** Modifier chords must never insert their spelling through a char event. */
 export async function pressKey(input: PreviewInputHandle, key: string): Promise<void> {
+  const parsed = parsePreviewKey(key)
+
+  if (parsed.modifiers) {
+    return pressControlKey(input, key)
+  }
+
   input.send({ keyCode: key, type: 'keyDown' })
   input.send({ keyCode: key, type: 'char' })
   input.send({ keyCode: key, type: 'keyUp' })
@@ -141,8 +185,10 @@ export async function selectAll(input: PreviewInputHandle): Promise<void> {
  *  phase would type the key's literal meaning for editable content, which a
  *  deletion or caret move must never do. */
 export async function pressControlKey(input: PreviewInputHandle, key: string): Promise<void> {
-  input.send({ keyCode: key, type: 'keyDown' })
-  input.send({ keyCode: key, type: 'keyUp' })
+  const parsed = parsePreviewKey(key)
+
+  input.send({ ...parsed, type: 'keyDown' })
+  input.send({ ...parsed, type: 'keyUp' })
   await wait(KEY_MS)
 }
 

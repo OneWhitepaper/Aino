@@ -11,7 +11,6 @@ import { clearSessionDraft, stashSessionDraft } from '@/store/composer'
 import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
 import { $sessionStates, $sessionTiles } from '@/store/session-states'
 
-import { $layoutEditMode } from '../../edit-mode'
 import { group } from '../model'
 
 import { WindowTitlebarContext } from './header-placement'
@@ -52,7 +51,6 @@ beforeAll(() => {
 beforeEach(() => {
   $workspaceIsPage.set(false)
   window.localStorage.clear()
-  $layoutEditMode.set(false)
   $activeSessionId.set(null)
   $selectedStoredSessionId.set('existing-session')
   $sessionStates.set({})
@@ -192,12 +190,6 @@ describe('single-session header', () => {
     act(() => stashSessionDraft(null, 'This message has not been sent', []))
     expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
 
-    act(() => $layoutEditMode.set(true))
-    expect(globalThis.document.querySelector('[data-tree-tab="workspace"]')?.textContent).toContain(
-      'This message has not been sent'
-    )
-    expect(globalThis.document.querySelector('[aria-label="Draft status"]')).toBeTruthy()
-    act(() => $layoutEditMode.set(false))
     expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
     act(() => {
       $selectedStoredSessionId.set('sent-session')
@@ -237,9 +229,6 @@ describe('single-session header', () => {
     )
 
     expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
-    act(() => $layoutEditMode.set(true))
-    expect(globalThis.document.querySelector('[data-tree-tab="session-tile:a"]')).toBeTruthy()
-    act(() => $layoutEditMode.set(false))
     expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
 
     act(() => $sessionStates.set({ 'draft-runtime': { ...draft, isUnsentDraft: false } }))
@@ -284,10 +273,6 @@ describe('single-session header', () => {
     act(() => bar().querySelector<HTMLButtonElement>('button:not([data-slot="conversation-switcher"])')!.click())
     expect(menuClicks).toBe(1)
 
-    act(() => $layoutEditMode.set(true))
-    expect(bar().querySelector('[data-current-session-title]')).toBeNull()
-    expect(inline().querySelectorAll('[data-tree-tab]')).toHaveLength(2)
-    act(() => $layoutEditMode.set(false))
     expect(bar().textContent).toContain('Promoted conversation')
 
     render(shell(false))
@@ -382,9 +367,6 @@ describe('single-session header', () => {
     expect(kebab()).toBeTruthy()
 
     // Edit mode keeps the full strip — the kebab belongs to the single header.
-    act(() => $layoutEditMode.set(true))
-    expect(kebab()).toBeNull()
-    act(() => $layoutEditMode.set(false))
 
     // A mixed zone keeps the shared strip, whose menu surface is right-click.
     const disposePreview = registry.register({
@@ -407,19 +389,6 @@ describe('single-session header', () => {
       />
     )
     expect(kebab()).toBeNull()
-  })
-
-  it('keeps every pane tab available while editing the layout', () => {
-    $layoutEditMode.set(true)
-
-    const node = group(['workspace', 'session-tile:a', 'session-tile:b'], {
-      active: 'session-tile:b',
-      id: 'grp-chat-edit'
-    })
-
-    render(<TreeGroup node={node} parentAxis="column" />)
-
-    expect(globalThis.document.querySelectorAll('[data-tree-tab]')).toHaveLength(3)
   })
 
   it('keeps the tool tab beside one current conversation title in a mixed zone', () => {

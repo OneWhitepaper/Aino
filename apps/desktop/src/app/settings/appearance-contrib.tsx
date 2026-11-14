@@ -3,7 +3,7 @@ import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 
 /**
  * Appearance settings' plugin seam — a render area at the END of the
- * Appearance page, so a plugin adds its own controls (session-colour rules,
+ * Appearance page, so a plugin adds its own controls (font preferences,
  * theme extras) with the app's own primitives instead of injecting nodes into
  * the page and driving its widgets through React internals.
  *

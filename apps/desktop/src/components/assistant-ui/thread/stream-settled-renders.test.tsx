@@ -3,7 +3,7 @@
 // ChatMessage; everything upstream of the thread keeps identity for settled
 // turns, so the only components allowed to render per chunk are the tail's.
 //
-// This drives the PRODUCTION transcript pipeline — ChatMessage[] ->
+// This drives the PRODUCTION transcript pipeline — live reconciliation -> ChatMessage[] ->
 // useRuntimeMessageRepository -> useIncrementalExternalStoreRuntime -> <Thread />
 // — and counts renders per message id at two levels: the message root
 // (`useMessageReactions`, called once per root render) and the text part
@@ -15,7 +15,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { useRuntimeMessageRepository } from '@/app/chat/runtime-repository'
 import type * as messageReactionsModule from '@/components/assistant-ui/thread/use-message-reactions'
-import type { ChatMessage } from '@/lib/chat-messages'
+import { type ChatMessage, preserveLocalAssistantErrors } from '@/lib/chat-messages'
 import { useIncrementalExternalStoreRuntime } from '@/lib/incremental-external-store-runtime'
 
 import { stubThreadEnvironment, stubThreadViewportSize } from '../test-utils'
@@ -160,7 +160,19 @@ describe('streaming into a settled transcript', () => {
     const prompt = text('u-live', 'user', 'live question')
 
     let body = 'tok0'
-    const stream = () => [...settled, prompt, text('a-live', 'assistant', body, true)]
+    let published: ChatMessage[] = []
+
+    const stream = () => {
+      // useSessionStateCache reconciles each frame against the published view
+      // before the runtime sees it. Measuring only the raw stream array misses
+      // history churn introduced at that boundary.
+      published = preserveLocalAssistantErrors(
+        [...settled, prompt, text('a-live', 'assistant', body, true)],
+        published
+      )
+
+      return published
+    }
 
     const { findByText, rerender } = render(<Harness busy messages={stream()} />)
 

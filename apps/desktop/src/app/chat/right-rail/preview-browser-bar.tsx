@@ -24,8 +24,11 @@ import { useI18n } from '@/i18n'
 import { isSubmitEnter } from '@/lib/ime'
 import { ANNOTATE_BLUE } from '@/lib/preview-annotate'
 import { cn } from '@/lib/utils'
+import { popOutBrowserTab, type PreviewTarget } from '@/store/preview'
 import { canOpenBrowserWindow, isBrowserWindow } from '@/store/windows'
 
+import { PreviewAgentStatus } from './preview-agent-status'
+import { PreviewPageZoom, type PreviewPageZoomValue } from './preview-page-zoom'
 import { PreviewVaultButton } from './preview-vault-picker'
 
 interface PreviewBrowserBarProps {
@@ -46,6 +49,9 @@ interface PreviewBrowserBarProps {
   onPopIn?: () => void
   onPopOut?: () => void
   onReload: () => void
+  pageZoom?: number
+  pageZoomMode?: 'fit' | 'manual'
+  onSetPageZoom?: (value: PreviewPageZoomValue) => void
   onToggleAnnotate?: () => void
   onToggleConsole: () => void
   onToggleDevTools: () => void
@@ -106,6 +112,17 @@ export function externalOpenerFor(url: string): (() => void) | undefined {
   return !isBrowserWindow() && !canOpenBrowserWindow() ? () => void window.hermesDesktop?.openExternal(url) : undefined
 }
 
+/** Window actions belong to the same browser toolbar in docked and popped-out hosts. */
+export function previewBrowserWindowActions(url: string, kind: PreviewTarget['kind'], tabId?: string) {
+  return {
+    onOpenExternal: externalOpenerFor(url),
+    onPopIn: isBrowserWindow() ? () => window.close() : undefined,
+    onPopOut: kind !== 'url' || isBrowserWindow() || !tabId || !canOpenBrowserWindow()
+      ? undefined
+      : () => popOutBrowserTab(tabId)
+  }
+}
+
 export function PreviewBrowserBar({
   annotateMode = false,
   canGoBack,
@@ -123,6 +140,9 @@ export function PreviewBrowserBar({
   onPopIn,
   onPopOut,
   onReload,
+  pageZoom = 1,
+  pageZoomMode = 'fit',
+  onSetPageZoom,
   onToggleAnnotate,
   onToggleConsole,
   onToggleDevTools,
@@ -233,7 +253,13 @@ export function PreviewBrowserBar({
           text={url}
         />
       </div>
-      {tabId ? <PreviewVaultButton tabId={tabId} url={url} /> : null}
+      <PreviewPageZoom factor={pageZoom} mode={pageZoomMode} onChange={onSetPageZoom} />
+      {tabId ? (
+        <>
+          <PreviewAgentStatus tabId={tabId} />
+          <PreviewVaultButton tabId={tabId} url={url} />
+        </>
+      ) : null}
       {onToggleAnnotate ? (
         <PaneStripGlyph
           active={annotateMode}

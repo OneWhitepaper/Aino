@@ -73,6 +73,7 @@ OPEN_TURN_TAIL_ROLES = frozenset({"user", "tool"})
 # ``messages.display_kind`` of that row: display-only (stripped before every provider request),
 # so renderers show a Hermes notice and room pollers never read it as the model's reply.
 FAILED_TURN_DISPLAY_KIND = "failed_turn"
+UNSTARTED_INTERRUPT_EXIT_REASON = "interrupted_before_turn_start"
 
 
 # ---- safety-refused turn, retained for display only -------------------------------------------
@@ -117,6 +118,12 @@ def durable_failed_turn_content(result, turn_messages):
         error = str(result.get("error") or "")
         return str(partial) + "\n\n" + error if partial else error
     return failed_turn_notice(turn_messages)
+
+
+def is_user_interrupted_turn(result: dict[str, Any]) -> bool:
+    """Only a recorded human interrupt can suppress failed-turn resend guidance."""
+    return bool(result.get("interrupted") and result.get("user_interrupted") is True
+                and not result.get("failed") and not result.get("error"))
 
 
 def provider_label_for(provider: Any) -> str:

@@ -70,6 +70,11 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       return () => ipcRenderer.removeListener('aino:platform-account:changed', listener)
     }
   },
+  legacyHistoryRecovery: {
+    inspect: async expectedOwner => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:inspect', expectedOwner)),
+    restore: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:restore', input)),
+    remind: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:legacy-history:remind', input))
+  },
   platformModels: {
     nativeDeviceKeys: true,
     credentialRejected: async (revision, version) =>
@@ -154,6 +159,19 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   setAccountWindowMode: (mode, height, expected) =>
     ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
   openBrowserWindow: tabId => ipcRenderer.invoke('hermes:window:openBrowser', tabId),
+  nativePreview: {
+    mount: request => ipcRenderer.invoke('hermes:preview-native:mount', request),
+    layout: (token, bounds, visible) => ipcRenderer.send('hermes:preview-native:layout', token, bounds, visible),
+    command: (token, command, args) => ipcRenderer.invoke('hermes:preview-native:command', token, command, args),
+    release: token => ipcRenderer.invoke('hermes:preview-native:release', token),
+    closeTab: tabId => ipcRenderer.invoke('hermes:preview-native:closeTab', tabId),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('hermes:preview-native:event', listener)
+
+      return () => ipcRenderer.removeListener('hermes:preview-native:event', listener)
+    }
+  },
   windowRelay: {
     send: payload => ipcRenderer.send('hermes:window:relay', payload),
     onMessage: callback => {
@@ -470,6 +488,17 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   },
   saveImageBuffer: (data, ext, name) => ipcRenderer.invoke('hermes:saveImageBuffer', { data, ext, name }),
   capturePreview: payload => ipcRenderer.invoke('hermes:capturePreview', payload),
+  previewBrowserInteraction: (webContentsId, request) => ipcRenderer.invoke('hermes:preview-browser-interaction', webContentsId, request),
+  onPreviewFileChooser: callback => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => callback(payload)
+    ipcRenderer.on('hermes:preview-file-chooser', handler)
+    return () => { ipcRenderer.removeListener('hermes:preview-file-chooser', handler) }
+  },
+  onPreviewBrowserDialog: callback => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('hermes:preview-browser-dialog', listener)
+    return () => ipcRenderer.removeListener('hermes:preview-browser-dialog', listener)
+  },
   savePastedText: text => ipcRenderer.invoke('hermes:savePastedText', { text }),
   saveClipboardImage: () => ipcRenderer.invoke('hermes:saveClipboardImage'),
   getPathForFile: file => {
@@ -526,6 +555,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   beginPreviewGuestActivity: webContentsId => ipcRenderer.invoke('hermes:preview-guest-activity:begin', webContentsId),
   endPreviewGuestActivity: token => ipcRenderer.invoke('hermes:preview-guest-activity:end', token),
   executePreviewGuestScript: (token, code) => ipcRenderer.invoke('hermes:preview-guest-activity:script', token, code),
+  armPreviewApproval: token => ipcRenderer.invoke('hermes:preview-approval:arm', token),
+  validatePreviewApproval: token => ipcRenderer.invoke('hermes:preview-approval:validate', token),
+  sendPreviewApprovedInput: (token, input) => ipcRenderer.invoke('hermes:preview-approval:input', token, input),
   syncPreviewSignins: request => ipcRenderer.invoke('hermes:preview-signins:sync', request),
   migratePreviewSigninsForProfile: (request: { oldProfile: string; newProfile: string }) =>
     ipcRenderer.invoke('hermes:preview-signins:profile-renamed', request),

@@ -1,0 +1,6 @@
+{
+  "name": "preview-native-retention-fixture",
+  "private": true,
+  "type": "module",
+  "main": "../preview-native-retention.test.mjs"
+}

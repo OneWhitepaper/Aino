@@ -1,5 +1,8 @@
 import type { Session, WebContents } from 'electron'
 
+import { createPreviewApproval } from './preview-approval'
+import { admitPreviewGuestSession, isOwnedPreviewGuest, watchNativePreviewOwner } from './preview-guest-owner'
+
 /**
  * The launch/default preview jar. A tab owned by the default profile (or an
  * empty profile) rides this partition so an upgrade never signs the existing
@@ -58,20 +61,6 @@ export interface PreviewGuestAttachPrefs {
   preload?: string
 }
 
-// Every preview-family session the attach gate has admitted. A webview's
-// `webContents.session` is the memoized `session.fromPartition(partition)`, so
-// recording that object here lets the ACTIVITY gate accept any sibling preview
-// jar by identity — without reading a partition name off a Session (Electron
-// exposes none) and without widening to arbitrary partitions.
-const previewGuestSessions = new WeakSet<Session>()
-
-/** True when `session` is a preview-family jar the attach gate admitted (#150283 F1).
- *  The guest's own session is authoritative: a named profile rides a sibling jar,
- *  not the default one, so the activity gate must accept it. */
-export function isPreviewGuestSession(session: Session | undefined): boolean {
-  return Boolean(session && previewGuestSessions.has(session))
-}
-
 /** Keep the preload partition-scoped; idle guests use Chromium's throttling. */
 export function applyPreviewGuestAttachPrefs(
   webPreferences: PreviewGuestAttachPrefs,
@@ -89,7 +78,7 @@ export function applyPreviewGuestAttachPrefs(
   // Remember the resolved preview jar so the activity gate recognizes this
   // guest's own (possibly non-default) session later.
   if (resolveSession && partition) {
-    previewGuestSessions.add(resolveSession(partition))
+    admitPreviewGuestSession(resolveSession(partition))
   }
 }
 
@@ -102,10 +91,21 @@ const leases = new Map<
     guest: WebContents
     release: () => void
     cancelled: AbortController
+    approval?: Awaited<ReturnType<typeof createPreviewApproval>>
+    approvalPending?: boolean
   }
 >()
 
 const activeGuests = new WeakMap<WebContents, Set<number>>()
+
+/** Layout adaptation must not move a target while its exact-request approval is held. */
+export function hasPreviewGuestApproval(guest: WebContents): boolean {
+  return [...(activeGuests.get(guest) ?? [])].some(token => {
+    const lease = leases.get(token)
+
+    return Boolean(lease?.approvalPending || lease?.approval)
+  })
+}
 
 /**
  * Only the embedding window can temporarily wake its preview guest. Scripts
@@ -118,15 +118,7 @@ export function beginPreviewGuestActivity(
   guest: undefined | WebContents,
   holdOwner: () => () => void
 ): number {
-  if (
-    owner.isDestroyed() ||
-    owner.getType() !== 'window' ||
-    !guest ||
-    guest.isDestroyed() ||
-    guest.getType() !== 'webview' ||
-    guest.hostWebContents !== owner ||
-    !isPreviewGuestSession(guest.session)
-  ) {
+  if (!isOwnedPreviewGuest(owner, guest)) {
     throw new Error('Preview guest does not belong to this window')
   }
 
@@ -149,6 +141,7 @@ export function beginPreviewGuestActivity(
     // Guest frames alone do not wake the host's typing/scroll timers.
     // The shared window controller must arbitrate this with live chat work.
     const releaseOwner = holdOwner()
+    let stopOwnerWatch: (() => void) | undefined
 
     // A new document can replace the hidden widget while the stored flag stays
     // false. Lease-only work (input/capture) must wake it without another script.
@@ -160,6 +153,7 @@ export function beginPreviewGuestActivity(
       }
 
       activeGuests.delete(guest)
+      stopOwnerWatch?.()
       guest.removeListener('destroyed', discard)
       guest.removeListener('render-process-gone', discard)
       guest.removeListener('did-navigate', wake)
@@ -178,6 +172,7 @@ export function beginPreviewGuestActivity(
 
     const discard = () => {
       for (const id of group) {
+        void leases.get(id)?.approval?.release().catch(error => console.warn('Could not restore browser approval overlay', error))
         leases.get(id)?.cancelled.abort(new Error('Preview guest is unavailable'))
         leases.delete(id)
       }
@@ -187,6 +182,7 @@ export function beginPreviewGuestActivity(
     }
 
     release = restore
+    stopOwnerWatch = watchNativePreviewOwner(guest, discard)
     guest.once('destroyed', discard)
     guest.once('render-process-gone', discard)
     guest.on('did-navigate', wake)
@@ -208,17 +204,70 @@ export function beginPreviewGuestActivity(
   return token
 }
 
-export function endPreviewGuestActivity(owner: WebContents, token: number): void {
+export function endPreviewGuestActivity(owner: WebContents, token: number): Promise<void> | undefined {
   const lease = leases.get(token)
 
-  if (!lease || lease.owner !== owner || lease.guest.hostWebContents !== owner) {
+  if (!lease || lease.owner !== owner || !isOwnedPreviewGuest(owner, lease.guest)) {
     return
   }
 
   leases.delete(token)
+  const released = lease.approval?.release()
   activeGuests.get(lease.guest)?.delete(token)
   lease.cancelled.abort(new Error('Preview activity ended'))
   lease.release()
+
+  return released
+}
+
+function approvalLease(owner: WebContents, token: number) {
+  const lease = leases.get(token)
+
+  if (!lease || lease.owner !== owner || !isOwnedPreviewGuest(owner, lease.guest)) {
+    throw new Error('Browser approval does not belong to this request window')
+  }
+
+  lease.cancelled.signal.throwIfAborted()
+
+  return lease
+}
+
+/** Bind a one-action approval to the existing request's guest activity lease. */
+export async function armPreviewGuestApproval(owner: WebContents, token: number): Promise<void> {
+  const lease = approvalLease(owner, token)
+
+  if (lease.approval) {throw new Error('Browser approval is already armed')}
+  if (lease.approvalPending) {throw new Error('Browser approval is already being prepared')}
+  lease.approvalPending = true
+  let approval: Awaited<ReturnType<typeof createPreviewApproval>>
+
+  try {
+    approval = await createPreviewApproval(owner, lease.guest)
+  } finally {
+    lease.approvalPending = false
+  }
+
+  if (leases.get(token) !== lease || lease.cancelled.signal.aborted) {
+    await approval.release()
+    throw new Error('Browser approval request ended')
+  }
+
+  lease.approval = approval
+}
+
+export async function validatePreviewGuestApproval(owner: WebContents, token: number): Promise<void> {
+  const lease = approvalLease(owner, token)
+
+  if (!lease.approval) {throw new Error('Browser approval observation is unavailable')}
+  await lease.approval.validate()
+  approvalLease(owner, token)
+}
+
+export async function sendPreviewGuestApprovedInput(owner: WebContents, token: number, input: Electron.MouseInputEvent | Electron.KeyboardInputEvent | Electron.MouseWheelInputEvent): Promise<void> {
+  const lease = approvalLease(owner, token)
+
+  if (!lease.approval) {throw new Error('Browser approval observation is unavailable')}
+  await lease.approval.send(input)
 }
 
 /** Dispatch in the loaded document, not through executeJavaScript's hidden
@@ -227,7 +276,7 @@ export function endPreviewGuestActivity(owner: WebContents, token: number): void
 export async function executePreviewGuestScript(owner: WebContents, token: number, code: string): Promise<unknown> {
   const lease = leases.get(token)
 
-  if (!lease || lease.owner !== owner || lease.guest.hostWebContents !== owner) {
+  if (!lease || lease.owner !== owner || !isOwnedPreviewGuest(owner, lease.guest)) {
     throw new Error('Preview activity does not belong to this window')
   }
 
@@ -276,6 +325,6 @@ export async function executePreviewGuestScript(owner: WebContents, token: numbe
       guest.removeListener('did-navigate', navigated)
     }
 
-    endPreviewGuestActivity(owner, token)
+    await endPreviewGuestActivity(owner, token)
   }
 }

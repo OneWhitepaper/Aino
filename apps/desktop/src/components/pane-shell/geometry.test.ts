@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubResizeObserver } from '@/test/jsdom'
 
-import { publishWorkspaceGeometry } from './geometry'
+import { beginSashDrag, endSashDrag, publishWorkspaceGeometry } from './geometry'
 import { group } from './tree/model'
 import { $layoutTree } from './tree/store'
 
@@ -114,6 +114,49 @@ describe('publishWorkspaceGeometry', () => {
     expect(document.documentElement.style.getPropertyValue('--workspace-right')).toBe('0px')
 
     dispose()
+  })
+
+  it('tracks titlebar edges during a drag while deferring document-wide geometry until release', () => {
+    stubResizeObserver()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+
+      return 1
+    })
+    const titlebar = document.createElement('header')
+    titlebar.dataset.slot = 'app-titlebar'
+    const zone = document.createElement('main')
+    zone.dataset.treeGroup = 'drag-main'
+    document.body.append(titlebar, zone)
+    $layoutTree.set(group(['workspace'], { id: 'drag-main' }))
+    let left = 245
+    let right = window.innerWidth
+    zone.getBoundingClientRect = () =>
+      ({ left, right, width: right - left, top: 43, bottom: 900, height: 857, x: left, y: 43 }) as DOMRect
+    const dispose = publishWorkspaceGeometry()
+    let dragging = false
+
+    try {
+      beginSashDrag()
+      dragging = true
+      left = 420
+      right = window.innerWidth - 320
+      window.dispatchEvent(new Event('resize'))
+      expect(titlebar.style.getPropertyValue('--workspace-left')).toBe('420px')
+      expect(titlebar.style.getPropertyValue('--workspace-right')).toBe('320px')
+      expect(document.documentElement.style.getPropertyValue('--workspace-left')).toBe('245px')
+      expect(document.documentElement.style.getPropertyValue('--workspace-right')).toBe('0px')
+      endSashDrag()
+      dragging = false
+      expect(document.documentElement.style.getPropertyValue('--workspace-left')).toBe('420px')
+      expect(document.documentElement.style.getPropertyValue('--workspace-right')).toBe('320px')
+    } finally {
+      if (dragging) { endSashDrag() }
+      dispose()
+    }
+
+    expect(titlebar.style.getPropertyValue('--workspace-left')).toBe('')
+    expect(titlebar.style.getPropertyValue('--workspace-right')).toBe('')
   })
 
   it('keeps flipped navigation chrome aligned when a summary reserves the window right edge', () => {

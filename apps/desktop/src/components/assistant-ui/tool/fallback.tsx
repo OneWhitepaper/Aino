@@ -12,13 +12,11 @@ import {
   type PropsWithChildren,
   type ReactNode,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState
 } from 'react'
 
-import { isArtifactProducerTool } from '@/app/artifacts/artifact-utils'
 import { useSessionView } from '@/app/chat/session-view'
 import { AnsiText } from '@/components/assistant-ui/ansi-text'
 import { MarkdownImage } from '@/components/assistant-ui/markdown-text'
@@ -43,7 +41,6 @@ import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { FadeText } from '@/components/ui/fade-text'
-import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { ToolIcon } from '@/components/ui/tool-icon'
 import { Tip } from '@/components/ui/tooltip'
@@ -54,7 +51,6 @@ import { AlertCircle, CheckCircle2 } from '@/lib/icons'
 import { toolResultRecord } from '@/lib/tool-result-metadata'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
-import { recordPreviewArtifact } from '@/store/preview-status'
 import { sessionApprovalRequest } from '@/store/prompts'
 import { $showToolActivity } from '@/store/tool-activity'
 import { $toolRowDismissed, dismissToolRow } from '@/store/tool-dismiss'
@@ -77,7 +73,6 @@ import {
   inlineDiffFromResult,
   isCardTool,
   isFileEditTool,
-  isPreviewableTarget,
   looksRedundant,
   type SearchResultRow,
   selectMessageRunning,
@@ -92,6 +87,7 @@ import {
 } from './fallback-model'
 import { isToolCallPart, summarizeToolRun, type ToolRunCopy } from './run-summary'
 import { ToolRunTicker } from './run-ticker'
+import { useToolPreviews } from './use-tool-previews'
 
 // `true` when a ToolEntry is rendered inside an embedding wrapper that owns
 // the per-row chrome (timer / preview). The flat ToolGroupSlot sets this
@@ -240,30 +236,24 @@ function statusGlyph(status: ToolStatus, copy: ToolStatusCopy): ReactNode {
 }
 
 // Leading glyph for any tool-row header. Status (running/error/warning)
-// takes precedence; otherwise falls back to the tool's codicon. Returns
+// takes precedence; otherwise shows the action's shared outline icon. Returns
 // null when neither applies so callers can render unconditionally.
 function ToolGlyph({
   copy,
-  filePath,
   icon,
   legendary,
   status
 }: {
   copy: ToolStatusCopy
-  filePath?: string
   icon?: string
   /** Landed memory write — keep the brain glyph, tint it gold→purple. */
   legendary?: boolean
   status?: ToolStatus
 }) {
-  const Icon = icon === 'brain' ? ToolIcon : Codicon
-
   const node = status ? (
     statusGlyph(status, copy)
-  ) : filePath ? (
-    <FileTypeIcon className="text-(--conversation-scaffold-icon)" path={filePath} size="0.875rem" />
   ) : icon ? (
-    <Icon
+    <ToolIcon
       className={legendary ? 'text-(--tool-memory-legendary-icon)' : 'text-(--conversation-scaffold-icon)'}
       name={icon}
       size="var(--conversation-glyph-size)"
@@ -521,7 +511,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   const isPending = messageRunning && result === undefined && completedAt === undefined
   const inlineDiff = inlineDiffFromResult(toolResultRecord(stablePart))
   const isFileEdit = isFileEditTool(toolName)
-  const defaultOpen = Boolean(inlineDiff) && !hideCodeDiffs
+  const defaultOpen = Boolean(inlineDiff) && !hideCodeDiffs && !runDisclosure
   const disclosureOpen = useDisclosureOpen(disclosureId, defaultOpen)
   const canDismiss = !isPending && !embedded
   // Only animate entries that mount while their message is actively
@@ -548,56 +538,10 @@ function ToolEntry({ part }: ToolEntryProps) {
   const showPayload = toolViewMode === 'technical' && !(hideCodeDiffs && isFileEdit)
   const showTerminalTranscript = toolName === 'terminal' && !showPayload
 
-  // Surface a previewable artifact (HTML file / localhost URL) as a compact link
-  // in the composer status stack rather than a bulky inline card. Uses the same
-  // detected target the old inline card did. Idempotent + dedup'd, so re-renders
-  // don't churn.
-  const previewTarget = view.previewTarget
-
-  const generatedPreview =
-    result !== undefined && view.status === 'success' && (isFileEdit || isArtifactProducerTool(toolName))
-
-  // The session whose transcript this row is IN, which is not necessarily the
-  // primary one: a tool row inside a session tile must feed that tile's composer.
-
-  const {
-    $cwd: $sessionCwd,
-    $runtimeId: $sessionRuntimeId,
-    $storedId: $sessionStoredId,
-    $messages: $sessionMessages
-  } = useSessionView()
-
-  useEffect(() => {
-    if (view.status !== 'success' || !previewTarget || !isPreviewableTarget(previewTarget)) {
-      return
-    }
-
-    // Read (don't subscribe) session/cwd: this only fires when a previewable
-    // target appears, and subscribing re-rendered every tool row on any session
-    // or cwd change.
-    const sessionId = $sessionRuntimeId.get()
-
-    // A route switch can paint the previous assistant row while these atoms
-    // already describe the next chat. Only that chat's own messages may feed it.
-    if (sessionId && $sessionMessages.get().some(message => message.id === messageId)) {
-      recordPreviewArtifact(
-        sessionId,
-        previewTarget,
-        $sessionCwd.get() || '',
-        $sessionStoredId.get() ?? sessionId,
-        generatedPreview
-      )
-    }
-  }, [
-    $sessionCwd,
-    $sessionRuntimeId,
-    $sessionStoredId,
-    $sessionMessages,
-    generatedPreview,
-    messageId,
-    previewTarget,
-    view.status
-  ])
+  useToolPreviews(
+    useMemo(() => [stablePart], [stablePart]),
+    messageId
+  )
 
   const detailSections = useMemo(() => {
     if (!view.detail) {
@@ -693,12 +637,9 @@ function ToolEntry({ part }: ToolEntryProps) {
     return null
   }
 
-  // A completed file edit with no diff to review is a bare, unexpandable row.
-  // This is almost always a `write_file` create after a reload: only `patch`
-  // persists its diff in the tool result, so creates rehydrate diff-less and
-  // read like dead duplicates of the real diff row. Hide them — but keep
-  // in-flight writes (activity) and failures (errors) visible.
-  if (isFileEdit && !isPending && view.status !== 'error' && !view.inlineDiff) {
+  // Expanded execution logs retain successful writes even when old receipts
+  // carry no diff. Standalone legacy cards still avoid duplicate empty edits.
+  if (isFileEdit && !runDisclosure && !isPending && view.status !== 'error' && !view.inlineDiff) {
     return null
   }
 
@@ -741,7 +682,6 @@ function ToolEntry({ part }: ToolEntryProps) {
           >
             <ToolGlyph
               copy={copy}
-              filePath={isFileEdit ? view.subtitle : undefined}
               icon={view.icon}
               legendary={memoryLegendary}
               status={leadingStatus(isPending, view.status)}
@@ -996,9 +936,8 @@ export type RunItem = { end: number; kind: 'run'; start: number } | { index: num
 /**
  * Split a range of parts into cards and the runs of activity between them.
  *
- * Order is preserved rather than sorted into "all the runs, then all the
- * cards": a turn that reads, edits, then reads again shows a summary, the
- * diff, then a second summary, in the sequence it happened. Indices are
+ * Order is preserved: reads, edits and commands share one summary; a consent,
+ * media or delegation card breaks the run at its original position. Indices are
  * relative to the range. An empty name is a part that isn't a tool call at
  * all, which passes through as its own card.
  */
@@ -1007,7 +946,7 @@ export function splitRunItems(toolNames: readonly string[]): RunItem[] {
   let run: null | Extract<RunItem, { kind: 'run' }> = null
 
   toolNames.forEach((name, index) => {
-    if (!name || isCardTool(name)) {
+    if (!name || (isCardTool(name) && !isFileEditTool(name))) {
       run = null
       items.push({ index, kind: 'card' })
 
@@ -1076,6 +1015,7 @@ interface ToolRunState {
   live: boolean
   startedAt?: number
   summary: string
+  tools: readonly ToolPart[]
 }
 
 // assistant-ui compares selector results with `Object.is` and calls the
@@ -1128,6 +1068,9 @@ function useToolRun(startIndex: number, endIndex: number, copy: ToolRunCopy): To
         return (
           tool.args === previous.args &&
           tool.result === previous.result &&
+          tool.toolResultMetadata === previous.toolResultMetadata &&
+          tool.innerToolName === previous.innerToolName &&
+          tool.interrupted === previous.interrupted &&
           tool.toolName === previous.toolName &&
           tool.isError === previous.isError
         )
@@ -1152,7 +1095,11 @@ function useToolRun(startIndex: number, endIndex: number, copy: ToolRunCopy): To
           count: tools.length,
           approvalActivity: tools.length > 0 && tools.every(isApprovalActivity),
           entryIds: tools.map(tool => toolEntryDisclosureId(state.message.id, tool)),
-          icon: tools[0] ? toolMeta(tools[0].toolName).icon : undefined,
+          icon: tools.some(tool => isFileEditTool(tool.toolName))
+            ? 'edit'
+            : tools[0]
+              ? toolMeta(tools[0].toolName).icon
+              : undefined,
           key: `${state.message.id}:${tools[0]?.toolCallId ?? ''}`,
           live,
           startedAt: timelineTools.reduce<number | undefined>(
@@ -1164,7 +1111,8 @@ function useToolRun(startIndex: number, endIndex: number, copy: ToolRunCopy): To
                   : Math.min(earliest, tool.timestamp),
             undefined
           ),
-          summary: summarizeToolRun(tools, live, copy)
+          summary: summarizeToolRun(tools, live, copy),
+          tools: timelineTools
         }
       }
     }
@@ -1196,8 +1144,11 @@ const ToolRun: FC<ToolGroupProps> = ({ children, endIndex, startIndex }) => {
   const { t } = useI18n()
   const messageRunning = useAuiState(selectMessageRunning)
 
-  const { activeIndex, completedAt, count, entryIds, icon, key, live, startedAt, summary, approvalActivity } =
+  const { activeIndex, completedAt, count, entryIds, icon, key, live, startedAt, summary, tools, approvalActivity } =
     useToolRun(startIndex, endIndex, t.assistant.tool.runSummary)
+
+  const messageId = useAuiState(state => state.message.id)
+  useToolPreviews(tools, messageId)
 
   const sessionId = useStore(useSessionView().$runtimeId)
   const approval = useStore(useMemo(() => sessionApprovalRequest(sessionId), [sessionId]))
@@ -1207,9 +1158,9 @@ const ToolRun: FC<ToolGroupProps> = ({ children, endIndex, startIndex }) => {
   const rowOpen = useStore(useMemo(() => $anyToolDisclosureOpen(entryIds), [entryIds]))
   const enterRef = useEnterAnimation(messageRunning, `tool-run:${key}`)
   const representedByApproval = !!approval && currentTurn && approvalActivity
-  const expanded = count < 2 || (persistedOpen ?? rowOpen)
+  const expanded = persistedOpen ?? rowOpen
   const collapsed = representedByApproval && !rowOpen && !persistedOpen
-  const preview = count > 1 && live && !expanded
+  const preview = live && !expanded
   const disclosure = useMemo(() => ({ id: disclosureId, preview }), [disclosureId, preview])
   const reduced = useReducedMotion()
 
@@ -1229,7 +1180,7 @@ const ToolRun: FC<ToolGroupProps> = ({ children, endIndex, startIndex }) => {
         ref={enterRef}
         transition={{ duration: reduced ? 0 : 0.22, ease: 'easeInOut' }}
       >
-        {count > 1 && !representedByApproval && (
+        {count > 0 && !representedByApproval && (
           <ToolRunHeader
             icon={icon}
             live={live}

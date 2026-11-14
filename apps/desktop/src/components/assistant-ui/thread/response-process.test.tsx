@@ -184,6 +184,9 @@ it('removes the hidden footer footprint when tools continue after the last progr
   expect(footer).not.toBeNull()
   expect(getComputedStyle(footer).display).toBe('none')
   expect(within(container).getByText(progress).closest('[hidden]')).toBeNull()
+  const toolSummary = container.querySelector('[data-tool-summary]') as HTMLElement
+  expect(within(toolSummary).getByRole('button').getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(within(toolSummary).getByRole('button'))
   expect(within(container).getByRole('button', { name: 'Read canvas.ts' })).toBeTruthy()
 
   rerender(

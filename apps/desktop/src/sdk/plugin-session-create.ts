@@ -1,5 +1,4 @@
 import { capturePlatformDraftAuthority, createPlatformDraft } from '@/api/platform-session-binding'
-import { resolveModelDefault } from '@/lib/model-default'
 import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS } from '@/lib/with-timeout'
 import { $gateway, requestGatewayForAgent, retainGatewayForAgent, type SpawnPriority } from '@/store/gateway'
@@ -17,6 +16,8 @@ import type { SessionRuntimeInfo } from '@/types/hermes'
 import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 
 import { preparePluginGroupModels } from './plugin-group-models'
+import { requestPluginImageGeneration } from './plugin-image-generation'
+import { resolvePluginBotDefault } from './plugin-model-default'
 import { requestPluginProfileCreate } from './plugin-profile-create'
 
 export interface PluginSessionCreateRoute {
@@ -137,7 +138,7 @@ function waitForManagedCapability(route: ManagedModelRoute): Promise<void> {
 async function resolvePluginModelDefault(route: PluginSessionCreateRoute, profile: string, assertAccount: () => void) {
   const scope = { ...(route.connectionId ? { connectionId: route.connectionId } : {}), profile }
   const managedRoute = { connectionId: route.connectionId ?? undefined, profile: route.profile }
-  const resolved = await resolveModelDefault(scope, managedRoute)
+  const resolved = await resolvePluginBotDefault(scope, managedRoute, assertAccount)
   assertAccount()
 
   // Explicit third-party configuration does not depend on managed capability.
@@ -147,7 +148,7 @@ async function resolvePluginModelDefault(route: PluginSessionCreateRoute, profil
 
   await waitForManagedCapability(managedRoute)
   assertAccount()
-  const ready = await resolveModelDefault(scope, managedRoute)
+  const ready = await resolvePluginBotDefault(scope, managedRoute, assertAccount)
   assertAccount()
 
   if (!ready.model && !ready.provider) {
@@ -232,7 +233,11 @@ function groupSendNotDispatched(error: unknown): Error {
   // Errors can be frozen or shared with another request. Preserve their public
   // fields without mutating them; this proof concerns only this Send attempt.
   return Object.assign(new Error(error instanceof Error ? error.message : String(error), { cause: error }), error, {
-    data: { ...data, admitted: false }
+    data: {
+      ...data,
+      admitted: false,
+      ...(error instanceof PlatformSelectionError ? { preparation_message: error.message } : {})
+    }
   })
 }
 
@@ -331,6 +336,10 @@ export async function requestPluginSession<T>(
   spawnPriority?: SpawnPriority
 ): Promise<T> {
   const send = () => (timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs))
+
+  if (method === 'image.generate') {
+    return requestPluginImageGeneration<T>(route, request, params, timeoutMs)
+  }
 
   if (method === 'profiles.create') {
     return requestPluginProfileCreate(route, params, send)

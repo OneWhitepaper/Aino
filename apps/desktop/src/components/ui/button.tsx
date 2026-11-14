@@ -64,7 +64,7 @@ const buttonVariants = cva(
         'icon-lg': 'size-10 rounded-(--aino-radius-control)',
         grip: 'h-4 w-12 rounded-full p-0',
         'icon-titlebar':
-          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-control) [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
+          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-control) hover:transition-none [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
       }
     },
     compoundVariants: [

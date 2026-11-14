@@ -276,7 +276,7 @@ export function isStaleLocalGatewayError(error: unknown): boolean {
 
 export async function redialLocalGateway<TEndpoint, TResult>(deps: {
   ensure: () => Promise<TEndpoint>
-  forget: () => Promise<void> | void
+  forget: (failed: TEndpoint) => Promise<void> | void
   use: (endpoint: TEndpoint) => Promise<TResult>
 }): Promise<TResult> {
   const first = await deps.ensure()
@@ -285,7 +285,7 @@ export async function redialLocalGateway<TEndpoint, TResult>(deps: {
     return await deps.use(first)
   } catch (error) {
     if (!isStaleLocalGatewayError(error)) {throw error}
-    await deps.forget()
+    await deps.forget(first)
 
     return deps.use(await deps.ensure())
   }
@@ -295,7 +295,7 @@ export async function redialLocalGateway<TEndpoint, TResult>(deps: {
  *  `prepare`, re-ensuring once when the cached owner is gone (`redialLocalGateway`). */
 export function localGatewayDial<T extends { baseUrl: string; gatewayEndpoint?: GatewayEndpoint }>(opts: {
   ensure: () => Promise<T>
-  forget: () => Promise<void> | void
+  forget: (failed: T) => Promise<void> | void
   launchHome: string
   mint?: typeof mintLocalGatewayTicket
   prepare: (baseUrl: string, ticket: string) => string

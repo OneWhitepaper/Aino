@@ -63,11 +63,8 @@ export function openLayoutPickPanes(preset: string): void {
   }
 }
 
-/** Apply a layout preset by id, resolved against the layouts contribution
- *  registry — the SAME list the layout picker renders, so core presets
- *  (default/focus/terminal-deck/quad), plugin presets, and user-saved presets
- *  are all addressable by the backend `set_theme` tool. Returns false for
- *  an unknown id. */
+/** Apply a registered layout by id for the existing appearance and onboarding
+ *  flows. Unknown or retired user layout ids leave the current panes intact. */
 export function applyDesktopLayoutPreset(preset: string): boolean {
   if (!preset) {
     return false

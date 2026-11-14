@@ -1,16 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  MACOS_TAHOE_DARWIN_MAJOR,
   TITLEBAR_CONTROL_OFFSET_X,
   TITLEBAR_CONTROL_SIZE,
   TITLEBAR_EDGE_INSET,
   TITLEBAR_FALLBACK_WINDOW_BUTTON_X,
   TITLEBAR_HEIGHT,
   TITLEBAR_ICON_SIZE,
-  TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE,
   titlebarControlsPosition,
-  titlebarControlsYNudge,
   titlebarIconSizeCss,
   titlebarToolsRightCss,
   titlebarToolsWidthCss
@@ -36,42 +33,43 @@ describe('titlebarControlsPosition', () => {
     expect(titlebarControlsPosition({ x: 15, y: 10 }).left).toBe(80)
   })
 
+  it.each([0.9, 1, 1.2])('aligns both toolbar axes with native coordinates at %s zoom', zoomFactor => {
+    for (const y of [10, 15]) {
+      const nativePosition = { x: 12, y }
+      const controls = titlebarControlsPosition(nativePosition, false, zoomFactor)
+
+      expect((controls.top + TITLEBAR_CONTROL_SIZE / 2) * zoomFactor).toBeCloseTo(nativePosition.y + 7)
+      expect(controls.left * zoomFactor).toBeCloseTo(nativePosition.x + TITLEBAR_CONTROL_OFFSET_X)
+    }
+  })
+
   it('pins to the edge when macOS fullscreen hides traffic lights', () => {
-    expect(titlebarControlsPosition({ x: 24, y: 10 }, true).left).toBe(TITLEBAR_EDGE_INSET)
+    const position = titlebarControlsPosition({ x: 24, y: 10 }, true)
+    expect(position.left).toBe(TITLEBAR_EDGE_INSET)
+    expect(position.top + TITLEBAR_CONTROL_SIZE / 2).toBe(TITLEBAR_HEIGHT / 2)
+  })
+
+  it('keeps enlarged controls fully inside the window at extreme zoom', () => {
+    expect(titlebarControlsPosition({ x: 12, y: 15 }, false, 2).top).toBe(0)
+    expect(titlebarControlsPosition({ x: 12, y: 15 }, false, 5).top).toBe(0)
   })
 
   it('pins to the edge on Windows/Linux where native controls render on the right', () => {
-    expect(titlebarControlsPosition(null).left).toBe(TITLEBAR_EDGE_INSET)
+    const position = titlebarControlsPosition(null)
+    expect(position.left).toBe(TITLEBAR_EDGE_INSET)
+    expect(position.top + TITLEBAR_CONTROL_SIZE / 2).toBe(TITLEBAR_HEIGHT / 2)
   })
 
   it('does not move macOS tools when the native traffic-light position arrives', () => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
-    expect(titlebarControlsPosition(undefined)).toEqual(titlebarControlsPosition({ x: TITLEBAR_FALLBACK_WINDOW_BUTTON_X, y: 10 }))
+    expect(titlebarControlsPosition(undefined)).toEqual(
+      titlebarControlsPosition({ x: TITLEBAR_FALLBACK_WINDOW_BUTTON_X, y: 15 })
+    )
   })
 
   it.each(['Win32', 'Linux x86_64'])('preserves the previous startup spacing on %s', platform => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue(platform)
     expect(titlebarControlsPosition(undefined).left).toBe(24 + TITLEBAR_CONTROL_OFFSET_X)
-  })
-})
-
-describe('titlebarControlsYNudge', () => {
-  it('nudges pre-Tahoe macOS when traffic lights are visible', () => {
-    expect(titlebarControlsYNudge({ windowButtonPosition: { x: 24, y: 10 }, darwinMajor: 24 })).toBe(
-      TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE
-    )
-  })
-
-  it('keeps the optical nudge on Tahoe but stays flat on Windows/Linux and macOS fullscreen', () => {
-    expect(
-      titlebarControlsYNudge({ windowButtonPosition: { x: 24, y: 10 }, darwinMajor: MACOS_TAHOE_DARWIN_MAJOR })
-    ).toBe(TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE)
-    expect(titlebarControlsYNudge({ windowButtonPosition: null })).toBe('0px')
-    expect(titlebarControlsYNudge({ windowButtonPosition: { x: 24, y: 10 }, isFullscreen: true })).toBe('0px')
-  })
-
-  it('nudges while macOS window-button position is still unknown on pre-Tahoe', () => {
-    expect(titlebarControlsYNudge({ darwinMajor: 24 })).toBe(TITLEBAR_MAC_TRAFFIC_LIGHTS_Y_NUDGE)
   })
 })
 

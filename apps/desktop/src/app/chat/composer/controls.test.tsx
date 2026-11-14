@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatBarState } from '@/app/chat/composer/types'
 import { I18nProvider } from '@/i18n'
+import { PlayFilled } from '@/lib/icons'
 import { $hudMode } from '@/store/hud'
 import { applyWakeStartResult, applyWakeStatus, resetWakeWordState } from '@/store/wake-word'
 
@@ -159,10 +160,10 @@ describe('narrow tiles', () => {
     expect(screen.queryByLabelText('Voice')).toBeNull()
   })
 
-  it('keeps Stop reachable mid-turn at the tightest width', () => {
+  it('keeps Pause reachable mid-turn at the tightest width', () => {
     renderControls({ busy: true, busyAction: 'stop', foldVoice: true, hasComposerPayload: false, minimal: true })
 
-    expect(screen.getByLabelText('Stop')).toBeTruthy()
+    expect(screen.getByLabelText('Pause task')).toBeTruthy()
   })
 })
 
@@ -187,25 +188,25 @@ describe('ComposerControls shortcut tooltips', () => {
     await expectShortcutTooltip('Steer the current run', '↵')
   })
 
-  it('shows Stop only when the composer is empty mid-turn', async () => {
+  it('shows Pause only when the composer is empty mid-turn', async () => {
     renderControls({ busy: true, busyAction: 'stop', canSubmit: true, hasComposerPayload: false })
 
     expect(screen.queryByRole('button', { name: 'Queue message' })).toBeNull()
-    await expectShortcutTooltip('Stop', '↵')
+    await expectShortcutTooltip('Pause task', '↵')
   })
 
   it('answers a waiting card with Send when the draft has text, and offers no Queue', () => {
     renderControls({ busy: true, busyAction: 'queue', cardWaiting: true, hasComposerPayload: true })
 
     expect(screen.getByLabelText('Send')).toBeTruthy()
-    expect(screen.queryByLabelText('Stop')).toBeNull()
+    expect(screen.queryByLabelText('Pause task')).toBeNull()
     expect(screen.queryByLabelText('Queue message')).toBeNull()
   })
 
-  it('keeps Stop enabled while a card waits and the draft is empty', () => {
+  it('keeps Pause enabled while a card waits and the draft is empty', () => {
     renderControls({ busy: true, busyAction: 'stop', canSubmit: true, cardWaiting: true, hasComposerPayload: false })
 
-    expect(screen.getByLabelText('Stop').hasAttribute('disabled')).toBe(false)
+    expect(screen.getByLabelText('Pause task').hasAttribute('disabled')).toBe(false)
   })
 
   it('shows Ctrl+Enter for Queue as the secondary mid-turn action', async () => {
@@ -283,6 +284,26 @@ describe('wake-word ear visibility', () => {
 })
 
 describe('paused task primary action', () => {
+  it('shows a recognizable pause control while an empty composer is running', () => {
+    renderControls({ busy: true, hasComposerPayload: false })
+
+    const button = screen.getByRole('button', { name: 'Pause task' })
+    expect(button.querySelector('[data-aino-icon="Pause"]')).toBeTruthy()
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('keeps the shared play icon viewport so Continue is visible', () => {
+    renderControls({
+      canSubmit: false,
+      hasComposerPayload: false,
+      continuation: { phase: 'paused', resume: vi.fn() }
+    })
+    render(<PlayFilled data-testid="shared-play-icon" />)
+
+    const icon = screen.getByRole('button', { name: 'Continue' }).querySelector('svg')!
+    expect(icon.getAttribute('viewBox')).toBe(screen.getByTestId('shared-play-icon').getAttribute('viewBox'))
+  })
+
   it.each([false, true])('offers Continue in the empty primary slot with HUD=%s', hud => {
     $hudMode.set(hud)
     const resume = vi.fn()
@@ -302,15 +323,19 @@ describe('paused task primary action', () => {
     expect(resume).toHaveBeenCalledOnce()
   })
 
-  it.each(['stopping', 'continuing'] as const)('waits for %s before allowing another continuation', phase => {
+  it.each([
+    ['stopping', 'Pausing task…'],
+    ['continuing', 'Continuing task…']
+  ] as const)('waits for %s before allowing another continuation', (phase, label) => {
     const resume = vi.fn()
     renderControls({
       hasComposerPayload: false,
       continuation: { phase, resume }
     })
 
-    const button = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    const button = screen.getByRole('button', { name: label }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
+    expect(button.getAttribute('aria-busy')).toBe('true')
     fireEvent.click(button)
     expect(resume).not.toHaveBeenCalled()
   })

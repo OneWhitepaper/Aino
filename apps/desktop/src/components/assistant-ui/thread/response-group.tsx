@@ -10,6 +10,7 @@ import { useI18n } from '@/i18n'
 import { isCardTool, isFileEditTool } from '@/lib/tool-render-class'
 import { $toolDisclosureOpen, setToolDisclosureOpen } from '@/store/tool-view'
 
+import { interAgentReplySender } from './agent-delivery'
 import { contentHasVisibleText, messageContentText, PROCESS_NOTIFICATION_RE } from './content'
 
 interface GroupMessage {
@@ -67,6 +68,7 @@ interface ResponseProcessState {
   enabled: boolean
   open: boolean
   answerMessageId?: string
+  identityMessageId?: string
 }
 
 export const ResponseProcess = createContext<ResponseProcessState>({ enabled: false, open: true })
@@ -104,6 +106,7 @@ interface ResponseRow {
   duration?: number
   running: boolean
   tail: boolean
+  identityEligible: boolean
 }
 
 interface ResponseSection {
@@ -140,7 +143,17 @@ function ResponseSectionView({
       ? t.assistant.thread.turnDuration(formatElapsed(Math.round(duration)))
       : t.assistant.thread.processTitle
 
-  const process = useMemo(() => ({ enabled, open, answerMessageId: answer?.id }), [enabled, open, answer?.id])
+  // A continued reply has multiple runtime rows while it streams. Its portrait
+  // belongs to the first visible reply, or the final answer when process is folded.
+  const identityMessageId = section.rows.find(
+    row => row.identityEligible && (!enabled || open || running || row.id === answer?.id)
+  )?.id
+
+  const process = useMemo(
+    () => ({ enabled, open, answerMessageId: answer?.id, identityMessageId }),
+    [enabled, open, answer?.id, identityMessageId]
+  )
+
   const responseIdsKey = section.assistantIds.join('\u0000')
   const responseIds = useMemo(() => (responseIdsKey ? responseIdsKey.split('\u0000') : []), [responseIdsKey])
   const indicesKey = section.indices.join(',')
@@ -219,7 +232,10 @@ export function ResponseMessages({ components, indices }: ResponseMessagesProps)
                 hasFinal: !interim && phases.includes('final'),
                 duration: message.metadata?.custom?.durationS,
                 running: message.role === 'assistant' && message.status?.type === 'running',
-                tail: index === s.thread.messages.length - 1
+                tail: index === s.thread.messages.length - 1,
+                identityEligible:
+                  message.role === 'assistant' &&
+                  (message.status?.type === 'running' || !interAgentReplySender(s.thread.messages, index))
               }
             ]
           : []

@@ -55,45 +55,34 @@ def _image_to_data_url(ref: str, cap: int):
 
 
 @method("image.generate")
+@_registry.profile_scoped
 def _(rid, params: dict) -> dict:
     """Params: ``prompt`` (required unless ``probe``), ``aspect_ratio``
     (landscape|square|portrait), ``probe`` (availability only), ``max_bytes`` (cap
     on the data URL, default 8MB, max 16MB). Result: ``{available, success, image,
     image_data, error}`` — ``image_data`` is omitted when the download fails, so
     callers fall back to ``image`` (the backend's URL/path)."""
-    try:
-        from tools.image_generation_tool import check_image_generation_requirements
-        available = bool(check_image_generation_requirements())
-    except Exception:
-        available = False
-    if is_truthy_value(params.get("probe", False)):
-        return _ok(rid, {"available": available})
-    if not available:
-        return _ok(rid, {
-            "available": False, "success": False,
-            "error": "No image generation backend configured (run `hermes tools` to enable one)."})
-    prompt = str(params.get("prompt") or "").strip()
-    if not prompt:
+    from contextlib import nullcontext
+    from tui_gateway.image_generation import generate_image
+    from tui_gateway.managed_image_runtime import conversation_image_scope
+
+    if not is_truthy_value(params.get("probe", False)) and not str(params.get("prompt") or "").strip():
         return _err(rid, 4071, "prompt required")
-    aspect = str(params.get("aspect_ratio") or "square").strip().lower()
+    scope = nullcontext()
+    if sid := params.get('session_id'):
+        peer = current_transport()
+        with _sessions_lock:
+            session = _sessions.get(sid)
+            if (peer is None or not session or session.get('_closing') or _session_source(session) != 'desktop'
+                    or session.get('transport') is not peer):
+                return _err(rid, 4403, 'managed image binding rejected')
+        scope = conversation_image_scope(session_id=sid, session=session)
     try:
-        cap = min(int(params.get("max_bytes", 8_000_000) or 8_000_000), 16_000_000)
-    except (TypeError, ValueError):
-        cap = 8_000_000
-    try:
-        # Full provider dispatcher — same path as the model tool (source-image confinement,
-        # plugin providers, managed routing, FAL fallback); the FAL leaf bypassed providers.
-        from tools.image_generation_tool import _handle_image_generate
-        result = json.loads(_handle_image_generate({"prompt": prompt, "aspect_ratio": aspect}))
+        with scope:
+            result = generate_image(params)
     except Exception as e:
         return _err(rid, 5071, str(e))
-    if not result.get("success"):
-        return _ok(rid, {"available": True, "success": False,
-                         "error": str(result.get("error") or "generation failed")})
-    image_ref = str(result.get("image") or "")
-    data_url = _image_to_data_url(image_ref, cap) if image_ref else None
-    return _ok(rid, {"available": True, "success": True, "image": image_ref,
-                     **({"image_data": data_url} if data_url else {})})
+    return _ok(rid, result)
 
 
 @method("image.render")

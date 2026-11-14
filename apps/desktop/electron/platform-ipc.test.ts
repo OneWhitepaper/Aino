@@ -4,7 +4,7 @@ import { unwrapPlatformAccountIpc } from '../shared/platform-contract'
 
 import { registerPlatformIpc } from './platform-ipc'
 
-function rig() {
+function rig(historyRecovery?: Parameters<typeof registerPlatformIpc>[0]['historyRecovery']) {
   const handlers = new Map<string, (...args: any[]) => any>()
 
   const ipc = {
@@ -75,7 +75,8 @@ function rig() {
     auth,
     captcha,
     fromWebContents: (value: unknown) => (value === sender ? (win as any) : (other as any)),
-    trustedRendererUrl: 'http://127.0.0.1:5174/'
+    trustedRendererUrl: 'http://127.0.0.1:5174/',
+    historyRecovery
   })
 
   controller.registerWindow(win as any)
@@ -99,6 +100,35 @@ function rig() {
 
 describe('platform account IPC', () => {
   beforeEach(() => vi.restoreAllMocks())
+
+  it('exposes history recovery only to a trusted registered renderer through drainable data channels', async () => {
+    const recovery = {
+      inspect: vi.fn().mockResolvedValue({ owned: 1 }),
+      restore: vi.fn().mockResolvedValue({ imported: 1 }),
+      remind: vi.fn().mockResolvedValue({ ok: true, showReminder: false })
+    }
+
+    const f = rig(recovery)
+
+    ;(f.event.senderFrame as any).url = 'http://127.0.0.1:5174/'
+    const inspect = f.handlers.get('aino:legacy-history:inspect')!
+    const owner = { userId: '1', mode: 'development', revision: 1 }
+    expect(await inspect({ ...f.event, senderFrame: {} }, owner)).toMatchObject({ ok: false })
+    expect(recovery.inspect).not.toHaveBeenCalled()
+    expect(await inspect(f.event, owner)).toEqual({ ok: true, value: { owned: 1 } })
+    expect(recovery.inspect).toHaveBeenCalledWith(owner)
+    const remind = f.handlers.get('aino:legacy-history:remind')!
+    const choice = { expectedOwner: owner, planId: 'plan', choice: 'ignore' }
+    expect(await remind({ ...f.event, senderFrame: {} }, choice)).toMatchObject({ ok: false })
+    expect(recovery.remind).not.toHaveBeenCalled()
+    expect(await remind(f.event, choice)).toMatchObject({ ok: true, value: { showReminder: false } })
+    expect(recovery.remind).toHaveBeenCalledWith(choice)
+    expect(f.handlers.has('aino:platform-account:history-recovery')).toBe(false)
+    f.controller.dispose()
+    expect(f.handlers.has('aino:legacy-history:inspect')).toBe(false)
+    expect(f.handlers.has('aino:legacy-history:restore')).toBe(false)
+    expect(f.handlers.has('aino:legacy-history:remind')).toBe(false)
+  })
 
   it('rejects stale sign-in recovery owners at the native boundary before logging out', async () => {
     for (const change of ['account', 'revision', 'mode'] as const) {

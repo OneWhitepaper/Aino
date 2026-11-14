@@ -315,6 +315,26 @@ it.each([
 })
 
 // AM4: the same reasons and codes also follow a committed user event, without `admitted: false`.
+it('explains a model preparation failure beside the retained draft instead of blaming the gateway', async () => {
+  const hint = 'The selected model is unavailable. Choose an available model and send again.'
+  const failure = Object.assign(new Error(hint), {
+    code: 'model_unavailable',
+    data: { admitted: false, preparation_message: hint }
+  })
+  const binding = { connectionId: 'local', profile: 'team', roomId: 'model-not-ready' }
+  room((params, attempt) => (attempt === 1 ? Promise.reject(failure) : receipt(params)))
+  const scope = await openRoom(binding)
+  await typeAndSend(scope, 'Keep my question')
+
+  await within(scope).findByText(hint)
+  expect(within(scope).queryByText(REFUSED)).toBeNull()
+  expect(editor(scope).value).toBe('Keep my question')
+  expect(await readCanonicalGroupSend(binding)).toMatchObject({ attempts: 0 })
+  fireEvent.click(within(scope).getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(sentIds()).toHaveLength(2))
+  await waitFor(() => expect(editor(scope).value).toBe(''))
+})
+
 it.each([
   ['an invalid_params from the gateway', refusal('invalid_params')],
   ['a room error from hermes serve', frame('hosted room not found', 4111)],

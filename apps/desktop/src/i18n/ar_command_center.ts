@@ -243,7 +243,7 @@ export const arCommandCenter = {
       userIdPlaceholder: 'معرّف مستخدم Telegram',
       add: 'إضافة',
       numericOnly: 'يجب أن تكون معرّفات مستخدمي Telegram أرقامًا.',
-      saveAndRestart: 'حفظ وإعادة التشغيل',
+      saveAndRestart: 'حفظ واتصال',
       applying: 'جارٍ الحفظ…',
       pairingExpired: 'انتهت صلاحية اقتران Telegram. ابدأ إعداد QR جديدًا.',
       stillWaiting: detail => `ما زلنا ننتظر Telegram. إعادة المحاولة بعد: ${detail}`,

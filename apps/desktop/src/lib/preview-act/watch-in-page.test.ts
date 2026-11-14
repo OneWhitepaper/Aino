@@ -35,6 +35,45 @@ const drawn = () =>
 const marks = () => [...drawn().shadow.children].filter(child => child !== drawn().pointer)
 
 describe('watchInPage', () => {
+  it('draws frame targets at the same position as root controls in the outer viewport', () => {
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    vi.spyOn(frame, 'getBoundingClientRect').mockReturnValue({
+      bottom: 500,
+      height: 300,
+      left: 300,
+      right: 700,
+      top: 200,
+      width: 400
+    } as DOMRect)
+    const target = frame.contentDocument!.createElement('button')
+    frame.contentDocument!.body.append(target)
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+      bottom: 70,
+      height: 40,
+      left: 20,
+      right: 120,
+      top: 30,
+      width: 100
+    } as DOMRect)
+
+    watchInPage(document, { aimed: target }, 'aim')
+    expect(host()).not.toBeNull()
+    const framedTransform = (marks()[0] as HTMLElement).style.transform
+    const rootTarget = document.createElement('button')
+    document.body.append(rootTarget)
+    vi.spyOn(rootTarget, 'getBoundingClientRect').mockReturnValue({
+      bottom: 270,
+      height: 40,
+      left: 320,
+      right: 420,
+      top: 230,
+      width: 100
+    } as DOMRect)
+    watchInPage(document, { aimed: rootTarget }, 'aim')
+    expect((marks()[0] as HTMLElement).style.transform).toBe(framedTransform)
+  })
+
   it('mounts one host on documentElement and reuses it across stages', () => {
     const target = document.createElement('button')
     document.body.append(target)
@@ -213,6 +252,25 @@ describe('watchInPage', () => {
     watchInPage(document, holder, 'clear')
 
     expect(holder.aimed).toBeNull()
+  })
+
+  it('preserves page-owned matching tags while rebuilding only its known overlay host', () => {
+    const pageHost = document.createElement('hermes-watch')
+    pageHost.innerHTML = '<button>Pay selected recipient</button>'
+    document.body.append(pageHost)
+    const target = pageHost.querySelector('button')!
+    const stamps = window as unknown as { __hermesWatchTag: number }
+    stamps.__hermesWatchTag = 10
+    watchInPage(document, { aimed: target }, 'aim')
+    const first = drawn().host
+    expect(pageHost.isConnected).toBe(true)
+    stamps.__hermesWatchTag = 11
+    watchInPage(document, { aimed: target }, 'aim')
+    expect(first.isConnected).toBe(false)
+    expect(drawn().host.isConnected).toBe(true)
+    expect(pageHost.isConnected).toBe(true)
+    expect(target.textContent).toBe('Pay selected recipient')
+    expect(document.querySelectorAll('hermes-watch')).toHaveLength(2)
   })
 
   // Same contract as the act engine: the pane injects `watchInPage.toString()`

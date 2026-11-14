@@ -22,7 +22,6 @@ interface GroupHeaderPresentationOptions {
   compactSidebar: boolean
   pageHeader: unknown
   compactTabs: boolean
-  editMode: boolean
   hasWindowTitlebar: boolean
 }
 
@@ -71,7 +70,6 @@ export function groupHeaderPresentation({
   compactSidebar,
   pageHeader,
   compactTabs,
-  editMode,
   hasWindowTitlebar
 }: GroupHeaderPresentationOptions) {
   const stripVisible = groupStripVisible({ toolPanel, workspacePage, shown, activeId, tabStripDefault, node, paneFor })
@@ -100,8 +98,7 @@ export function groupHeaderPresentation({
   // the routed session (syncWorkspaceTitle), so a routed conversation gets the
   // same single heading as a tile.  The zone's in-surface ChatHeader stays
   // display:none inside trees (renderer/index.tsx), so this header is the only
-  // title a chat zone paints.  Layout edit mode deliberately keeps the full
-  // tab strip so every pane remains draggable/reorderable while editing.
+  // title a chat zone paints. Mixed groups retain their normal draggable tabs.
   // Independent of stripVisible: a workspace-only chat zone (no tiles open —
   // the default main zone) auto-hides its strip, and that must not take the
   // single session title with it.
@@ -111,7 +108,6 @@ export function groupHeaderPresentation({
       workspacePage,
       isEmpty,
       verticalCollapse,
-      editMode,
       shown,
       headerVeto: activeChrome.headerVeto
     })
@@ -119,13 +115,20 @@ export function groupHeaderPresentation({
   const singleSessionHeader = hideSessionTabStrip
   // Workspace ownership survives conversation scoping: bots and groups hide
   // the ordinary workspace tab, but still occupy its primary window zone.
-  const titleInWindowBar = hasWindowTitlebar && singleSessionHeader && node.panes.includes('workspace') && !node.minimized
+  const titleInWindowBar =
+    hasWindowTitlebar && singleSessionHeader && node.panes.includes('workspace') && !node.minimized
 
   return { stripVisible, verticalCollapse, headerVisible, hideSessionTabStrip, singleSessionHeader, titleInWindowBar }
 }
 
 /** The same zone header owns a tab strip or the native titlebar's reserved space. */
-export function groupTabHeaderVisible({ headerVisible, hideSessionTabStrip, panelTopEdge, verticalCollapse, singleSessionHeader }: {
+export function groupTabHeaderVisible({
+  headerVisible,
+  hideSessionTabStrip,
+  panelTopEdge,
+  verticalCollapse,
+  singleSessionHeader
+}: {
   headerVisible: boolean
   hideSessionTabStrip: boolean
   panelTopEdge: boolean

@@ -25,6 +25,7 @@ export interface CopyButtonProps {
   errorMessage?: string
   haptic?: boolean
   iconClassName?: string
+  idleIcon?: React.ReactNode
   label?: string
   onCopied?: () => void
   onCopyError?: (error: unknown) => void
@@ -34,6 +35,16 @@ export interface CopyButtonProps {
   stopPropagation?: boolean
   text: CopyPayload
   title?: string
+}
+
+interface CopyFeedbackIconProps extends Pick<CopyButtonProps, 'iconClassName' | 'idleIcon'> {
+  status: CopyStatus
+}
+
+function CopyFeedbackIcon({ iconClassName, idleIcon, status }: CopyFeedbackIconProps) {
+  const Icon = status === 'copied' ? Check : status === 'error' ? X : Copy
+
+  return status === 'idle' && idleIcon != null ? idleIcon : <Icon className={cn('size-3.5', iconClassName)} />
 }
 
 export function CopyButton({
@@ -46,6 +57,7 @@ export function CopyButton({
   errorMessage,
   haptic = true,
   iconClassName,
+  idleIcon,
   label,
   onCopied,
   onCopyError,
@@ -120,9 +132,6 @@ export function CopyButton({
     [haptic, onCopied, onCopyError, preventDefault, stopPropagation, text]
   )
 
-  const Icon = status === 'copied' ? Check : status === 'error' ? X : Copy
-  const icon = <Icon className={cn('size-3.5', iconClassName)} />
-
   const visibleChildren =
     (showLabel ?? (appearance !== 'icon' && appearance !== 'tool-row'))
       ? status === 'copied'
@@ -131,6 +140,8 @@ export function CopyButton({
           ? t.common.failed
           : (children ?? resolvedLabel)
       : null
+
+  const icon = <CopyFeedbackIcon iconClassName={iconClassName} idleIcon={idleIcon} status={status} />
 
   const content = (
     <>

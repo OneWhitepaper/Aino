@@ -167,13 +167,13 @@ function partPaintWeight(part: unknown, measure: (parts: readonly unknown[]) => 
     return 0
   }
 
-  if (!isCardTool(toolName, part.args)) {
+  if (!isCardTool(toolName, part.args) || isFileEditTool(toolName)) {
     return COLLAPSED_ROW_WEIGHT
   }
 
-  // A diff is the one card that scales: `FileDiffPanel` mounts a row per line,
-  // and a big patch really is the expensive thing in the turn.
-  return isFileEditTool(toolName) ? measure([part]) : CARD_WEIGHT
+  // File diffs sit behind the execution log and its per-row disclosure;
+  // only dedicated media/consent/delegation cards mount by default.
+  return CARD_WEIGHT
 }
 
 /**

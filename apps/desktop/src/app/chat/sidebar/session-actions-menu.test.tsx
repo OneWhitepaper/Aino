@@ -88,7 +88,6 @@ vi.mock('@/i18n', () => ({
   })
 }))
 vi.mock('@/lib/haptics', () => ({ triggerHaptic: vi.fn() }))
-vi.mock('@/lib/profile-color', () => ({ PROFILE_SWATCHES: [] }))
 vi.mock('@/lib/session-export', () => ({ exportSession: vi.fn() }))
 vi.mock('@/store/gateway', () => ({ activeGateway: vi.fn(() => null) }))
 vi.mock('@/store/notifications', () => ({ $notificationEpoch: atom(0), notify: vi.fn(), notifyError: vi.fn() }))
@@ -113,10 +112,6 @@ vi.mock('@/store/session', () => ({
   sessionMatchesStoredId: vi.fn(() => false),
   sessionPinId: vi.fn((s: { id: string }) => s.id),
   setSessions: vi.fn()
-}))
-vi.mock('@/store/session-color', () => ({
-  $sessionColorOverrides: atom<Record<string, string>>({}),
-  setSessionColorOverride: vi.fn()
 }))
 vi.mock('@/store/session-states', () => ({
   $sessionStates: atom<Record<string, unknown>>({}),

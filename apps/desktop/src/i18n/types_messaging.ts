@@ -1,5 +1,25 @@
 /** Messaging setup, platform status and connection copy shared by every locale. */
 export interface MessagingTranslations {
+  qrSetup: {
+    scan: (name: string) => string
+    qrAlt: (name: string) => string
+    starting: string
+    waiting: string
+    scanned: string
+    saving: string
+    saved: string
+    expired: string
+    retry: string
+    replace: string
+    manual: string
+    manualHint: string
+    automatic: string
+    reconnect: string
+    failed: string
+    saveFailed: string
+    savedAccount: string
+    busy: string
+  }
   directory: {
     statusFilters: string
     title: string

@@ -20,7 +20,6 @@ import { previewTabIdsVisibleTo } from '@/store/preview'
 import type { PreviewOwner } from '@/store/preview-ownership'
 import { isBrowserWindow, windowBrowserTabId } from '@/store/windows'
 
-import { actOnActivePreview } from './preview-act'
 import { activePreviewNav } from './preview-nav'
 import { type PreviewReadOptions, type PreviewReadResult, readActivePreview } from './preview-reader'
 import { activePreviewScriptRunner } from './preview-script-runner'
@@ -34,6 +33,9 @@ import {
 const CHANNEL = 'hermes:preview-popout'
 
 const ACT_TIMEOUT_MS = 20_000
+// A claimed action may be waiting for the person to confirm it. Keep that wait
+// inside the gateway's 120-second request lifetime, separate from discovery.
+const ACT_EXECUTION_TIMEOUT_MS = 110_000
 const READ_TIMEOUT_MS = 8_000
 const VAULT_TIMEOUT_MS = 20_000
 
@@ -68,6 +70,7 @@ type BridgeRequest = { id: string; tabIds?: string[] } & (
 )
 
 type BridgeResponse =
+  | { id: string; kind: 'accepted'; operation: 'act' }
   | { id: string; kind: 'act'; result: PreviewActResult }
   | { id: string; kind: 'read'; result: PreviewReadResult | null }
   | { id: string; kind: 'vault'; result: VaultBridgeResult }
@@ -142,7 +145,8 @@ function askPopout<T>(
   request: BridgeRequest,
   timeoutMs: number,
   pick: (response: BridgeResponse) => T | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  claimed?: { failure: (error: string) => T; timeoutMs: number }
 ): Promise<T | null> {
   const bus = getBus()
 
@@ -153,8 +157,19 @@ function askPopout<T>(
   return new Promise(resolve => {
     let stop: (() => void) | undefined
     let onAbort: (() => void) | undefined
+    let accepted = false
+    let settled = false
+    let timer: number
 
     const finish = (value: T | null) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      window.clearTimeout(timer)
+      stop?.()
+
       if (onAbort) {
         signal?.removeEventListener('abort', onAbort)
       }
@@ -162,19 +177,26 @@ function askPopout<T>(
       resolve(value)
     }
 
-    const timer = window.setTimeout(() => {
-      stop?.()
-      finish(null)
-    }, timeoutMs)
+    const timeout = () => {
+      bus.post({ cancel: true, id: request.id } satisfies BridgeCancel)
+      // A claimed action must never fall through to a second local execution.
+      finish(
+        accepted
+          ? (claimed?.failure(
+              'The browser action timed out and was cancelled. Observe the page before trying again.'
+            ) ?? null)
+          : null
+      )
+    }
+
+    timer = window.setTimeout(timeout, timeoutMs)
 
     // The chat window's Stop/timeout aborted: tell the pop-out to abort its own
     // in-flight controller so a queued fill never reaches the page (F5), then
     // stop waiting for a reply.
     if (signal) {
       onAbort = () => {
-        window.clearTimeout(timer)
         bus.post({ cancel: true, id: request.id } satisfies BridgeCancel)
-        stop?.()
         finish(null)
       }
 
@@ -200,15 +222,20 @@ function askPopout<T>(
         return
       }
 
+      if (response.kind === 'accepted' && request.kind === 'act' && claimed && !accepted) {
+        accepted = true
+        window.clearTimeout(timer)
+        timer = window.setTimeout(timeout, claimed.timeoutMs)
+
+        return
+      }
+
       if (!('result' in response) && response.kind !== 'error') {
         return
       }
 
-      window.clearTimeout(timer)
-      stop?.()
-
       if (response.kind === 'error') {
-        finish(null)
+        finish(accepted ? (claimed?.failure(response.error ?? 'The browser action failed.') ?? null) : null)
 
         return
       }
@@ -222,9 +249,20 @@ function askPopout<T>(
 
 /** Ask the browser pop-out to run drive_preview for `owner` (the requesting
  *  session's stored id). Null when no pop-out showing one of its tabs answers. */
-export function requestPopoutPreviewAct(payload: ActPayload, owner?: PreviewOwner): Promise<PreviewActResult | null> {
-  return askPopout({ id: nextId('act'), kind: 'act', payload, ...scopeFor(owner) }, ACT_TIMEOUT_MS, response =>
-    response.kind === 'act' ? response.result : undefined
+export function requestPopoutPreviewAct(
+  payload: ActPayload,
+  owner?: PreviewOwner,
+  signal?: AbortSignal
+): Promise<PreviewActResult | null> {
+  return askPopout(
+    { id: nextId('act'), kind: 'act', payload, ...scopeFor(owner) },
+    ACT_TIMEOUT_MS,
+    response => (response.kind === 'act' ? response.result : undefined),
+    signal,
+    {
+      failure: error => ({ error, success: false }),
+      timeoutMs: ACT_EXECUTION_TIMEOUT_MS
+    }
   )
 }
 
@@ -344,13 +382,32 @@ export function installPopoutPreviewResponder(): () => void {
       return
     }
 
+    if (request.kind === 'act') {
+      const explicitTab = (request.payload as ActPayload)?.tabId
+
+      // A session can own several pop-outs. Only the requested tab may claim
+      // the operation; a sibling's refusal must not beat the owner's reply.
+      if (explicitTab && explicitTab !== windowBrowserTabId()) {
+        return
+      }
+    }
+
     const id = request.id
 
     void (async () => {
       try {
         if (request.kind === 'act') {
-          const result = await actOnActivePreview(request.payload as ActPayload)
-          bus.post({ id, kind: 'act', result } satisfies BridgeResponse)
+          const controller = new AbortController()
+          inFlight.set(id, controller)
+          bus.post({ id, kind: 'accepted', operation: 'act' } satisfies BridgeResponse)
+
+          try {
+            const { runPreviewAgentAction } = await import('./preview-agent')
+            const result = await runPreviewAgentAction(request.payload as ActPayload, controller.signal)
+            bus.post({ id, kind: 'act', result } satisfies BridgeResponse)
+          } finally {
+            inFlight.delete(id)
+          }
 
           return
         }
@@ -382,5 +439,13 @@ export function installPopoutPreviewResponder(): () => void {
     })()
   })
 
-  return stop
+  return () => {
+    stop()
+
+    for (const controller of inFlight.values()) {
+      controller.abort()
+    }
+
+    inFlight.clear()
+  }
 }

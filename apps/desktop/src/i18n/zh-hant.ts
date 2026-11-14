@@ -6,6 +6,7 @@ import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
 import { messagingDirectory } from './messaging-directory'
+import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
@@ -26,9 +27,9 @@ import { zhHantSettings } from './zh-hant_settings'
 
 const zhHantBaseOverrides = {
   gatewayGroupOpen: {
-    opening: "正在開啟群組聊天…",
-    lookupFailed: "無法在閘道上查找此群組，請重試。",
-    missing: "此群組聊天已不存在。"
+    opening: '正在開啟群組聊天…',
+    lookupFailed: '無法在閘道上查找此群組，請重試。',
+    missing: '此群組聊天已不存在。'
   },
   notificationCenter: notificationCenterCopy['zh-hant'],
   appearancePage: appearancePage['zh-hant'],
@@ -193,7 +194,11 @@ const zhHantBaseOverrides = {
   starmap: zhHantCapabilities.starmap,
   agents: zhHantCapabilities.agents,
   commandCenter: zhHantCommandCenter.commandCenter,
-  messaging: { ...zhHantCommandCenter.messaging, directory: messagingDirectory['zh-hant'] },
+  messaging: {
+    ...zhHantCommandCenter.messaging,
+    directory: messagingDirectory['zh-hant'],
+    qrSetup: messagingOnboarding['zh-hant']
+  },
   profiles: zhHantCommandCenter.profiles,
   modelAssignment: {
     saveFailed: 'Hermes 未儲存該模型變更。',
@@ -210,6 +215,9 @@ const zhHantBaseOverrides = {
   composer: {
     ...zhHantChat.composer,
     redirect: '重新導向目前的執行',
+    pauseTask: '暫停任務',
+    pausingTask: '正在暫停…',
+    continuingTask: '正在繼續…',
     queueLostNote: '重新啟動期間該回合已遺失',
     restoreImageDraft: '還原圖片草稿',
     queueCancelFailed: '無法移除排隊的回合',

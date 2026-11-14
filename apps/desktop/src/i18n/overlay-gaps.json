@@ -4058,15 +4058,6 @@
     "ru",
     "zh-hant"
   ],
-  "commandCenter.contributedActions.layoutEditMode": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh-hant"
-  ],
   "commandCenter.contributedActions.reloadPlugins": [
     "ar",
     "de",
@@ -12942,18 +12933,6 @@
     "es",
     "fr"
   ],
-  "settings.appearance.appActionsDesc": [
-    "ar"
-  ],
-  "settings.appearance.appActionsLeft": [
-    "ar"
-  ],
-  "settings.appearance.appActionsRight": [
-    "ar"
-  ],
-  "settings.appearance.appActionsTitle": [
-    "ar"
-  ],
   "settings.appearance.chatFontDesc": [
     "ar"
   ],
@@ -21124,14 +21103,6 @@
     "ja",
     "zh-hant"
   ],
-  "titlebar.layoutEditor": [
-    "ja",
-    "zh-hant"
-  ],
-  "titlebar.layoutEditorTitle": [
-    "ja",
-    "zh-hant"
-  ],
   "titlebar.resetHudLayout": [
     "ru"
   ],
@@ -22092,42 +22063,6 @@
   ],
   "zones.closeRunningTitle": [
     "ja",
-    "zh-hant"
-  ],
-  "zones.layoutTitles.default": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh-hant"
-  ],
-  "zones.layoutTitles.focus": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh-hant"
-  ],
-  "zones.layoutTitles.quad": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh-hant"
-  ],
-  "zones.layoutTitles.terminalDeck": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
     "zh-hant"
   ],
   "zones.newSessionTab": [

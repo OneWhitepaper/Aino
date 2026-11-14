@@ -250,7 +250,7 @@ function PlatformCard({
           {platform.id === 'wecom' && <span className="messaging-send-only">{m.directory.sendOnly}</span>}
         </span>
         <span aria-hidden="true" className="messaging-configure-action">
-          {m.directory.configure}
+          {platform.onboarding && !platform.configured ? m.qrSetup.reconnect : m.directory.configure}
           <ChevronRight />
         </span>
       </span>

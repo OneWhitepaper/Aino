@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
 import { parseAnsi } from '@/lib/ansi'
@@ -97,6 +97,28 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+async function revealEdit(container: HTMLElement, changed: boolean) {
+  await waitFor(() => expect(container.querySelector('[data-tool-summary], [data-tool-row]')).not.toBeNull())
+  const runToggle = container.querySelector('[data-tool-summary] button[aria-expanded]')
+
+  if (runToggle) {
+    expect(runToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-tool-row]')).toBeNull()
+    fireEvent.click(runToggle)
+  }
+
+  await waitFor(() => expect(container.querySelector('[data-tool-row]')).not.toBeNull())
+  const row = container.querySelector('[data-tool-row]')!
+  expect(row.hasAttribute('data-file-edit')).toBe(false)
+
+  if (changed) {
+    const editToggle = row.querySelector('button[aria-expanded]')!
+    expect(editToggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(editToggle)
+    await waitFor(() => expect(row.hasAttribute('data-file-edit')).toBe(true))
+  }
+}
+
 it.each(Object.entries(receipts))(
   '%s: cold tool hydration preserves raw results and edit visibility',
   async (_name, receipt) => {
@@ -113,9 +135,7 @@ it.each(Object.entries(receipts))(
       </ThreadRuntime>
     )
 
-    if (receipt.changed) {
-      await waitFor(() => expect(liveUi.container.querySelector('[data-tool-row][data-file-edit]')).not.toBeNull())
-    }
+    await revealEdit(liveUi.container, receipt.changed)
 
     cleanup()
 
@@ -138,12 +158,15 @@ it.each(Object.entries(receipts))(
         expect(parts[0].result).toEqual(receipt.completion.result)
         expect(parts[0].toolResultMetadata?.inline_diff).toBe(receipt.completion.inline_diff)
 
+        $toolDisclosureStates.set({})
+
         const ui = render(
           <ThreadRuntime messages={cold.map(toRuntimeMessage)}>
             <Thread />
           </ThreadRuntime>
         )
 
+        await revealEdit(ui.container, receipt.changed)
         await waitFor(() => {
           expect(Boolean(ui.container.querySelector('[data-tool-row][data-file-edit]'))).toBe(receipt.changed)
         })

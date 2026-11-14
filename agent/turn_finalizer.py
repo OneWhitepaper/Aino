@@ -14,7 +14,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 from agent.codex_responses_adapter import _summarize_user_message_for_log
 from agent.delegation_context import is_dispatcher_owned_worker_context
-from agent.interrupt_control import interrupted_during_api_call_reason
+from agent.interrupt_control import USER_INTERRUPT_REASONS, interrupted_during_api_call_reason
 from agent.turn_failure_copy import exit_reason_failure, stamp_failure
 from agent.context_compressor import _DB_PERSISTED_MARKER
 from agent.message_content import flatten_message_text
@@ -172,7 +172,10 @@ def _resolve_budget_fallback(
                 from agent.conversation_loop import INTERRUPT_WAITING_FOR_MODEL_PREFIX
                 interrupted = True
                 _turn_exit_reason = interrupted_during_api_call_reason(agent)
-                final_response = f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{time.time() - _summary_start:.1f}s elapsed)."
+                final_response = (
+                    "" if getattr(agent, "_tool_interrupt_reason", None) in USER_INTERRUPT_REASONS
+                    else f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{time.time() - _summary_start:.1f}s elapsed)."
+                )
 
     # A kanban worker must record a terminal outcome whether or not a fallback path
     # was eligible, so the dispatcher learns the worker could not complete. Only the
@@ -797,6 +800,7 @@ def finalize_turn(
         "failed": failed,
         "partial": False,  # True only when stopped due to invalid tool calls
         "interrupted": interrupted,
+        "user_interrupted": bool(interrupted and getattr(agent, "_tool_interrupt_reason", None) in USER_INTERRUPT_REASONS),
         "response_transformed": _response_transformed,
         "pre_transform_response": public_pre_transform(agent, _pre_transform_response),
         "response_previewed": getattr(agent, "_response_was_previewed", False),

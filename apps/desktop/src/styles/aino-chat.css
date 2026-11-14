@@ -305,6 +305,7 @@
 [data-chat-surface][data-conversation-layout] {
   container-type: inline-size;
   --aino-conversation-inset: clamp(1rem, 3cqw, 2rem);
+  --aino-conversation-identity-gutter: 2.75rem;
   --composer-width: var(--aino-conversation-width);
   --composer-row-gap: 0.25rem;
   --composer-shell-pad-block-end: 1.25rem;
@@ -582,6 +583,13 @@
   overflow: visible;
 }
 
+/* Historical turns use paint containment; include the portrait gutter inside
+   that boundary while keeping the response column aligned with the composer. */
+[data-chat-surface][data-conversation-layout] [data-slot='aui_message-group'] {
+  margin-inline-start: calc(-1 * var(--aino-conversation-identity-gutter));
+  padding-inline-start: var(--aino-conversation-identity-gutter);
+}
+
 [data-slot='aui_assistant-brand'],
 [data-slot='aui_assistant-avatar'] {
   display: none;
@@ -589,26 +597,33 @@
 
 [data-chat-surface][data-conversation-layout]
   [data-slot='aui_assistant-message-root']:has(> :is([data-slot='aui_assistant-brand'], [data-slot='aui_assistant-avatar'])) {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
-  column-gap: 0.75rem;
+  position: relative;
 }
 
 [data-chat-surface][data-conversation-layout] :is([data-slot='aui_assistant-brand'], [data-slot='aui_assistant-avatar']) {
+  /* Identity sits beside the shared transcript/composer column, never inside its measure. */
+  position: absolute;
+  inset-inline-start: calc(-1 * var(--aino-conversation-identity-gutter));
+  top: 0.125rem;
   display: grid;
   width: 2rem;
   height: 2rem;
-  grid-column: 1;
-  grid-row: 1;
-  margin-top: 0.125rem;
   object-fit: contain;
   place-items: center;
 }
 
-[data-chat-surface][data-conversation-layout]
-  [data-slot='aui_assistant-message-root']:has(> :is([data-slot='aui_assistant-brand'], [data-slot='aui_assistant-avatar']))
-  > :not([data-slot='aui_assistant-brand'], [data-slot='aui_assistant-avatar']) {
-  grid-column: 2;
+/* Split panes need their full message width. When the outer gutter no longer
+   fits, keep identity above the reply rather than clipping it at the viewport. */
+@container (max-width: 58rem) {
+  [data-chat-surface][data-conversation-layout] [data-slot='aui_message-group'] {
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+  }
+
+  [data-chat-surface][data-conversation-layout] :is([data-slot='aui_assistant-brand'], [data-slot='aui_assistant-avatar']) {
+    position: static;
+    margin-block: 0 0.5rem;
+  }
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-message-content'] {
@@ -617,7 +632,7 @@
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-message-content'] .aui-md {
-  max-inline-size: 74ch;
+  max-inline-size: 100%;
   font-weight: 400;
 }
 

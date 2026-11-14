@@ -118,7 +118,7 @@ export interface SessionStatusDotProps {
  * the session switcher render, so a session's status can never disagree
  * between surfaces. It resolves everything itself from the stored session id:
  * the live state (via `$sessionDotStateById`, already reduced to one mutually
- * exclusive answer) and the color (override → project, via `sessionColorFor`).
+ * exclusive answer) and the inherited project color (via `sessionColorFor`).
  * An idle session shows its project color; the active states own the dot with
  * their semantic color so an attention cue is never masked by the tint.
  */

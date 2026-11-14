@@ -687,11 +687,10 @@ controls write (so a plugin action and a hand click can never disagree):
 host.sessions.pin(storedSessionId: string, pinned?: boolean, index?: number): void
 host.sessions.reorder(storedSessionIds: string[]): void   // Recents; [] = clear manual order → default sort
 host.sessions.reorderPinned(storedSessionIds: string[]): void  // Pinned section; omitted pins keep their slot
-host.sessions.setColor(storedSessionId: string, color: string | null): void
 ```
 
 Ids are STORED session ids: a live id is resolved to its durable lineage root,
-so pins and colours survive compression's id rotation — and the row-decoration
+so pins survive compression's id rotation — and the row-decoration
 slots hand your render that same durable id (`_lineage_root_id ?? id`), never
 the live one. Resolution goes through the rows this window has loaded; an id
 that matches no loaded row is written as given, so pass the slot's durable id
@@ -724,12 +723,6 @@ Migration for the held catalog plugins:
   a drop back into Recents, `host.sessions.reorderPinned(ids)` for a drag
   within the Pinned section, and `host.sessions.reorder([])` for its
   "reset manual order" path.
-- **better-session-appearance** — replace the `localStorage`
-  `hermes.desktop.sessionColors` write and the fiber-harvested `onChange` with
-  `host.sessions.setColor(sessionId, hex)` (`null` clears), and render its
-  per-row glyph through `SESSION_ROW_AREAS.leading` instead of mutating the
-  row's status dot (the durable id it needed from `_lineage_root_id` is the
-  slot's `sessionId`).
 
 `COMPOSER_AREAS.modelPill` overrides the model pill's **label** — a provider
 (`{ label: (ctx: ComposerModelPillContext) => string | null }`) receives
@@ -956,7 +949,7 @@ APPEARANCE_AREAS = { extra: 'appearance.extra' } as const
 
 ctx.register({
   area: APPEARANCE_AREAS.extra,
-  id: 'session-colour-rules',          // unique within your plugin
+  id: 'appearance-extras',             // unique within your plugin
   render: () => <MyAppearanceCard />   // any React tree; SDK hooks allowed
 })
 ```
@@ -974,18 +967,10 @@ Nothing persists app-side, so there is nothing to clean up in `ctx.onDispose`.
 
 For colour picking use the app's own swatch grid — `ColorSwatches` (already an
 SDK export) renders exactly what the profile rail and project dialog render,
-with your own `onChange`; feed it `PROFILE_SWATCHES` and pair it with
-`host.sessions.setColor(id, color)` for session colours.
+with your own `onChange`; feed it `PROFILE_SWATCHES` for the shared palette.
 
 Migrations for the plugins that motivated this slot:
 
-* **better-session-appearance** — replace the fiber walk that harvests the
-  Appearance submenu's `{ onChange, swatches }` and the `clearBtn.after(...)` /
-  `host.appendChild(panel)` injection into the app dropdown with one
-  `ctx.register({ area: APPEARANCE_AREAS.extra, id: 'rules', render })` whose
-  card renders `<ColorSwatches swatches={PROFILE_SWATCHES} value onChange />`
-  plus its bold/glyph/auto-rule controls; drop the `data-better-session-appearance`
-  attribute writes and the dropdown `max-height` overrides.
 * **hermes-appearance-hub** — mount its paper-texture / font / intro-copy
   controls as an `APPEARANCE_AREAS.extra` card instead of a status-bar menu
   that reaches into Settings; the settings *values* still go through
@@ -1451,7 +1436,6 @@ host.sessions.pin(storedSessionId, pinned?, index?)  // pin/unpin (default pinne
                                            //   same store the row's ⇧-click / drop writes
 host.sessions.reorder(ids)                 // replace the manual Recents order (what a drag persists); [] resets
 host.sessions.reorderPinned(ids)           // permute the Pinned section (the pinned drag path)
-host.sessions.setColor(storedSessionId, color | null)  // per-session colour override; null clears
 host.skills.list(profile?)                 // every skill for the scope (Capabilities endpoints)
 host.skills.setEnabled(name, on, profile?)  // enable/disable a skill — the Capabilities toggle
 host.toolsets.list(profile?)               // toolsets + enabled state

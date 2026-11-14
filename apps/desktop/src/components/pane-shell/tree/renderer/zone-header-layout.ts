@@ -6,6 +6,13 @@ import { isSessionStripPane } from '../store'
 /** The desktop tab strip's row (`h-7`). */
 const TAB_STRIP_HEIGHT = 28
 
+/** App-owned secondary headers share one CSS band at every window scale. */
+export function panelHeaderHeight(titlebarHeight: number, stripHeight: number | string, belowControls: boolean): number | string {
+  if (!belowControls) { return titlebarHeight }
+
+  return typeof stripHeight === 'number' ? titlebarHeight + stripHeight : `calc(${titlebarHeight}px + ${stripHeight})`
+}
+
 interface ZoneHeaderLayoutInput {
   /** The titlebar measured too little room beside its controls for the tabs. */
   measuredBelowControls: boolean

@@ -9,14 +9,22 @@ import { type RefObject, useEffect } from 'react'
 
 import { isElementInHiddenPane } from '@/components/pane-shell/pane-visibility'
 
+import { beginPreviewApproval } from './preview-approval'
 import { type PreviewInputEvent, registerPreviewInput, toWebviewInputSpace } from './preview-input'
-import { type PreviewScriptRunner, registerPreviewScriptRunner } from './preview-script-runner'
+import { installPreviewNativeActions } from './preview-native-actions'
+import {
+  type PreviewLoadFailure,
+  type PreviewScriptRunner,
+  registerPreviewScriptRunner,
+  setPreviewLoadFailure
+} from './preview-script-runner'
 
 export type PreviewDriveGuest = HTMLElement & {
   executeJavaScript?: (code: string) => Promise<unknown>
   getWebContentsId?: () => number
   getZoomFactor?: () => number
   sendInputEvent?: (event: PreviewInputEvent) => void
+  settleInput?: () => Promise<void>
 }
 
 /** A script can await a frame even when its page is hidden. Wake only for that
@@ -91,7 +99,11 @@ export async function withPreviewGuestActivity<T>(
   }
 }
 
-export function runPreviewGuestScript(guest: PreviewDriveGuest, code: string, signal?: AbortSignal) {
+export async function runPreviewGuestScript(guest: PreviewDriveGuest, code: string, signal?: AbortSignal) {
+  if (guest.settleInput) {
+    await guest.settleInput()
+  }
+
   const execute = window.hermesDesktop?.executePreviewGuestScript
 
   if (!execute) {
@@ -123,7 +135,8 @@ export async function withPreviewDeadline<T>(
 export function usePreviewDriveChannels(
   webviewRef: RefObject<null | PreviewDriveGuest>,
   tabId: string | undefined,
-  usesWebview: boolean
+  usesWebview: boolean,
+  loadFailure: PreviewLoadFailure | null = null
 ) {
   // Publish the SCRIPT runner for this tab: the one channel into the guest
   // page, shared by the tour tool (injected driver.js walkthroughs) and the
@@ -142,7 +155,19 @@ export function usePreviewDriveChannels(
         throw new Error('preview webview is not ready')
       }
 
+      await runner.nativeAction?.({ action: 'watch' }, signal)
+
       return runPreviewGuestScript(webview, code, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal)
+    }
+
+    installPreviewNativeActions(runner, () => webviewRef.current, tabId, lifetime.signal)
+
+    runner.beginApproval = signal => {
+      const webview = webviewRef.current
+
+      if (!webview) {throw new Error('preview webview is not ready')}
+
+      return beginPreviewApproval(webview, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal)
     }
 
     runner.withActivity = (operation, signal) => {
@@ -158,6 +183,31 @@ export function usePreviewDriveChannels(
       return withPreviewGuestActivity(webview, operation, lifetime.signal, signal)
     }
 
+    runner.capture = async signal => {
+      const webview = webviewRef.current
+
+      if (webview?.settleInput) {
+        await webview.settleInput()
+      }
+
+      const webContentsId = webview?.getWebContentsId?.()
+
+      if (!webview || typeof webContentsId !== 'number' || !window.hermesDesktop.capturePreview) {
+        throw new Error('Native browser capture is unavailable')
+      }
+
+      return withPreviewGuestActivity(
+        webview,
+        async () => {
+          const data = await window.hermesDesktop.capturePreview!({ webContentsId })
+          signal?.throwIfAborted()
+
+          return data
+        },
+        signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
+      )
+    }
+
     const unregister = registerPreviewScriptRunner(tabId, runner)
 
     return () => {
@@ -165,6 +215,13 @@ export function usePreviewDriveChannels(
       unregister()
     }
   }, [tabId, usesWebview, webviewRef])
+
+  // Rejected loadURL/module loads share the registered runner's native failure state.
+  useEffect(() => {
+    if (tabId) {
+      setPreviewLoadFailure(tabId, loadFailure)
+    }
+  }, [loadFailure, tabId, usesWebview])
 
   // Publish the INPUT channel for this tab. Same idea as the script runner, but
   // it carries real Chromium input rather than script — the agent's clicks and

@@ -569,8 +569,6 @@ export const en: Translations = {
     enterHud: 'HUD mode',
     exitHud: 'Exit HUD mode',
     resetHudLayout: 'Reset HUD size and position',
-    layoutEditor: 'Layout editor',
-    layoutEditorTitle: mod => `Layout editor — ${mod}-click resets the layout`
   },
 
   keybinds: {
@@ -1022,10 +1020,6 @@ export const en: Translations = {
       tabStripAuto: 'Auto',
       tabStripAlways: 'Always',
       tabStripNever: 'Never',
-      appActionsTitle: 'App Actions',
-      appActionsDesc: 'Where Settings, Layout, and HUD sit in the titlebar. Right leaves room for tabs on the left.',
-      appActionsLeft: 'Left',
-      appActionsRight: 'Right',
       terminalFontTitle: 'Terminal Font',
       terminalFontDesc:
         'Choose an installed font for Desktop terminals. Nerd Fonts render Powerlevel10k and shell icons; leave blank to use bundled JetBrains Mono.',
@@ -3038,7 +3032,6 @@ export const en: Translations = {
       viewLog: 'Action log'
     },
     contributedActions: {
-      layoutEditMode: 'Toggle layout edit mode',
       reloadPlugins: 'Reload desktop plugins',
       resetLayout: 'Reset layout',
       toggleStatusbar: 'Toggle status bar',
@@ -3642,6 +3635,9 @@ export const en: Translations = {
     steer: 'Steer the current run',
     redirect: 'Redirect the current run',
     stop: 'Stop',
+    pauseTask: 'Pause task',
+    pausingTask: 'Pausing task…',
+    continuingTask: 'Continuing task…',
     send: 'Send',
     speaking: 'Speaking',
     transcribing: 'Transcribing',
@@ -4950,29 +4946,6 @@ export const en: Translations = {
     pluginDisabled: pluginId => `Plugin "${pluginId}" disabled`,
     pluginDisabledBody: 'Re-enable it in Capabilities → Plugins to bring the pane back.',
     missingPane: paneId => `missing pane: ${paneId}`,
-    editTitle: 'Layouts',
-    editHint: 'Pick a layout, or drag panes between zones.',
-    reset: 'Reset',
-    templates: 'Templates',
-    custom: 'Custom',
-    newGridLayout: 'New grid layout',
-    saveCurrentAs: 'Save current arrangement as a template',
-    nameLayoutPlaceholder: 'Name this layout…',
-    deletePreset: name => `Delete ${name}`,
-    zoneEditorTitle: 'Zone editor',
-    editorHintPre: 'click to split · ',
-    editorHintPost: ' flips the line · drag across zones to merge · drag shared edges to resize',
-    templateColumns: 'Columns',
-    templateRows: 'Rows',
-    templateGrid: 'Grid',
-    templatePriority: 'Priority',
-    zoneTag: index => `zone ${index}`,
-    mergeZones: count => `Merge ${count} zones`,
-    customZoneName: count => `Custom ${count}-zone`,
-    layoutNamePlaceholder: fallback => `Layout name (${fallback})`,
-    saveApply: 'Save & apply',
-    notExpressible: 'this arrangement interlocks (pinwheel) — not expressible as nested splits yet',
-    zoneCount: count => `${count} zones`,
     tabCount: count => `${count} tab${count === 1 ? '' : 's'}`,
     paneTitles: {
       sessions: 'Sessions',
@@ -4982,12 +4955,6 @@ export const en: Translations = {
       logs: 'Logs'
     },
 
-    layoutTitles: {
-      default: 'Default',
-      focus: 'Focus',
-      terminalDeck: 'Terminal deck',
-      quad: 'Quad'
-    },
     tabActions: title => `Actions for ${title}`
   },
 

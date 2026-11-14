@@ -266,6 +266,8 @@ def _worker_workspace(frame):
 
 
 def _run_worker_turns(agent, frame, history):
+    from gateway.session_pause import continuation_history
+    history = continuation_history(history)
     context = json.loads(frame['policy'].get('kanban_json') or 'null')
     if context is None:
         from gateway.session_display import worker_display_kwargs

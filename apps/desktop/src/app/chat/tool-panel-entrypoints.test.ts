@@ -263,8 +263,8 @@ it('rejects an unmarked chooser source that contains an unknown pane', async () 
   expect(model.findGroupOfPane(tree.$layoutTree.get()!, 'review')?.id).toBe('unsafe-split')
 })
 
-it('keeps Simple-mode tool panes hidden when a user preset opens them as layout intent', async () => {
-  const { tree, model, layout, terminal } = await setup()
+it('keeps Simple-mode tool panes hidden when a contributed preset opens them as layout intent', async () => {
+  const { tree, model, registry, layout, terminal } = await setup()
   const mode = await import('@/store/interface-mode')
   const presets = await import('@/components/pane-shell/tree/presets')
   mode.setInterfaceMode('simple')
@@ -294,7 +294,8 @@ it('keeps Simple-mode tool panes hidden when a user preset opens them as layout 
     model.group(['files', 'review', 'terminal'], { id: 'user-tools', toolPanel: true, active: 'review' })
   ])
 
-  const id = presets.saveLayoutPresetTree('Simple intent contract', custom, [])!
+  const id = 'plugin-simple-intent'
+  registry.register({ area: 'layouts', id, source: 'plugin:test', data: custom })
   presets.applyLayoutPreset(id, custom)
   expect(layout.$fileBrowserOpen.get()).toBe(false)
   expect(terminal.$terminalTakeover.get()).toBe(false)

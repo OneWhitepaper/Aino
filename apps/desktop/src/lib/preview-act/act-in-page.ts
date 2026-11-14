@@ -24,6 +24,7 @@
  * stringified and is free to import.
  */
 
+import { domSurfaces, type DomSurfaces } from './dom-surfaces'
 import { identityKit } from './identity'
 import type { IdentityKit } from './identity'
 import { namingKit } from './naming'
@@ -52,17 +53,69 @@ export type {
 
 /** Everything the core needs that it cannot define for itself. */
 export interface ActKit {
+  clickTarget(el: HTMLElement, action: PreviewActAction, point: () => { clientX: number; clientY: number }): boolean
+  requiresNativeInput(action: PreviewActAction): boolean
+  surfaces: DomSurfaces
   identity: IdentityKit
   naming: NamingKit
   visibility: VisibilityKit
+}
+
+/** Synthetic fallback keeps the same target through the click pair. Native
+ * input remains preferred because only Chromium can deliver trusted events. */
+function clickTarget(
+  el: HTMLElement,
+  action: PreviewActAction,
+  point: () => { clientX: number; clientY: number }
+): boolean {
+  const count = new Map([
+    ['click', 1],
+    ['double_click', 2]
+  ]).get(action.kind)
+
+  if (!count) {
+    return false
+  }
+
+  const init = { bubbles: true, cancelable: true, ...point() }
+
+  for (let detail = 1; detail <= count; detail++) {
+    if (typeof PointerEvent === 'function') {
+      el.dispatchEvent(new PointerEvent('pointerdown', { ...init, detail }))
+      el.dispatchEvent(new PointerEvent('pointerup', { ...init, detail }))
+    }
+
+    el.dispatchEvent(new MouseEvent('mousedown', { ...init, detail }))
+    el.dispatchEvent(new MouseEvent('mouseup', { ...init, detail }))
+    el.click()
+  }
+
+  if (count === 2) {
+    el.dispatchEvent(new MouseEvent('dblclick', { ...init, detail: 2 }))
+  }
+
+  return true
+}
+
+/** Synthetic key events cannot perform browser modifier shortcuts. */
+function requiresNativeInput(action: PreviewActAction): boolean {
+  return action.kind === 'press' && (action.key?.length ?? 0) > 1 && action.key?.includes('+') === true
 }
 
 /** Assemble the kits for one document. Used in-process; the guest page gets
  *  the same three factories through `actEngineSource`. */
 export function buildActKit(doc: Document): ActKit {
   const naming = namingKit(doc)
+  const surfaces = domSurfaces(doc)
 
-  return { identity: identityKit(naming), naming, visibility: visibilityKit(doc, doc.defaultView) }
+  return {
+    clickTarget,
+    requiresNativeInput,
+    identity: identityKit(naming),
+    naming,
+    surfaces,
+    visibility: visibilityKit(doc, doc.defaultView, surfaces)
+  }
 }
 
 /** Run one action against `doc`, resolving refs through `holder`. */
@@ -81,6 +134,7 @@ export function actInPageCore(
   const { anchorOf, labelOf, selectorFor, stableOf, valueOf } = kit.naming
   const { affinity, coin, shifted } = kit.identity
   const { onScreen, visible } = kit.visibility
+  const surfaces = kit.surfaces
 
   // Declared inside, not at module scope: this body is stringified and eval'd
   // in the guest page, where a module-level constant is simply not defined.
@@ -108,16 +162,17 @@ export function actInPageCore(
     const nodes: Element[] = []
     const field: Element[] = []
     const elements: PreviewElement[] = []
+    let truncated = false
 
-    const candidates = doc.querySelectorAll(
+    const candidates = surfaces.collect(
       'a[href], button, input:not([type="hidden"]), select, textarea, summary, label[for], ' +
         '[role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], ' +
         '[role="menuitem"], [role="switch"], [role="option"], [role="combobox"], [role="searchbox"], ' +
-        '[role="textbox"], [contenteditable=""], [contenteditable="true"], [onclick], ' +
+        '[role="textbox"], [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"], [onclick], ' +
         '[tabindex]:not([tabindex="-1"])'
     )
 
-    for (const el of candidates) {
+    for (const el of candidates.elements) {
       if (elements.length >= max && field.length >= maxMarks) {
         break
       }
@@ -134,6 +189,8 @@ export function actInPageCore(
       }
 
       if (elements.length >= max) {
+        truncated ||= Boolean(labelOf(el) || valueOf(el))
+
         continue
       }
 
@@ -183,7 +240,32 @@ export function actInPageCore(
     holder.nodes = nodes
     holder.field = field
 
-    return { elements, nodes }
+    return { elements, nodes, opaqueFrames: candidates.opaqueFrames, truncated }
+  }
+
+  const bestReplacement = (
+    pool: PreviewActBinding[],
+    now: PreviewActBinding,
+    claimed: Record<string, boolean>
+  ): PreviewActBinding | undefined => {
+    let best: PreviewActBinding | undefined
+    let score = 0
+
+    for (const bound of pool) {
+      if (claimed[bound.ref] || (bound.surface && bound.surface !== now.surface)) {
+        continue
+      }
+
+      const rung = affinity(bound, now)
+
+      // A tie preserves DOM order, so identical pages rebind identically.
+      if (rung >= rebindBar && rung > score) {
+        best = bound
+        score = rung
+      }
+    }
+
+    return best
   }
 
   /** Look at the page and say what is there — or, once there is something to
@@ -206,6 +288,19 @@ export function actInPageCore(
     const book = holder.book || (holder.book = [])
     const coined = holder.coined || (holder.coined = {})
     const seen = sight(max)
+
+    const note =
+      [
+        seen.opaqueFrames
+          ? 'Some embedded frames are not readable from this page. Use a screenshot and visual actions for their rendered content.'
+          : '',
+        seen.truncated
+          ? `Interactive element inventory is capped at ${max}; additional controls are omitted. Scroll then call elements to inspect more, or use a selector learned from the page. A missing item here does not mean it is absent.`
+          : ''
+      ]
+        .filter(Boolean)
+        .join('\n') || undefined
+
     const claimed: Record<string, boolean> = {}
     const kept: PreviewActBinding[] = []
     const added: PreviewElement[] = []
@@ -254,7 +349,7 @@ export function actInPageCore(
     // the node away and built a new one) or is genuinely new. The pool is only
     // the handles whose element is GONE, which is both the correct candidate
     // set and a small one.
-    const pool = book.filter(bound => !claimed[bound.ref] && !doc.contains(bound.el))
+    const pool = book.filter(bound => !claimed[bound.ref] && !surfaces.contains(bound.el))
 
     for (const i of waiting) {
       const entry = seen.elements[i]
@@ -268,27 +363,12 @@ export function actInPageCore(
         path: anchorOf(el),
         ref: '',
         role: entry.role,
+        surface: el.getRootNode(),
         stable: stableOf(el),
         value: entry.value || ''
       }
 
-      let best: PreviewActBinding | undefined
-      let score = 0
-
-      for (const bound of pool) {
-        if (claimed[bound.ref]) {
-          continue
-        }
-
-        const rung = affinity(bound, now)
-
-        // Strictly better, so a tie goes to whichever candidate the page put
-        // first and the same page twice re-binds the same way.
-        if (rung >= rebindBar && rung > score) {
-          best = bound
-          score = rung
-        }
-      }
+      const best = bestReplacement(pool, now, claimed)
 
       if (best) {
         // Same handle, new node. Reported as one word rather than a removal
@@ -327,7 +407,7 @@ export function actInPageCore(
         continue
       }
 
-      if (doc.contains(bound.el) && visible(bound.el)) {
+      if (surfaces.contains(bound.el) && visible(bound.el)) {
         kept.push(bound)
 
         continue
@@ -345,7 +425,7 @@ export function actInPageCore(
     const churn = added.length + changed.length
 
     if (fresh || action.full || churn * 2 >= seen.elements.length) {
-      return { elements: seen.elements, success: true }
+      return { elements: seen.elements, note, success: true }
     }
 
     const delta: PreviewActDelta = { same }
@@ -366,7 +446,7 @@ export function actInPageCore(
       delta.rebound = rebound
     }
 
-    return { delta, success: true }
+    return { delta, note, success: true }
   }
 
   /** Resolve the action's target: a handle from the book, else a selector. */
@@ -387,7 +467,7 @@ export function actInPageCore(
         return { error: 'Unknown element ' + ref + '. Call elements to get current refs.' }
       }
 
-      if (!doc.contains(bound.el)) {
+      if (!surfaces.contains(bound.el)) {
         return { error: ref + ' has been removed from the page since the last snapshot. Call elements again.' }
       }
 
@@ -403,7 +483,7 @@ export function actInPageCore(
     let el: Element | null = null
 
     try {
-      el = doc.querySelector(selector)
+      el = surfaces.collect(selector).elements[0] ?? null
     } catch {
       return { error: 'Not a valid CSS selector: ' + selector }
     }
@@ -427,9 +507,9 @@ export function actInPageCore(
 
   /** Center of `el` in viewport coords, for pointer events that read position. */
   const pointAt = (el: Element) => {
-    const rect = el.getBoundingClientRect()
+    const point = surfaces.point(el)
 
-    return { clientX: Math.round(rect.left + rect.width / 2), clientY: Math.round(rect.top + rect.height / 2) }
+    return { clientX: point.x, clientY: point.y }
   }
 
   if (action.kind === 'elements') {
@@ -438,8 +518,12 @@ export function actInPageCore(
 
     return answer({
       ...looked,
-      note: empty ? 'No interactive elements found — the page may still be loading.' : undefined
+      note: looked.note ?? (empty ? 'No interactive elements found — the page may still be loading.' : undefined)
     })
+  }
+
+  if (kit.requiresNativeInput(action)) {
+    return fail('Keyboard combinations require the native desktop browser input channel.')
   }
 
   if (action.kind === 'scroll') {
@@ -479,9 +563,7 @@ export function actInPageCore(
   // on screen and names it, so the overlay has something to draw while the real
   // verb is still a beat away.
   if (action.kind === 'locate') {
-    if (el.scrollIntoView) {
-      el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })
-    }
+    surfaces.scrollIntoView(el)
 
     if (action.focus) {
       el.focus()
@@ -506,9 +588,7 @@ export function actInPageCore(
   // plumbing for the click that follows, not something anyone asked to watch —
   // and every millisecond of it is time the caller spends waiting for the page
   // to stop moving before it can aim real input at a fixed coordinate.
-  if (el.scrollIntoView) {
-    el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })
-  }
+  surfaces.scrollIntoView(el)
 
   // Hovering a disabled control is allowed — a disabled button with a tooltip
   // explaining WHY is exactly the thing worth hovering.
@@ -530,22 +610,7 @@ export function actInPageCore(
     return fail(describe(el) + ' is disabled.')
   }
 
-  if (action.kind === 'click') {
-    const init = { bubbles: true, cancelable: true, ...pointAt(el) }
-
-    // Frameworks bind to the pointer/mouse pair as often as to click itself, so
-    // replay the whole sequence; el.click() then runs the native activation
-    // (following a link, toggling a checkbox, submitting a form) that a bare
-    // synthetic MouseEvent would leave to chance.
-    if (typeof PointerEvent === 'function') {
-      el.dispatchEvent(new PointerEvent('pointerdown', init))
-      el.dispatchEvent(new PointerEvent('pointerup', init))
-    }
-
-    el.dispatchEvent(new MouseEvent('mousedown', init))
-    el.dispatchEvent(new MouseEvent('mouseup', init))
-    el.click()
-
+  if (kit.clickTarget(el, action, () => pointAt(el))) {
     return answer({ acted: 'clicked ' + describe(el), success: true })
   }
 
@@ -668,10 +733,14 @@ export function actInPageCore(
 export function actEngineSource(): string {
   return `(function (doc, holder, action) {
   var naming = (${namingKit.toString()})(doc);
+  var surfaces = (${domSurfaces.toString()})(doc);
   var kit = {
+    clickTarget: (${clickTarget.toString()}),
+    requiresNativeInput: (${requiresNativeInput.toString()}),
     naming: naming,
+    surfaces: surfaces,
     identity: (${identityKit.toString()})(naming),
-    visibility: (${visibilityKit.toString()})(doc, doc.defaultView)
+    visibility: (${visibilityKit.toString()})(doc, doc.defaultView, surfaces)
   };
   return (${actInPageCore.toString()})(doc, holder, action, kit);
 })`

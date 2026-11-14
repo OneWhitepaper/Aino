@@ -29,6 +29,7 @@
 
 import { translateNow } from '@/i18n'
 import { actEngineSource, type PreviewActAction, type PreviewActResult } from '@/lib/preview-act/act-in-page'
+import { domSurfaces } from '@/lib/preview-act/dom-surfaces'
 import { watchInPage } from '@/lib/preview-act/watch-in-page'
 import type { PreviewOwner } from '@/store/preview-ownership'
 
@@ -36,6 +37,7 @@ import {
   clearCharsBack,
   clickAt,
   glideTo,
+  parsePreviewKey,
   pointerPlaced,
   pressKey,
   selectAll,
@@ -44,6 +46,7 @@ import {
 } from './preview-drive'
 import { activePreviewInput, type PreviewInputHandle } from './preview-input'
 import { activePreviewNav, type PreviewNavHandle } from './preview-nav'
+import { hasPendingPreviewNative, observeAfterPreviewInput } from './preview-pending-native'
 import { activePreviewScriptRunner, type PreviewScriptRunner } from './preview-script-runner'
 
 /** Verbs the pane owns; a guest page cannot drive its own history. */
@@ -83,12 +86,17 @@ const ACT_TIMEOUT_MS = 8_000
 /** Verbs that get the look-then-act treatment: locate the target, walk the
  *  pointer there, then send real input. Actions with no single target (scroll,
  *  elements) are absent and skip it. */
-const DRIVEN: readonly string[] = ['click', 'hover', 'press', 'type']
+const DRIVEN: readonly string[] = ['click', 'double_click', 'hover', 'press', 'type']
 
 /** Verbs that put the mouse button down, and so are the only ones the pointerdown
  *  witness can speak to. `press` and `hover` never click, so demanding a witness
  *  from them would report every one of them as a failure. */
-const CLICKS: readonly string[] = ['click', 'type']
+const CLICKS: readonly string[] = ['click', 'double_click', 'type']
+
+const CLICK_COUNTS = new Map<string, number>([
+  ['click', 1],
+  ['double_click', 2]
+])
 
 const nothingOpen = () => translateNow('preview.drive.noLivePage')
 
@@ -136,6 +144,7 @@ const preamble = () => `  var w = window;
   w.__hermesWatch_fn = (${watchInPage.toString()});
   w.__hermesWatchTag = ${WATCH_TAG};
   var holder = w.__hermesActHolder;
+  var surfaces = (${domSurfaces.toString()})(document);
   var act = function (a) { return w.__hermesAct(document, holder, a); };
   var watch = function (stage, label) {
     try { w.__hermesWatch_fn(document, holder, stage, label); } catch (err) {}
@@ -180,9 +189,17 @@ ${preamble()}
   // click that never reached the page is indistinguishable from one the page
   // ignored, and the agent would report success either way.
   w.__hermesHit = null;
-  document.addEventListener('pointerdown', function (e) {
-    w.__hermesHit = { tag: e.target ? e.target.tagName : '?', trusted: e.isTrusted === true };
-  }, { capture: true, once: true });
+  if (w.__hermesHitCleanup) { w.__hermesHitCleanup(); }
+  var witnessRoot = holder.aimed ? holder.aimed.getRootNode() : document;
+  var recordHit = function (e) {
+    var target = e.composedPath ? e.composedPath()[0] : e.target;
+    w.__hermesHit = { tag: target ? target.tagName : '?', trusted: e.isTrusted === true };
+  };
+  witnessRoot.addEventListener('pointerdown', recordHit, { capture: true, once: true });
+  w.__hermesHitCleanup = function () {
+    witnessRoot.removeEventListener('pointerdown', recordHit, true);
+    w.__hermesHitCleanup = null;
+  };
   // Measure again once the scroll has stopped: real input is aimed at a fixed
   // viewport coordinate, so it has to be where the target ENDS UP.
   return restAfterScroll().then(function () {
@@ -212,7 +229,7 @@ function buildFocusProbeScript(): string {
 ${preamble()}
   // hermes-focus-probe
   var aimed = holder.aimed;
-  var active = document.activeElement;
+  var active = surfaces.activeElement();
   var tag = aimed && aimed.tagName ? aimed.tagName : '';
   var editable = !!(aimed && (aimed.isContentEditable === true || tag === 'INPUT' || tag === 'TEXTAREA'));
   var focused = editable && active === aimed;
@@ -304,6 +321,7 @@ ${preamble()}
       var out = act({ kind: 'elements' });
       watch('sweep');
       out.hit = w.__hermesHit || null;
+      if (w.__hermesHitCleanup) { w.__hermesHitCleanup(); }
       return JSON.stringify(out);
     } catch (err) {
       return JSON.stringify({ note: 'The page changed before it could be re-read: ' + err, success: true });
@@ -353,8 +371,9 @@ ${preamble()}
  *  only reads `document.activeElement`, which is exactly who receives keys. */
 function buildFieldStateScript(): string {
   return `(function () {
+    // hermes-field-state
     try {
-      var el = document.activeElement;
+      var el = (${domSurfaces.toString()})(document).activeElement();
       if (!el) { return JSON.stringify({ success: true, field: false, len: -1 }); }
       var value = '';
       var hasStart = false;
@@ -443,18 +462,20 @@ async function replaceExisting(
  *  change so the page records it. */
 function buildDirectSetScript(text: string): string {
   return `(function () {
+    // hermes-direct-set
     try {
-      var el = document.activeElement;
+      var el = (${domSurfaces.toString()})(document).activeElement();
       if (!el) { return JSON.stringify({ success: false, error: 'no focused field' }); }
       var setVal = null;
-      if (el.tagName === 'TEXTAREA') { setVal = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; }
-      else if (el.tagName === 'INPUT') { setVal = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; }
+      var view = el.ownerDocument.defaultView;
+      if (el.tagName === 'TEXTAREA') { setVal = Object.getOwnPropertyDescriptor(view.HTMLTextAreaElement.prototype, 'value').set; }
+      else if (el.tagName === 'INPUT') { setVal = Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value').set; }
       if (setVal) { setVal.call(el, ${JSON.stringify(text)}); }
       else if ('value' in el) { el.value = ${JSON.stringify(text)}; }
       else if (el.isContentEditable) { el.textContent = ${JSON.stringify(text)}; }
       else { return JSON.stringify({ success: false, error: 'not a text field' }); }
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new view.Event('input', { bubbles: true }));
+      el.dispatchEvent(new view.Event('change', { bubbles: true }));
       return JSON.stringify({ success: true });
     } catch (err) {
       return JSON.stringify({ success: false, error: String(err) });
@@ -558,6 +579,10 @@ function stoppedType(signal: AbortSignal, typed: number, total: number): Preview
 
 /** Past tense of the verb the agent asked for, against what it actually hit. */
 function describeDone(action: PreviewActAction, target: string): string {
+  if (action.kind === 'double_click') {
+    return `Double-clicked ${target}`
+  }
+
   if (action.kind === 'type') {
     return translateNow('preview.drive.typed', target, Boolean(action.submit))
   }
@@ -578,7 +603,8 @@ async function driveAction(
   run: PreviewScriptRunner,
   input: PreviewInputHandle,
   action: PreviewActAction,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  owner?: PreviewOwner
 ): Promise<PreviewActResult> {
   // A key press must not be preceded by a click — that would activate the
   // control rather than type into it — so the page hands it focus instead.
@@ -607,17 +633,16 @@ async function driveAction(
 
   await glideTo(input, found.point)
 
-  if (action.kind === 'click') {
-    await clickAt(input)
+  const clickCount = CLICK_COUNTS.get(action.kind)
+
+  if (clickCount) {
+    await clickAt(input, clickCount)
   } else if (action.kind === 'type') {
     const text = action.text ?? ''
 
     if (found.typable === false) {
       return {
-        error: translateNow(
-          'preview.drive.notTextField',
-          String(found.acted || 'That').replace(/^looking at /, '')
-        ),
+        error: translateNow('preview.drive.notTextField', String(found.acted || 'That').replace(/^looking at /, '')),
         success: false
       }
     }
@@ -690,8 +715,12 @@ async function driveAction(
   // target, which is the whole request.
 
   const target = String(found.acted || '').replace(/^looking at /, '')
-  const after = await runJson(run, buildFinishScript(SETTLE_MS))
-  const acted = describeDone(action, target)
+  const after = await finishNativeInput(run, input, owner, signal)
+
+  return nativeInputResult(after, action, describeDone(action, target))
+}
+
+function nativeInputResult(after: Trip, action: PreviewActAction, acted: string): PreviewActResult {
 
   // The action itself already happened as real input, so a page that will not
   // answer the read-back is a page that navigated — never a failed click.
@@ -700,6 +729,10 @@ async function driveAction(
   }
 
   const { hit, ...result } = after.result as PreviewActResult & { hit?: { tag: string; trusted: boolean } | null }
+
+  if (hasPendingPreviewNative(result)) {
+    return { ...result, acted }
+  }
 
   // The witness the locate trip armed. No record means the input never reached
   // the document, which the agent must hear about — every other signal here
@@ -712,13 +745,33 @@ async function driveAction(
     }
   }
 
-  return { ...result, acted, note: hitNote(hit), success: true }
+  return { ...result, acted, note: hitNote(hit, result.note), success: true }
 }
 
-/** Flag a click the overlay intercepted, which would otherwise look like a page
- *  that simply ignored it. */
-function hitNote(hit?: { tag: string; trusted: boolean } | null): string | undefined {
-  return hit && hit.tag === 'HERMES-WATCH' ? translateNow('preview.drive.overlayIntercepted') : undefined
+async function finishNativeInput(
+  run: PreviewScriptRunner,
+  input: PreviewInputHandle,
+  owner?: PreviewOwner,
+  signal?: AbortSignal
+): Promise<Trip> {
+  await input.settle?.()
+
+  const receipt = await observeAfterPreviewInput(run, owner, signal, nextSignal =>
+    runJson(
+      (code, tripSignal) =>
+        run(code, nextSignal && tripSignal ? AbortSignal.any([nextSignal, tripSignal]) : (nextSignal ?? tripSignal)),
+      buildFinishScript(SETTLE_MS)
+    )
+  )
+
+  return 'pending' in receipt ? { kind: 'answered', result: receipt.pending } : receipt.observed
+}
+
+/** Keep inventory guidance alongside a warning when the overlay intercepted input. */
+function hitNote(hit?: { tag: string; trusted: boolean } | null, inventoryNote?: string): string | undefined {
+  const intercepted = hit && hit.tag === 'HERMES-WATCH' ? translateNow('preview.drive.overlayIntercepted') : undefined
+
+  return [inventoryNote, intercepted].filter(Boolean).join('\n') || undefined
 }
 
 /** How far a screenful is, whether there is anywhere to go, and a spot to wheel
@@ -761,7 +814,11 @@ async function driveScroll(
   const anchor = trip.result as PreviewActResult & { page?: number; span?: number }
 
   if (!anchor.span) {
-    return { ...anchor, acted: translateNow('preview.drive.scrolledPage'), note: translateNow('preview.drive.nothingToScroll') }
+    return {
+      ...anchor,
+      acted: translateNow('preview.drive.scrolledPage'),
+      note: translateNow('preview.drive.nothingToScroll')
+    }
   }
 
   // A person does not move the mouse to scroll; the wheel turns wherever their
@@ -788,8 +845,30 @@ async function driveScroll(
 export async function actOnActivePreview(
   action: Omit<PreviewActAction, 'kind'> & { kind: string },
   signal?: AbortSignal,
-  owner?: PreviewOwner
+  owner?: PreviewOwner,
+  validate?: () => void,
+  approvedInput?: PreviewInputHandle
 ): Promise<PreviewActResult> {
+  const ensureCurrent = () => {
+    signal?.throwIfAborted()
+    validate?.()
+  }
+
+  const failed = (error: unknown): PreviewActResult => ({
+    error: error instanceof Error ? error.message : String(error),
+    success: false
+  })
+
+  try {
+    ensureCurrent()
+
+    if (action.kind === 'press') {
+      parsePreviewKey(action.key || 'Enter')
+    }
+  } catch (error) {
+    return failed(error)
+  }
+
   const nav = NAV_ACTIONS.find(verb => verb === action.kind)
 
   if (nav) {
@@ -812,11 +891,36 @@ export async function actOnActivePreview(
     return { error: nothingOpen(), success: false }
   }
 
-  const run: PreviewScriptRunner = (code, tripSignal) =>
-    runner(code, signal && tripSignal ? AbortSignal.any([signal, tripSignal]) : (signal ?? tripSignal))
+  const rawInput = approvedInput ?? activePreviewInput(owner)
 
-  const input = activePreviewInput(owner)
-  const perform = () => actWithChannels(action as PreviewActAction, run, input, signal)
+  const run: PreviewScriptRunner = async (code, tripSignal) => {
+    await rawInput?.settle?.()
+    ensureCurrent()
+
+    return runner(code, signal && tripSignal ? AbortSignal.any([signal, tripSignal]) : (signal ?? tripSignal))
+  }
+
+  run.nativeAction = runner.nativeAction
+
+  const input = rawInput
+    ? {
+        focus: () => {
+          ensureCurrent()
+          rawInput.focus()
+        },
+        send: (event: Parameters<PreviewInputHandle['send']>[0]) => {
+          // Release held keys/buttons in the captured guest even when the target
+          // was withdrawn between down/up. No fresh input may reach a new page.
+          if (event.type !== 'mouseUp' && event.type !== 'keyUp') {
+            ensureCurrent()
+          }
+
+          rawInput.send(event)
+        }
+      }
+    : null
+
+  const perform = () => actWithChannels(action as PreviewActAction, run, input, signal, owner).catch(failed)
 
   if (!runner.withActivity) {
     return perform()
@@ -845,7 +949,8 @@ async function actWithChannels(
   typed: PreviewActAction,
   run: PreviewScriptRunner,
   input: PreviewInputHandle | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  owner?: PreviewOwner
 ): Promise<PreviewActResult> {
   // Annotation, not interaction: nothing is clicked, nothing settles, and the
   // page is not re-read, so these skip the whole act-then-inventory path.
@@ -862,7 +967,7 @@ async function actWithChannels(
   }
 
   if (input && DRIVEN.indexOf(typed.kind) !== -1) {
-    return driveAction(run, input, typed, signal)
+    return driveAction(run, input, typed, signal, owner)
   }
 
   // A plain page scroll is a wheel gesture. Jumping to an end is not — no hand
