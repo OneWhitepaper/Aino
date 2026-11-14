@@ -86,7 +86,17 @@ it('waits for Blink to acknowledge the prepared hover before taking the native b
     executeJavaScript: vi.fn(async () => {})
   }
 
-  const pending = createPreviewApproval({} as never, guest as never, { x: 40, y: 20 })
+  const pending = createPreviewApproval(
+    {} as never,
+    guest as never,
+    {
+      x: 40,
+      y: 20,
+      type: 'mousePressed',
+      button: 'left',
+      clickCount: 1
+    } as never
+  )
   await Promise.resolve()
   expect(fixture.cdp.sendCommand).toHaveBeenCalledExactlyOnceWith('Input.dispatchMouseEvent', {
     type: 'mouseMoved',

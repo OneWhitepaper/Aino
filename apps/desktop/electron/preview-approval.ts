@@ -151,7 +151,7 @@ export async function createPreviewApproval(owner: WebContents, guest: WebConten
     if (point) {
       // Unlike sendInputEvent's queue receipt, CDP acknowledges Blink's input
       // handling. Bind hover-driven styles only after the real move has landed.
-      await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'none', ...point })
+      await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'none', x: point.x, y: point.y })
     }
 
     await pause(true)
