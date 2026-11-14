@@ -8,7 +8,11 @@ export interface PreviewApproval {
 }
 
 /** Keep one existing activity token from pre-approval observation through actual input. */
-export async function beginPreviewApproval(guest: PreviewDriveGuest, signal?: AbortSignal): Promise<PreviewApproval> {
+export async function beginPreviewApproval(
+  guest: PreviewDriveGuest,
+  signal?: AbortSignal,
+  point?: { x: number; y: number }
+): Promise<PreviewApproval> {
   const native = window.hermesDesktop
 
   if (
@@ -32,6 +36,7 @@ export async function beginPreviewApproval(guest: PreviewDriveGuest, signal?: Ab
     if (released) {
       return released
     }
+
     ended = true
     signal?.removeEventListener('abort', abort)
     released = native.endPreviewGuestActivity!(token)
@@ -42,6 +47,7 @@ export async function beginPreviewApproval(guest: PreviewDriveGuest, signal?: Ab
   const abort = () => {
     void release().catch(error => console.warn('Could not release browser approval', error))
   }
+
   signal?.addEventListener('abort', abort, { once: true })
 
   const check = () => {
@@ -54,7 +60,7 @@ export async function beginPreviewApproval(guest: PreviewDriveGuest, signal?: Ab
 
   try {
     check()
-    await native.armPreviewApproval(token)
+    await native.armPreviewApproval(token, point)
     check()
 
     return {

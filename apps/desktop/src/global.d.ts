@@ -507,7 +507,7 @@ declare global {
       beginPreviewGuestActivity?: (webContentsId: number) => Promise<number>
       endPreviewGuestActivity?: (token: number) => Promise<void>
       executePreviewGuestScript?: (token: number, code: string) => Promise<unknown>
-      armPreviewApproval?: (token: number) => Promise<void>
+      armPreviewApproval?: (token: number, point?: { x: number; y: number }) => Promise<void>
       validatePreviewApproval?: (token: number) => Promise<void>
       sendPreviewApprovedInput?: (token: number, input: PreviewInputEvent) => Promise<void>
       openExternal: (url: string) => Promise<void>

@@ -28,7 +28,7 @@ interface FixtureBridge {
   end(token: number): Promise<void>
   script(token: number, code: string): Promise<unknown>
   capture(guest: number): Promise<string>
-  arm(token: number): Promise<void>
+  arm(token: number, point?: { x: number; y: number }): Promise<void>
   validate(token: number): Promise<void>
   input(token: number, input: PreviewInputEvent): Promise<void>
   native(guest: number, request: PreviewBrowserInteractionRequest): Promise<PreviewBrowserInteractionResult>
@@ -103,7 +103,7 @@ window.hermesDesktop = {
   onPreviewFileChooser: bridge.onChooser
 }
 installPreviewNativeActions(runner, () => view, tabId, new AbortController().signal)
-runner.beginApproval = signal => beginPreviewApproval(view, signal)
+runner.beginApproval = (signal, point) => beginPreviewApproval(view, signal, point)
 registerPreviewScriptRunner(tabId, runner, { initiallyReady: false })
 registerPreviewInput(tabId, {
   focus: () => view.focus(),

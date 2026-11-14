@@ -191,7 +191,7 @@ async function run() {
   )
   ipcMain.handle('fixture:end', (event, token) => endPreviewGuestActivity(event.sender, token))
   ipcMain.handle('fixture:script', (event, token, code) => executePreviewGuestScript(event.sender, token, code))
-  ipcMain.handle('fixture:approval-arm', (event, token) => armPreviewGuestApproval(event.sender, token))
+  ipcMain.handle('fixture:approval-arm', (event, token, point) => armPreviewGuestApproval(event.sender, token, point))
   ipcMain.handle('fixture:approval-validate', (event, token) => validatePreviewGuestApproval(event.sender, token))
   ipcMain.handle('fixture:approval-input', (event, token, input) => sendPreviewGuestApprovedInput(event.sender, token, input))
   ipcMain.handle('fixture:capture', (event, id) => captureOwnedPreviewContents(event.sender, webContents.fromId(id)))

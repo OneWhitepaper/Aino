@@ -138,7 +138,7 @@ async function approveTarget(ctx: OperationContext, seen?: PreviewObservation): 
     throw new Error('Native browser approval observation is unavailable. Use manual control.')
   }
 
-  await prepareApprovalTarget(ctx, point)
+  const pointer = await prepareApprovalTarget(ctx, point)
   const prepared = await inspectPreviewAction(binding.runner, action, point, signal, action.kind === 'press')
   guard()
 
@@ -146,8 +146,15 @@ async function approveTarget(ctx: OperationContext, seen?: PreviewObservation): 
     throw new Error('The website or target changed while positioning the pointer. Observe the browser again.')
   }
 
-  ctx.approval = await binding.runner.beginApproval(signal)
+  ctx.approval = await binding.runner.beginApproval(signal, pointer)
   guard()
+
+  if (
+    JSON.stringify(target) !==
+    JSON.stringify(await inspectPreviewAction(binding.runner, action, point, signal, action.kind === 'press'))
+  ) {
+    throw new Error('The website or target changed while positioning the pointer. Observe the browser again.')
+  }
 
   const copy = previewAgentCopy(getRuntimeI18nLocale())
   // Locating can scroll. Bind approval to the now-visible target.
@@ -191,7 +198,10 @@ async function approveTarget(ctx: OperationContext, seen?: PreviewObservation): 
 }
 
 /** Hover/focus is observation; settle it before binding the confirmed DOM and styles. */
-async function prepareApprovalTarget(ctx: OperationContext, point?: { x: number; y: number }): Promise<void> {
+async function prepareApprovalTarget(
+  ctx: OperationContext,
+  point?: { x: number; y: number }
+): Promise<{ x: number; y: number } | undefined> {
   const { action, signal, owner, guard } = ctx
   const input = activePreviewInput(owner)
 
@@ -199,14 +209,27 @@ async function prepareApprovalTarget(ctx: OperationContext, point?: { x: number;
     throw new Error('Native browser input is unavailable. Use manual control.')
   }
 
+  let pointer = point
+
+  const prepareInput = {
+    ...input,
+    send: (event: Parameters<typeof input.send>[0]) => {
+      if (event.type === 'mouseMove') {
+        pointer = { x: event.x, y: event.y }
+      }
+      input.send(event)
+    }
+  }
+
   if (point) {
-    input.send({ type: 'mouseMove', ...point })
+    prepareInput.send({ type: 'mouseMove', ...point })
   } else if (action.ref || action.selector) {
     const result = await actOnActivePreview(
       { kind: 'hover', ref: action.ref, selector: action.selector },
       signal,
       owner,
-      guard
+      guard,
+      prepareInput
     )
 
     if (!result.success) {
@@ -216,6 +239,8 @@ async function prepareApprovalTarget(ctx: OperationContext, point?: { x: number;
 
   await input.settle?.()
   guard()
+
+  return pointer
 }
 
 async function performSemantic(ctx: OperationContext): Promise<PreviewActResult> {

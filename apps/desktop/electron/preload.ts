@@ -561,7 +561,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   beginPreviewGuestActivity: webContentsId => ipcRenderer.invoke('hermes:preview-guest-activity:begin', webContentsId),
   endPreviewGuestActivity: token => ipcRenderer.invoke('hermes:preview-guest-activity:end', token),
   executePreviewGuestScript: (token, code) => ipcRenderer.invoke('hermes:preview-guest-activity:script', token, code),
-  armPreviewApproval: token => ipcRenderer.invoke('hermes:preview-approval:arm', token),
+  armPreviewApproval: (token, point) => ipcRenderer.invoke('hermes:preview-approval:arm', token, point),
   validatePreviewApproval: token => ipcRenderer.invoke('hermes:preview-approval:validate', token),
   sendPreviewApprovedInput: (token, input) => ipcRenderer.invoke('hermes:preview-approval:input', token, input),
   syncPreviewSignins: request => ipcRenderer.invoke('hermes:preview-signins:sync', request),

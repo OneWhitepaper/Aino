@@ -90,6 +90,26 @@ it('refuses a target changed by hover before offering approval or clicking', asy
   expect(send.mock.calls.every(([event]) => event.type === 'mouseMove')).toBe(true)
 })
 
+it('rechecks the real target after native hover acknowledgement before offering approval', async () => {
+  const tabId = browser()
+  const release = vi.fn(async () => {})
+  const runner: PreviewScriptRunner = async code => await new Function('return ' + code)()
+
+  runner.beginApproval = async (_signal, point) => {
+    expect(point).toEqual({ x: expect.any(Number), y: expect.any(Number) })
+    document.querySelector('#buy')!.textContent = 'Pay another recipient'
+
+    return { validate: async () => {}, input: { focus: () => {}, send }, release }
+  }
+
+  cleanups.push(registerPreviewScriptRunner(tabId, runner))
+  const result = await runPreviewAgentAction({ kind: 'click', selector: '#buy', tabId })
+  expect(result).toMatchObject({ success: false, error: expect.stringContaining('positioning the pointer') })
+  expect($confirmRequest.get()).toBeNull()
+  expect(release).toHaveBeenCalledOnce()
+  expect(send.mock.calls.every(([event]) => event.type === 'mouseMove')).toBe(true)
+})
+
 beforeEach(() => {
   send.mockReset()
   document.body.innerHTML = '<button id="buy">Pay now</button>'

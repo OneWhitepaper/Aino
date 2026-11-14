@@ -35,7 +35,7 @@ export interface PreviewScriptRunner {
     signal?: AbortSignal
   ) => Promise<PreviewBrowserInteractionResult>
   setNativeAuthority?: (owner?: PreviewOwner) => void
-  beginApproval?: (signal?: AbortSignal) => Promise<PreviewApproval>
+  beginApproval?: (signal?: AbortSignal, point?: { x: number; y: number }) => Promise<PreviewApproval>
 }
 
 export interface ActivePreviewScriptRunner {

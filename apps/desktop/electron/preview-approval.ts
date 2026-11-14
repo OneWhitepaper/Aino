@@ -71,7 +71,11 @@ export function previewApprovalFingerprint(snapshot: any): string {
 }
 
 /** A single activity lease owns this guard; no snapshot contents leave main. */
-export async function createPreviewApproval(owner: WebContents, guest: WebContents) {
+export async function createPreviewApproval(owner: WebContents, guest: WebContents, point?: { x: number; y: number }) {
+  if (point && (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.y < 0)) {
+    throw new Error('Invalid browser approval pointer')
+  }
+
   const cdp = acquirePreviewGuestCdp(owner, guest)
   let changed = false
   let consumed = false
@@ -119,6 +123,7 @@ export async function createPreviewApproval(owner: WebContents, guest: WebConten
     if (released) {
       return released
     }
+
     closed = true
     stop()
     released = (async () => {
@@ -143,6 +148,12 @@ export async function createPreviewApproval(owner: WebContents, guest: WebConten
   }
 
   try {
+    if (point) {
+      // Unlike sendInputEvent's queue receipt, CDP acknowledges Blink's input
+      // handling. Bind hover-driven styles only after the real move has landed.
+      await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'none', ...point })
+    }
+
     await pause(true)
     const baseline = await snapshot()
     changed = false

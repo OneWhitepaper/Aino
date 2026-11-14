@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('previewFixtureBridge', {
   end: token => ipcRenderer.invoke('fixture:end', token),
   script: (token, code) => ipcRenderer.invoke('fixture:script', token, code),
   capture: guest => ipcRenderer.invoke('fixture:capture', guest),
-  arm: token => ipcRenderer.invoke('fixture:approval-arm', token),
+  arm: (token, point) => ipcRenderer.invoke('fixture:approval-arm', token, point),
   validate: token => ipcRenderer.invoke('fixture:approval-validate', token),
   input: (token, input) => ipcRenderer.invoke('fixture:approval-input', token, input),
   native: (guest, request) => ipcRenderer.invoke('fixture:native', guest, request),

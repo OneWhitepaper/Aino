@@ -11,7 +11,9 @@ import {
 } from './preview-guest-throttle'
 
 export function registerPreviewGuestIpc(holdWindow: (owner: BrowserWindow) => () => void): void {
-  ipcMain.handle('hermes:preview-approval:arm', (event, token: number) => armPreviewGuestApproval(event.sender, token))
+  ipcMain.handle('hermes:preview-approval:arm', (event, token: number, point?: { x: number; y: number }) =>
+    armPreviewGuestApproval(event.sender, token, point)
+  )
   ipcMain.handle('hermes:preview-approval:validate', (event, token: number) =>
     validatePreviewGuestApproval(event.sender, token)
   )

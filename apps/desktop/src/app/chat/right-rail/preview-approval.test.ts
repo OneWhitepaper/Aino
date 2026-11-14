@@ -19,6 +19,7 @@ function fixture() {
   }
 
   window.hermesDesktop = { ...original, ...native }
+
   const guest = Object.assign(document.createElement('div'), {
     getWebContentsId: () => 7,
     getZoomFactor: () => 1.25
@@ -29,12 +30,12 @@ function fixture() {
 
 it('uses one native request token for observation, validation, scaled input and release', async () => {
   const { guest, native } = fixture()
-  const approval = await beginPreviewApproval(guest)
+  const approval = await beginPreviewApproval(guest, undefined, { x: 40, y: 20 })
   await approval.validate()
   approval.input.send({ type: 'mouseDown', button: 'left', clickCount: 1, x: 40, y: 20 })
   await approval.input.settle?.()
   await approval.release()
-  expect(native.armPreviewApproval).toHaveBeenCalledWith(42)
+  expect(native.armPreviewApproval).toHaveBeenCalledWith(42, { x: 40, y: 20 })
   expect(native.validatePreviewApproval).toHaveBeenCalledWith(42)
   expect(native.sendPreviewApprovedInput).toHaveBeenCalledWith(42, expect.objectContaining({ x: 50, y: 25 }))
   expect(native.endPreviewGuestActivity).toHaveBeenCalledExactlyOnceWith(42)

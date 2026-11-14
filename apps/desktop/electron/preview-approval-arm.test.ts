@@ -14,7 +14,6 @@ function browser() {
   const owner = Object.assign(new EventEmitter(), { getType: () => 'window', isDestroyed: () => false })
   const session = {}
   admitPreviewGuestSession(session as never)
-  const input = Promise.withResolvers<void>()
 
   const guest = Object.assign(new EventEmitter(), {
     getType: () => 'webview',
@@ -24,33 +23,30 @@ function browser() {
     getBackgroundThrottling: () => false,
     setBackgroundThrottling: vi.fn(),
     getURL: () => 'https://fixture.test/',
-    isLoadingMainFrame: () => false,
-    capturePage: vi.fn(() => input.promise)
+    isLoadingMainFrame: () => false
   })
 
   const token = beginPreviewGuestActivity(owner as never, guest as never, () => () => {})
 
-  return { owner: owner as never, token, input, guest }
+  return { owner: owner as never, token, guest }
 }
 
-it('binds the approval snapshot only after pending native input has rendered', async () => {
-  const { owner, token, input, guest } = browser()
-  const pending = armPreviewGuestApproval(owner, token)
-  await Promise.resolve()
-  expect(guest.capturePage).toHaveBeenCalledWith(undefined, { stayHidden: true })
-  expect(fixture.create).not.toHaveBeenCalled()
-  input.resolve()
-  await pending
-  expect(fixture.create).toHaveBeenCalledOnce()
+it('binds the confirmed pointer in CSS coordinates to the same native activity', async () => {
+  const { owner, token, guest } = browser()
+  await armPreviewGuestApproval(owner, token, { x: 40, y: 20 })
+  expect(fixture.create).toHaveBeenCalledExactlyOnceWith(owner, guest, { x: 40, y: 20 })
   await endPreviewGuestActivity(owner, token)
 })
 
-it('does not arm an approval when takeover cancels its pending render', async () => {
-  const { owner, token, input } = browser()
+it('releases the native guard when takeover cancels its pending input acknowledgement', async () => {
+  const { owner, token } = browser()
+  const input = Promise.withResolvers<Awaited<ReturnType<typeof fixture.create>>>()
+  fixture.create.mockReturnValueOnce(input.promise)
   const pending = armPreviewGuestApproval(owner, token)
   const rejected = expect(pending).rejects.toThrow('ended')
   await endPreviewGuestActivity(owner, token)
+  const release = vi.fn()
+  input.resolve({ release })
   await rejected
-  input.resolve()
-  expect(fixture.create).not.toHaveBeenCalled()
+  expect(release).toHaveBeenCalledOnce()
 })

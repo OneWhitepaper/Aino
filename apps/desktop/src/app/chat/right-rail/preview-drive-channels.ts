@@ -162,14 +162,14 @@ export function usePreviewDriveChannels(
 
     installPreviewNativeActions(runner, () => webviewRef.current, tabId, lifetime.signal)
 
-    runner.beginApproval = signal => {
+    runner.beginApproval = (signal, point) => {
       const webview = webviewRef.current
 
       if (!webview) {
         throw new Error('preview webview is not ready')
       }
 
-      return beginPreviewApproval(webview, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal)
+      return beginPreviewApproval(webview, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal, point)
     }
 
     runner.withActivity = (operation, signal) => {
