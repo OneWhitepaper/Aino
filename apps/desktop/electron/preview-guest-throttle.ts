@@ -1,5 +1,7 @@
 import type { Session, WebContents } from 'electron'
 
+import { settlePreviewInputInPage } from '../shared/preview-settle-input'
+
 import { createPreviewApproval } from './preview-approval'
 import { admitPreviewGuestSession, isOwnedPreviewGuest, watchNativePreviewOwner } from './preview-guest-owner'
 
@@ -246,10 +248,14 @@ export async function armPreviewGuestApproval(owner: WebContents, token: number)
   if (lease.approvalPending) {
     throw new Error('Browser approval is already being prepared')
   }
+
   lease.approvalPending = true
   let approval: Awaited<ReturnType<typeof createPreviewApproval>>
 
   try {
+    // sendInputEvent queues input; a script/timer receipt alone can still precede
+    // Chromium's hover/style update. Bind the full snapshot after its next render.
+    await executePreviewActivityScript(owner, token, `(${settlePreviewInputInPage.toString()})(document)`)
     approval = await createPreviewApproval(owner, lease.guest)
   } finally {
     lease.approvalPending = false
@@ -269,6 +275,7 @@ export async function validatePreviewGuestApproval(owner: WebContents, token: nu
   if (!lease.approval) {
     throw new Error('Browser approval observation is unavailable')
   }
+
   await lease.approval.validate()
   approvalLease(owner, token)
 }
@@ -283,6 +290,7 @@ export async function sendPreviewGuestApprovedInput(
   if (!lease.approval) {
     throw new Error('Browser approval observation is unavailable')
   }
+
   await lease.approval.send(input)
 }
 
@@ -290,6 +298,15 @@ export async function sendPreviewGuestApprovedInput(
  * navigation queue. Old-document promises need explicit cancellation: Electron
  * does not guarantee they settle when that document disappears. */
 export async function executePreviewGuestScript(owner: WebContents, token: number, code: string): Promise<unknown> {
+  try {
+    return await executePreviewActivityScript(owner, token, code)
+  } finally {
+    await endPreviewGuestActivity(owner, token)
+  }
+}
+
+/** Approval preparation retains the lease that will validate and deliver its input. */
+async function executePreviewActivityScript(owner: WebContents, token: number, code: string): Promise<unknown> {
   const lease = leases.get(token)
 
   if (!lease || lease.owner !== owner || !isOwnedPreviewGuest(owner, lease.guest)) {
@@ -340,7 +357,5 @@ export async function executePreviewGuestScript(owner: WebContents, token: numbe
     if (navigated) {
       guest.removeListener('did-navigate', navigated)
     }
-
-    await endPreviewGuestActivity(owner, token)
   }
 }

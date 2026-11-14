@@ -75,12 +75,35 @@ async function run() {
   try {
     await guest.loadURL('about:blank')
     assert.equal((await request('watch')).dialog_control, 'aino', 'native dialog adapter must be active before opening a dialog')
+    const trace = []
+    const record = (event, details) => {
+      const entry = { event, ...details }
+      trace.push(entry)
+      console.log('frame-prompt event:', JSON.stringify(entry))
+    }
+    guest.on('-run-dialog', info => record('native-open', {
+      type: info.dialogType,
+      message: info.messageText,
+      url: info.frame?.url,
+      process_id: info.frame?.processId,
+      detached: info.frame?.detached
+    }))
+    guest.on('-cancel-dialogs', info => record('native-cancel', { resetState: info?.resetState }))
+    guest.on('did-navigate', (_event, url) => record('navigate', { url }))
     guest.debugger.on('message', (_event, method, params, sessionId) => {
+      if (method === 'Page.javascriptDialogOpening' || method === 'Page.javascriptDialogClosed') {
+        record(method, { message: params.message, url: params.url, frame: params.frameId, sessionId, result: params.result })
+      }
       if (method !== 'Page.javascriptDialogOpening') return
       const response = (async () => {
+        let lastStatus
         const { status, pending: dialog } = await waitForNativePreviewDialog(async action => {
           const result=await request(action)
+          lastStatus = result
           return {...result,dialogs:result.dialogs?.filter(item=>item.message===params.message&&item.url===params.url)}
+        }).catch(error => {
+          console.error('frame-prompt unmatched:', JSON.stringify({ expected: { message: params.message, url: params.url, sessionId }, status: lastStatus, trace }))
+          throw error
         })
         console.log('prompt:', params.message, sessionId)
         assert.ok(dialog, 'frame dialog reaches native receipt')
