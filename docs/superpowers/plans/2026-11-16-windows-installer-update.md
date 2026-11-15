@@ -20,7 +20,7 @@
 
 ## Tasks
 
-- [ ] Validate existing install stamp, App Installer strategy/recovery and package-identity baseline tests.
+- [x] Validate existing install stamp, App Installer strategy/recovery and package-identity baseline tests.
 - [ ] Add default installation/update candidate output using the existing bundle build and descriptor generator, isolated from public distribution. Validate exact commit, architecture, signer, native identity and digest.
 - [ ] Extend Windows acceptance to assert account workspace, historical conversation, Bot/profile and model configuration preservation; detect missing or altered records.
 - [ ] Add private artifact-only Windows SDK/deployment verification, including failure/cancel paths and uninstall retaining external data; forbid public workflow execution/publication.
@@ -39,3 +39,17 @@ python scripts/check
 ```
 
 CI may store encrypted-access GitHub artifacts in the private validation repository only. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests.
+
+## Native evidence so far
+
+- At `c374f48e67`, private run `43747784200` completed the Windows SDK/contracts job:
+  10 Python behaviors (including actual signing-key/trust creation and cleanup), eight real
+  SDK pack/unpack identities, 65 Electron updater/state contracts, GUI-environment restoration,
+  and App Installer descriptor checks passed. Host: Windows Server 2025, not Windows 10.
+- Full candidate packaging, deployment, UI cancellation and automatic relaunch remain unaccepted.
+  The build is running; do not infer deployment success from the SDK job.
+- The actual published `v0.1.5` ZIP-to-MSIX migration is being added separately, with pinned
+  artifact hashes and a natural gateway-owner transition. Seeded-data preservation alone does
+  not establish that migration.
+- Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
+  website or production feed has been published or promoted.

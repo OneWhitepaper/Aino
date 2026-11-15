@@ -220,11 +220,47 @@ function readDatabase(root, python, selection) {
   return JSON.parse(runPython(root, python, READ_HISTORY, [JSON.stringify(selection)]));
 }
 
-/** Static files are byte-preserved; seeded DB rows survive normal new history and checkpoints. */
-export function snapshotUserState({ root, snapshotPath, python }) {
+function recordedHistory(root, python, historyPath) {
+  if (!historyPath) return null;
+  const proof = JSON.parse(fs.readFileSync(outputPath(root, historyPath), 'utf8').replace(/^\uFEFF/, ''));
+  if (proof.purpose !== 'aino-released-zip-history' || proof.status !== 'passed'
+      || proof.legacyCommit !== '22a472fcbca8775f56c0f89374027b8e4c68ab5b'
+      || fs.realpathSync(proof.userData) !== fs.realpathSync(root)) {
+    throw new Error('History receipt is not the verified released ZIP in this userData');
+  }
+  const relativeHome = path.relative(fs.realpathSync(root), fs.realpathSync(proof.hermesHome));
+  const account = fixtureAccountForHome({ root, home: path.resolve(root, relativeHome) });
+  const chat = proof.storedChat;
+  if (!account || chat?.profile !== 'default' || typeof chat.sessionId !== 'string'
+      || !chat.sessionId || !Array.isArray(chat.messages) || chat.messages.length !== 2
+      || chat.messages.some(row => !Number.isSafeInteger(row.id) || row.id <= 0 || typeof row.content !== 'string')
+      || chat.messages[0].role !== 'user' || chat.messages[1].role !== 'assistant') {
+    throw new Error('Released ZIP history must identify two real rows in a fixture-owned account');
+  }
+  const selection = { path: `${account.relativeHome}/state.db`, sessionIds: [chat.sessionId],
+    messageIds: chat.messages.map(row => row.id) };
+  const actual = readDatabase(root, python, selection);
+  if (actual.sessions?.length !== 1 || actual.messages?.length !== 2 || chat.messages.some(expected =>
+    !actual.messages.some(row => row.id === expected.id && row.session_id === chat.sessionId
+      && row.role === expected.role && row.content === expected.content))) {
+    throw new Error('ZIP API history receipt disagrees with its actual stored rows');
+  }
+  return selection;
+}
+
+/** Static files and both seeded and real ZIP-written rows survive normal new history. */
+export function snapshotUserState({ root, snapshotPath, python, historyPath }) {
   root = explicitRoot(root);
   const fixture = validateDocument(JSON.parse(fs.readFileSync(safeFile(root, MARKER), 'utf8')));
   const databases = new Map(fixture.databases.map(database => [database.path, database]));
+  const recorded = recordedHistory(root, python, historyPath);
+  if (recorded) {
+    const seeded = databases.get(recorded.path);
+    if (!seeded) throw new Error('Released ZIP history does not belong to a seeded database');
+    databases.set(recorded.path, { path: recorded.path,
+      sessionIds: [...new Set([...seeded.sessionIds, ...recorded.sessionIds])],
+      messageIds: [...new Set([...seeded.messageIds, ...recorded.messageIds])] });
+  }
   const files = fixture.files.map(relative => {
     const selection = databases.get(relative);
     if (!selection) return hashFile(root, relative);
@@ -270,13 +306,13 @@ function main(argv) {
   const options = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index]?.replace(/^--/, '');
-    if (!['root', 'snapshot', 'report', 'python', 'origin', 'primary-user-id', 'secondary-user-id', 'mock-url'].includes(key) || options[key] || !args[index + 1]) {
+    if (!['root', 'snapshot', 'report', 'python', 'origin', 'primary-user-id', 'secondary-user-id', 'mock-url', 'history'].includes(key) || options[key] || !args[index + 1]) {
       throw new Error('Usage: windows-user-state.mjs seed|snapshot|verify --root PATH [--python PATH] [--snapshot PATH] [--report PATH]');
     }
     options[key] = args[index + 1];
   }
   const input = { root: options.root, python: options.python, snapshotPath: options.snapshot, reportPath: options.report,
-    origin: options.origin, primaryUserId: options['primary-user-id'], secondaryUserId: options['secondary-user-id'], mockUrl: options['mock-url'] };
+    origin: options.origin, primaryUserId: options['primary-user-id'], secondaryUserId: options['secondary-user-id'], mockUrl: options['mock-url'], historyPath: options.history };
   const handlers = {
     seed: () => { const fixture = seedUserState(input); if (options.snapshot) snapshotUserState(input); return fixture; },
     snapshot: () => snapshotUserState(input),

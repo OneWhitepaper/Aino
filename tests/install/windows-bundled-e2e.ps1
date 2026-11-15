@@ -67,6 +67,16 @@ function Assert-Bundle($Side) {
 }
 Assert-Bundle $m.old
 Assert-Bundle $m.new
+$LegacyRoot = Join-Path $Work 'released-zip'
+$LegacyProof = Join-Path $Proof 'released-zip'
+$FirstMsixProof = Join-Path $Proof 'first-msix'
+New-Item -ItemType Directory -Path $LegacyProof, $FirstMsixProof | Out-Null
+Run-Node @((Join-Path $Assets 'released-windows-zip.mjs'), '--arch', $Arch, '--out', $LegacyRoot,
+    '--python', $fixturePython, '--report', (Join-Path $Proof 'released-zip-artifact.json'))
+$legacyArtifact = Get-Content -LiteralPath (Join-Path $Proof 'released-zip-artifact.json') -Raw | ConvertFrom-Json
+if ($legacyArtifact.status -cne 'passed' -or $legacyArtifact.commit -ceq $m.old.commit) { throw 'Released ZIP and first MSIX must have verified different source commits' }
+$LegacyHistory = Join-Path $LegacyProof 'released-zip-opened.json'
+$MigrationDriver = Join-Path $Assets 'released-zip-migration.ts'
 
 function Installed($Side) {
     $packages = @(Get-AppxPackage -Name $Side.identity)
@@ -97,11 +107,21 @@ $acceptance = $null
 $nativeEnvironment = @{}
 $recovery = @{ preparation=@{ ok=$false; status='not-run' }; cancellation=@{ ok=$false; status='not-run' } }
 $recoverySettings = $null
+$publishedZipMigration = @{ tested=$false; status='not-run'; release='v0.1.5' }
 try {
     $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
     Run-Node @($StateHelper, 'seed', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
         '--origin', 'https://api.agentera.com.cn', '--mock-url', $env:HERMES_E2E_MOCK_URL,
         '--snapshot', $StateSnapshot, '--report', (Join-Path $Proof 'user-state-seed.json'))
+    $legacyCode = Invoke-OutsideRunnerJob 'released-zip-old' $Work $Node @(
+        $MigrationDriver, '--mode', 'legacy', '--exe', $legacyArtifact.exe, '--root', $legacyArtifact.payloadRoot,
+        '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $LegacyProof,
+        '--expect-commit', $legacyArtifact.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL) 15
+    if ($legacyCode -ne 0) { throw 'Released ZIP did not complete real account chat and retain its canonical gateway' }
+    # Snapshot after the released application writes its actual turn. This only
+    # reads its store; the current SessionDB never rebuilds the old database.
+    Run-Node @($StateHelper, 'snapshot', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
+        '--history', $LegacyHistory, '--snapshot', $StateSnapshot, '--report', (Join-Path $Proof 'user-state-after-released-zip.json'))
     $deadline = (Get-Date).AddSeconds(20)
     while (-not (Test-Path $PortFile)) {
         if ($server.HasExited -or (Get-Date) -gt $deadline) { throw 'Feed failed to start' }
@@ -116,7 +136,30 @@ try {
     Add-AppxPackage -AppInstallerFile $descriptor
     $installed = $true
     $old = Installed $m.old
+    # Preserve the detached ZIP owner. First MSIX activation must use its normal
+    # ensure/stale-SHA restart path; the harness never stops that owner for it.
+    $migrationCode = Invoke-OutsideRunnerJob 'released-zip-first-msix' $Work $Node @(
+        $MigrationDriver, '--mode', 'current', '--exe', $old.exe,
+        '--root', (Join-Path $old.package.InstallLocation 'app\resources\agent-payload'),
+        '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $FirstMsixProof,
+        '--expect-commit', $m.old.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL, '--legacy-proof', $LegacyHistory) 15
+    if ($migrationCode -ne 0) { throw 'First MSIX did not naturally migrate the released ZIP account, history and gateway owner' }
     Verify-UserState install
+    $migration = Get-Content -LiteralPath (Join-Path $FirstMsixProof 'released-zip-migration.json') -Raw | ConvertFrom-Json
+    if ($migration.status -cne 'passed' -or -not $migration.tested) { throw 'Released ZIP migration receipt is not successful' }
+    $legacyProcessRoot = [IO.Path]::GetFullPath($LegacyRoot).TrimEnd('\') + '\'
+    $legacyProcesses = @(Get-CimInstance Win32_Process | Where-Object {
+        $_.ExecutablePath -and $_.ExecutablePath.StartsWith($legacyProcessRoot, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($legacyProcesses.Count) { throw 'Released ZIP payload processes survived natural MSIX owner rotation; no forced stop attempted' }
+    Remove-Item -LiteralPath $LegacyRoot -Recurse -Force
+    $publishedZipMigration = @{ tested=$true; status='passed'; release='v0.1.5';
+        releasedZipOpened=$true; manualFirstMsixInstall=$true; sameUserData=$true; oldWrittenHistoryPreserved=$true;
+        legacyCodeSha=$migration.legacyCodeSha; currentCodeSha=$migration.currentCodeSha;
+        legacyOwner=$migration.legacyOwner; currentOwner=$migration.owner;
+        userData=$migration.userData; hermesHome=$migration.hermesHome; extractedPayloadRemoved=$true;
+        artifactReceipt='released-zip-artifact.json'; historyReceipt='released-zip/released-zip-opened.json';
+        migrationReceipt='first-msix/released-zip-migration.json' }
     $startAppId = "$($old.package.PackageFamilyName)!$($m.old.applicationId)"
     $shortcutDeadline = (Get-Date).AddSeconds(30)
     do {
@@ -240,6 +283,9 @@ try {
     $recovery.cancellation = Invoke-NativeCancelRecovery $recoverySettings `
         { Descriptor $m.old 'old.msixbundle' } { Descriptor $m.new 'new.msixbundle' } `
         { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
+} catch {
+    if (-not $publishedZipMigration.tested) { $publishedZipMigration.status='failed'; $publishedZipMigration.error=$_.Exception.Message }
+    throw
 } finally {
     Restore-NativeRelaunchEnvironment $nativeEnvironment
     if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -ErrorAction SilentlyContinue }
@@ -248,6 +294,7 @@ try {
     # Disposable runner teardown only, scoped to the package installed by this leg.
     if ($installed) { Remove-DesktopJourneyPackage $m.old.identity }
     $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
+    $publishedZipMigration | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'published-zip-migration.json')
 }
 
 if ($acceptance) {
@@ -255,7 +302,7 @@ if ($acceptance) {
     Verify-UserState uninstall
     $acceptance.uninstallPreservedUserState = $true
     $acceptance.recovery = $recovery
-    $acceptance.publishedZipMigration = @{ tested=$false; release='v0.1.5'; reason='Released ZIP execution and manual first MSIX installation are not covered by this candidate journey' }
+    $acceptance.publishedZipMigration = $publishedZipMigration
     $acceptance.ok = $recovery.preparation.ok -and $recovery.cancellation.ok
     $acceptance.status = if ($acceptance.ok) { 'accepted' } else { 'failed' }
     $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')

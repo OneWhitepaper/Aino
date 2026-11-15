@@ -58,7 +58,9 @@ def main() -> None:
         health = json.load(response)
     assert health.get("ok") is True and health.get("commit") == commit, "Health identity differs from NEW code"
     print(json.dumps({"pid": pid, "startTime": state["start_time"], "home": str(home),
-                      "commit": discovery.endpoint.code_sha, "health": health}))
+                      "commit": discovery.endpoint.code_sha, "health": health,
+                      "instanceId": discovery.endpoint.instance_id,
+                      "executable": str(Path(psutil.Process(pid).exe()).resolve())}))
 
 
 if __name__ == "__main__":

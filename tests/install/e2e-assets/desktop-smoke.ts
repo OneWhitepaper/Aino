@@ -36,6 +36,8 @@ const optionsSchema = z.object({
   'launch-spec': absolutePath.optional(), 'mock-url': z.string().optional(),
   'platform-account': z.boolean().optional(), 'tool-smoke': z.boolean().optional(), appimage: absolutePath.optional(),
   'native-handoff': z.boolean().optional(),
+  'keep-signed-in': z.boolean().optional(),
+  'require-existing-account': z.boolean().optional(),
 })
 type SmokeOptions = z.infer<typeof optionsSchema>
 
@@ -378,7 +380,7 @@ export async function holdNativeUpdate(handoff: NativeUpdateHandoff): Promise<vo
 }
 
 export async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment,
-  login: { keepSignedIn?: boolean; allowExisting?: boolean } = {}) {
+  login: { keepSignedIn?: boolean; allowExisting?: boolean; requireExisting?: boolean } = {}) {
   if (!enabled) { return undefined }
   const account = await startPlatformServer()
   try {
@@ -389,6 +391,8 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
       proof: () => ({
         mode: 'synthetic-account-real-native-bridge',
         requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
+        authenticatedProfileRequests: account.requests.filter(request => request.authenticatedProfile).length,
+        existingSessionRequired: !!login.requireExisting,
         proxyHits: edge.apiHits, proxyConnects: edge.connects, blockedConnects: edge.deniedConnects,
         certificates: ['ca.pem', 'leaf.pem'].map(name => {
           const certificate = new X509Certificate(fs.readFileSync(path.join(out, 'edge-ca', name)))
@@ -505,7 +509,8 @@ function assertNativeHandoffOptions(options: SmokeOptions): void {
 async function prepareAccountLaunch(options: SmokeOptions, launch: Launch) {
   const preserved = preservedSmokeAccount(options)
   const account = await prepareAccountFixture(options['platform-account'], options.out, launch.env, {
-    keepSignedIn: options['native-handoff'], allowExisting: !!preserved,
+    keepSignedIn: options['native-handoff'] || options['keep-signed-in'], allowExisting: !!preserved,
+    requireExisting: options['require-existing-account'],
   })
   try {
     const bundleEnv = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
@@ -622,6 +627,10 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     fs.writeFileSync(path.join(out, `desktop-backend-${options.phase}.log`), connection.logs.map(redact).join('\n'))
     const backend = localBackendProcess(Number(base.port), running.pid, predictedHome ?? options.home,
       observerPayloadRoot(options))
+    fs.writeFileSync(path.join(out, `desktop-backend-${options.phase}.json`), JSON.stringify({
+      userData: running.userData, hermesHome: identity.hermesHome, expectedCommit: options['expect-commit'],
+      actualCodeSha: backend.codeSha ?? null, backend: { ...backend, command: redact(backend.command) },
+    }, null, 2) + '\n')
     // `identity.hermesRoot` was asserted against options.root above. For a listener that
     // descends from this app process, on a platform that cannot read the backend's own
     // environment, those two facts are the available evidence; a ledger-attached host
@@ -679,6 +688,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     'expect-commit': { type: 'string' }, 'launch-spec': { type: 'string' }, 'mock-url': { type: 'string' },
     'platform-account': { type: 'boolean' }, 'tool-smoke': { type: 'boolean' }, appimage: { type: 'string' },
     'native-handoff': { type: 'boolean' },
+    'keep-signed-in': { type: 'boolean' },
   } })
 
   // When the app exits before printing its debugger line, Playwright's Electron.launch rejects

@@ -3,7 +3,7 @@ import * as http from 'node:http'
 import { type ElectronApplication, expect, type Page } from '@playwright/test'
 
 export function startPlatformServer() {
-  const requests: Array<{ method: string; path: string; body: Record<string, unknown> }> = []
+  const requests: Array<{ method: string; path: string; body: Record<string, unknown>; authenticatedProfile?: boolean }> = []
   let displayName = 'Native member'
   let challengeIssued = false
 
@@ -23,7 +23,8 @@ export function startPlatformServer() {
     request.on('end', () => {
       const body = chunks.length > 0 ? (JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>) : {}
       const requestPath = request.url ?? '/'
-      requests.push({ method: request.method ?? '', path: requestPath, body })
+      const recorded: typeof requests[number] = { method: request.method ?? '', path: requestPath, body }
+      requests.push(recorded)
 
       const route = `${request.method} ${requestPath}`
       let data: unknown
@@ -67,6 +68,17 @@ export function startPlatformServer() {
           token_type: 'Bearer'
         }
       } else if (route === 'GET /api/v1/user/profile') {
+        // These inert fixture tokens are stable across service restarts, so a
+        // restored encrypted token must authenticate without issuing a new login.
+        recorded.authenticatedProfile = request.headers.authorization === 'Bearer native-access-token'
+
+        if (!recorded.authenticatedProfile) {
+          response.writeHead(401, { 'content-type': 'application/json' })
+          response.end(JSON.stringify({ code: 'UNAUTHORIZED', message: 'fixture access token required' }))
+
+          return
+        }
+
         data = {
           id: 17,
           username: displayName,
@@ -85,7 +97,7 @@ export function startPlatformServer() {
         }
       } else if (route === 'POST /api/v1/auth/logout') {
         data = null
-      } else if (['GET /api/v1/desktop/models', 'GET /api/v1/desktop/devices'].includes(route)) {
+      } else if (route.split('?')[0] === 'GET /api/v1/desktop/models' || route === 'GET /api/v1/desktop/devices') {
         data = []
       } else if (route === 'GET /api/v1/desktop/billing-summary') {
         data = {
@@ -163,17 +175,42 @@ export async function platformLoginWorkspace(app: ElectronApplication, page: Pag
   }
 }
 
+/** Read only the authenticated persistence facts, never the stored tokens. */
+export async function readFixturePlatformSession(page: Page) {
+  const snapshot = await page.evaluate(async () => {
+    const state = await (window as unknown as { hermesDesktop: { platformAccount: { status: () => Promise<{
+      phase: string; account?: { id: string | number } | null; mode: string; remember_state: string; error: unknown
+    }> } } }).hermesDesktop.platformAccount.status()
+
+    return { phase: state.phase, userId: String(state.account?.id ?? ''), mode: state.mode,
+      rememberState: state.remember_state, hasError: state.error !== null }
+  })
+
+  if (snapshot.phase !== 'signed_in' || snapshot.userId !== '17' || snapshot.mode !== 'production'
+      || snapshot.rememberState !== 'encrypted' || snapshot.hasError) {
+    throw new Error('Persisted platform session is not authenticated with the encrypted production account')
+  }
+
+  return snapshot
+}
+
 /** Use the real sign-in UI and return the renderer owned by that account. */
 export async function signInPlatformFixture(app: ElectronApplication, page: Page,
-  options: { keepSignedIn?: boolean; allowExisting?: boolean } = {}): Promise<Page> {
-  if (options.allowExisting) {
+  options: { keepSignedIn?: boolean; allowExisting?: boolean; requireExisting?: boolean } = {}): Promise<Page> {
+  if (options.allowExisting || options.requireExisting) {
     // The native updater's automatically relaunched workspace can already own
     // the persisted fixture session. It still uses the real platform bridge.
     const member = page.getByRole('button', { name: /^(?:My account · Native member|我的账户 · Native member)$/, exact: true })
     const phone = page.getByRole('textbox', { name: /^(?:Phone number|手机号)$/, exact: true })
     await expect.poll(async () => await member.isVisible() || await phone.isVisible(), { timeout: 120_000 }).toBe(true)
 
-    if (await member.isVisible()) { return page }
+    if (await member.isVisible()) {
+      if (options.requireExisting) { await readFixturePlatformSession(page) }
+
+      return page
+    }
+
+    if (options.requireExisting) { throw new Error('Persisted platform session was lost; migration cannot sign in again') }
   }
 
   await page.getByRole('textbox', { name: /^(?:Phone number|手机号)$/, exact: true }).fill('+8613800138000')
