@@ -17,7 +17,9 @@ Exit codes:
 API shape (pywinrt projection, verified against the installed winrt 3.2.1):
 ``Package.current`` is a static PROPERTY; the update check is the instance
 method ``Package.check_update_availability_async`` — ``PackageManager`` has
-no such method. ``PackageUpdateAvailability`` members (verified live in the
+no such method. Resolve the current identity through ``FindPackageForUser``
+first: Microsoft documents Access denied when checking ``Package.current`` directly.
+``PackageUpdateAvailability`` members (verified live in the
 installed projection): UNKNOWN=0, NO_UPDATES=1, AVAILABLE=2, REQUIRED=3,
 ERROR=4. Only the specific "no package identity" HRESULT (0x80073D54) means
 not-packaged; every other failure is an unknown, never a "no update".
@@ -33,13 +35,14 @@ _NO_PACKAGE_IDENTITY_HRESULT = -2147009196
 
 def _load_projection():
     from winrt.windows.applicationmodel import Package, PackageUpdateAvailability
+    from winrt.windows.management.deployment import PackageManager
 
-    return Package, PackageUpdateAvailability
+    return Package, PackageUpdateAvailability, PackageManager
 
 
 def main() -> int:
     try:
-        Package, PackageUpdateAvailability = _load_projection()
+        Package, PackageUpdateAvailability, PackageManager = _load_projection()
     except ImportError as exc:
         # The winrt module is absent (older payload without the dep): the
         # update check cannot run. Report unknown, not "no update".
@@ -61,6 +64,7 @@ def main() -> int:
         return 1
 
     try:
+        package = PackageManager().find_package_by_user_security_id_package_full_name("", package.id.full_name)
         source = package.get_app_installer_info()
         if source is None:
             print(json.dumps({

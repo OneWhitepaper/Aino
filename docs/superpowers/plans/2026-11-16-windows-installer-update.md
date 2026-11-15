@@ -109,5 +109,20 @@ CI may store encrypted-access GitHub artifacts in the private validation reposit
 - The current acceptance matrix is recorded in
   `apps/desktop/docs/windows-installer-acceptance.md`. Both independent full
   production/acceptance review and the localized-control follow-up found no P1/P2.
+- Subsequent compatibility review found an existing update-checker defect:
+  Microsoft's documented `Package.Current` instance cannot query update
+  availability directly. The checker now resolves the current user's exact
+  package through the actual PyWinRT 3.2.1 method
+  `find_package_by_user_security_id_package_full_name` before checking it.
+  `winrt-windows-management-deployment` is now a bounded Windows dependency;
+  `hermes pm lock` added only its pinned metadata, with no existing upgrades.
+  Current-object denial and lookup failures are covered by red-to-green behavior
+  tests; related Python tests: 18 passed, one native Windows skip. Independent
+  review found no P1/P2. A new signed build is required for this production fix;
+  old candidates remain diagnostics only.
+- Full build `43767548248` completed x64 OLD/NEW signing and verification but
+  its older harness failed on the already-fixed `/api/config.model` object
+  assumption. Its x64 artifact is `14185791158`. ARM64 remains running; preserve
+  its outputs. This run is not native installation acceptance.
 - Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
   website or production feed has been published or promoted.

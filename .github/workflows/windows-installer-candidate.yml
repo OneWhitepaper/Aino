@@ -82,6 +82,7 @@ jobs:
           scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
             tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
             tests/scripts/install/test_windows_fixture_python.py \
+            tests/desktop/test_appinstaller_check_script.py \
             2>&1 | tee "$RUNNER_TEMP/aino-windows-contracts/candidate-python.log"
 
       - name: Validate native acceptance harness contracts on Windows

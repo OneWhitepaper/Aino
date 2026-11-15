@@ -1,7 +1,8 @@
 # Windows installation and update acceptance
 
-Status: implementation complete; native acceptance in progress. Distribution is
-held. This document does not authorize publishing installers or production feeds.
+Status: update-checker correction implemented; native acceptance is in progress.
+Distribution is held. This document does not authorize publishing installers or
+production feeds.
 
 ## Scope
 
@@ -53,6 +54,18 @@ failed after the expected reply because its idle-control locator recognized
 only English. The current harness accepts exact English/Chinese primary controls
 and retains its request witness, new-message and streaming-completion checks.
 That earlier run does not prove installation or migration.
+
+A subsequent compatibility review found that the checker invokes
+`CheckUpdateAvailabilityAsync` on `Package.Current`. Microsoft's documented
+[known issue](https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.package.checkupdateavailabilityasync#remarks)
+requires resolving that same package through `PackageManager.FindPackageForUser`
+first to avoid Access denied. The correction uses PyWinRT 3.2.1's actual
+`find_package_by_user_security_id_package_full_name` method and includes the
+Windows Deployment projection in the locked dependencies. Eighteen relevant
+Python tests pass locally, with one native Windows probe skipped on Mac. The
+Windows contracts job now includes that native projection probe. Previously
+signed candidates do not contain this correction and cannot establish acceptance
+of the corrected production source.
 
 ## Remaining native receipts
 
