@@ -48,11 +48,14 @@ def admit(env: Mapping[str, str], event: dict) -> str:
 
 def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None) -> str:
     print("candidate: " + subprocess.list2cmdline(argv), flush=True)
+    # pwsh -> Python -> powershell.exe bypasses PowerShell 7's WinPS path cleanup.
+    # Each child must rebuild its own module path, including nested build/E2E scripts.
+    child_env = {key: value for key, value in env.items() if key.upper() != "PSMODULEPATH"}
     if log is None:
-        return subprocess.check_output(argv, cwd=ROOT, env=dict(env), text=True, encoding="utf-8", timeout=300).strip()
+        return subprocess.check_output(argv, cwd=ROOT, env=child_env, text=True, encoding="utf-8", timeout=300).strip()
     with log.open("w", encoding="utf-8") as output:
         try:
-            subprocess.run(argv, cwd=ROOT, env=dict(env), stdout=output, stderr=subprocess.STDOUT,
+            subprocess.run(argv, cwd=ROOT, env=child_env, stdout=output, stderr=subprocess.STDOUT,
                            check=True, timeout=18000)
         finally:
             output.flush()
@@ -61,9 +64,8 @@ def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None) -> 
 
 
 def powershell(script: str, env: Mapping[str, str]) -> str:
-    # Certificate cmdlets do not autoload the Cert: provider in a fresh -NoProfile session.
     return run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                "$ErrorActionPreference='Stop'; Import-Module Microsoft.PowerShell.Security; " + script], env)
+                "$ErrorActionPreference='Stop'; " + script], env)
 
 
 def check_prerequisites(env: Mapping[str, str], out: Path) -> None:

@@ -22,6 +22,7 @@ $env:HOME = Join-Path $Work 'os-home'
 New-Item -ItemType Directory -Path $env:HOME | Out-Null
 . (Join-Path $Assets 'desktop-smoke-windows.ps1')
 . (Join-Path $Assets 'windows-native-environment.ps1')
+. (Join-Path $Assets 'windows-bundled-recovery.ps1')
 $Node = if ($env:HERMES_E2E_NODE) { $env:HERMES_E2E_NODE } else { (Get-Command node.exe).Source }
 function Run-Node([string[]]$Argv) {
     & $Node @Argv
@@ -94,6 +95,8 @@ $mock = $null
 $oldDriver = $null
 $acceptance = $null
 $nativeEnvironment = @{}
+$recovery = @{ preparation=@{ ok=$false; status='not-run' }; cancellation=@{ ok=$false; status='not-run' } }
+$recoverySettings = $null
 try {
     $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
     Run-Node @($StateHelper, 'seed', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
@@ -123,6 +126,15 @@ try {
     } while ((Get-Date) -lt $shortcutDeadline)
     if ($shortcut.Count -ne 1) { throw 'Installed package did not register one Start menu entry' }
     $shortcut[0] | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Proof 'start-menu-entry.json')
+    $recoverySettings = @{ Node=$Node; Assets=$Assets; Work=$Work; Proof=$Proof;
+        Exe=$old.exe; Root=(Join-Path $old.package.InstallLocation 'app\resources\agent-payload');
+        Home=$env:HERMES_HOME; UserData=$env:HERMES_DESKTOP_USER_DATA_DIR; Commit=$m.old.commit;
+        Identity=$m.old.identity; MockUrl=$env:HERMES_E2E_MOCK_URL; Descriptor=$descriptor }
+    # A missing descriptor must leave the same OLD window usable. This isolated
+    # proof cannot hide the ordinary replacement journey's later diagnostics.
+    $recovery.preparation = Invoke-NativePreparationRecovery $recoverySettings `
+        { Descriptor $m.new 'new.msixbundle' } { Descriptor $m.old 'old.msixbundle' } `
+        { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
     # Pin a real OS-registered update source before launching the application.
     $old.package | Select-Object Name, Version, Publisher, Architecture, InstallLocation | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-package.json')
     $marker = Join-Path $env:HERMES_HOME 'bundle-state-marker'
@@ -219,24 +231,34 @@ try {
     if ($newCode -ne 0) { throw 'Post-update native account/history/chat smoke failed' }
     Verify-UserState update
     $acceptance = @{ ok=$true; oldVersion=$m.old.version; newVersion=$m.new.version; oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; stamp=$new.stamp; automaticRelaunch=$true; candidateOnly=[bool]$CandidateManifest; userStatePreserved=$true }
+    $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'native-update-success.json')
+    Remove-DesktopJourneyPackage $m.old.identity
+    $installed = $false
+    Verify-UserState uninstall
+    # Cancellation is last: its bounded OS waiter cannot race the successful
+    # replacement's relaunch. No OS cancellation UI means this test is unmet.
+    $recovery.cancellation = Invoke-NativeCancelRecovery $recoverySettings `
+        { Descriptor $m.old 'old.msixbundle' } { Descriptor $m.new 'new.msixbundle' } `
+        { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
 } finally {
     Restore-NativeRelaunchEnvironment $nativeEnvironment
     if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -ErrorAction SilentlyContinue }
     if ($oldDriver) { Stop-OutsideRunnerJob $oldDriver }
     if (-not $server.HasExited) { Stop-Process -Id $server.Id -ErrorAction SilentlyContinue }
     # Disposable runner teardown only, scoped to the package installed by this leg.
-    if ($installed) {
-        $pkg = Get-AppxPackage -Name $m.old.identity
-        if ($pkg) {
-            Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($pkg.InstallLocation + '\', [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
-            Remove-AppxPackage -Package $pkg.PackageFullName
-        }
-    }
+    if ($installed) { Remove-DesktopJourneyPackage $m.old.identity }
+    $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
 }
 
 if ($acceptance) {
     if (Get-AppxPackage -Name $m.old.identity) { throw 'Uninstall did not remove the candidate package registration' }
     Verify-UserState uninstall
     $acceptance.uninstallPreservedUserState = $true
+    $acceptance.recovery = $recovery
+    $acceptance.publishedZipMigration = @{ tested=$false; release='v0.1.5'; reason='Released ZIP execution and manual first MSIX installation are not covered by this candidate journey' }
+    $acceptance.ok = $recovery.preparation.ok -and $recovery.cancellation.ok
+    $acceptance.status = if ($acceptance.ok) { 'accepted' } else { 'failed' }
+    $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
     $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'acceptance.json')
+    if (-not $acceptance.ok) { throw 'Native success receipts were retained, but required recovery acceptance remains unmet' }
 }

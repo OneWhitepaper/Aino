@@ -3,12 +3,29 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import uuid
 import zipfile
 
 import pytest
 
 from scripts.ci import windows_installer_candidate as candidate
+
+
+@pytest.mark.parametrize("key", ["PSModulePath", "PSMODULEPATH", "psmodulepath"])
+@pytest.mark.parametrize("logged", [False, True])
+def test_candidate_children_rebuild_module_search_path_without_mutating_parent(tmp_path, key, logged):
+    import json
+
+    env = {**os.environ, key: "incompatible-powershell-seven-modules", "AINO_CANDIDATE_SENTINEL": "kept"}
+    script = ("import json,os; print(json.dumps({'modulePath': [k for k in os.environ if "
+              "k.upper() == 'PSMODULEPATH'], 'sentinel': os.environ['AINO_CANDIDATE_SENTINEL']}))")
+    log = tmp_path / "child.log" if logged else None
+    output = candidate.run([sys.executable, "-c", script], env, log=log)
+    if log:
+        output = log.read_text(encoding="utf-8")
+    assert json.loads(output) == {"modulePath": [], "sentinel": "kept"}
+    assert env[key] == "incompatible-powershell-seven-modules"
 
 
 @pytest.mark.platforms("windows")

@@ -22,6 +22,7 @@ test('native OLD keeps the exact preservation profile before Electron requests i
 
     expect(launch.env.HERMES_DESKTOP_USER_DATA_DIR).toBe(userData)
     expect(launch.args).toContain(`--user-data-dir=${userData}`)
+    expect(launch.args).toContain('--force-renderer-accessibility')
     expect(fs.readFileSync(path.join(userData, 'Local State'), 'utf8')).toBe('existing Chromium profile')
     expect(fs.readdirSync(root)).toEqual(['preserved-user-data'])
   } finally { fs.rmSync(root, { recursive: true, force: true }) }

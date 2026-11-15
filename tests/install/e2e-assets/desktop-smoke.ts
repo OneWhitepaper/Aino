@@ -155,7 +155,7 @@ export function resolveSmokeLaunch(options: SmokeOptions): Launch {
   if (args.some((arg: string): boolean => /^--(?:no-sandbox|disable-setuid-sandbox)(?:=|$)/.test(arg))) {
     throw new Error('Desktop smoke requires Chromium sandboxing')
   }
-  if (options['native-handoff']) { args = isolatedElectronArgs(args, options['user-data']) }
+  if (options['native-handoff']) { args = isolatedElectronArgs([...args, '--force-renderer-accessibility'], options['user-data']) }
   return { chromiumSandbox: true, executablePath: smokeExecutable(options), args, cwd, env }
 }
 
@@ -511,7 +511,7 @@ async function prepareAccountLaunch(options: SmokeOptions, launch: Launch) {
     const bundleEnv = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
     const predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
     // Check before the driver creates its sandbox folders inside this home.
-    if (predictedHome && !(preserved && options['native-handoff'])) { assertSmokeHermesHome(predictedHome, options) }
+    if (predictedHome && !(preserved && options.phase !== 'installed')) { assertSmokeHermesHome(predictedHome, options) }
     return { account, preserved, predictedHome }
   } catch (error) {
     await account?.close()
@@ -555,7 +555,8 @@ async function completeSmokeWindow(options: SmokeOptions, app: ElectronApplicati
 
 // `launchApp` is a parameter so a test can substitute a failing launcher and
 // exercise the seeding that happens before the launch without touching Playwright.
-export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch)): Promise<void> {
+export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch),
+  checkpoint?: (app: ElectronApplication, page: Page) => Promise<unknown>): Promise<void> {
   assertNativeHandoffOptions(options)
   const out = options.out
   fs.mkdirSync(out, { recursive: true })
@@ -634,6 +635,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const reusedBuildCommit = reusedDesktopBuildCommit(options.root, options.origin, provenanceCommit)
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit })
+    const checkpointProof = await checkpoint?.(app, page)
     let tool
     if (options['tool-smoke']) {
       const marker = desktopToolMarker(identity, options.home, predictedHome)
@@ -645,7 +647,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
       tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
     }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, tool, gatewayHealth, preservation, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    const result = { ...chat, tool, gatewayHealth, preservation, checkpoint: checkpointProof, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
     await completeSmokeWindow(options, app, { result, running, identity, env: launch.env, waitForProcessClose, account })

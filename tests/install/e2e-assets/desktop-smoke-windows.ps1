@@ -159,3 +159,12 @@ function Main-Processes([string]$Exe) {
     # Prevent the function output pipeline from unrolling zero/one process arrays.
     return ,@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ieq $Exe -and $_.CommandLine -notmatch '(?:^|\s)--type(?:=|\s)' })
 }
+
+function Remove-DesktopJourneyPackage([string]$Identity) {
+    $package = Get-AppxPackage -Name $Identity
+    if (-not $package) { return }
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.ExecutablePath -and $_.ExecutablePath.StartsWith($package.InstallLocation + '\', [StringComparison]::OrdinalIgnoreCase)
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
+    Remove-AppxPackage -Package $package.PackageFullName
+}
