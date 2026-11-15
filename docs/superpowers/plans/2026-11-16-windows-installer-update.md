@@ -66,5 +66,36 @@ CI may store encrypted-access GitHub artifacts in the private validation reposit
   Related Vitest results: 70 passed / 4 host-specific skips; six extractor tests and all
   15 repository checks passed. Independent scoped transport review found no important issue.
   This is acceptance transport only; production update ownership is unchanged.
+- The real Windows contract run `43765756070` passed 48 Python, 65 JS harness (nine host
+  skips), six extractor, eight SDK manifest cases, 68 updater/state and four descriptor
+  tests. The expanded latest run `43769016653` passed 48 Python, 67 JS harness (nine host
+  skips), eight extractor, the SDK cases, 68 updater/state and four descriptor tests.
+- `7a99f718bb` stages the exact historical ZIP from its original GitHub Actions archive,
+  binding outer metadata/digest and the original inner size/digest. Real run `43766175820`
+  proved workflow-token access, complete verification/extraction and released-app login.
+  Its chat checkpoint exposed a harness response-shape error, not an accepted migration.
+- `e7d0c02447` observes the actual automatically relaunched NEW PID and native window before
+  closing it, verifying its encrypted account, actual home, model and original history.
+  Authentication is scoped to NEW's own startup interval. Independent review and local
+  contracts passed; actual Windows UIA observation remains outstanding.
+- `01a8dc64e9` corrects the model observation to the existing scoped
+  `/api/providers/custom-endpoints.current` contract. The prior `/api/config.model` object
+  assumption was wrong; the endpoint deliberately returns the model as a string. Strict
+  model/provider/base-URL checks remain. Reaccept `43769016653` used
+  signed production source `00e438fc2b` (artifact `14181849856`) and harness `01a8dc64e9`.
+- `43769016653` verified the exact historical archive, launched released `v0.1.5`,
+  signed in to the synthetic account, sent a prompt and received the expected mock reply.
+  It then failed because the idle-composer locator recognized only English labels;
+  the actual UI exposed Chinese `语音` and `发送`. This is a harness failure before
+  installation, not a migration or update pass. The locator now recognizes the exact
+  English and Chinese primary actions, retaining transcript and streaming guards.
+- The full desktop typecheck exposed missing composite-project entries for the new
+  acceptance drivers. They are now included explicitly; the full renderer, Electron,
+  E2E and builder typecheck passes. Fresh local production contracts: 63 passed;
+  candidate/runner Python contracts: 51 passed, one native-Windows skip; repository
+  checks: all 15 passed.
+- Full current-source builds `43767548248` remain in progress on x64 and Windows 11 ARM64.
+  They predate only the final harness response correction; keep signed artifacts for reuse.
+  Native installation/update/cancel/uninstall acceptance has not passed yet.
 - Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
   website or production feed has been published or promoted.

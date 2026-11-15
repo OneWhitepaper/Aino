@@ -7,6 +7,14 @@
     "noEmit": false
   },
   "files": ["electron/backend-discovery.ts"],
-  "include": ["e2e", "playwright.config.ts", "../../tests-js/scripts", "../../tests/install/e2e-assets/desktop-smoke.ts"],
+  "include": [
+    "e2e",
+    "playwright.config.ts",
+    "../../tests-js/scripts",
+    "../../tests/install/e2e-assets/desktop-smoke.ts",
+    "../../tests/install/e2e-assets/native-update-recovery.ts",
+    "../../tests/install/e2e-assets/released-zip-migration.ts",
+    "../../tests/install/e2e-assets/observe-native-new.ts"
+  ],
   "exclude": ["src", "electron"]
 }

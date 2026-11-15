@@ -13,7 +13,7 @@ commands package the current desktop build; they do not stage a fresh runtime.
 | macOS ARM64 / x64 | Signed, notarized `Aino.app` (or the selected Aino variant) in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
 | Linux x64 / ARM64 | Native AppImage candidates; DEB/RPM repackaged from the admitted payload | External replacement; automated Linux release publication remains disabled |
 
-The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
+The MSIX manifest targets Windows 10 22H2 (`10.0.19045.0`) and Windows 11.
 The source-script Windows support range is separate from this package floor.
 Windows desktop packaging uses MSIX, not NSIS or MSI.
 

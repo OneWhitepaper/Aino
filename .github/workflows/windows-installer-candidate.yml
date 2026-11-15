@@ -91,6 +91,7 @@ jobs:
           $tests = @(
             'bundle-input-ranges.test.mjs', 'bundle-inputs.test.mjs',
             'scripts/platform-account-fixture.test.ts', 'scripts/platform-login-workspace.test.ts',
+            'scripts/desktop-transcript.test.ts',
             'scripts/desktop-smoke.test.ts', 'scripts/desktop-smoke-window.test.ts',
             'scripts/desktop-smoke-launch-failure.test.ts', 'scripts/native-update-handoff.test.ts',
             'scripts/native-update-recovery.test.ts', 'scripts/native-account-preservation.test.ts',
