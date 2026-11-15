@@ -75,7 +75,7 @@ async function main() {
       origin: 'bundled', home: process.env.HERMES_HOME,
       'user-data': process.env.HERMES_DESKTOP_USER_DATA_DIR, out: path.resolve(proofDir),
       phase: 'old', 'expect-commit': oldSha, 'mock-url': process.env.HERMES_E2E_MOCK_URL,
-      'platform-account': true, 'native-handoff': true,
+      'platform-account': true, 'native-handoff': true, 'require-existing-account': true, 'keep-signed-in': true,
     })
     return
   }

@@ -386,13 +386,17 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
   try {
     const edge = await startHttpsEdge(out, { host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false })
     Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
-    return {
-      signIn: (app: ElectronApplication, page: Page) => signInPlatformFixture(app, page, login),
-      proof: () => ({
+    const proof = () => {
+      const authenticatedProfileRequests = account.requests.filter(request => request.authenticatedProfile).length
+      const freshAuthenticationRequests = account.requests.filter(request => request.method === 'POST'
+        && request.path.startsWith('/api/v1/auth/') && request.path.split('?')[0] !== '/api/v1/auth/refresh').length
+      return {
         mode: 'synthetic-account-real-native-bridge',
         requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
-        authenticatedProfileRequests: account.requests.filter(request => request.authenticatedProfile).length,
+        authenticatedProfileRequests,
+        freshAuthenticationRequests,
         existingSessionRequired: !!login.requireExisting,
+        authenticationPreservedWithoutLogin: !!login.requireExisting && authenticatedProfileRequests > 0 && freshAuthenticationRequests === 0,
         proxyHits: edge.apiHits, proxyConnects: edge.connects, blockedConnects: edge.deniedConnects,
         certificates: ['ca.pem', 'leaf.pem'].map(name => {
           const certificate = new X509Certificate(fs.readFileSync(path.join(out, 'edge-ca', name)))
@@ -400,7 +404,16 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
             fingerprint: certificate.fingerprint256, validFrom: certificate.validFrom, validTo: certificate.validTo }
         }),
         boundary: 'Local account fixture and custom mock inference; no production SMS, platform model lease or billing verification.'
-      }),
+      }
+    }
+    return {
+      signIn: (app: ElectronApplication, page: Page) => signInPlatformFixture(app, page, login),
+      proof,
+      assertPreserved: () => {
+        if (login.requireExisting && !proof().authenticationPreservedWithoutLogin) {
+          throw new Error('Retained account did not authenticate without a new login')
+        }
+      },
       close: async () => {
         try { await edge.close() } finally {
           await account.close()
@@ -551,6 +564,7 @@ async function completeSmokeWindow(options: SmokeOptions, app: ElectronApplicati
     fs.writeFileSync(receiptPath, `${JSON.stringify(result, null, 2)}\n`)
     await holdNativeUpdate({ out: options.out, pid: running.pid, exe: running.executable, oldSha: options['expect-commit'],
       userData: running.userData, hermesHome: identity.hermesHome!, env, waitForProcessClose })
+    account?.assertPreserved()
     fs.writeFileSync(path.join(options.out, 'native-account-lifetime.json'), JSON.stringify(account?.proof(), null, 2) + '\n')
     return
   }
@@ -656,6 +670,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
       tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
     }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
+    account?.assertPreserved()
     const result = { ...chat, tool, gatewayHealth, preservation, checkpoint: checkpointProof, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
@@ -689,6 +704,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     'platform-account': { type: 'boolean' }, 'tool-smoke': { type: 'boolean' }, appimage: { type: 'string' },
     'native-handoff': { type: 'boolean' },
     'keep-signed-in': { type: 'boolean' },
+    'require-existing-account': { type: 'boolean' },
   } })
 
   // When the app exits before printing its debugger line, Playwright's Electron.launch rejects

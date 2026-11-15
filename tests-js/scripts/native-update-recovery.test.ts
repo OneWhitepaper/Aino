@@ -5,7 +5,10 @@ import path from 'node:path'
 
 import { expect, test } from 'vitest'
 
-import { assertPreparationRecovery, withUnavailableDescriptor } from '../../tests/install/e2e-assets/native-update-recovery.ts'
+import { assertPreparationRecovery, runNativeRecovery, withUnavailableDescriptor } from '../../tests/install/e2e-assets/native-update-recovery.ts'
+
+import { type ElectronApplication, type Page } from './e2e-driver-deps.ts'
+import { signInPlatformFixture } from './platform-account-fixture.ts'
 
 test('a deliberately unavailable feed is restored even when its native observation fails', async (): Promise<void> => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'native-feed-recovery-'))
@@ -49,4 +52,26 @@ test('preparation recovery requires the same OLD process, the actual HTTP failur
   expect(() => assertPreparationRecovery({ ...proof, error: '' })).toThrow('HTTP 404')
   expect(() => assertPreparationRecovery({ ...proof, pendingRelaunch: true })).toThrow('pending relaunch')
   expect(() => assertPreparationRecovery({ ...proof, chat: { status: 'failed', turnComplete: false } })).toThrow('completed chat')
+})
+
+test('native recovery refuses a lost retained session before touching the sign-in form', async (): Promise<void> => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'native-recovery-auth-'))
+  const mutations: string[] = []
+  const login = { getByRole: (role: string) => ({
+    isVisible: async () => role === 'textbox',
+    fill: async () => { mutations.push('fill'); throw new Error('Unexpected credential entry') },
+  }) } as unknown as Page
+  const app = {} as ElectronApplication
+  try {
+    for (const scenario of ['preparation-failure', 'manual-old-reopen'] as const) {
+      await expect(runNativeRecovery({ scenario, exe: process.execPath, root: out, home: out,
+        'user-data': out, out, 'expect-commit': 'a'.repeat(40), 'mock-url': 'http://127.0.0.1:9',
+        descriptor: path.join(out, 'update.appinstaller') }, async options => {
+        await signInPlatformFixture(app, login, { allowExisting: true, requireExisting: options['require-existing-account'] })
+      })).rejects.toThrow('Persisted platform session')
+      const receipt = JSON.parse(fs.readFileSync(path.join(out, 'recovery.json'), 'utf8'))
+      expect(receipt).toMatchObject({ status: 'failed', scenario })
+    }
+    expect(mutations).toEqual([])
+  } finally { fs.rmSync(out, { recursive: true, force: true }) }
 })

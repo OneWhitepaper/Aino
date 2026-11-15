@@ -73,19 +73,20 @@ async function preparationFailure(app: ElectronApplication, page: Page, options:
   return proof
 }
 
-export async function runNativeRecovery(options: RecoveryOptions): Promise<void> {
+export async function runNativeRecovery(options: RecoveryOptions, smoke: typeof runInstalledDesktopSmoke = runInstalledDesktopSmoke): Promise<void> {
   const receipt = path.join(options.out, 'recovery.json')
   fs.mkdirSync(options.out, { recursive: true })
   try {
     if (options.scenario === 'preparation-failure' && !options.descriptor) { throw new Error('Preparation recovery requires its local descriptor') }
-    await runInstalledDesktopSmoke({ ...options, origin: 'bundled', phase: 'old', 'platform-account': true },
+    await smoke({ ...options, origin: 'bundled', phase: 'old', 'platform-account': true,
+      'require-existing-account': true, 'keep-signed-in': true },
       launch => _electron.launch(launch), options.scenario === 'preparation-failure' ?
         (app, page) => preparationFailure(app, page, options) : undefined)
     const chat = JSON.parse(fs.readFileSync(path.join(options.out, 'desktop-chat-old.json'), 'utf8'))
     fs.writeFileSync(receipt, JSON.stringify({ status: 'passed', scenario: options.scenario,
       automaticRecovery: false, manualReopen: options.scenario === 'manual-old-reopen',
       expectedCommit: options['expect-commit'], running: chat.running, preservation: chat.preservation,
-      checkpoint: chat.checkpoint, chatReceipt: 'desktop-chat-old.json' }, null, 2) + '\n')
+      checkpoint: chat.checkpoint, account: chat.account, chatReceipt: 'desktop-chat-old.json' }, null, 2) + '\n')
   } catch (error) {
     fs.writeFileSync(receipt, JSON.stringify({ status: 'failed', scenario: options.scenario, error: String(error) }, null, 2) + '\n')
     throw error

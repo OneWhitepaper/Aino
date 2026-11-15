@@ -16,6 +16,10 @@ $Work = Join-Path $env:RUNNER_TEMP 'hermes-bundled-update'
 if (Test-Path $Work) { throw "Refusing to reuse $Work" }
 $Proof = Join-Path $Work 'proof'
 New-Item -ItemType Directory -Path $Proof -Force | Out-Null
+function Write-AcceptanceStage([string]$Stage) {
+    Write-Host "[native-e2e] $([DateTime]::UtcNow.ToString('o')) $Stage"
+}
+Write-AcceptanceStage 'Checking the existing fixture interpreter'
 # PM test selection belongs to the setup home. Resolve and exercise it before
 # the acceptance sandbox changes HERMES_HOME/HOME and before downloading ZIPs.
 $bootstrapPython = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { (Get-Command python.exe).Source }
@@ -24,6 +28,7 @@ $fixturePython = & $bootstrapPython -B (Join-Path $Assets 'windows-fixture-pytho
 if ($LASTEXITCODE -ne 0) { throw 'PM test interpreter failed the real SessionDB fixture preflight' }
 $fixturePython = ([string]$fixturePython).Trim()
 $env:HERMES_PYTHON = $fixturePython
+Write-AcceptanceStage 'Fixture interpreter ready; validating candidate bundles'
 $env:HERMES_HOME = Join-Path $Work 'home'
 New-Item -ItemType Directory -Path $env:HERMES_HOME | Out-Null
 $env:HERMES_DESKTOP_USER_DATA_DIR = Join-Path $Work 'electron-user-data'
@@ -80,6 +85,7 @@ function Assert-Bundle($Side) {
 }
 Assert-Bundle $m.old
 Assert-Bundle $m.new
+Write-AcceptanceStage 'Candidate hashes and signatures verified; staging the released ZIP'
 $LegacyRoot = Join-Path $Work 'released-zip'
 $LegacyProof = Join-Path $Proof 'released-zip'
 $FirstMsixProof = Join-Path $Proof 'first-msix'
@@ -122,6 +128,7 @@ $recovery = @{ preparation=@{ ok=$false; status='not-run' }; cancellation=@{ ok=
 $recoverySettings = $null
 $publishedZipMigration = @{ tested=$false; status='not-run'; release='v0.1.5' }
 try {
+    Write-AcceptanceStage 'Starting the account data fixture and released ZIP chat'
     $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
     Run-Node @($StateHelper, 'seed', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
         '--origin', 'https://api.agentera.com.cn', '--mock-url', $env:HERMES_E2E_MOCK_URL,
@@ -131,6 +138,7 @@ try {
         '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $LegacyProof,
         '--expect-commit', $legacyArtifact.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL) 15
     if ($legacyCode -ne 0) { throw 'Released ZIP did not complete real account chat and retain its canonical gateway' }
+    Write-AcceptanceStage 'Released ZIP chat passed; snapshotting its stored history'
     # Snapshot after the released application writes its actual turn. This only
     # reads its store; the current SessionDB never rebuilds the old database.
     Run-Node @($StateHelper, 'snapshot', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
@@ -146,9 +154,11 @@ try {
     }
     Descriptor $m.old 'old.msixbundle'
     $descriptor = Join-Path $Feed 'update.appinstaller'
+    Write-AcceptanceStage 'Installing the first MSIX package'
     Add-AppxPackage -AppInstallerFile $descriptor
     $installed = $true
     $old = Installed $m.old
+    Write-AcceptanceStage 'First MSIX installed; checking retained login, history and natural gateway rotation'
     # Preserve the detached ZIP owner. First MSIX activation must use its normal
     # ensure/stale-SHA restart path; the harness never stops that owner for it.
     $migrationCode = Invoke-OutsideRunnerJob 'released-zip-first-msix' $Work $Node @(
@@ -157,6 +167,7 @@ try {
         '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $FirstMsixProof,
         '--expect-commit', $m.old.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL, '--legacy-proof', $LegacyHistory) 15
     if ($migrationCode -ne 0) { throw 'First MSIX did not naturally migrate the released ZIP account, history and gateway owner' }
+    Write-AcceptanceStage 'Released ZIP to MSIX migration passed'
     Verify-UserState install
     $migration = Get-Content -LiteralPath (Join-Path $FirstMsixProof 'released-zip-migration.json') -Raw | ConvertFrom-Json
     if ($migration.status -cne 'passed' -or -not $migration.tested) { throw 'Released ZIP migration receipt is not successful' }
@@ -188,9 +199,11 @@ try {
         Identity=$m.old.identity; MockUrl=$env:HERMES_E2E_MOCK_URL; Descriptor=$descriptor }
     # A missing descriptor must leave the same OLD window usable. This isolated
     # proof cannot hide the ordinary replacement journey's later diagnostics.
+    Write-AcceptanceStage 'Checking preparation failure recovery in the retained account'
     $recovery.preparation = Invoke-NativePreparationRecovery $recoverySettings `
         { Descriptor $m.new 'new.msixbundle' } { Descriptor $m.old 'old.msixbundle' } `
         { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
+    Write-AcceptanceStage "Preparation recovery finished: ok=$($recovery.preparation.ok)"
     # Pin a real OS-registered update source before launching the application.
     $old.package | Select-Object Name, Version, Publisher, Architecture, InstallLocation | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-package.json')
     $marker = Join-Path $env:HERMES_HOME 'bundle-state-marker'
@@ -205,6 +218,7 @@ try {
     # Keep Playwright's actual OLD window alive across chat and the native UIA
     # trigger. The NEW descriptor is not published until OLD chat has passed.
     $oldChatReady = Join-Path $Proof 'old-chat-ready.json'
+    Write-AcceptanceStage 'Starting OLD chat before the native update'
     $oldDriver = Start-OutsideRunnerJob 'native-old' $Work $Node @(
         (Join-Path $Assets 'drive-update.cjs'), $old.exe, $Proof, $m.old.commit, '--native-handoff'
     )
@@ -224,6 +238,7 @@ try {
     $oldProcess | Select-Object ProcessId, CreationDate, ExecutablePath | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-process.json')
     $nativeEnvironment = Publish-NativeRelaunchEnvironment (Join-Path $Proof 'native-relaunch-environment.json') $Work $env:HERMES_DESKTOP_USER_DATA_DIR
     Descriptor $m.new 'new.msixbundle'
+    Write-AcceptanceStage 'OLD chat passed; invoking the real native Update action'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Assets 'windows-bundled-drive-update.ps1') -OldProcessId $oldProcess.ProcessId -ProofDir $Proof -ResultPath (Join-Path $Proof 'click.json')
     if ($LASTEXITCODE -ne 0) { throw 'Real in-app update trigger failed' }
     $click = Get-Content -Raw (Join-Path $Proof 'click.json') | ConvertFrom-Json
@@ -235,6 +250,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     $deadline = (Get-Date).AddMinutes(15)
+    Write-AcceptanceStage 'Waiting for native package replacement and automatic NEW launch'
     $new = $null; $newRows = @()
     do {
         $pkg = Get-AppxPackage -Name $m.new.identity
@@ -267,6 +283,7 @@ try {
         if (-not $healthy) { Start-Sleep -Seconds 2 }
     } while (-not $healthy -and (Get-Date) -lt $deadline)
     if (-not $healthy) { throw 'New packaged backend never returned HTTP 200 health' }
+    Write-AcceptanceStage 'Automatic NEW launch and packaged backend health verified'
     & $python $verifier verify --home $env:HERMES_HOME --snapshot (Join-Path $Work 'plugins-before.json') --report (Join-Path $Proof 'plugin-preservation.json')
     if ($LASTEXITCODE -ne 0) { throw 'Plugin preservation failed' }
     if ((Get-Content -Raw $marker).Trim() -cne $witness) { throw 'User-state witness changed' }
@@ -283,9 +300,11 @@ try {
     $newCode = Invoke-OutsideRunnerJob 'native-new' $Work $Node @(
         (Join-Path $Assets 'desktop-smoke.ts'), '--exe', $new.exe, '--root', $payloadRoot, '--origin', 'bundled',
         '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $Proof,
-        '--phase', 'new', '--expect-commit', $m.new.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL, '--platform-account') 15
+        '--phase', 'new', '--expect-commit', $m.new.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL,
+        '--platform-account', '--require-existing-account', '--keep-signed-in') 15
     if ($newCode -ne 0) { throw 'Post-update native account/history/chat smoke failed' }
     Verify-UserState update
+    Write-AcceptanceStage 'NEW retained login, history and chat passed; checking uninstall preservation'
     $acceptance = @{ ok=$true; oldVersion=$m.old.version; newVersion=$m.new.version; oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; stamp=$new.stamp; automaticRelaunch=$true; candidateOnly=[bool]$CandidateManifest; userStatePreserved=$true }
     $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'native-update-success.json')
     Remove-DesktopJourneyPackage $m.old.identity
@@ -293,9 +312,11 @@ try {
     Verify-UserState uninstall
     # Cancellation is last: its bounded OS waiter cannot race the successful
     # replacement's relaunch. No OS cancellation UI means this test is unmet.
+    Write-AcceptanceStage 'Checking actual OS cancellation and manual OLD reopen with retained login'
     $recovery.cancellation = Invoke-NativeCancelRecovery $recoverySettings `
         { Descriptor $m.old 'old.msixbundle' } { Descriptor $m.new 'new.msixbundle' } `
         { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
+    Write-AcceptanceStage "Cancellation and reopen finished: ok=$($recovery.cancellation.ok)"
 } catch {
     if (-not $publishedZipMigration.tested) { $publishedZipMigration.status='failed'; $publishedZipMigration.error=$_.Exception.Message }
     throw
@@ -321,4 +342,5 @@ if ($acceptance) {
     $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
     $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'acceptance.json')
     if (-not $acceptance.ok) { throw 'Native success receipts were retained, but required recovery acceptance remains unmet' }
+    Write-AcceptanceStage 'All required native acceptance stages passed'
 }

@@ -45,8 +45,12 @@ export async function stageReleasedWindowsZip({ arch, out, python }) {
   const archive = path.join(out, 'release.zip')
   try {
     const downloadSpace = await pythonHelper(python, ['space', out, String(artifact.size + reserve)])
+    console.log(`[released-zip] ${new Date().toISOString()} download starting: ${release} ${arch}, ${artifact.size} bytes`)
     await downloadArtifact(artifact, archive)
+    console.log(`[released-zip] ${new Date().toISOString()} download complete; SHA-256 verified`)
+    console.log(`[released-zip] ${new Date().toISOString()} extraction and provenance checks starting`)
     const extracted = await extractReleasedWindowsZip({ archive, size: artifact.size, out: path.join(out, 'extracted'), arch, python })
+    console.log(`[released-zip] ${new Date().toISOString()} extraction complete; ${extracted.expandedSize} bytes verified, archive removed`)
     return { status: 'passed', release, version: '0.1.5', commit, arch, ...artifact,
       ...extracted, downloadSpace }
   } finally {
