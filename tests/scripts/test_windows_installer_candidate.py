@@ -48,8 +48,12 @@ def test_candidate_certificate_has_private_key_and_removes_disposable_trust(tmp_
           }
           $trust = Get-Item -LiteralPath "Cert:\LocalMachine\TrustedPeople\$thumbprint"
           if ($trust.HasPrivateKey) { throw 'Machine trust must contain only the public certificate' }
-          foreach ($store in @('Cert:\CurrentUser\TrustedPeople', 'Cert:\CurrentUser\Root', 'Cert:\LocalMachine\Root')) {
-            if (Test-Path -LiteralPath "$store\$thumbprint") { throw 'Candidate broadened certificate trust' }
+          # CurrentUser logical stores inherit machine trust; inspect physical persistence.
+          foreach ($store in @('HKCU:\Software\Microsoft\SystemCertificates\TrustedPeople',
+                               'HKCU:\Software\Microsoft\SystemCertificates\Root',
+                               'HKLM:\Software\Microsoft\SystemCertificates\Root')) {
+            $physical = "$store\Certificates\$thumbprint"
+            if (Test-Path -LiteralPath $physical) { throw "Candidate broadened certificate trust: $physical" }
           }
           $cert.HasPrivateKey
           """, env) == "True"
