@@ -343,8 +343,11 @@ The candidate builder reuses `scripts/bundles/desktop.py`, the ordinary MSIX
 stamp and the production App Installer descriptor writer. Two local package
 versions at the exact tested source commit exercise native replacement. Their
 temporary annotated claims are never pushed. A nonexportable test certificate
-is trusted only in the disposable runner user's certificate stores and removed
-with its private key after the run. Candidate artifacts are private and expire
+keeps its private key in the disposable runner's `CurrentUser\My` store. Only
+the public certificate enters `LocalMachine\TrustedPeople`, which App Installer
+uses for package identity verification; no root trust is added. The job requires
+an already elevated disposable runner and removes both entries and the private
+key after the run. Candidate artifacts are private and expire
 after seven days; test signing is not production signing acceptance.
 
 The native journey must keep one account/data root across OLD and automatic

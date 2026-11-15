@@ -1,7 +1,8 @@
 """Build test-signed MSIX/AppInstaller pairs on a private disposable Actions runner.
 
 These artifacts are acceptance inputs, never release or channel publication inputs.
-The private key stays nonexportable in CurrentUser and is removed after acceptance.
+The private key stays nonexportable in CurrentUser. Only its public certificate is
+trusted in LocalMachine TrustedPeople; both are removed after acceptance.
 """
 from __future__ import annotations
 
@@ -74,10 +75,13 @@ def check_prerequisites(env: Mapping[str, str], out: Path) -> None:
     Get-Command Add-AppxPackage -ErrorAction Stop | Out-Null
     $installer = @(Get-AppxPackage -Name Microsoft.DesktopAppInstaller)
     $os = Get-CimInstance Win32_OperatingSystem
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    $administrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     @{ os=$os.Caption; version=$os.Version; productType=$os.ProductType
-       appInstaller=@($installer | Select-Object Name, Version, PackageFullName) } |
+       administrator=$administrator; appInstaller=@($installer | Select-Object Name, Version, PackageFullName) } |
        ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $env:CANDIDATE_PREREQUISITES
     if ($installer.Count -ne 1) { throw 'Microsoft.DesktopAppInstaller must be installed for this runner user' }
+    if (-not $administrator) { throw 'Disposable runner must already be elevated for package-signing test trust' }
     """, {**env, "CANDIDATE_PREREQUISITES": str(out / "runner-prerequisites.json")})
 
 
@@ -88,8 +92,7 @@ def create_certificate(env: Mapping[str, str]) -> str:
       -HashAlgorithm SHA256 -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddDays(2)
     $cert.Thumbprint | Set-Content -Encoding UTF8 -LiteralPath $env:CANDIDATE_THUMBPRINT
     Export-Certificate -Cert $cert -FilePath $env:CANDIDATE_CERTIFICATE | Out-Null
-    Import-Certificate -FilePath $env:CANDIDATE_CERTIFICATE -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-    Import-Certificate -FilePath $env:CANDIDATE_CERTIFICATE -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+    Import-Certificate -FilePath $env:CANDIDATE_CERTIFICATE -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
     """, env)
     thumbprint = Path(env["CANDIDATE_THUMBPRINT"]).read_text(encoding="utf-8-sig").strip()
     if not re.fullmatch(r"[A-F0-9]{40}", thumbprint):
@@ -106,11 +109,11 @@ def remove_certificate(env: Mapping[str, str]) -> str:
     powershell(r"""
     $thumbprint = (Get-Content -Raw -LiteralPath $env:CANDIDATE_THUMBPRINT).Trim()
     if ($thumbprint -notmatch '^[A-F0-9]{40}$') { throw 'Invalid candidate certificate thumbprint' }
-    foreach ($store in @('My', 'TrustedPeople', 'Root')) {
-      $path = "Cert:\CurrentUser\$store\$thumbprint"
+    foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\TrustedPeople')) {
+      $path = "$store\$thumbprint"
       if (Test-Path -LiteralPath $path) {
         if ((Get-Item -LiteralPath $path).Subject -cne $env:CANDIDATE_PUBLISHER) { throw 'Foreign certificate' }
-        if ($store -eq 'My') { Remove-Item -LiteralPath $path -DeleteKey }
+        if ($store -eq 'Cert:\CurrentUser\My') { Remove-Item -LiteralPath $path -DeleteKey }
         else { Remove-Item -LiteralPath $path }
         if (Test-Path -LiteralPath $path) { throw "Candidate certificate remains in $store" }
       }

@@ -134,7 +134,7 @@ jobs:
           python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --execute-e2e
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Remove disposable CurrentUser test trust
+      - name: Remove disposable signing key and package trust
         if: always()
         shell: pwsh
         run: |

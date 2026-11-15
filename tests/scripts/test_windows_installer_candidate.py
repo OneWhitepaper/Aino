@@ -29,8 +29,10 @@ def test_candidate_certificate_has_private_key_and_removes_disposable_trust(tmp_
           if ($cert.Subject -cne $env:CANDIDATE_PUBLISHER -or -not $cert.HasPrivateKey) {
             throw 'Candidate signing identity or private key missing'
           }
-          foreach ($store in @('TrustedPeople', 'Root')) {
-            Get-Item -LiteralPath "Cert:\CurrentUser\$store\$thumbprint" | Out-Null
+          $trust = Get-Item -LiteralPath "Cert:\LocalMachine\TrustedPeople\$thumbprint"
+          if ($trust.HasPrivateKey) { throw 'Machine trust must contain only the public certificate' }
+          foreach ($store in @('Cert:\CurrentUser\TrustedPeople', 'Cert:\CurrentUser\Root', 'Cert:\LocalMachine\Root')) {
+            if (Test-Path -LiteralPath "$store\$thumbprint") { throw 'Candidate broadened certificate trust' }
           }
           $cert.HasPrivateKey
           """, env) == "True"
@@ -38,8 +40,8 @@ def test_candidate_certificate_has_private_key_and_removes_disposable_trust(tmp_
         candidate.remove_certificate(env)
     assert candidate.powershell(r"""
       $thumbprint = (Get-Content -Raw -LiteralPath $env:CANDIDATE_THUMBPRINT).Trim()
-      foreach ($store in @('My', 'TrustedPeople', 'Root')) {
-        if (Test-Path -LiteralPath "Cert:\CurrentUser\$store\$thumbprint") {
+      foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\TrustedPeople')) {
+        if (Test-Path -LiteralPath "$store\$thumbprint") {
           throw "Candidate certificate remains in $store"
         }
       }
