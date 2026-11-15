@@ -502,19 +502,19 @@ export async function readPreservedAccountHistory(page: Page, account: FixtureAc
     const rows = []
     for (const item of items) {
       const request = { profile: item.profile, connectionId: 'local', method: 'GET', timeoutMs: 60_000 }
-      const config = await bridge.api({ ...request, path: '/api/config?include_defaults=false' })
+      const assignment = await bridge.api({ ...request, path: '/api/providers/custom-endpoints' })
       const history = await bridge.api({ ...request, path: `/api/sessions/${encodeURIComponent(item.sessionId)}/messages` })
-      rows.push({ ...item, config, history })
+      rows.push({ ...item, assignment, history })
     }
     return rows
   }, scopes)
   const schema = z.object({ profile: z.string(), sessionId: z.string(),
-    config: z.object({ model: z.object({ default: z.string(), provider: z.string(), base_url: z.string() }) }),
+    assignment: z.object({ current: z.object({ model: z.string(), provider: z.string(), base_url: z.string() }) }),
     history: z.object({ session_id: z.string(), messages: z.array(z.object({ role: z.string(), content: z.string() })) }),
   })
   const sessions = z.array(schema).parse(replies).map(row => {
-    const model = row.config.model
-    if (model.default !== account.model || model.provider !== 'custom' || model.base_url !== account.baseUrl) {
+    const model = row.assignment.current
+    if (model.model !== account.model || model.provider !== 'custom' || model.base_url !== account.baseUrl) {
       throw new Error(`Preserved ${row.profile} model configuration differs in the active account`)
     }
     const expected = [
@@ -558,20 +558,21 @@ export async function collectAutomaticNewWorkspace(expected: AutomaticNewWorkspa
   const histories = []
   for (const scope of expected.scopes) {
     const request = { profile: scope.profile, connectionId: 'local', method: 'GET', timeoutMs: 60_000 }
-    const config = await bridge.api({ ...request, path: '/api/config?include_defaults=false' }) as {
-      model: { default: string; provider: string; base_url: string }
+    const assignment = await bridge.api({ ...request, path: '/api/providers/custom-endpoints' }) as {
+      current: { model: string; provider: string; base_url: string }
     }
     const history = await bridge.api({ ...request, path: `/api/sessions/${encodeURIComponent(scope.sessionId)}/messages` }) as {
       session_id: string; messages: { id: string | number; role: string; content: string }[]
     }
-    if (config.model.default !== scope.model || config.model.provider !== 'custom' || config.model.base_url !== scope.baseUrl) {
+    const model = assignment.current
+    if (model.model !== scope.model || model.provider !== 'custom' || model.base_url !== scope.baseUrl) {
       throw new Error('Automatic NEW changed the retained model')
     }
     if (history.session_id !== scope.sessionId || scope.messages.some(message => !history.messages.some(actual =>
       String(actual.id) === String(message.id) && actual.role === message.role && actual.content === message.content))) {
       throw new Error('Automatic NEW lost retained history')
     }
-    histories.push({ profile: scope.profile, sessionId: scope.sessionId, model: config.model, messages: scope.messages })
+    histories.push({ profile: scope.profile, sessionId: scope.sessionId, model, messages: scope.messages })
   }
   return { identity: { appVersion: version.appVersion, commit: version.commit, hermesHome: version.hermesHome, hermesRoot: version.hermesRoot, platform: version.platform },
     account: { phase: status.phase, userId: String(status.account?.id), rememberState: status.remember_state },

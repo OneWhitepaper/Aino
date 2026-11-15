@@ -19,14 +19,19 @@ test('automatic NEW observes its existing IPC workspace and rejects a wrong acco
   let phase = 'signed_in'
   let userId = '17'
   let messages = expected.scopes[0].messages
+  const current = { model: 'fixture-model', provider: 'custom', base_url: expected.scopes[0].baseUrl }
 
   const nativeWindow = { hermesDesktop: {
     getVersion: async () => ({ appVersion: '0.1.7', platform: 'win32', commit: expected.commit, hermesHome: home, hermesRoot: 'C:\\payload\\repo' }),
     platformAccount: { status: async () => ({ phase, account: { id: userId }, mode: 'production', remember_state: 'encrypted', error: null }) },
     getConnection: async () => ({ baseUrl: 'http://127.0.0.1:4567', mode: 'local' }),
-    api: async ({ path: route }: { path: string }) => route.startsWith('/api/config')
-      ? { model: { default: 'fixture-model', provider: 'custom', base_url: expected.scopes[0].baseUrl } }
-      : { session_id: 'zip-history', messages },
+    api: async ({ path: route }: { path: string }) => {
+      if (route === '/api/providers/custom-endpoints') { return { current, endpoints: [] } }
+
+      if (route.startsWith('/api/config')) { return { model: current.model, model_context_length: 64000 } }
+
+      return { session_id: 'zip-history', profile: 'default', messages, pagination: { returned: messages.length } }
+    },
   } }
 
   // The native console receives this function without its module scope.
@@ -42,6 +47,14 @@ test('automatic NEW observes its existing IPC workspace and rejects a wrong acco
   userId = '23'
   await expect(observe(expected)).rejects.toThrow('authenticated')
   userId = '17'
+
+  for (const [field, wrong] of [['model', 'wrong-model'], ['provider', 'openrouter'], ['base_url', 'http://127.0.0.1:9999/v1']] as const) {
+    const original = current[field]
+    current[field] = wrong
+    await expect(observe(expected)).rejects.toThrow('model')
+    current[field] = original
+  }
+
   messages = []
   await expect(observe(expected)).rejects.toThrow('history')
 })
@@ -65,20 +78,22 @@ test('native OLD keeps the exact preservation profile before Electron requests i
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
-test('active preservation proof reads scoped historical messages and model through the desktop API', async (): Promise<void> => {
+test('active preservation proof reads scoped history and the actual custom-endpoint assignment through the desktop API', async (): Promise<void> => {
   const account = { home: '/account/home', relativeHome: 'account/home', origin: 'https://api.agentera.com.cn',
     userId: '17', displayName: '测试账户甲', profile: 'research', model: 'fixture-model',
     baseUrl: 'http://127.0.0.1:9999/v1', sessionIds: ['fixture-history-17', 'fixture-bot-17'] }
 
-  let actualModel = account.model
+  const current = { model: account.model, provider: 'custom', base_url: account.baseUrl }
   let hasHistory = true
 
   const page = { evaluate: async (reader: (items: unknown) => Promise<unknown>, items: unknown) => {
     const prior = globalThis.window
     Object.assign(globalThis, { window: { hermesDesktop: { api: async (request: { path: string; profile: string }) => {
       if (request.path.startsWith('/api/config')) {
-        return { model: { default: actualModel, provider: 'custom', base_url: account.baseUrl } }
+        return { model: current.model, model_context_length: 64000 }
       }
+
+      if (request.path === '/api/providers/custom-endpoints') { return { current, endpoints: [] } }
 
       return { session_id: request.profile === 'default' ? account.sessionIds[0] : account.sessionIds[1],
         messages: hasHistory ? [{ role: 'user', content: '测试账户甲：请保留我的历史记录。' },
@@ -91,9 +106,14 @@ test('active preservation proof reads scoped historical messages and model throu
   const proof = await readPreservedAccountHistory(page, account)
   expect(proof.sessions.map(row => row.profile)).toEqual(['default', 'research'])
   expect(proof.sessions.map(row => row.sessionId)).toEqual(account.sessionIds)
-  actualModel = 'wrong-model'
-  await expect(readPreservedAccountHistory(page, account)).rejects.toThrow('model')
-  actualModel = account.model
+
+  for (const [field, wrong] of [['model', 'wrong-model'], ['provider', 'openrouter'], ['base_url', 'http://127.0.0.1:8888/v1']] as const) {
+    const original = current[field]
+    current[field] = wrong
+    await expect(readPreservedAccountHistory(page, account)).rejects.toThrow('model')
+    current[field] = original
+  }
+
   hasHistory = false
   await expect(readPreservedAccountHistory(page, account)).rejects.toThrow('historical messages')
 })
