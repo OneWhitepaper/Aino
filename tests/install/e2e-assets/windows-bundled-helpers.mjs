@@ -18,9 +18,9 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 
 import { validateDownloadedBundle } from './bundle-manifest.cjs'
 
-export function validateBundledManifest(manifest, { expectedPublisher, arch = 'x64' }) {
+export function validateBundledManifest(manifest, { expectedPublisher, arch = 'x64', candidateCommit }) {
   try {
-    validateDownloadedBundle(manifest, 'windows', arch)
+    validateDownloadedBundle(manifest, 'windows', arch, { candidateCommit })
     for (const side of ['old', 'new']) {
       if (manifest[side].publisher !== expectedPublisher) {
         throw new Error(`${side}.publisher does not equal the production OUT_OF_STORE_PUBLISHER`)
@@ -74,11 +74,16 @@ async function main() {
     path.resolve(fileURLToPath(new URL('../../../scripts/msix-shared.mjs', import.meta.url)))
 
   if (cmd === 'validate-manifest') {
+    const candidateCommit = flags['candidate-commit']
+    if (candidateCommit && (process.env.GITHUB_ACTIONS !== 'true' || candidateCommit !== process.env.GITHUB_SHA)) {
+      throw new Error('Local candidates are accepted only by their exact private CI checkout')
+    }
     const shared = await loadMsixShared(msixShared)
     const manifest = JSON.parse(fs.readFileSync(flags.manifest, 'utf8'))
     const result = validateBundledManifest(manifest, {
       expectedPublisher: shared.OUT_OF_STORE_PUBLISHER,
-      arch: flags.arch || undefined
+      arch: flags.arch || undefined,
+      candidateCommit
     })
     console.log(JSON.stringify(result))
     process.exit(result.ok ? 0 : 1)

@@ -144,7 +144,7 @@ export async function platformLoginWorkspace(app: ElectronApplication, page: Pag
     await expect.poll(async () => {
       for (const candidate of [...candidates].reverse()) {
         if (!candidate.isClosed() && await candidate.getByRole('button', {
-          name: 'My account · Native member', exact: true
+          name: /^(?:My account|我的账户) · Native member$/, exact: true
         }).isVisible().catch(() => false)) {
           workspace = candidate
 
@@ -164,15 +164,28 @@ export async function platformLoginWorkspace(app: ElectronApplication, page: Pag
 }
 
 /** Use the real sign-in UI and return the renderer owned by that account. */
-export async function signInPlatformFixture(app: ElectronApplication, page: Page): Promise<Page> {
-  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
-  await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
-  await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
-  await page.getByRole('button', { name: 'Send code', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('246810')
+export async function signInPlatformFixture(app: ElectronApplication, page: Page,
+  options: { keepSignedIn?: boolean; allowExisting?: boolean } = {}): Promise<Page> {
+  if (options.allowExisting) {
+    // The native updater's automatically relaunched workspace can already own
+    // the persisted fixture session. It still uses the real platform bridge.
+    const member = page.getByRole('button', { name: /^(?:My account · Native member|我的账户 · Native member)$/, exact: true })
+    const phone = page.getByRole('textbox', { name: /^(?:Phone number|手机号)$/, exact: true })
+    await expect.poll(async () => await member.isVisible() || await phone.isVisible(), { timeout: 120_000 }).toBe(true)
 
-  return platformLoginWorkspace(app, page, () => page.getByRole('button', { name: 'Sign in', exact: true }).click().catch(error => {
+    if (await member.isVisible()) { return page }
+  }
+
+  await page.getByRole('textbox', { name: /^(?:Phone number|手机号)$/, exact: true }).fill('+8613800138000')
+  await page.getByRole('checkbox', { name: /^(?:Agree to the user agreement and privacy policy|同意用户协议和隐私政策)$/, exact: true }).check()
+  const persistent = page.getByRole('checkbox', { name: /^(?:Keep me signed in on this device|在此设备保持登录)$/, exact: true })
+
+  if (options.keepSignedIn) { await persistent.check() } else { await persistent.uncheck() }
+  await page.getByRole('button', { name: /^(?:Send code|发送验证码)$/, exact: true }).click()
+  await expect(page.getByRole('textbox', { name: /^(?:Verification code|验证码)$/, exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: /^(?:Verification code|验证码)$/, exact: true }).fill('246810')
+
+  return platformLoginWorkspace(app, page, () => page.getByRole('button', { name: /^(?:Sign in|登录)$/, exact: true }).click().catch(error => {
     if (!page.isClosed()) { throw error }
   }))
 }

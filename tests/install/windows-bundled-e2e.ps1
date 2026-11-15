@@ -1,6 +1,7 @@
 # Native package replacement acceptance. Never run on a developer desktop.
 param(
     [string]$ManifestUrl,
+    [string]$CandidateManifest,
     [ValidateSet('x64','arm64')][string]$Arch = 'x64'
 )
 $ErrorActionPreference = 'Stop'
@@ -8,7 +9,8 @@ Set-StrictMode -Version Latest
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:OS -ne 'Windows_NT') { throw 'Disposable Windows Actions runner required' }
 $Repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $Assets = Join-Path $PSScriptRoot 'e2e-assets'
-if (-not $ManifestUrl) { throw 'ManifestUrl is required for ordinary package updates' }
+if ([bool]$ManifestUrl -eq [bool]$CandidateManifest) { throw 'Supply exactly one of ManifestUrl or CandidateManifest' }
+if ($CandidateManifest -and $env:AINO_PRIVATE_CANDIDATE -cne 'true') { throw 'Local candidates require the private disposable candidate runner' }
 $Work = Join-Path $env:RUNNER_TEMP 'hermes-bundled-update'
 if (Test-Path $Work) { throw "Refusing to reuse $Work" }
 $Proof = Join-Path $Work 'proof'
@@ -19,15 +21,32 @@ $env:HERMES_DESKTOP_USER_DATA_DIR = Join-Path $Work 'electron-user-data'
 $env:HOME = Join-Path $Work 'os-home'
 New-Item -ItemType Directory -Path $env:HOME | Out-Null
 . (Join-Path $Assets 'desktop-smoke-windows.ps1')
+. (Join-Path $Assets 'windows-native-environment.ps1')
 $Node = if ($env:HERMES_E2E_NODE) { $env:HERMES_E2E_NODE } else { (Get-Command node.exe).Source }
 function Run-Node([string[]]$Argv) {
     & $Node @Argv
     if ($LASTEXITCODE -ne 0) { throw "Node failed: $($Argv[0])" }
 }
-Run-Node @((Join-Path $Assets 'bundle-inputs.mjs'), '--manifest-url', $ManifestUrl, '--platform', 'windows', '--arch', $Arch, '--out', $Work)
 $ManifestPath = Join-Path $Work 'bundle-inputs.json'
+if ($CandidateManifest) {
+    $candidatePath = (Resolve-Path -LiteralPath $CandidateManifest).ProviderPath
+    $temporaryRoot = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\'
+    if (-not $candidatePath.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Candidate manifest must be owned by RUNNER_TEMP' }
+    Copy-Item -LiteralPath $candidatePath -Destination $ManifestPath
+} else {
+    Run-Node @((Join-Path $Assets 'bundle-inputs.mjs'), '--manifest-url', $ManifestUrl, '--platform', 'windows', '--arch', $Arch, '--out', $Work)
+}
 $m = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
-Run-Node @((Join-Path $Assets 'windows-bundled-helpers.mjs'), 'validate-manifest', '--manifest', $ManifestPath, '--arch', $Arch)
+$validation = @((Join-Path $Assets 'windows-bundled-helpers.mjs'), 'validate-manifest', '--manifest', $ManifestPath, '--arch', $Arch)
+if ($CandidateManifest) { $validation += @('--candidate-commit', $env:GITHUB_SHA) }
+Run-Node $validation
+$StateHelper = Join-Path $Assets 'windows-user-state.mjs'
+$StateSnapshot = Join-Path $Proof 'user-state-before.json'
+$fixturePython = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { (Get-Command python.exe).Source }
+function Verify-UserState([string]$Phase) {
+    Run-Node @($StateHelper, 'verify', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR,
+        '--snapshot', $StateSnapshot, '--python', $fixturePython, '--report', (Join-Path $Proof "user-state-after-$Phase.json"))
+}
 if (Get-AppxPackage -Name $m.old.identity) { throw 'Package identity is already installed; refusing to modify it' }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 function Assert-Bundle($Side) {
@@ -73,7 +92,13 @@ $server = Start-Process -FilePath $Node -ArgumentList @('"'+$Helper+'"', 'serve'
 $installed = $false
 $mock = $null
 $oldDriver = $null
+$acceptance = $null
+$nativeEnvironment = @{}
 try {
+    $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
+    Run-Node @($StateHelper, 'seed', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
+        '--origin', 'https://api.agentera.com.cn', '--mock-url', $env:HERMES_E2E_MOCK_URL,
+        '--snapshot', $StateSnapshot, '--report', (Join-Path $Proof 'user-state-seed.json'))
     $deadline = (Get-Date).AddSeconds(20)
     while (-not (Test-Path $PortFile)) {
         if ($server.HasExited -or (Get-Date) -gt $deadline) { throw 'Feed failed to start' }
@@ -88,6 +113,16 @@ try {
     Add-AppxPackage -AppInstallerFile $descriptor
     $installed = $true
     $old = Installed $m.old
+    Verify-UserState install
+    $startAppId = "$($old.package.PackageFamilyName)!$($m.old.applicationId)"
+    $shortcutDeadline = (Get-Date).AddSeconds(30)
+    do {
+        $shortcut = @(Get-StartApps | Where-Object { $_.AppID -ceq $startAppId })
+        if ($shortcut.Count -eq 1) { break }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $shortcutDeadline)
+    if ($shortcut.Count -ne 1) { throw 'Installed package did not register one Start menu entry' }
+    $shortcut[0] | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Proof 'start-menu-entry.json')
     # Pin a real OS-registered update source before launching the application.
     $old.package | Select-Object Name, Version, Publisher, Architecture, InstallLocation | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-package.json')
     $marker = Join-Path $env:HERMES_HOME 'bundle-state-marker'
@@ -99,17 +134,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Plugin seed failed' }
     & $python $verifier snapshot --home $env:HERMES_HOME --out (Join-Path $Work 'plugins-before.json')
     if ($LASTEXITCODE -ne 0) { throw 'Plugin snapshot failed' }
-    $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
     # Keep Playwright's actual OLD window alive across chat and the native UIA
     # trigger. The NEW descriptor is not published until OLD chat has passed.
     $oldChatReady = Join-Path $Proof 'old-chat-ready.json'
-    $oldDriver = Start-Process -FilePath $Node -ArgumentList @(
-        ('"' + (Join-Path $Assets 'drive-update.cjs') + '"'), ('"' + $old.exe + '"'),
-        ('"' + $Proof + '"'), $m.old.commit, '--native-handoff'
-    ) -PassThru -RedirectStandardOutput (Join-Path $Proof 'old-chat-driver.log') -RedirectStandardError (Join-Path $Proof 'old-chat-driver-error.log')
+    $oldDriver = Start-OutsideRunnerJob 'native-old' $Work $Node @(
+        (Join-Path $Assets 'drive-update.cjs'), $old.exe, $Proof, $m.old.commit, '--native-handoff'
+    )
     $deadline = (Get-Date).AddMinutes(6)
     while (-not (Test-Path -LiteralPath $oldChatReady)) {
-        if ($oldDriver.HasExited -or (Get-Date) -ge $deadline) { throw 'Mandatory OLD desktop chat failed before the update trigger' }
+        if ((Test-Path -LiteralPath $oldDriver.ExitFile) -or -not (Get-Process -Id $oldDriver.Id -ErrorAction SilentlyContinue) -or (Get-Date) -ge $deadline) { throw 'Mandatory OLD desktop chat failed before the update trigger' }
         Start-Sleep -Milliseconds 200
     }
     $ready = Get-Content -LiteralPath $oldChatReady -Raw | ConvertFrom-Json
@@ -121,12 +154,18 @@ try {
     if ($oldChat.status -ne 'passed') { throw 'Mandatory OLD chat receipt failed' }
     $oldProcess = $oldRows[0]
     $oldProcess | Select-Object ProcessId, CreationDate, ExecutablePath | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-process.json')
+    $nativeEnvironment = Publish-NativeRelaunchEnvironment (Join-Path $Proof 'native-relaunch-environment.json') $Work $env:HERMES_DESKTOP_USER_DATA_DIR
     Descriptor $m.new 'new.msixbundle'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Assets 'windows-bundled-drive-update.ps1') -OldProcessId $oldProcess.ProcessId -ProofDir $Proof -ResultPath (Join-Path $Proof 'click.json')
     if ($LASTEXITCODE -ne 0) { throw 'Real in-app update trigger failed' }
     $click = Get-Content -Raw (Join-Path $Proof 'click.json') | ConvertFrom-Json
     if (-not $click.ok -or -not $click.exited) { throw 'In-app trigger receipt is not successful' }
-    if (-not $oldDriver.WaitForExit(30000) -or $oldDriver.ExitCode -ne 0) { throw 'OLD Playwright ownership did not release after native process close' }
+    $closed = Join-Path $Proof 'old-process-closed.json'
+    $closedDeadline = (Get-Date).AddSeconds(30)
+    while (-not (Test-Path -LiteralPath $closed)) {
+        if ((Test-Path -LiteralPath $oldDriver.ExitFile) -or (Get-Date) -ge $closedDeadline) { throw 'OLD Playwright ownership did not release after native process close' }
+        Start-Sleep -Milliseconds 200
+    }
     $deadline = (Get-Date).AddMinutes(15)
     $new = $null; $newRows = @()
     do {
@@ -167,15 +206,23 @@ try {
     @{ oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; automaticRelaunch=$true } |
         ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'relaunch-proof.json')
     Close-VerifiedDesktop $new.exe $newProcess.ProcessId
+    Set-Content -LiteralPath (Join-Path $Proof 'native-update-complete') -Value 'verified'
+    if ((Wait-OutsideRunnerJob $oldDriver 1) -ne 0) { throw 'OLD account fixture did not release cleanly' }
+    Restore-NativeRelaunchEnvironment $nativeEnvironment
+    $nativeEnvironment = @{}
     @{ phase='new'; launch='post-update-launch'; automaticRelaunchProof='relaunch-proof.json' } |
         ConvertTo-Json | Set-Content (Join-Path $Proof 'desktop-chat-new-launch.json')
-    Run-Node @((Join-Path $Assets 'desktop-smoke.ts'), '--exe', $new.exe, '--root', $payloadRoot, '--origin', 'bundled',
+    $newCode = Invoke-OutsideRunnerJob 'native-new' $Work $Node @(
+        (Join-Path $Assets 'desktop-smoke.ts'), '--exe', $new.exe, '--root', $payloadRoot, '--origin', 'bundled',
         '--home', $env:HERMES_HOME, '--user-data', $env:HERMES_DESKTOP_USER_DATA_DIR, '--out', $Proof,
-        '--phase', 'new', '--expect-commit', $m.new.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL)
-    @{ ok=$true; oldVersion=$m.old.version; newVersion=$m.new.version; oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; stamp=$new.stamp; automaticRelaunch=$true } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'acceptance.json')
+        '--phase', 'new', '--expect-commit', $m.new.commit, '--mock-url', $env:HERMES_E2E_MOCK_URL, '--platform-account') 15
+    if ($newCode -ne 0) { throw 'Post-update native account/history/chat smoke failed' }
+    Verify-UserState update
+    $acceptance = @{ ok=$true; oldVersion=$m.old.version; newVersion=$m.new.version; oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; stamp=$new.stamp; automaticRelaunch=$true; candidateOnly=[bool]$CandidateManifest; userStatePreserved=$true }
 } finally {
+    Restore-NativeRelaunchEnvironment $nativeEnvironment
     if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -ErrorAction SilentlyContinue }
-    if ($oldDriver -and -not $oldDriver.HasExited) { Stop-Process -Id $oldDriver.Id -ErrorAction SilentlyContinue }
+    if ($oldDriver) { Stop-OutsideRunnerJob $oldDriver }
     if (-not $server.HasExited) { Stop-Process -Id $server.Id -ErrorAction SilentlyContinue }
     # Disposable runner teardown only, scoped to the package installed by this leg.
     if ($installed) {
@@ -185,4 +232,11 @@ try {
             Remove-AppxPackage -Package $pkg.PackageFullName
         }
     }
+}
+
+if ($acceptance) {
+    if (Get-AppxPackage -Name $m.old.identity) { throw 'Uninstall did not remove the candidate package registration' }
+    Verify-UserState uninstall
+    $acceptance.uninstallPreservedUserState = $true
+    $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'acceptance.json')
 }

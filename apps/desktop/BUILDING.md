@@ -285,6 +285,11 @@ replace signed-package installation and update acceptance on each native host.
 
 ## Windows signing and App Installer
 
+The installation target is Windows 10 22H2 (build 19045) and Windows 11,
+on x64 and ARM64. A manifest minimum is a build contract, not a claim that
+every Windows desktop version has passed native acceptance. Keep the SDK
+and runtime receipts separate.
+
 The signing jobs provide `AZURE_SIGN_ENDPOINT`, `AZURE_SIGN_ACCOUNT`,
 `AZURE_SIGN_PROFILE`, `AZURE_SIGN_PUBLISHER`, and `AZURE_CLIENT_ID`, plus
 Azure authentication. Do not pass publisher names through shell-split `-c`
@@ -317,6 +322,43 @@ registered source through WinRT and distinguishes an unknown result from no
 update. Apply downloads the descriptor before teardown, then opens the local
 `.appinstaller` file. It does not require the disabled `ms-appinstaller:` protocol.
 The app registers a detached relaunch waiter before handoff.
+
+Distribute the `.appinstaller` entry point with its matching signed bundle.
+Installing only a `.msixbundle` does not register the update subscription.
+The stable ZIP distribution deliberately declares external updates: existing
+ZIP users install the first installation-based release manually, then update
+through App Installer. Keep the stable app identity and `%APPDATA%\Aino`
+unchanged; account workspaces, conversations, Bot profiles and model settings
+remain in that existing root. Do not copy all accounts into a new profile or
+put durable state inside the package installation directory.
+
+### Private Windows candidate acceptance
+
+`windows-installer-candidate.yml` runs only in a private repository, by manual
+dispatch or on `validation/windows-installer/**` pushes. It has read-only
+repository permissions and never calls a public release, website, stable
+feed, R2 or Microsoft Store publication step.
+
+The candidate builder reuses `scripts/bundles/desktop.py`, the ordinary MSIX
+stamp and the production App Installer descriptor writer. Two local package
+versions at the exact tested source commit exercise native replacement. Their
+temporary annotated claims are never pushed. A nonexportable test certificate
+is trusted only in the disposable runner user's certificate stores and removed
+with its private key after the run. Candidate artifacts are private and expire
+after seven days; test signing is not production signing acceptance.
+
+The native journey must keep one account/data root across OLD and automatic
+NEW activation, use the isolated Aino account fixture, and preserve existing
+session/message rows while allowing new history and SQLite maintenance.
+Installation, update and uninstall each verify account, Bot, model and user-file
+preservation. GUI activation environment overrides are scoped to the disposable
+runner user and restored in cleanup.
+
+A missing App Installer, failed SDK pack, skipped native journey, or absent
+production signer remains an unmet acceptance requirement. Windows Server SDK
+contracts do not establish Windows 10 or Windows 11 desktop runtime coverage.
+Do not promote candidates or change production feeds until the native OS and
+production-signing receipts required for the intended release are present.
 
 The build stamp declares `updateMechanism`: `app-installer` for sideload bundles,
 `microsoft-store` for Store builds, `electron-updater` for macOS packages, and

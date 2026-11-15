@@ -258,13 +258,11 @@ module.exports = {
     setBuildNumber: false,
     // Store versions are baked into a build-time template. App semver and
     // artifact filenames stay unchanged; the Store reserves revision zero.
-    // Floor Windows 11 22H2. Below build 18307 the manifest schema caps
-    // AppExtension Name at 39 chars and Microsoft's own
-    // "com.microsoft.windows.copilotkeyprovider" is 40 (makeappx
-    // 0x80080204 — A/B-verified against the 26100 kit; 18307 exactly
-    // still failed on it, 22621 passes), and 22621 is the documented
-    // Copilot hardware key floor anyway.
-    minVersion: '10.0.22621.0',
+    // Target Windows 10 22H2 and Windows 11 without removing native aliases,
+    // shared-state access or the Copilot extension on supported systems.
+    // Candidate acceptance must pass the SDK schema check at this floor;
+    // declaring it alone is not evidence of Windows 10 runtime compatibility.
+    minVersion: '10.0.19045.0',
     maxVersionTested: '10.0.26100.0',
     // Static path: the file itself is written by scripts/before-build.mjs at
     // build time (see the comment on the hook) — never at config require

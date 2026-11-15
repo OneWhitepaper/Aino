@@ -46,10 +46,11 @@ async function nativeProof() {
   const work = path.join(root, 'source')
   const desktop = path.join(work, 'apps/desktop')
   const copied = [
-    'apps/desktop/product-identity.cjs', 'apps/desktop/electron-builder.config.cjs',
+    'apps/desktop/product-identity.cjs', 'apps/desktop/electron-builder.config.cjs', 'apps/desktop/brand.json',
     'apps/desktop/package.json', 'apps/desktop/update-feed.cjs',
     'apps/desktop/assets/msix-manifest.xml',
-    ...['before-build', 'gen-msix-manifest', 'mac-sign', 'payload-digests', 'write-build-stamp', 'utils']
+    'apps/desktop/scripts/mac-icon.cjs',
+    ...['before-build', 'gen-msix-manifest', 'mac-sign', 'mac-sign-cache', 'payload-digests', 'write-build-stamp', 'bundle-env', 'utils']
       .map(name => `apps/desktop/scripts/${name}.mjs`),
     'scripts/msix-shared.mjs', 'scripts/release-content-types.json', 'scripts/build/python.mjs',
     'scripts/bundles/desktop_prepare.py', 'hermes_cli/release_channels.py', 'hermes_cli/__init__.py',

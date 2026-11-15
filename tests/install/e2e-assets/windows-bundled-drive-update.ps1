@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # windows-bundled-drive-update.ps1 — drive the REAL in-app update surface of
 # the INSTALLED (MSIX) desktop app via UI Automation.
 # ============================================================================
@@ -133,8 +133,10 @@ while ((Get-Date) -lt $deadline -and -not $clicked) {
     if ($win) {
         $hit = Find-InvokableButton -Root $win -Patterns @(
             '^Update now',            # en: the packaged overlay's primary action
-            'Update Hermes',          # en settings: About surface
-            '^Update$'
+            'Update (Aino|Hermes)',
+            '^Update$',
+            '^立即更新',
+            '^更新(?: Aino)?$'
         )
         if ($hit) {
             Save-Shot "01-before-update-click"
@@ -142,7 +144,7 @@ while ((Get-Date) -lt $deadline -and -not $clicked) {
             if (Invoke-Button $hit.Element) { $clicked = $hit } else { Write-Host "  [uia] invoke pattern unavailable; retrying" }
         } else {
             # Use the visible settings flow; never call the updater bridge.
-            $navigation = Find-InvokableButton -Root $win -Patterns @('^Open settings$', '^About$', '^Check now$', 'choose a provider later')
+            $navigation = Find-InvokableButton -Root $win -Patterns @('^Open settings$', '^About$', '^Check now$', '^打开设置$', '^设置$', '^关于$', '^立即检查$', 'choose a provider later')
             if ($navigation) { [void](Invoke-Button $navigation.Element) }
         }
     }
@@ -167,7 +169,7 @@ while ((Get-Date) -lt $cDeadline -and -not $confirmed) {
             [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $installer.Id)
         $win = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
         if ($win) {
-            $hit = Find-InvokableButton -Root $win -Patterns @('^Update$', '^Install$', '^(Reinstall|Update) .*')
+            $hit = Find-InvokableButton -Root $win -Patterns @('^Update$', '^Install$', '^(Reinstall|Update) .*', '^更新$', '^安装$', '^重新安装$')
             if ($hit) {
                 Save-Shot "02-appinstaller-confirm"
                 Write-Host "  [uia] App Installer dialog: clicking '$($hit.Name)'"
