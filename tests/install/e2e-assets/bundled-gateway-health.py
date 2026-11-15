@@ -52,7 +52,8 @@ def main() -> None:
     state = read_runtime_status(home / "gateway_state.json")
     assert state["pid"] == pid and state["start_time"] == get_process_start_time(pid)
     assert Path(state["hermes_home"]).resolve() == home
-    assert Path(psutil.Process(pid).exe()).resolve() == Path(sys.executable).resolve()
+    executable = Path(psutil.Process(pid).exe()).resolve()
+    assert executable == Path(sys.argv[4]).resolve(), "Gateway interpreter differs from the verified installation"
     with urllib.request.urlopen(discovery.endpoint.api_origin + "/api/health", timeout=10) as response:
         assert response.status == 200
         health = json.load(response)
@@ -60,7 +61,7 @@ def main() -> None:
     print(json.dumps({"pid": pid, "startTime": state["start_time"], "home": str(home),
                       "commit": discovery.endpoint.code_sha, "health": health,
                       "instanceId": discovery.endpoint.instance_id,
-                      "executable": str(Path(psutil.Process(pid).exe()).resolve())}))
+                      "executable": str(executable)}))
 
 
 if __name__ == "__main__":

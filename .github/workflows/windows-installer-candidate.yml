@@ -82,6 +82,7 @@ jobs:
           scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
             tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
             tests/scripts/install/test_windows_fixture_python.py \
+            tests/scripts/install/test_bundled_gateway_health.py \
             tests/desktop/test_appinstaller_check_script.py \
             2>&1 | tee "$RUNNER_TEMP/aino-windows-contracts/candidate-python.log"
 
@@ -97,6 +98,7 @@ jobs:
             'scripts/desktop-smoke-launch-failure.test.ts', 'scripts/native-update-handoff.test.ts',
             'scripts/native-update-recovery.test.ts', 'scripts/native-account-preservation.test.ts',
             'scripts/desktop-smoke-process-snapshot.test.ts', 'windows-bundled-helpers.test.mjs',
+            'scripts/bundled-upgrade-probe.test.ts',
             'scripts/released-zip-migration.test.ts', 'released-zip-history.test.mjs'
           )
           pnpm exec vitest run @tests 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/harness.log"

@@ -41,7 +41,9 @@ try {
   fs.writeFileSync(spec, JSON.stringify({ pid: options.pid, exe: options.exe, startedAt: options['started-at'], nonce, expression }) + '\n', { flag: 'wx', mode: 0o600 })
   execFileSync('powershell.exe', ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File',
     path.join(import.meta.dirname, 'observe-native-new.ps1'), '-SpecPath', spec, '-OutputPath', observation], {
-    stdio: 'inherit', timeout: 180_000, windowsHide: true,
+    // UIA may spend 210 seconds across its bounded waits; allow its finally
+    // block to restore the clipboard and close only the owned DevTools window.
+    stdio: 'inherit', timeout: 300_000, windowsHide: true,
   })
   const result = z.object({ pid: z.literal(options.pid), startedAt: z.literal(options['started-at']), observedAt: z.number().int().positive(),
     nonce: z.literal(nonce), status: z.literal('passed'), workspace: z.object({

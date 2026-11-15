@@ -20,34 +20,54 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 
 ## Evidence as of 2026-11-16
 
-| Check                                                          | Result                                                    |
-| -------------------------------------------------------------- | --------------------------------------------------------- |
-| Local updater, manifest and data-preservation contracts        | 63 passed                                                 |
-| Local candidate, fixture and runner Python contracts           | 51 passed; one Windows-only skip                          |
-| Local release artifact and bundle naming contracts             | 13 passed                                                 |
-| Complete tests-js typecheck, tests and ESLint                  | Passed; 376 tests, five platform skips                    |
-| Complete desktop renderer, Electron, E2E and builder typecheck | Passed                                                    |
-| Repository `scripts/check`                                     | All 15 checks passed                                      |
-| Independent production and acceptance review                   | No P1/P2 findings                                         |
-| Native SDK pack/unpack at 19045 floor                          | Eight cases passed on Windows Server 2025                 |
-| Windows Python and acceptance-harness contracts                | 48 Python and 71 JS passed; nine platform skips           |
-| Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed         |
-| Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference |
-| Real ZIP to MSIX retained-login migration                      | Pending                                                   |
-| In-app update and actual automatic NEW workspace               | Pending                                                   |
-| Preparation failure, OS cancellation and manual OLD reopen     | Pending                                                   |
-| Native uninstall preserving user data                          | Pending                                                   |
-| Windows 11 ARM64 native lifecycle                              | Pending                                                   |
-| Windows 10 22H2 native lifecycle                               | No test host available                                    |
-| Production signing and ordinary-user trust                     | No production signing credentials available               |
+| Check                                                          | Result                                                                           |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Local updater, manifest and data-preservation contracts        | 63 passed                                                                        |
+| Local candidate, fixture and runner Python contracts           | 51 passed; one Windows-only skip                                                 |
+| Local release artifact and bundle naming contracts             | 13 passed                                                                        |
+| Complete tests-js typecheck, tests and ESLint                  | Passed; 376 tests, five platform skips                                           |
+| Complete desktop renderer, Electron, E2E and builder typecheck | Passed                                                                           |
+| Repository `scripts/check`                                     | All 15 checks passed                                                             |
+| Independent production and acceptance review                   | No P1/P2 findings                                                                |
+| Native SDK pack/unpack at 19045 floor                          | Eight cases passed on Windows Server 2025                                        |
+| Windows Python and acceptance-harness contracts                | 48 Python and 71 JS passed; nine platform skips                                  |
+| Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed                                |
+| Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference                        |
+| Real ZIP to MSIX retained-login migration                      | Partial: first MSIX installed, retained login observed; complete journey pending |
+| In-app update and actual automatic NEW workspace               | Pending                                                                          |
+| Preparation failure, OS cancellation and manual OLD reopen     | Pending                                                                          |
+| Native uninstall preserving user data                          | Pending                                                                          |
+| Windows 11 ARM64 native lifecycle                              | Pending                                                                          |
+| Windows 10 22H2 native lifecycle                               | No test host available                                                           |
+| Standard-user native lifecycle                                | Pending; elevated CI is not equivalent                                            |
+| Production signing and ordinary-user trust                     | No production signing credentials available                                      |
 
-The active x64 reaccept run is
+The previous x64 reaccept run was
 [`43771648784`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43771648784),
 harness `9cfa1d343c`, using the exact previously signed production source
 `00e438fc2bc391bba9cd2430037de075b24fdca9`.
-Full x64/ARM64 builds remain in private run
+It passed released ZIP chat and installed the first MSIX. The installed app
+authenticated without re-login and exposed the seeded account/Bot history and
+model settings. The external harness then failed to spawn a Python executable
+inside `WindowsApps` (`EPERM`), before completing gateway and original ZIP-history
+checks. This is not an accepted migration.
+
+The observer now uses the preflighted fixture interpreter on Windows, where
+external Node cannot execute a `WindowsApps` interpreter. It still imports the
+installed gateway's discovery code and verifies the actual owner executable
+against the exact installed interpreter. PID, birth time, account home, source
+commit and selected listener checks remain required. POSIX observation still
+uses the payload interpreter and dependencies. Real process and wrong-interpreter
+contracts cover this distinction. The native NEW observation timeout also leaves
+time for its DevTools and clipboard cleanup after all internal waits.
+
+Corrected production source `ec74611f0d` is building x64/ARM64 in private run
+[`43775234306`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43775234306).
+The earlier x64/ARM64 run was
 [`43767548248`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43767548248).
-Private artifact retention is seven days. No candidate has been promoted.
+Its x64 pair completed signing, but its old model-response harness failed before
+installation. ARM64 remains in progress. Private artifact retention is seven
+days. No candidate has been promoted.
 
 Earlier x64 execution verified and opened the historical ZIP, but its harness
 failed after the expected reply because its idle-control locator recognized
@@ -66,6 +86,11 @@ Python tests pass locally, with one native Windows probe skipped on Mac. The
 Windows contracts job now includes that native projection probe. Previously
 signed candidates do not contain this correction and cannot establish acceptance
 of the corrected production source.
+
+Fresh observer-change verification: complete `tests-js` checks passed (65 files,
+376 tests, five host skips), full desktop typecheck passed, four gateway-health
+Python contracts passed, and all 15 repository checks passed. The new Windows
+listener contract still requires the private Windows run.
 
 ## Remaining native receipts
 
