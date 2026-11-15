@@ -228,7 +228,7 @@ def execute(arch: str, execute_e2e: bool) -> None:
             run([sys.executable, str(ROOT / "scripts/bundles/desktop.py"), "--tag", tag,
                  "--release-commit", commit, "--variant", "bundled", "--clean",
                  "--work", str(out / slot), "--cache", str(ROOT / ".cache/desktop-inputs"),
-                 "--", f"-c.msix.minVersion={MINIMUM_WINDOWS}", "--publish", "never"],
+                 "--", "--publish", "never"],
                 build_env, log=out / f"{slot}-build.log")
             sides[slot] = bundle_candidate(slot, tag, arch, build_env, out, thumbprint)
         manifest = out / "candidate-inputs.json"
