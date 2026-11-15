@@ -2,6 +2,7 @@
 param(
     [string]$ManifestUrl,
     [string]$CandidateManifest,
+    [string]$CandidateSourceCommit,
     [ValidateSet('x64','arm64')][string]$Arch = 'x64'
 )
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,14 @@ $Work = Join-Path $env:RUNNER_TEMP 'hermes-bundled-update'
 if (Test-Path $Work) { throw "Refusing to reuse $Work" }
 $Proof = Join-Path $Work 'proof'
 New-Item -ItemType Directory -Path $Proof -Force | Out-Null
+# PM test selection belongs to the setup home. Resolve and exercise it before
+# the acceptance sandbox changes HERMES_HOME/HOME and before downloading ZIPs.
+$bootstrapPython = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { (Get-Command python.exe).Source }
+$fixturePython = & $bootstrapPython -B (Join-Path $Assets 'windows-fixture-python.py') `
+    --project $Repo --work $Work --report (Join-Path $Proof 'fixture-python.json')
+if ($LASTEXITCODE -ne 0) { throw 'PM test interpreter failed the real SessionDB fixture preflight' }
+$fixturePython = ([string]$fixturePython).Trim()
+$env:HERMES_PYTHON = $fixturePython
 $env:HERMES_HOME = Join-Path $Work 'home'
 New-Item -ItemType Directory -Path $env:HERMES_HOME | Out-Null
 $env:HERMES_DESKTOP_USER_DATA_DIR = Join-Path $Work 'electron-user-data'
@@ -39,11 +48,15 @@ if ($CandidateManifest) {
 }
 $m = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
 $validation = @((Join-Path $Assets 'windows-bundled-helpers.mjs'), 'validate-manifest', '--manifest', $ManifestPath, '--arch', $Arch)
-if ($CandidateManifest) { $validation += @('--candidate-commit', $env:GITHUB_SHA) }
+if ($CandidateSourceCommit -and -not $CandidateManifest) { throw 'CandidateSourceCommit requires a local candidate manifest' }
+if ($CandidateSourceCommit -and $CandidateSourceCommit -cnotmatch '^[a-f0-9]{40}$') { throw 'Exact candidate source commit required' }
+if ($CandidateManifest) {
+    $candidateCommit = if ($CandidateSourceCommit) { $CandidateSourceCommit } else { $env:GITHUB_SHA }
+    $validation += @('--candidate-commit', $candidateCommit)
+}
 Run-Node $validation
 $StateHelper = Join-Path $Assets 'windows-user-state.mjs'
 $StateSnapshot = Join-Path $Proof 'user-state-before.json'
-$fixturePython = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { (Get-Command python.exe).Source }
 function Verify-UserState([string]$Phase) {
     Run-Node @($StateHelper, 'verify', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR,
         '--snapshot', $StateSnapshot, '--python', $fixturePython, '--report', (Join-Path $Proof "user-state-after-$Phase.json"))
@@ -183,7 +196,7 @@ try {
     $marker = Join-Path $env:HERMES_HOME 'bundle-state-marker'
     $witness = [Guid]::NewGuid().ToString()
     Set-Content -LiteralPath $marker -Value $witness
-    $python = (Get-Command python.exe).Source
+    $python = $fixturePython
     $verifier = Join-Path $Assets 'verify-plugin-preservation.py'
     & $python $verifier seed --home $env:HERMES_HOME --external (Join-Path $Work 'external-plugin')
     if ($LASTEXITCODE -ne 0) { throw 'Plugin seed failed' }

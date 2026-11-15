@@ -11,7 +11,20 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { byteRange } from './windows-bundled-helpers.mjs'
+import { admitCandidateCommit, byteRange } from './windows-bundled-helpers.mjs'
+
+test('reused packages require an explicit private hosted source without rewriting the harness SHA', () => {
+  const source = 'a'.repeat(40)
+  const env = { GITHUB_ACTIONS: 'true', GITHUB_SHA: 'b'.repeat(40), GITHUB_EVENT_NAME: 'workflow_dispatch',
+    RUNNER_ENVIRONMENT: 'github-hosted', AINO_PRIVATE_CANDIDATE: 'true', AINO_PRIVATE_REUSE_SOURCE_COMMIT: source }
+  assert.doesNotThrow(() => admitCandidateCommit(source, env))
+  assert.equal(env.GITHUB_SHA, 'b'.repeat(40))
+  for (const changed of [{ AINO_PRIVATE_REUSE_SOURCE_COMMIT: '' }, { RUNNER_ENVIRONMENT: 'self-hosted' },
+    { GITHUB_EVENT_NAME: 'push' }, { AINO_PRIVATE_CANDIDATE: '' }, { GITHUB_ACTIONS: '' }]) {
+    assert.throws(() => admitCandidateCommit(source, { ...env, ...changed }))
+  }
+  assert.doesNotThrow(() => admitCandidateCommit(source, { GITHUB_ACTIONS: 'true', GITHUB_SHA: source }))
+})
 
 test('native acceptance descriptor CLI uses explicit publisher and a stable subscription across upgrades', () => {
   const feed = fs.mkdtempSync(path.join(os.tmpdir(), 'wbh-descriptor-'))

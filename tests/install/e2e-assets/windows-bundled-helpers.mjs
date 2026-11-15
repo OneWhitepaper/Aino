@@ -56,6 +56,15 @@ export async function loadMsixShared(msixSharedPath) {
   return import(pathToFileURL(resolved).href)
 }
 
+export function admitCandidateCommit(commit, env = process.env) {
+  const reuse = env.AINO_PRIVATE_REUSE_SOURCE_COMMIT === commit && env.AINO_PRIVATE_CANDIDATE === 'true' &&
+    env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.RUNNER_ENVIRONMENT === 'github-hosted'
+  if (!/^[a-f0-9]{40}$/.test(commit) || env.GITHUB_ACTIONS !== 'true' ||
+    (commit !== env.GITHUB_SHA && !reuse)) {
+    throw new Error('Local candidates require the exact checkout or an explicitly verified private artifact source')
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
@@ -75,9 +84,7 @@ async function main() {
 
   if (cmd === 'validate-manifest') {
     const candidateCommit = flags['candidate-commit']
-    if (candidateCommit && (process.env.GITHUB_ACTIONS !== 'true' || candidateCommit !== process.env.GITHUB_SHA)) {
-      throw new Error('Local candidates are accepted only by their exact private CI checkout')
-    }
+    if (candidateCommit) admitCandidateCommit(candidateCommit)
     const shared = await loadMsixShared(msixShared)
     const manifest = JSON.parse(fs.readFileSync(flags.manifest, 'utf8'))
     const result = validateBundledManifest(manifest, {

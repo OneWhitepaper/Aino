@@ -11,9 +11,27 @@ on:
         description: Also build and accept on the hosted Windows ARM64 runner
         type: boolean
         default: false
+      reuse-run-id:
+        description: Exact prior private candidate run ID (empty builds fresh packages)
+        type: string
+        default: ''
+      reuse-artifact-id:
+        description: Exact private candidate artifact ID
+        type: string
+        default: ''
+      reuse-source-commit:
+        description: Full source SHA baked into the reused packages
+        type: string
+        default: ''
+      reuse-arch:
+        description: Native architecture of the reused artifact
+        type: choice
+        options: [x64, arm64]
+        default: x64
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: private-windows-installer-${{ github.ref }}
@@ -108,7 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((github.event_name == 'push' || inputs.include-arm64) && '[{"runner":"windows-latest","arch":"x64"},{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]') }}
+        target: ${{ fromJSON(inputs.reuse-run-id != '' && (inputs.reuse-arch == 'arm64' && '[{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]') || ((github.event_name == 'push' || inputs.include-arm64) && '[{"runner":"windows-latest","arch":"x64"},{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]')) }}
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
@@ -119,11 +137,14 @@ jobs:
         uses: ./.github/actions/setup-pm
         with:
           toolchain: all
+          test-environment: 'true'
+          extras: '[]'
           cache: false
           cache-python: false
           cache-node: false
 
       - name: Build, test sign and accept the native update
+        if: inputs.reuse-run-id == ''
         # Preparation supplies the build workspaces. The helper installs the
         # separate acceptance driver after OLD and NEW packaging finishes.
         shell: pwsh
@@ -134,11 +155,26 @@ jobs:
           python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --execute-e2e
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Reaccept exact private signed candidates
+        if: inputs.reuse-run-id != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_RUN_ID: ${{ inputs.reuse-run-id }}
+          REUSE_ARTIFACT_ID: ${{ inputs.reuse-artifact-id }}
+          REUSE_SOURCE_COMMIT: ${{ inputs.reuse-source-commit }}
+          REUSE_ARCH: ${{ inputs.reuse-arch }}
+        run: |
+          python scripts/ci/windows_candidate_reaccept.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Remove disposable signing key and package trust
         if: always()
         shell: pwsh
         run: |
           python scripts/ci/windows_installer_candidate.py --cleanup
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/ci/windows_candidate_reaccept.py --cleanup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Preserve private acceptance artifacts and diagnostics
@@ -152,6 +188,8 @@ jobs:
             ${{ runner.temp }}/aino-windows-installer/*.cer
             ${{ runner.temp }}/aino-windows-installer/*.msixbundle
             ${{ runner.temp }}/aino-windows-installer/*.appinstaller
+            ${{ runner.temp }}/aino-windows-reaccept/*.json
+            ${{ runner.temp }}/aino-windows-reaccept/*.log
             ${{ runner.temp }}/hermes-bundled-update/proof
             ${{ runner.temp }}/hermes-bundled-update/outside-job-*/*.log
             ${{ runner.temp }}/hermes-bundled-update/outside-job-*/exit-code
