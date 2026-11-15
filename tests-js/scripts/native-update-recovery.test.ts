@@ -57,11 +57,14 @@ test('preparation recovery requires the same OLD process, the actual HTTP failur
 test('native recovery refuses a lost retained session before touching the sign-in form', async (): Promise<void> => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'native-recovery-auth-'))
   const mutations: string[] = []
+
   const login = { getByRole: (role: string) => ({
     isVisible: async () => role === 'textbox',
     fill: async () => { mutations.push('fill'); throw new Error('Unexpected credential entry') },
   }) } as unknown as Page
+
   const app = {} as ElectronApplication
+
   try {
     for (const scenario of ['preparation-failure', 'manual-old-reopen'] as const) {
       await expect(runNativeRecovery({ scenario, exe: process.execPath, root: out, home: out,
@@ -72,6 +75,7 @@ test('native recovery refuses a lost retained session before touching the sign-i
       const receipt = JSON.parse(fs.readFileSync(path.join(out, 'recovery.json'), 'utf8'))
       expect(receipt).toMatchObject({ status: 'failed', scenario })
     }
+
     expect(mutations).toEqual([])
   } finally { fs.rmSync(out, { recursive: true, force: true }) }
 })

@@ -12,6 +12,7 @@ test('retained account acceptance rejects fresh authentication while preserving 
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'native-account-proof-'))
   const env = smokeEnvironment(process.env, path.join(out, 'home'), path.join(out, 'user-data'))
   const account = await prepareAccountFixture(true, out, env, { requireExisting: true })
+
   const request = (route: string, method = 'GET') => promisify(execFile)(process.execPath, ['--input-type=module', '-e',
     `const response = await fetch('https://api.agentera.com.cn/api/v1/${route}', {
       method: '${method}', headers: { Authorization: 'Bearer native-access-token' }

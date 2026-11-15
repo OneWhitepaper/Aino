@@ -123,14 +123,14 @@ test('disk admission reports insufficient capacity before any archive extraction
   })
 })
 
-test('a downloaded digest mismatch removes the archive without exposing an executable', async context => {
+test('an invalid download response removes the archive without exposing an executable', async context => {
   await temporary(async directory => {
     const disk = fs.statfsSync(directory)
     if (disk.bavail * disk.bsize < 2_100_000_000) return context.skip('Digest fixture requires production download disk admission')
     const original = globalThis.fetch
     globalThis.fetch = async () => new Response('wrong release bytes')
     try {
-      await assert.rejects(stageReleasedWindowsZip({ arch: 'arm64', out: directory, python }), /SHA-256 mismatch/)
+      await assert.rejects(stageReleasedWindowsZip({ arch: 'arm64', out: directory, python }), /Range response/)
       assert.deepEqual(fs.readdirSync(directory), [])
     } finally { globalThis.fetch = original }
   })

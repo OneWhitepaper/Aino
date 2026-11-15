@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Pin real release packages before a destructive update leg starts.
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Transform, Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -35,8 +35,75 @@ async function transient(work) {
   }
 }
 
+async function downloadRange(url, temporary, start, end, size, signal) {
+  await transient(async () => {
+    const response = await fetch(url, {
+      headers: { Range: `bytes=${start}-${end}`, 'Accept-Encoding': 'identity' },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(2 * 60_000)])
+    })
+    if (response.status !== 206 || !response.body || response.headers.get('content-range') !== `bytes ${start}-${end}/${size}`
+        || (response.headers.get('content-encoding') || 'identity').toLowerCase() !== 'identity') {
+      await response.body?.cancel()
+      throw new Error(`Range response HTTP ${response.status} does not match the requested identity bytes`)
+    }
+    const length = end - start + 1
+    const declared = response.headers.get('content-length')
+    if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) !== length)) {
+      await response.body.cancel()
+      throw new Error('Range Content-Length does not match its length')
+    }
+    let received = 0
+    await pipeline(Readable.fromWeb(response.body), new Transform({
+      transform(chunk, encoding, done) {
+        received += chunk.length
+        if (received > length) done(new Error('Range body exceeds its length'))
+        else done(null, chunk)
+      }
+    }), createWriteStream(temporary, { flags: 'r+', start }), { signal })
+    if (received !== length) throw new Error('Range body does not match its length')
+  })
+}
+
+async function downloadRanges(artifact, url, destination) {
+  const temporary = `${destination}.partial`
+  // One bounded file fits the caller's size-based disk admission. Completed
+  // ranges survive only this call's transport retries, never a later invocation.
+  await writeFile(temporary, '', { flag: 'wx' })
+  try {
+    const rangeSize = 8 * 1024 * 1024
+    const count = Math.ceil(artifact.size / rangeSize)
+    const controller = new AbortController()
+    let next = 0
+    const workers = Array.from({ length: Math.min(8, count) }, async () => {
+      while (next < count && !controller.signal.aborted) {
+        const start = next++ * rangeSize
+        const end = Math.min(start + rangeSize, artifact.size) - 1
+        await withRetries(() => downloadRange(url, temporary, start, end, artifact.size, controller.signal))
+      }
+    })
+    try {
+      await Promise.all(workers)
+    } catch (error) {
+      controller.abort()
+      await Promise.allSettled(workers)
+      throw error
+    }
+    if ((await stat(temporary)).size !== artifact.size) throw new Error('Package size mismatch')
+    const digest = createHash('sha256')
+    for await (const chunk of createReadStream(temporary)) digest.update(chunk)
+    if (digest.digest('hex') !== artifact.sha256) throw new Error('Package SHA-256 mismatch')
+    await rename(temporary, destination)
+  } finally {
+    await rm(temporary, { force: true })
+  }
+}
+
 export async function downloadArtifact(artifact, destination) {
   const url = artifactUrl(artifact.url)
+  if (artifact.size !== undefined) {
+    if (!Number.isSafeInteger(artifact.size) || artifact.size <= 0) throw new Error('Package size must be a positive safe integer')
+    return downloadRanges(artifact, url, destination)
+  }
   await withRetries(async () => {
     const digest = createHash('sha256')
     const temporary = `${destination}.partial`
