@@ -10,7 +10,7 @@ import { seedUserState, snapshotUserState, verifyUserState } from '../tests/inst
 test('the pre-MSIX snapshot protects actual ZIP-written rows alongside seeded history', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'released-zip-history-'))
   const root = path.join(directory, 'user-data')
-  const python = execFileSync(process.env.HERMES_PYTHON || 'python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim()
+  const python = execFileSync(process.env.HERMES_PYTHON || 'python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8', timeout: 15_000 }).trim()
   const snapshotPath = path.join(directory, 'before.json')
   const historyPath = path.join(directory, 'released-zip-opened.json')
   try {
@@ -26,7 +26,7 @@ with SessionDB(db_path=Path(sys.argv[1])) as db:
     second=db.append_message('real-zip-session', role='assistant', content='actual ZIP reply')
 print(json.dumps([first,second]))`
     const ids = JSON.parse(execFileSync(python, ['-c', script, path.join(home, 'state.db')], {
-      cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', env: { ...process.env, HERMES_HOME: home },
+      cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: 15_000, env: { ...process.env, HERMES_HOME: home },
     }))
     fs.writeFileSync(historyPath, JSON.stringify({ purpose: 'aino-released-zip-history', status: 'passed',
       legacyCommit: '22a472fcbca8775f56c0f89374027b8e4c68ab5b', userData: fs.realpathSync(root), hermesHome: fs.realpathSync(home),
@@ -36,7 +36,7 @@ print(json.dumps([first,second]))`
     expect(snapshot.files.find(file => file.path === `${account.home}/state.db`).sessions.map(row => row.id)).toContain('real-zip-session')
     expect(verifyUserState({ root, python, snapshotPath }).ok).toBe(true)
     execFileSync(python, ['-c', 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute("UPDATE messages SET content=? WHERE id=?",("changed after install",int(sys.argv[2]))); db.commit()',
-      path.join(home, 'state.db'), String(ids[1])])
+      path.join(home, 'state.db'), String(ids[1])], { timeout: 15_000 })
     expect(verifyUserState({ root, python, snapshotPath })).toMatchObject({ ok: false, changed: [`${account.home}/state.db`] })
   } finally { fs.rmSync(directory, { recursive: true, force: true }) }
-})
+}, 60_000)
