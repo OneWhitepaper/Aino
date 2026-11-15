@@ -34,7 +34,7 @@
 pnpm exec vitest run --project electron scripts/write-build-stamp.test.mjs scripts/msix-virtualization.test.mjs scripts/msix-manifest-roundtrip.test.mjs electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/app-installer-file.test.ts
 pnpm run typecheck
 # repository, isolated HERMES_HOME and HERMES_RUNTIME_DIR
-scripts/run_tests.sh tests/scripts/test_bundle_release_artifacts.py
+scripts/run_tests.sh tests/scripts/test_release_artifacts.py tests/scripts/test_bundle_msix_names.py
 python scripts/check
 ```
 
@@ -97,5 +97,17 @@ CI may store encrypted-access GitHub artifacts in the private validation reposit
 - Full current-source builds `43767548248` remain in progress on x64 and Windows 11 ARM64.
   They predate only the final harness response correction; keep signed artifacts for reuse.
   Native installation/update/cancel/uninstall acceptance has not passed yet.
+- Private reaccept `43771648784` at `9cfa1d343c` uses the same exact signed
+  `00e438fc2b` x64 pair with localized idle detection. Its real Windows contracts
+  job passed; the native journey is still running. No production source changed
+  after the signed pair was built.
+- Fresh complete `tests-js` checks passed under PM's locked Node/pnpm and runtime
+  interpreter: 376 tests passed, five platform skips, typecheck and ESLint passed.
+  The initial broad run used the ambient pnpm and an interpreter without the
+  icon dependency; selecting the existing PM environment resolved those failures
+  without source or dependency changes. Release artifact/naming tests: 13 passed.
+- The current acceptance matrix is recorded in
+  `apps/desktop/docs/windows-installer-acceptance.md`. Both independent full
+  production/acceptance review and the localized-control follow-up found no P1/P2.
 - Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
   website or production feed has been published or promoted.
