@@ -1,4 +1,4 @@
-# Read only the already-running NEW renderer. No app launch, account login or path override.
+﻿# Read only the already-running NEW renderer. No app launch, account login or path override.
 param([Parameter(Mandatory=$true)][string]$SpecPath, [Parameter(Mandatory=$true)][string]$OutputPath)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -88,8 +88,9 @@ try {
         if (-not $allowedPaste) {
             $names = @($devtools.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }) -join "`n"
-            if ($names -match 'allow pasting|允许粘贴') {
-                [System.Windows.Forms.SendKeys]::SendWait('^aallow pasting{ENTER}')
+            $phrase = Get-DevToolsPastePhrase $names
+            if ($phrase) {
+                [System.Windows.Forms.SendKeys]::SendWait("^a${phrase}{ENTER}")
                 [System.Windows.Forms.SendKeys]::SendWait('^a^v{ENTER}')
                 $allowedPaste = $true
             }

@@ -1,5 +1,14 @@
-# Journey-owned mock and ordinary window close, shared by source and MSIX drivers.
+﻿# Journey-owned mock and ordinary window close, shared by source and MSIX drivers.
 # Callers supply a checkout-provisioned Node; never resolve tooling from OLD.
+function Get-DevToolsPastePhrase([string]$Names) {
+    # Chromium 152 compares the localized allowPasting phrase exactly:
+    # https://github.com/ChromeDevTools/devtools-frontend/blob/04db1f5240b636511ec4e9058a78f8274a7f65ee/front_end/panels/console/ConsolePrompt.ts#L364-L366
+    foreach ($phrase in @('允许粘贴', 'allow pasting')) {
+        if ($Names -match $phrase) { return $phrase }
+    }
+    return $null
+}
+
 function Start-DesktopJourneyMock([string]$Node, [string]$Assets, [string]$Work, [string]$HermesHome, [string]$Out) {
     New-Item -ItemType Directory -Path $Out -Force | Out-Null
     $urlFile = Join-Path $Work 'chat-mock-url'

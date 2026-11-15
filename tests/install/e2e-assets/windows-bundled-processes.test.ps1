@@ -1,4 +1,4 @@
-# Pipeline/array contracts only; no package installation or live process changes.
+﻿# Pure driver contracts only; no package installation or live process changes.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'desktop-smoke-windows.ps1')
@@ -44,3 +44,12 @@ $script:processRecords = @(
 $rows = Main-Processes $exe
 if ($rows.Count -ne 1 -or $rows[0].ProcessId -ne 100) { throw 'Installed main-process filtering changed' }
 Write-Output 'PASS: exact executable identity excludes Electron children and unrelated processes'
+
+$englishWarning = 'Type "allow pasting" below and press Enter to allow pasting.'
+if ((Get-DevToolsPastePhrase $englishWarning) -cne 'allow pasting') { throw 'English DevTools paste confirmation changed' }
+Write-Output 'PASS: English DevTools warning types its exact confirmation phrase'
+$chineseWarning = '请在下方输入“允许粘贴”并按 Enter 键以允许粘贴。'
+if ((Get-DevToolsPastePhrase $chineseWarning) -cne '允许粘贴') { throw 'Chinese DevTools paste confirmation must use its localized phrase' }
+Write-Output 'PASS: Chinese DevTools warning types its exact confirmation phrase'
+if ($null -ne (Get-DevToolsPastePhrase "Console`nConsole prompt")) { throw 'Paste confirmation requires an observed warning' }
+Write-Output 'PASS: no paste confirmation is typed without an observed warning'
