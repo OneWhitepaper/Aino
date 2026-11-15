@@ -18,7 +18,13 @@ function makeDeps(over: Partial<AppInstallerStrategyDeps> = {}): StrategyFixture
   const deps: AppInstallerStrategyDeps = {
     python: 'python.exe',
     module: 'check.module',
-    run: async () => ({ code: 0, stdout: '{"available": true}' }),
+    run: async () => ({
+      code: 2,
+      stdout: JSON.stringify({
+        available: true,
+        source_uri: 'https://updates.example/hermes-desktop/win32/stable/stable.appinstaller'
+      })
+    }),
     channel: 'stable',
     light: false,
     feedBaseUrl: 'https://updates.example/hermes-desktop',
@@ -57,6 +63,48 @@ function makeDeps(over: Partial<AppInstallerStrategyDeps> = {}): StrategyFixture
 }
 
 describe('AppInstallerStrategy.apply', () => {
+  it.each(['https://registered.example/stable.appinstaller', undefined])(
+    'rejects a configured feed when the OS registered source differs or is missing: %s',
+    async (sourceUri: string | undefined): Promise<void> => {
+      const { deps, calls } = makeDeps({
+        run: async () => ({ code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) })
+      })
+
+      const strategy = new AppInstallerStrategy(deps)
+
+      expect(await strategy.check()).toMatchObject({
+        updateAvailable: undefined,
+        error: expect.stringMatching(/registered App Installer source.*remove.*desktop_feed_base_url.*reinstall/i)
+      })
+      await expect(strategy.apply()).rejects.toThrow(/registered App Installer source/i)
+      expect(calls).toEqual([])
+    }
+  )
+
+  it('checks and applies a configured feed only when it matches the OS registered source exactly', async (): Promise<void> => {
+    const sourceUri = 'https://updates.example/hermes-desktop/win32/stable/stable.appinstaller'
+    const prepared: string[] = []
+
+    const { deps, calls } = makeDeps({
+      run: async () => ({ code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) }),
+      installer: {
+        prepare: async url => {
+          prepared.push(url)
+
+          return 'matched.appinstaller'
+        },
+        open: async () => ''
+      }
+    })
+
+    const strategy = new AppInstallerStrategy(deps)
+
+    expect(await strategy.check()).toMatchObject({ updateAvailable: true, error: undefined })
+    expect(await strategy.apply()).toMatchObject({ ok: true, handedOff: true })
+    expect(prepared).toEqual([sourceUri])
+    expect(calls).toEqual(['relaunch-marker', 'teardown', 'quit'])
+  })
+
   it('fails open: a marker-write failure never blocks the update', async () => {
     const progress: string[] = []
 
@@ -149,7 +197,7 @@ describe('AppInstallerStrategy.apply', () => {
   })
 
   it('no feed URL → manual card, no teardown, no quit', async () => {
-    const { deps, calls } = makeDeps({ feedBaseUrl: '' })
+    const { deps, calls } = makeDeps({ feedBaseUrl: '', run: async () => ({ code: 0, stdout: '{"available":true}' }) })
     const result = await new AppInstallerStrategy(deps).apply()
     expect(result).toEqual({ ok: true, manual: true, bundled: true, mechanism: 'app-installer' })
     expect(calls).toEqual([])
@@ -167,6 +215,7 @@ it.each([
   'checker %s %s → available=%s error=%s',
   async (code: number, stdout: string, available: boolean | undefined, error: string | undefined): Promise<void> => {
     const { deps }: ReturnType<typeof makeDeps> = makeDeps({
+      feedBaseUrl: '',
       run: async (python: string, module: string): Promise<{ code: number; stdout: string }> => {
         expect([python, module]).toEqual(['python.exe', 'check.module'])
 
@@ -195,6 +244,10 @@ it.each([
     const { deps, calls }: ReturnType<typeof makeDeps> = makeDeps({
       channel,
       light,
+      run: async () => ({
+        code: 2,
+        stdout: JSON.stringify({ available: true, source_uri: `https://updates.example/hermes-desktop/${suffix}` })
+      }),
       installer: {
         prepare: async (url: string): Promise<string> => {
           expect(url).toBe(`https://updates.example/hermes-desktop/${suffix}`)

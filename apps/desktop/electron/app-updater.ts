@@ -36,6 +36,10 @@ export function win32AppInstallerFeedPath(channel: string, light: boolean): stri
   return `win32/${variant}${channel}/`
 }
 
+export function win32AppInstallerFeedUrl(baseUrl: string, channel: string, light: boolean): string {
+  return `${baseUrl.replace(/\/+$/, '')}/${win32AppInstallerFeedPath(channel, light)}${channel}.appinstaller`
+}
+
 // ─── win32 arm (OS App Installer checker + trigger) ────────────────────────
 
 /** The result of an App Installer update check. */
@@ -106,9 +110,7 @@ export async function triggerAppInstallerUpdate(
   beforeInstall?: () => void | Promise<void>,
   sourceUri?: string
 ): Promise<{ ok: true }> {
-  const appinstallerUrl =
-    sourceUri ||
-    `${feedBaseUrl.replace(/\/+$/, '')}/${win32AppInstallerFeedPath(channel, light)}${channel}.appinstaller`
+  const appinstallerUrl = sourceUri || win32AppInstallerFeedUrl(feedBaseUrl, channel, light)
 
   const file = await installer.prepare(appinstallerUrl)
 

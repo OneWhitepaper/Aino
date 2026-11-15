@@ -10,7 +10,9 @@ import { channelPublicBase } from './channel-protocol'
  * App Installer source / no feed). Config is the one override: a second env
  * source would let a stray variable silently redirect updates. A configured
  * value is held to the same rule as every other update origin
- * (channelPublicBase: HTTPS or loopback, no credentials/traversal) — the
+ * (channelPublicBase: HTTPS or loopback, no credentials/traversal).
+ * Windows checks the OS-registered subscription; an override must name that
+ * exact descriptor or check/apply refuse it with registration guidance. The
  * descriptor is fetched and opened unverified, so a plain-http base would
  * hand a network attacker the update source. Throws on a bad value rather
  * than silently falling back, so the misconfiguration is named.

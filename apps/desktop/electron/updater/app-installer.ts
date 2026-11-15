@@ -3,7 +3,8 @@ import {
   parseCheckOutput,
   type PayloadPythonRunner,
   triggerAppInstallerUpdate,
-  win32AppInstallerFeedPath
+  win32AppInstallerFeedPath,
+  win32AppInstallerFeedUrl
 } from '../app-updater'
 // updater/app-installer.ts — the win32 out-of-store MSIX strategy.
 //
@@ -111,10 +112,25 @@ export class AppInstallerStrategy {
       }
     }
 
+    return appInstallerCheckToStatus(await this.checkRegisteredSource(), this.deps.appVersion)
+  }
+
+  private async checkRegisteredSource(): Promise<AppInstallerCheck> {
     const { code, stdout } = await this.deps.run(this.deps.python, this.deps.module)
     const check = parseCheckOutput(code, stdout)
 
-    return appInstallerCheckToStatus(check, this.deps.appVersion)
+    if (
+      this.deps.feedBaseUrl &&
+      check.sourceUri !== win32AppInstallerFeedUrl(this.deps.feedBaseUrl, this.deps.channel, this.deps.light)
+    ) {
+      return {
+        available: null,
+        error:
+          'The registered App Installer source differs from the configured feed; remove updates.desktop_feed_base_url or reinstall using the target .appinstaller file to register it.'
+      }
+    }
+
+    return check
   }
 
   async apply(): Promise<UpdaterApplyResultWire> {
@@ -135,9 +151,14 @@ export class AppInstallerStrategy {
       }
     }
 
-    if (!feedBaseUrl && !sourceUri) {
-      const { code, stdout } = await this.deps.run(this.deps.python, this.deps.module)
-      sourceUri = parseCheckOutput(code, stdout).sourceUri
+    if (!feed) {
+      const check = await this.checkRegisteredSource()
+
+      if (feedBaseUrl && check.available === null) {
+        throw new Error(check.error)
+      }
+
+      sourceUri = check.sourceUri
 
       if (sourceUri) {
         channelPublicBase(sourceUri)

@@ -28,9 +28,13 @@ for (const failureAt of ['prepare', 'register', 'teardown', 'open', 'none']) {
     const deps: AppInstallerStrategyDeps = {
       python: 'unused-checker',
       module: 'unused.module',
-      run: async () => {
-        throw new Error('configured feed does not need the checker')
-      },
+      run: async () => ({
+        code: 2,
+        stdout: JSON.stringify({
+          available: true,
+          source_uri: 'https://example.invalid/win32/stable/stable.appinstaller'
+        })
+      }),
       channel: 'stable',
       light: false,
       appVersion: '1.0',
@@ -108,7 +112,13 @@ test('handoff errors retain cleanup failures while still restoring the backend',
   const deps: AppInstallerStrategyDeps = {
     python: 'unused',
     module: 'unused.module',
-    run: async () => ({ code: 0, stdout: '' }),
+    run: async () => ({
+      code: 2,
+      stdout: JSON.stringify({
+        available: true,
+        source_uri: 'https://example.invalid/win32/stable/stable.appinstaller'
+      })
+    }),
     channel: 'stable',
     light: false,
     appVersion: '1.0',
