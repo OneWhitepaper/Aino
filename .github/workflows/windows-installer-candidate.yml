@@ -11,6 +11,10 @@ on:
         description: Also build and accept on the hosted Windows ARM64 runner
         type: boolean
         default: false
+      contracts-only:
+        description: Run contracts without building or reaccepting packages
+        type: boolean
+        default: false
       reuse-run-id:
         description: Exact prior private candidate run ID (empty builds fresh packages)
         type: string
@@ -74,7 +78,33 @@ jobs:
 
       - name: Validate native candidate script behavior
         shell: bash
-        run: scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py
+        run: |
+          scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
+            tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
+            tests/scripts/install/test_windows_fixture_python.py \
+            2>&1 | tee "$RUNNER_TEMP/aino-windows-contracts/candidate-python.log"
+
+      - name: Validate native acceptance harness contracts on Windows
+        shell: pwsh
+        working-directory: tests-js
+        run: |
+          $tests = @(
+            'bundle-input-ranges.test.mjs', 'bundle-inputs.test.mjs',
+            'scripts/platform-account-fixture.test.ts', 'scripts/platform-login-workspace.test.ts',
+            'scripts/desktop-smoke.test.ts', 'scripts/desktop-smoke-window.test.ts',
+            'scripts/desktop-smoke-launch-failure.test.ts', 'scripts/native-update-handoff.test.ts',
+            'scripts/native-update-recovery.test.ts', 'scripts/native-account-preservation.test.ts',
+            'scripts/desktop-smoke-process-snapshot.test.ts', 'windows-bundled-helpers.test.mjs',
+            'scripts/released-zip-migration.test.ts', 'released-zip-history.test.mjs'
+          )
+          pnpm exec vitest run @tests 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/harness.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate released ZIP extraction contracts on Windows
+        shell: pwsh
+        run: |
+          node --test tests/install/e2e-assets/released-windows-zip.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/released-zip.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate production MSIX manifests with the native SDK
         shell: pwsh
@@ -119,7 +149,7 @@ jobs:
           retention-days: 7
 
   candidate:
-    if: github.event.repository.private == true
+    if: github.event.repository.private == true && !inputs.contracts-only
     name: Test-signed installer (${{ matrix.target.arch }})
     runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 360
