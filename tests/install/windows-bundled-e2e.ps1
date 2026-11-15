@@ -287,6 +287,13 @@ try {
     & $python $verifier verify --home $env:HERMES_HOME --snapshot (Join-Path $Work 'plugins-before.json') --report (Join-Path $Proof 'plugin-preservation.json')
     if ($LASTEXITCODE -ne 0) { throw 'Plugin preservation failed' }
     if ((Get-Content -Raw $marker).Trim() -cne $witness) { throw 'User-state witness changed' }
+    # Observe the actual OS-owned window before any close or driver-owned launch.
+    # The inspector uses the existing local DevTools and IPC; it cannot select a data root.
+    Write-AcceptanceStage 'Observing the automatic NEW retained account and history in its actual window'
+    Run-Node @((Join-Path $Assets 'observe-native-new.ts'), '--exe', $new.exe, '--pid', ([string]$newProcess.ProcessId),
+        '--started-at', ([string]([DateTimeOffset]$newProcess.CreationDate).ToUnixTimeMilliseconds()),
+        '--root', $payloadRoot, '--out', $Proof, '--old-ready', $oldChatReady,
+        '--snapshot', $StateSnapshot, '--expect-commit', $m.new.commit)
     # Record automatic relaunch before ANY driver-owned NEW launch.
     @{ oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; automaticRelaunch=$true } |
         ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'relaunch-proof.json')

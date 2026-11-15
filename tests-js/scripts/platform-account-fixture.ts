@@ -3,7 +3,7 @@ import * as http from 'node:http'
 import { type ElectronApplication, expect, type Page } from '@playwright/test'
 
 export function startPlatformServer() {
-  const requests: Array<{ method: string; path: string; body: Record<string, unknown>; authenticatedProfile?: boolean }> = []
+  const requests: Array<{ method: string; path: string; body: Record<string, unknown>; receivedAt: number; authenticatedProfile?: boolean }> = []
   let displayName = 'Native member'
   let challengeIssued = false
 
@@ -23,7 +23,7 @@ export function startPlatformServer() {
     request.on('end', () => {
       const body = chunks.length > 0 ? (JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>) : {}
       const requestPath = request.url ?? '/'
-      const recorded: typeof requests[number] = { method: request.method ?? '', path: requestPath, body }
+      const recorded: typeof requests[number] = { method: request.method ?? '', path: requestPath, body, receivedAt: Date.now() }
       requests.push(recorded)
 
       const route = `${request.method} ${requestPath}`

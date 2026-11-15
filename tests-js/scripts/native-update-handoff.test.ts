@@ -1,13 +1,50 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 
 import { expect, test } from 'vitest'
 
 import { resolveDesktopHermesHome } from '../../apps/desktop/electron/data-paths.mjs'
-import { holdNativeUpdate, readPreservedAccountHistory, resolveSmokeLaunch, seedSmokeAccount, verifyRunningDesktop } from '../../tests/install/e2e-assets/desktop-smoke.ts'
+import { collectAutomaticNewWorkspace, holdNativeUpdate, readPreservedAccountHistory, resolveSmokeLaunch, seedSmokeAccount, verifyRunningDesktop } from '../../tests/install/e2e-assets/desktop-smoke.ts'
 
 import type { ElectronApplication, Page } from './e2e-driver-deps.ts'
+
+test('automatic NEW observes its existing IPC workspace and rejects a wrong account, home or history without repairing it', async () => {
+  const expected = { home: 'C:\\fixture\\account', commit: 'a'.repeat(40), scopes: [{ profile: 'default',
+    model: 'fixture-model', baseUrl: 'http://127.0.0.1:4321/v1', sessionId: 'zip-history',
+    messages: [{ id: 7, role: 'user', content: 'ZIP-written prompt' }, { id: 8, role: 'assistant', content: 'ZIP-written reply' }] }] }
+
+  let home = expected.home
+  let phase = 'signed_in'
+  let userId = '17'
+  let messages = expected.scopes[0].messages
+
+  const nativeWindow = { hermesDesktop: {
+    getVersion: async () => ({ appVersion: '0.1.7', platform: 'win32', commit: expected.commit, hermesHome: home, hermesRoot: 'C:\\payload\\repo' }),
+    platformAccount: { status: async () => ({ phase, account: { id: userId }, mode: 'production', remember_state: 'encrypted', error: null }) },
+    getConnection: async () => ({ baseUrl: 'http://127.0.0.1:4567', mode: 'local' }),
+    api: async ({ path: route }: { path: string }) => route.startsWith('/api/config')
+      ? { model: { default: 'fixture-model', provider: 'custom', base_url: expected.scopes[0].baseUrl } }
+      : { session_id: 'zip-history', messages },
+  } }
+
+  // The native console receives this function without its module scope.
+  const observe = vm.runInNewContext(`(${collectAutomaticNewWorkspace.toString()})`, { window: nativeWindow }) as (input: typeof expected) => Promise<unknown>
+  await expect(observe(expected)).resolves.toMatchObject({ identity: { hermesHome: expected.home },
+    account: { phase: 'signed_in', userId: '17', rememberState: 'encrypted' }, histories: [{ sessionId: 'zip-history', messages }] })
+  home = 'C:\\different-account'
+  await expect(observe(expected)).rejects.toThrow('home')
+  home = expected.home
+  phase = 'signed_out'
+  await expect(observe(expected)).rejects.toThrow('authenticated')
+  phase = 'signed_in'
+  userId = '23'
+  await expect(observe(expected)).rejects.toThrow('authenticated')
+  userId = '17'
+  messages = []
+  await expect(observe(expected)).rejects.toThrow('history')
+})
 
 test('native OLD keeps the exact preservation profile before Electron requests its singleton', (): void => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-handoff-profile-'))
@@ -127,6 +164,7 @@ test('native OLD reports process close without releasing its account service bef
       env: { HERMES_HOME: '/preserved/home', HERMES_DESKTOP_USER_DATA_DIR: '/preserved/profile',
         HTTPS_PROXY: 'http://127.0.0.1:4321', NODE_EXTRA_CA_CERTS: '/fixture/ca.pem', RUNNER_TOKEN: 'must-not-publish' },
       waitForProcessClose: () => processClosed,
+      observeAutomaticNew: phase => ({ ...phase, authenticatedProfileRequests: 1, authenticationPreservedWithoutLogin: true }),
     }).then(() => { released = true })
 
     expect(JSON.parse(fs.readFileSync(path.join(out, 'old-chat-ready.json'), 'utf8'))).toMatchObject({
@@ -140,6 +178,14 @@ test('native OLD reports process close without releasing its account service bef
     await expect.poll(() => fs.existsSync(path.join(out, 'old-process-closed.json')), { timeout: 5000 }).toBe(true)
     expect(JSON.parse(fs.readFileSync(path.join(out, 'old-process-closed.json'), 'utf8'))).toMatchObject({ pid: 2718, closed: true })
     expect(released).toBe(false)
+    fs.writeFileSync(path.join(out, 'automatic-new-authentication-request.json'), JSON.stringify({
+      phase: 'automatic-new', startedAt: Date.now() - 1000, observedAt: Date.now(),
+    }))
+    const authentication = path.join(out, 'automatic-new-authentication.json')
+    await expect.poll(() => fs.existsSync(authentication), { timeout: 3000 }).toBe(true)
+    expect(JSON.parse(fs.readFileSync(authentication, 'utf8'))).toMatchObject({
+      status: 'passed', phase: 'automatic-new', authenticatedProfileRequests: 1,
+    })
     fs.writeFileSync(path.join(out, 'native-update-complete'), 'NEW verified')
     await completion
     expect(released).toBe(true)

@@ -344,6 +344,13 @@ interface NativeUpdateHandoff {
   hermesHome: string
   env: NodeJS.ProcessEnv
   waitForProcessClose: (timeoutMs?: number) => Promise<void>
+  observeAutomaticNew?: (phase: NativeAccountPhase) => unknown
+}
+
+interface NativeAccountPhase {
+  phase: string
+  startedAt: number
+  observedAt: number
 }
 
 function writeHandoffReceipt(out: string, name: string, value: unknown): void {
@@ -354,7 +361,7 @@ function writeHandoffReceipt(out: string, name: string, value: unknown): void {
 
 /** OLD owns the fixture until the harness has observed the OS-owned NEW relaunch. */
 export async function holdNativeUpdate(handoff: NativeUpdateHandoff): Promise<void> {
-  const { out, waitForProcessClose, env, ...identity } = handoff
+  const { out, waitForProcessClose, env, observeAutomaticNew, ...identity } = handoff
   const whitelist = ['HERMES_HOME', 'HERMES_DESKTOP_USER_DATA_DIR', 'HERMES_DESKTOP_SKIP_QUIT_CONFIRM',
     'NODE_USE_ENV_PROXY', 'NODE_EXTRA_CA_CERTS', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY']
   writeHandoffReceipt(out, 'native-relaunch-environment.json', Object.fromEntries(
@@ -366,16 +373,41 @@ export async function holdNativeUpdate(handoff: NativeUpdateHandoff): Promise<vo
   await new Promise<void>((resolve, reject) => {
     const finish = (): void => {
       clearTimeout(timer)
+      clearInterval(poll)
       watcher.close()
       resolve()
     }
-    const watcher = fs.watch(out, () => { if (fs.existsSync(release)) { finish() } })
+    let observed = false
+    const inspect = (): void => {
+      const request = path.join(out, 'automatic-new-authentication-request.json')
+      if (observeAutomaticNew && !observed && fs.existsSync(request)) {
+        observed = true
+        try {
+          const phase = z.object({ phase: z.literal('automatic-new'), startedAt: z.number().int().positive(),
+            observedAt: z.number().int().positive() }).parse(JSON.parse(fs.readFileSync(request, 'utf8')))
+          if (phase.observedAt < phase.startedAt || phase.observedAt > Date.now()) { throw new Error('Invalid automatic NEW observation interval') }
+          writeHandoffReceipt(out, 'automatic-new-authentication.json', { status: 'passed', ...observeAutomaticNew(phase) as object })
+        } catch (error) {
+          writeHandoffReceipt(out, 'automatic-new-authentication.json', { status: 'failed', error: String(error) })
+          clearTimeout(timer)
+          clearInterval(poll)
+          watcher.close()
+          reject(error)
+          return
+        }
+      }
+      if (fs.existsSync(release)) { finish() }
+    }
+    const watcher = fs.watch(out, inspect)
+    // Filesystem events can coalesce across the atomic receipt renames.
+    const poll = setInterval(inspect, 1000)
     const timer = setTimeout(() => {
+      clearInterval(poll)
       watcher.close()
       reject(new Error('Native NEW verification did not release the OLD account fixture'))
     }, 20 * 60_000)
-    watcher.on('error', error => { clearTimeout(timer); watcher.close(); reject(error) })
-    if (fs.existsSync(release)) { finish() }
+    watcher.on('error', error => { clearTimeout(timer); clearInterval(poll); watcher.close(); reject(error) })
+    inspect()
   })
 }
 
@@ -386,13 +418,15 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
   try {
     const edge = await startHttpsEdge(out, { host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false })
     Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
-    const proof = () => {
-      const authenticatedProfileRequests = account.requests.filter(request => request.authenticatedProfile).length
-      const freshAuthenticationRequests = account.requests.filter(request => request.method === 'POST'
+    const proof = (phase?: NativeAccountPhase) => {
+      const requests = phase ? account.requests.filter(request => request.receivedAt >= phase.startedAt && request.receivedAt <= phase.observedAt) : account.requests
+      const authenticatedProfileRequests = requests.filter(request => request.authenticatedProfile).length
+      const freshAuthenticationRequests = requests.filter(request => request.method === 'POST'
         && request.path.startsWith('/api/v1/auth/') && request.path.split('?')[0] !== '/api/v1/auth/refresh').length
       return {
+        ...phase,
         mode: 'synthetic-account-real-native-bridge',
-        requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
+        requests: requests.map(({ method, path: route }) => ({ method, path: route })),
         authenticatedProfileRequests,
         freshAuthenticationRequests,
         existingSessionRequired: !!login.requireExisting,
@@ -409,8 +443,8 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
     return {
       signIn: (app: ElectronApplication, page: Page) => signInPlatformFixture(app, page, login),
       proof,
-      assertPreserved: () => {
-        if (login.requireExisting && !proof().authenticationPreservedWithoutLogin) {
+      assertPreserved: (phase?: NativeAccountPhase) => {
+        if (login.requireExisting && !proof(phase).authenticationPreservedWithoutLogin) {
           throw new Error('Retained account did not authenticate without a new login')
         }
       },
@@ -496,6 +530,54 @@ export async function readPreservedAccountHistory(page: Page, account: FixtureAc
   return { home: account.home, origin: account.origin, userId: account.userId, sessions }
 }
 
+export interface AutomaticNewWorkspace {
+  home: string
+  commit: string
+  scopes: { profile: string; model: string; baseUrl: string; sessionId: string;
+    messages: { id: string | number; role: string; content: string }[] }[]
+}
+
+/** Serialized into the existing native DevTools console; never signs in or selects a workspace. */
+export async function collectAutomaticNewWorkspace(expected: AutomaticNewWorkspace) {
+  const bridge = (window as unknown as { hermesDesktop: {
+    getVersion: () => Promise<{ appVersion: string; commit: string; hermesHome: string; hermesRoot: string; platform: string }>
+    platformAccount: { status: () => Promise<{ phase: string; account?: { id: string | number }; mode: string; remember_state: string; error: unknown }> }
+    getConnection: () => Promise<{ baseUrl: string; mode: string }>
+    api: (request: unknown) => Promise<unknown>
+  } }).hermesDesktop
+  const status = await bridge.platformAccount.status()
+  if (status.phase !== 'signed_in' || String(status.account?.id) !== '17' || status.mode !== 'production'
+      || status.remember_state !== 'encrypted' || status.error !== null) {
+    throw new Error('Automatic NEW is not the retained authenticated encrypted account')
+  }
+  const version = await bridge.getVersion()
+  const normalize = (value: string): string => value.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
+  if (normalize(version.hermesHome) !== normalize(expected.home)) { throw new Error('Automatic NEW selected another account home') }
+  if (version.commit !== expected.commit) { throw new Error('Automatic NEW selected another build') }
+  const selected = await bridge.getConnection()
+  const histories = []
+  for (const scope of expected.scopes) {
+    const request = { profile: scope.profile, connectionId: 'local', method: 'GET', timeoutMs: 60_000 }
+    const config = await bridge.api({ ...request, path: '/api/config?include_defaults=false' }) as {
+      model: { default: string; provider: string; base_url: string }
+    }
+    const history = await bridge.api({ ...request, path: `/api/sessions/${encodeURIComponent(scope.sessionId)}/messages` }) as {
+      session_id: string; messages: { id: string | number; role: string; content: string }[]
+    }
+    if (config.model.default !== scope.model || config.model.provider !== 'custom' || config.model.base_url !== scope.baseUrl) {
+      throw new Error('Automatic NEW changed the retained model')
+    }
+    if (history.session_id !== scope.sessionId || scope.messages.some(message => !history.messages.some(actual =>
+      String(actual.id) === String(message.id) && actual.role === message.role && actual.content === message.content))) {
+      throw new Error('Automatic NEW lost retained history')
+    }
+    histories.push({ profile: scope.profile, sessionId: scope.sessionId, model: config.model, messages: scope.messages })
+  }
+  return { identity: { appVersion: version.appVersion, commit: version.commit, hermesHome: version.hermesHome, hermesRoot: version.hermesRoot, platform: version.platform },
+    account: { phase: status.phase, userId: String(status.account?.id), rememberState: status.remember_state },
+    connection: { baseUrl: selected.baseUrl, mode: selected.mode }, histories }
+}
+
 export async function prepareSmokeWindow(
   app: ElectronApplication,
   account: Pick<NonNullable<Awaited<ReturnType<typeof prepareAccountFixture>>>, 'signIn'> | undefined,
@@ -563,7 +645,8 @@ async function completeSmokeWindow(options: SmokeOptions, app: ElectronApplicati
   if (waitForProcessClose) {
     fs.writeFileSync(receiptPath, `${JSON.stringify(result, null, 2)}\n`)
     await holdNativeUpdate({ out: options.out, pid: running.pid, exe: running.executable, oldSha: options['expect-commit'],
-      userData: running.userData, hermesHome: identity.hermesHome!, env, waitForProcessClose })
+      userData: running.userData, hermesHome: identity.hermesHome!, env, waitForProcessClose,
+      observeAutomaticNew: phase => { account!.assertPreserved(phase); return account!.proof(phase) } })
     account?.assertPreserved()
     fs.writeFileSync(path.join(options.out, 'native-account-lifetime.json'), JSON.stringify(account?.proof(), null, 2) + '\n')
     return
