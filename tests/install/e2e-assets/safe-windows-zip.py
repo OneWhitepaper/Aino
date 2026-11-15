@@ -1,4 +1,5 @@
 """Admit and extract a pinned Windows release ZIP without executing its payload."""
+import hashlib
 import json
 import ntpath
 from pathlib import Path
@@ -153,6 +154,43 @@ def extract(archive, out, arch, expected_size):
         raise
 
 
+def unwrap(archive, out, name, outer_size, outer_sha256, size, sha256):
+    partial = out.with_name(out.name + ".partial")
+    if not out.is_absolute() or out.exists() or partial.exists():
+        raise ValueError("GitHub wrapper requires an absent absolute inner ZIP path")
+    if archive.stat().st_size != outer_size:
+        raise ValueError("GitHub artifact size mismatch")
+    with archive.open("rb") as source:
+        if hashlib.file_digest(source, "sha256").hexdigest() != outer_sha256:
+            raise ValueError("GitHub artifact SHA-256 mismatch")
+    try:
+        with zipfile.ZipFile(archive) as package:
+            entries = admit_entries(package)
+            if len(entries) != 1 or entries[0][1] != [name] or entries[0][0].is_dir():
+                raise ValueError("GitHub wrapper must contain only the exact release ZIP")
+            entry = entries[0][0]
+            if entry.file_size != size:
+                raise ValueError("Inner release ZIP size mismatch")
+            disk = require_space(out.parent, size + RESERVE)
+            digest, received = hashlib.sha256(), 0
+            with package.open(entry) as source, partial.open("xb") as target:
+                while chunk := source.read(1024 * 1024):
+                    received += len(chunk)
+                    if received > size:
+                        raise ValueError("Inner release ZIP size mismatch")
+                    digest.update(chunk)
+                    target.write(chunk)
+            if received != size:
+                raise ValueError("Inner release ZIP size mismatch")
+            if digest.hexdigest() != sha256:
+                raise ValueError("Inner release ZIP SHA-256 mismatch")
+            partial.replace(out)
+            return {"entry": name, "outer": {"size": outer_size, "sha256": outer_sha256},
+                    "inner": {"size": size, "sha256": sha256}, "unwrappingSpace": disk}
+    finally:
+        partial.unlink(missing_ok=True)
+
+
 def main():
     try:
         mode, *args = sys.argv[1:]
@@ -160,8 +198,10 @@ def main():
             result = require_space(Path(args[0]), int(args[1]))
         elif mode == "extract":
             result = extract(Path(args[0]), Path(args[1]), args[2], int(args[3]))
+        elif mode == "unwrap":
+            result = unwrap(Path(args[0]), Path(args[1]), args[2], int(args[3]), args[4], int(args[5]), args[6])
         else:
-            raise ValueError("Expected space or extract")
+            raise ValueError("Expected space, extract or unwrap")
         print(json.dumps(result))
     except Exception as error:
         print(str(error), file=sys.stderr)

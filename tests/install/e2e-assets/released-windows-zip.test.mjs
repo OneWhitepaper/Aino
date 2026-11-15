@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -51,6 +52,59 @@ async function temporary(work) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'released-windows-zip-'))
   try { return await work(directory) } finally { fs.rmSync(directory, { recursive: true, force: true }) }
 }
+
+function digest(filename) {
+  return { size: fs.statSync(filename).size, sha256: createHash('sha256').update(fs.readFileSync(filename)).digest('hex') }
+}
+
+test('a pinned GitHub wrapper admits only its verified inner release ZIP before the existing provenance checks', async () => {
+  for (const arch of ['x64', 'arm64']) await temporary(async directory => {
+    const inner = archive(directory, fixture([], {}, arch))
+    const pin = digest(inner)
+    const wrapperRoot = path.join(directory, 'wrapper')
+    fs.mkdirSync(wrapperRoot)
+    const outer = archive(wrapperRoot, [{ name: `AinoBundled-0.1.5-win-${arch}.zip`, data: fs.readFileSync(inner).toString('base64') }])
+    fs.rmSync(inner)
+    const wrapper = digest(outer)
+    const result = await extractReleasedWindowsZip({ archive: outer, ...pin, wrapper, out: path.join(directory, 'app'), arch, python })
+    assert.equal(result.stamp.commit, commit)
+    assert.deepEqual(result.artifactWrapper.outer, wrapper)
+    assert.deepEqual(result.artifactWrapper.inner, pin)
+    assert.equal(result.artifactWrapper.entry, `AinoBundled-0.1.5-win-${arch}.zip`)
+    assert.equal(fs.existsSync(result.exe), true)
+    assert.deepEqual(fs.readdirSync(wrapperRoot), [])
+  })
+})
+
+test('bad wrapper or inner pins and any extra, unsafe, duplicate or linked wrapper member expose no application', async () => {
+  for (const fault of ['outer-size', 'outer-hash', 'inner-size', 'inner-hash', 'extra', 'unsafe', 'duplicate', 'link']) {
+    await temporary(async directory => {
+      const inner = archive(directory, fixture())
+      const pin = digest(inner)
+      const name = 'AinoBundled-0.1.5-win-x64.zip'
+      const row = { name, data: fs.readFileSync(inner).toString('base64') }
+      const rows = [fault === 'unsafe' ? { ...row, name: `../${name}` } :
+        fault === 'link' ? { ...row, mode: 0o120777 } : row]
+      if (fault === 'extra') rows.push({ ...row, name: 'extra.zip' })
+      if (fault === 'duplicate') rows.push(row)
+      const wrapperRoot = path.join(directory, 'wrapper')
+      fs.mkdirSync(wrapperRoot)
+      const outer = archive(wrapperRoot, rows)
+      const wrapper = digest(outer)
+      if (fault === 'outer-size') wrapper.size++
+      if (fault === 'outer-hash') wrapper.sha256 = 'f'.repeat(64)
+      if (fault === 'inner-size') pin.size++
+      if (fault === 'inner-hash') pin.sha256 = 'f'.repeat(64)
+      const out = path.join(directory, 'app')
+      const diagnostic = fault.endsWith('hash') ? /SHA-256 mismatch/ :
+        fault.endsWith('size') ? /size mismatch/ : /wrapper|Unsafe ZIP|duplicate/i
+      await assert.rejects(extractReleasedWindowsZip({ archive: outer, ...pin, wrapper, out, arch: 'x64', python }),
+        diagnostic, fault)
+      assert.equal(fs.existsSync(out), false, fault)
+      assert.deepEqual(fs.readdirSync(wrapperRoot), [], fault)
+    })
+  }
+})
 
 test('a release ZIP pairs the desktop stamp with its executable and validates the separate runtime stamp', async () => {
   for (const arch of ['x64', 'arm64']) await temporary(async directory => {
