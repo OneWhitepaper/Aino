@@ -54,13 +54,26 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile --filter "{./apps/desktop}..." --filter "{./tests-js}..." --ignore-scripts
 
-      - name: Validate real SDK packaging and PowerShell waiter behavior
+      - name: Validate native candidate script behavior
+        shell: bash
+        run: scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py
+
+      - name: Validate production MSIX manifests with the native SDK
         shell: pwsh
         working-directory: apps/desktop
         env:
           AZURE_SIGN_PUBLISHER: CN=Aino SDK Contract Fixture
         run: |
-          pnpm exec vitest run --project electron scripts/windows-bundle-tools.test.mjs scripts/msix-shared.test.mjs scripts/sign-msix.test.mjs scripts/commit-bundles.windows.test.mjs scripts/side-by-side.windows.test.mjs scripts/windows-install-contract.test.mjs electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/updater/relaunch-waiter.windows-live.test.ts electron/updater/relaunch-waiter-spawn.windows-live.test.ts electron/updater/relaunch-waiter-lifecycle.test.ts e2e/windows-user-state.unit.test.ts 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/contracts.log"
+          node scripts/side-by-side.windows.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/sdk-manifests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate PowerShell waiter and installer contracts
+        shell: pwsh
+        working-directory: apps/desktop
+        env:
+          AZURE_SIGN_PUBLISHER: CN=Aino SDK Contract Fixture
+        run: |
+          pnpm exec vitest run --project electron scripts/windows-bundle-tools.test.mjs scripts/msix-shared.test.mjs scripts/sign-msix.test.mjs scripts/commit-bundles.windows.test.mjs scripts/windows-install-contract.test.mjs electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/updater/relaunch-waiter.windows-live.test.ts electron/updater/relaunch-waiter-spawn.windows-live.test.ts electron/updater/relaunch-waiter-lifecycle.test.ts e2e/windows-user-state.unit.test.ts 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/contracts.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify disposable GUI activation environment restoration
@@ -95,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(inputs.include-arm64 && '[{"runner":"windows-latest","arch":"x64"},{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]') }}
+        target: ${{ fromJSON((github.event_name == 'push' || inputs.include-arm64) && '[{"runner":"windows-latest","arch":"x64"},{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]') }}
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:

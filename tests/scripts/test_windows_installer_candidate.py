@@ -3,11 +3,48 @@ from __future__ import annotations
 
 import os
 import subprocess
+import uuid
 import zipfile
 
 import pytest
 
 from scripts.ci import windows_installer_candidate as candidate
+
+
+@pytest.mark.platforms("windows")
+def test_candidate_certificate_has_private_key_and_removes_disposable_trust(tmp_path):
+    if (os.environ.get("GITHUB_ACTIONS") != "true"
+            or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted"):
+        pytest.skip("Test trust is only installed on disposable GitHub-hosted Windows")
+    publisher = f"CN=Aino Installer Candidate {uuid.uuid4()}"
+    env = {**os.environ, "CANDIDATE_PUBLISHER": publisher,
+           "CANDIDATE_THUMBPRINT": str(tmp_path / "certificate-thumbprint.txt"),
+           "CANDIDATE_CERTIFICATE": str(tmp_path / "candidate-public.cer")}
+    try:
+        thumbprint = candidate.create_certificate(env)
+        assert len(thumbprint) == 40
+        assert candidate.powershell(r"""
+          $thumbprint = (Get-Content -Raw -LiteralPath $env:CANDIDATE_THUMBPRINT).Trim()
+          $cert = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint"
+          if ($cert.Subject -cne $env:CANDIDATE_PUBLISHER -or -not $cert.HasPrivateKey) {
+            throw 'Candidate signing identity or private key missing'
+          }
+          foreach ($store in @('TrustedPeople', 'Root')) {
+            Get-Item -LiteralPath "Cert:\CurrentUser\$store\$thumbprint" | Out-Null
+          }
+          $cert.HasPrivateKey
+          """, env) == "True"
+    finally:
+        candidate.remove_certificate(env)
+    assert candidate.powershell(r"""
+      $thumbprint = (Get-Content -Raw -LiteralPath $env:CANDIDATE_THUMBPRINT).Trim()
+      foreach ($store in @('My', 'TrustedPeople', 'Root')) {
+        if (Test-Path -LiteralPath "Cert:\CurrentUser\$store\$thumbprint") {
+          throw "Candidate certificate remains in $store"
+        }
+      }
+      'removed'
+      """, env) == "removed"
 
 
 def test_candidate_admission_requires_private_hosted_pinned_workflow():

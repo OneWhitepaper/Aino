@@ -60,8 +60,9 @@ def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None) -> 
 
 
 def powershell(script: str, env: Mapping[str, str]) -> str:
+    # Certificate cmdlets do not autoload the Cert: provider in a fresh -NoProfile session.
     return run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                "$ErrorActionPreference='Stop'; " + script], env)
+                "$ErrorActionPreference='Stop'; Import-Module Microsoft.PowerShell.Security; " + script], env)
 
 
 def check_prerequisites(env: Mapping[str, str], out: Path) -> None:
