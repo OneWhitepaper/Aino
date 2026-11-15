@@ -12,6 +12,47 @@ import pytest
 from scripts.ci import windows_installer_candidate as candidate
 
 
+def test_logged_child_progress_reaches_the_parent_before_the_child_can_finish(tmp_path, monkeypatch):
+    signal = tmp_path / "parent-observed"
+    finished = tmp_path / "child-finished"
+    log = tmp_path / "live.log"
+    observed = []
+
+    def console(message, **_options):
+        if "child-progress-ready" in str(message).splitlines():
+            assert not finished.exists()
+            observed.append("before-exit")
+            signal.touch()
+
+    monkeypatch.setattr(candidate, "print", console, raising=False)
+    script = """import sys
+from pathlib import Path
+from tests.waiting import wait_until
+signal, finished = map(Path, sys.argv[1:])
+print('child-progress-ready', flush=True)
+wait_until(signal.exists, timeout=10, what='parent received live child output')
+finished.write_text('done', encoding='utf-8')
+print('child-completed', flush=True)
+"""
+    assert candidate.run([sys.executable, "-c", script, str(signal), str(finished)], os.environ, log=log) == ""
+    assert observed == ["before-exit"]
+    assert finished.read_text(encoding="utf-8") == "done"
+    assert log.read_text(encoding="utf-8") == "child-progress-ready\nchild-completed\n"
+
+
+def test_logged_child_failure_prints_its_final_unterminated_utf8_tail_and_preserves_exit_code(tmp_path, monkeypatch):
+    messages = []
+    monkeypatch.setattr(candidate, "print", lambda message, **_options: messages.append(str(message)), raising=False)
+    text = "进度已写入\nfailed child final tail"
+    script = "import sys; sys.stdout.buffer.write(sys.argv[1].encode('utf-8')); sys.stdout.flush(); sys.exit(7)"
+    log = tmp_path / "failed.log"
+    with pytest.raises(subprocess.CalledProcessError) as failure:
+        candidate.run([sys.executable, "-c", script, text], os.environ, log=log)
+    assert failure.value.returncode == 7
+    assert log.read_text(encoding="utf-8") == text
+    assert "".join(messages[1:]) == text
+
+
 @pytest.mark.parametrize("key", ["PSModulePath", "PSMODULEPATH", "psmodulepath"])
 @pytest.mark.parametrize("logged", [False, True])
 def test_candidate_children_rebuild_module_search_path_without_mutating_parent(tmp_path, key, logged):

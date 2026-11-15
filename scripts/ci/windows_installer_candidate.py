@@ -7,8 +7,10 @@ trusted in LocalMachine TrustedPeople; both are removed after acceptance.
 from __future__ import annotations
 
 import argparse
+import codecs
 from collections.abc import Mapping
 from datetime import UTC, datetime
+import io
 import json
 import os
 from pathlib import Path
@@ -17,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+from typing import BinaryIO
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
@@ -53,14 +56,51 @@ def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None) -> 
     child_env = {key: value for key, value in env.items() if key.upper() != "PSMODULEPATH"}
     if log is None:
         return subprocess.check_output(argv, cwd=ROOT, env=child_env, text=True, encoding="utf-8", timeout=300).strip()
-    with log.open("w", encoding="utf-8") as output:
-        try:
-            subprocess.run(argv, cwd=ROOT, env=child_env, stdout=output, stderr=subprocess.STDOUT,
-                           check=True, timeout=18000)
-        finally:
-            output.flush()
-            print(log.read_text(encoding="utf-8-sig", errors="replace"), flush=True)
+    _run_logged(argv, child_env, log)
     return ""
+
+
+def _emit_log_tail(reader: BinaryIO, decoder: io.IncrementalNewlineDecoder, *, final: bool = False) -> None:
+    # Bound each pass to the current file size so a noisy child cannot keep
+    # extending this read and prevent the supervisor from checking its deadline.
+    remaining = os.fstat(reader.fileno()).st_size - reader.tell()
+    while remaining > 0:
+        chunk = reader.read(min(remaining, 64 * 1024))
+        if not chunk:
+            break
+        remaining -= len(chunk)
+        text = decoder.decode(chunk)
+        if text:
+            print(text, end="", flush=True)
+    if final:
+        text = decoder.decode(b"", final=True)
+        if text:
+            print(text, end="", flush=True)
+
+
+def _run_logged(argv: list[str], env: Mapping[str, str], log: Path) -> None:
+    with log.open("wb") as output, log.open("rb") as reader:
+        decoder = io.IncrementalNewlineDecoder(codecs.getincrementaldecoder("utf-8-sig")(errors="replace"), translate=True)
+        with subprocess.Popen(argv, cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT) as process:
+            deadline = time.monotonic() + 18000
+            try:
+                while process.poll() is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(argv, 18000)
+                    try:
+                        process.wait(timeout=min(2, remaining))
+                    except subprocess.TimeoutExpired:
+                        _emit_log_tail(reader, decoder)
+                if process.returncode:
+                    raise subprocess.CalledProcessError(process.returncode, argv)
+            except BaseException:
+                process.kill()
+                process.wait()
+                raise
+            finally:
+                output.flush()
+                _emit_log_tail(reader, decoder, final=True)
 
 
 def powershell(script: str, env: Mapping[str, str]) -> str:
