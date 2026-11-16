@@ -32,6 +32,7 @@ $root = [System.Windows.Automation.AutomationElement]::RootElement
 $before = @($root.FindAll([System.Windows.Automation.TreeScope]::Children,
     [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.NativeWindowHandle })
 $owned = @()
+$closedHandles = @()
 try {
     $code = Invoke-OutsideRunnerJob 'installer-hosting' $work (Get-Process -Id $PID).Path @(
         '-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-OpenFixture', $descriptor) 1
@@ -60,18 +61,31 @@ try {
         if ($owned.Count) { break }
         Start-Sleep -Milliseconds 300
     } while ($clock.Elapsed.TotalSeconds -lt 30)
-    $report = @{ verifiedInstallerProcessCount=$processes.Count; directWindowCount=$direct.Count;
+    $report = @{ verifiedInstallerProcessCount=$processes.Count; directWindowCount=@($owned | Where-Object { $_.Direct }).Count; verifiedWindowCount=$direct.Count;
         observedWindowCount=$owned.Count; hostedWindowCount=@($owned | Where-Object { -not $_.Direct }).Count }
     Write-Output ('[installer-hosting] ' + ($report | ConvertTo-Json -Compress))
     if (-not $owned.Count) { throw 'No real App Installer surface was observed after the controlled shell launch' }
     foreach ($window in $owned) {
-        if (@($direct | Where-Object { $_.Handle -eq $window.Handle }).Count -ne 1) {
+        $verified = @($direct | Where-Object { $_.Handle -eq $window.Handle })
+        if ($verified.Count -ne 1) {
             throw 'The real App Installer surface is omitted by verified-window discovery'
         }
+        if (Test-InstallerWindowClosed $verified[0]) {
+            throw 'The visible hosted installer must not be mistaken for an already closed window'
+        }
+        $action = Invoke-TestInstallerCancel $verified[0]
+        if ($action -notin @('cancel-button', 'window-close')) { throw 'Fixture cancellation did not use a safe native action' }
+        $closeClock = [Diagnostics.Stopwatch]::StartNew()
+        while (-not (Test-InstallerWindowClosed $verified[0])) {
+            if ($closeClock.Elapsed.TotalSeconds -ge 10) { throw 'The owned real installer did not close after cancellation' }
+            Start-Sleep -Milliseconds 200
+        }
+        $closedHandles += $window.Handle
     }
-    Write-Output 'PASS: verified installer discovery includes the real shell-activated surface'
+    Write-Output 'PASS: verified installer discovery and cancellation bind the real shell-activated surface'
 } finally {
     foreach ($window in $owned) {
+        if ($closedHandles -contains $window.Handle) { continue }
         $pattern = $null
         if (-not $window.Element.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) {
             throw 'Owned fixture surface exposes no safe window-close pattern'
