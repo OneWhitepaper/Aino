@@ -295,6 +295,17 @@ Windows rerun. Local verification passed 124 Python tests (two Windows skips),
 seven observer Node tests (two Windows skips), four descriptor tests, eight
 selected-gateway/handoff tests and PowerShell parsing.
 
+Run [`43866276951`](https://github.com/OneWhitepaper/Aino/actions/runs/43866276951)
+freezes `385b1b3453` on
+`validation/windows-installer-public/20261116-installer-window/reaped-launchers`.
+It starts full fresh x64/ARM64 candidates as well as contracts; neither package
+leg has a final receipt yet. Native Python contracts passed 158 tests (four
+host skips), including all four real timeout/tree-ownership regressions. The
+next JS step hit an existing native listener test's 5-second default while it
+performs three 30-second-bounded OS scans; 73 other JS tests passed. The follow-up
+sets a 120-second test budget while preserving every scan and ownership assertion.
+Its Windows rerun is pending; candidate builds at `385b1b3453` remain independent.
+
 Installer-window diagnostics also extract only bounded, validated HRESULTs from
 the identified product's window/control text. They can expose a native error
 when deployment events are absent without uploading arbitrary UI text.

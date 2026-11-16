@@ -95,4 +95,6 @@ test.runIf(process.platform === 'win32')('Windows observes the installed listene
     await once(child, 'exit')
     fs.rmSync(payload, { recursive: true, force: true })
   }
-})
+  // This native contract performs three independently bounded (30s) OS scans.
+  // Vitest's 5s unit-test default can expire while a valid Windows query runs.
+}, 120_000)

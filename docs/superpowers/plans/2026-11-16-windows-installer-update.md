@@ -52,6 +52,13 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
+  Its Windows Python contracts passed 158 tests (four skips), including the four
+  actual worker/tree cleanup tests. Contracts then stopped at a preexisting
+  native listener test's 5-second unit-test default (three independently
+  30-second-bounded native scans). Its explicit 120-second native-test budget
+  keeps all assertions; a focused Windows rerun is pending. UIA additions have
+  not yet executed in this run. No native acceptance has been promoted.
 - Focused standard-runner run `43864177745` at `2c747067ee` skipped large
   builds and found a real candidate timeout-cleanup defect before UIA execution:
   Windows venv launcher PID 5940 was killed but worker PID 8420 remained. Logged
