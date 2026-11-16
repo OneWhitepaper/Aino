@@ -30,7 +30,7 @@
 - [x] Implement explicit public receipts-only execution and complete, fail-closed 13-gate proof projection; independent review of `006d35b6b3` is clean.
 - [x] Implement source-only apply and bounded UIA About scrolling at `f5d12ce3dc`; local Python, Electron, PowerShell, type/lint and repository checks pass.
 - [x] Complete independent review of `f5d12ce3dc` (no Critical/Important findings) and start public standard-runner run `43801657955`; its Windows contracts job passed. Both native jobs completed with a driver UIA error after migration and preparation recovery passed.
-- [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. Native package jobs remain in progress.
+- [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. x64 later failed and ARM64 stalled at replacement/automatic NEW; neither is accepted.
 - [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
 - [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
 
@@ -45,7 +45,7 @@ scripts/run_tests.sh tests/scripts/test_release_artifacts.py tests/scripts/test_
 python scripts/check
 ```
 
-Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; acceptance requires all 13 complete and consistent evidence gates, and absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public x64/ARM64 native jobs in run `43801657955` completed with failures; neither receipt is accepted.
+Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; acceptance requires all 13 complete and consistent evidence gates, and absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public x64/ARM64 native jobs in run `43801657955` completed with failures. Follow-up `43819576334` also has no accepted receipt: x64 failed and the stalled ARM64 job was cancelled.
 
 ## Current progress as of 2026-11-16
 
@@ -80,11 +80,23 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 - The public `validation/windows-installer-public/20261116` ref stays frozen at
   `f5d12ce3dc`. The correction uses frozen
   `validation/windows-installer-public/20261116-uia-binding` at `3fd5e9c26c` in
-  run `43819576334`; x64 job `133139303070` and ARM64 job `133139303136` are
-  running. Later documentation updates use `codex/windows-native-acceptance`.
-  Only curated
-  receipts may be uploaded. There is no installer/release/feed/site publication,
+  run `43819576334`; x64 job `133139303070` and ARM64 job `133139303136` ended
+  with failure/cancellation at replacement/automatic NEW. Later documentation
+  updates use `codex/windows-native-acceptance`. Only curated receipts may be
+  uploaded. There is no installer/release/feed/site publication,
   `main` merge, production signing or production-trust acceptance.
+
+- Follow-up x64 failed at 08:23 UTC after its actual Update click and OLD exit:
+  replacement/automatic NEW was not observed within 15 minutes. ARM64 reached
+  the same wait at 09:04:09 UTC, including an observed App Installer Update
+  confirmation, then emitted no progress for 29 minutes. The controller cancelled
+  the stale run; ARM64 ended cancelled at 09:34:08 UTC. Both safe receipts are
+  unaccepted; disposable signing trust cleanup recorded removed. ARM64 migration
+  passed in console but its final migration receipt did not flush before cancel.
+  No automatic NEW, cancellation/manual-reopen or final uninstall proof exists.
+  The combined timeout alone cannot distinguish deployment from activation;
+  bounded native observations and waiter diagnostics must precede another full
+  rebuild. No product change is justified from the timeout alone.
 
 ## Historical evidence summary
 

@@ -1,11 +1,11 @@
 # Windows installation and update acceptance
 
-Status: follow-up public run `43819576334` at `3fd5e9c26c` passed its Windows
-contracts, including the new real UIA regression. x64/ARM64 package acceptance is
-still running. The preceding run failed at the driver's incorrect UIA API after
-migration and preparation recovery passed; no complete native lifecycle has been
-accepted. Distribution is held; this document does not authorize
-installer, release, feed or website publication, or a merge to `main`. The user
+Status: follow-up public run `43819576334` at `3fd5e9c26c` is completed with
+conclusion `cancelled`: Windows contracts passed, x64 failed while waiting for
+package replacement/automatic NEW, and the stalled ARM64 leg was cancelled after
+29 minutes without progress at that same stage. Neither architecture has a
+complete accepted native lifecycle. Distribution is held; this document does not
+authorize installer, release, feed or website publication, or a merge to `main`. The user
 authorized test-signing acceptance first; production signing and ordinary
 production trust remain deferred to release preparation.
 
@@ -33,7 +33,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Full desktop typecheck, changed-file lint, repository checks and independent review (`f5d12ce3dc`) | Passed; review found no Critical/Important findings |
 | Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
 | Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
-| Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | In progress in jobs `133139303070` and `133139303136`; no native lifecycle receipt yet |
+| Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
 | Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
 | Actual installed PackageManager update query | Both architectures returned exit 2, `AVAILABLE`, registered loopback source and empty stderr |
@@ -66,7 +66,8 @@ Local PowerShell 7.5.4 parsing, seven pure contract groups and all 15 repository
 checks pass. The native UIA group is skipped on Mac and passed on actual Windows
 PowerShell 5.1 in job `133139302779` of follow-up run
 [`43819576334`](https://github.com/OneWhitepaper/Aino/actions/runs/43819576334).
-That job completed successfully; package x64/ARM64 jobs remain in progress.
+That job completed successfully; the package jobs subsequently failed/stalled at
+replacement/automatic NEW as detailed below.
 UTF-8 BOM and CRLF remain in the Windows scripts. The successful owned-control
 regression does not establish the installed application's complete lifecycle.
 
@@ -98,8 +99,9 @@ ref so they do not restart the two package builds.
 The UIA correction `3fd5e9c26c` uses a new frozen opt-in ref,
 `validation/windows-installer-public/20261116-uia-binding`, for follow-up run
 `43819576334`. Its contracts job passed, including real Windows UIA execution;
-both native package jobs are still running. Later documentation commits use the
-ordinary `codex/windows-native-acceptance` ref and do not restart those builds.
+the x64 native job failed and the stalled ARM64 job was subsequently cancelled.
+Later documentation commits use the ordinary `codex/windows-native-acceptance`
+ref and do not restart those builds.
 
 Native execution on the public `OneWhitepaper/Aino` repository is allowed only
 through the explicit `validation/windows-installer-public/**` branch prefix.
@@ -137,10 +139,49 @@ ZIPs and the full workspace are never selected for public artifact upload. Raw
 diagnostics stay in the ephemeral runner and the masked Actions console. Private
 candidate/reuse artifact behavior and origin validation remain unchanged.
 
-Both preceding public native receipts are `unaccepted`; the follow-up native
-jobs have no final receipts yet. The standard x64 runner is Windows Server 2025; the ARM64 runner is Windows
-11 ARM64. Neither establishes Windows 11 x64 desktop, Windows 10 19045 desktop,
+Both preceding and follow-up public native receipts are `unaccepted`. The
+standard x64 runner is Windows Server 2025; the ARM64 runner is Windows 11 ARM64.
+Neither establishes Windows 11 x64 desktop, Windows 10 19045 desktop,
 standard-user or production-trust acceptance.
+
+## Completed follow-up and stalled update handoff
+
+Follow-up run [`43819576334`](https://github.com/OneWhitepaper/Aino/actions/runs/43819576334)
+used `3fd5e9c26c` on standard hosted runners. The real UIA regression and all
+Windows contracts passed in job `133139302779`.
+
+- x64 job `133139303070` completed with failure at 08:23 UTC. It passed ZIP chat,
+  first-MSIX migration, all 25 preservation checks and preparation HTTP404
+  recovery. The UIA driver clicked the actual Update action, observed OLD exit,
+  and then the replacement/automatic-NEW observation failed after 15 minutes.
+  No App Installer confirmation dialog was observed on this host. The combined
+  error does not identify whether deployment or activation was responsible.
+- ARM64 job `133139303136` built and test signed both packages, completed ZIP
+  chat, first-MSIX migration and preparation recovery according to the console,
+  clicked the actual in-app Update action and the observed App Installer Update
+  confirmation, and observed OLD exit. Its last progress was 09:04:09 UTC at
+  replacement/automatic NEW. There was still no new progress at cancellation
+  09:33:18 UTC, beyond the outer loop's nominal 15-minute deadline. This proves
+  stalled progress, not which native query or teardown operation was blocking.
+- The controller cancelled the stalled run; ARM64 ended `cancelled` at 09:34:08
+  UTC. Both public receipts remain `unaccepted`. Disposable certificate/key trust
+  cleanup recorded removed on both architectures. ARM64's migration receipt was
+  not flushed before cancellation, so its public migration gate is false even
+  though the earlier console stage had passed. Console progress is not promoted
+  into a complete accepted receipt.
+- Safe receipt artifact IDs are x64 `14208288195` and ARM64 `14213375765`. Full
+  job logs were downloaded locally to `/tmp/aino-public-43819576334-x64.log` and
+  `/tmp/aino-public-43819576334-arm64.log`; only curated receipts are public
+  artifacts. Raw waiter and deployment failure evidence is not present in those
+  public receipts, so no production fix is inferred from this combined timeout.
+
+Before another costly full rebuild, extend the existing observation to retain
+bounded package-version, process and waiter-stage diagnostics and enforce its
+deadline around native calls. Use the resulting evidence to distinguish failed
+deployment from failed activation. Automatic NEW, cancellation/manual reopen and
+final uninstall/reinstall preservation are still not accepted. Distribution and
+`main` remain unchanged, and the other chat's worktree and desktop process remain
+untouched.
 
 ## Remaining native receipts
 
