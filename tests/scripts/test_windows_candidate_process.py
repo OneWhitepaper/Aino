@@ -7,7 +7,6 @@ import subprocess
 import sys
 import time
 
-import psutil
 import pytest
 
 from hermes_cli._subprocess_compat import kill_process_tree, pid_exists_stdlib
