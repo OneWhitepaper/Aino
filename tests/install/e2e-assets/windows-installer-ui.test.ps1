@@ -83,6 +83,18 @@ try {
         '-ReadyFile', "`"$readyPath`"", '-ReadyEvent', $readyName, '-StopEvent', $stopName)
     if (-not $readySignal.WaitOne(30000)) { throw 'The separate UI owner did not start its message pump within 30 seconds' }
     $handles = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
+    # Compare the default Win32 proxy mapping against explicit registration of
+    # Microsoft's signed framework provider; keep the actual Button contract.
+    $before = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$handles.button)
+    Write-Output "fixture provider before: type=$($before.Current.ControlType.ProgrammaticName) class=$($before.Current.ClassName) framework=$($before.Current.FrameworkId) patterns=$((@($before.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName })) -join ',')"
+    $proxyBefore = @([System.Windows.Automation.ClientSettings]::GetProxyFactoryMappingTable())
+    Write-Output "fixture proxy mapping count before: $($proxyBefore.Count)"
+    $assemblyName = [System.Windows.Automation.AutomationElement].Assembly.GetName()
+    $assemblyName.Name = 'UIAutomationClientsideProviders'
+    $proxyAssembly = [Reflection.Assembly]::Load($assemblyName)
+    [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($proxyAssembly.GetName())
+    $proxyAfter = @([System.Windows.Automation.ClientSettings]::GetProxyFactoryMappingTable())
+    Write-Output "fixture proxy mapping count after: $($proxyAfter.Count)"
     $clicked = Get-Date
     $helper = Window-Record $handles.helper
     $target = Window-Record $handles.target
