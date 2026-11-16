@@ -147,6 +147,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-bundled-processes.test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-installer-ui.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-native-environment.test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -169,8 +171,9 @@ jobs:
           retention-days: 7
 
   candidate:
+    # Focused native-control checks retain feature-prefix admission without rebuilding packages.
     if: >-
-      !inputs.contracts-only && (github.event.repository.private == true ||
+      !inputs.contracts-only && !endsWith(github.ref, '/contracts-only') && (github.event.repository.private == true ||
       (github.repository == 'OneWhitepaper/Aino' && github.event.repository.private == false &&
       startsWith(github.ref, 'refs/heads/validation/windows-installer-public/') &&
       (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.public-receipts-only)) &&

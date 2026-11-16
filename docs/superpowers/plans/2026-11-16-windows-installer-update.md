@@ -32,7 +32,8 @@
 - [x] Complete independent review of `f5d12ce3dc` (no Critical/Important findings) and start public standard-runner run `43801657955`; its Windows contracts job passed. Both native jobs completed with a driver UIA error after migration and preparation recovery passed.
 - [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. x64 later failed and ARM64 stalled at replacement/automatic NEW; neither is accepted.
 - [x] Add bounded package/process observations, OLD-bound waiter-stage diagnostics, deployment HRESULT projection and bounded disposable cleanup; flush migration/recovery evidence before potentially blocking teardown. Product gateway behavior remains unchanged pending evidence.
-- [ ] Reproduce the native replacement/activation stall with these diagnostics, identify the failed phase, then fix and reaccept it.
+- [x] Reproduce x64 with bounded diagnostics: 282 samples confirm OLD registration unchanged and waiter package-timeout; deployment query has no matching events.
+- [ ] Establish the remaining package-replacement cause with installer-window/process facts; verify the strict confirmation selection and then reaccept the complete native lifecycle.
 - [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
 - [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
 
@@ -58,11 +59,25 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   30-minute budgets. Real-child tests failed before the implementation; 46
   related tests now pass (one Windows skip). This follow-up is outside frozen
   run `43846856927`; the earlier deployment/activation cause remains unproven.
-- The x64 replacement observer began at 11:26:47 UTC after migration, 25 state
-  checks and preparation recovery passed. Its first three minutes show healthy
-  native queries, `waiting-for-package`, one OLD payload process, zero NEW main
-  processes and waiter stage `query-started`. This is interim evidence inside
-  the budget; deployment events and root-cause confirmation are still pending.
+- x64 native job `133229084011` failed at 11:42 UTC. Its 282 complete
+  package/process samples confirmed unchanged OLD version, one OLD payload
+  process, no OLD main, one installer and no NEW. The waiter reached
+  `package-timeout`; the event query found no matching deployment events or
+  HRESULT. Receipt artifact `14222743163` is unaccepted; owned package cleanup
+  succeeded and test signing/trust cleanup recorded removed. Do not infer a
+  gateway or signing root cause from these facts.
+- Fixed the observation-budget classification: the final shortened probe must
+  retain confirmed OLD state rather than invent a native query timeout. Added
+  fixed-field receipt validation for the operation that exhausted the budget.
+- Reused strict product/new-window binding for confirmation across all verified
+  installer windows. The former first-window branch and unconditional absent-UI
+  message concealed unhandled dialogs. Added a native-control contract and safe
+  trigger-state projection, OLD runtime process counts, a bounded final UIA
+  observation and existing 18-minute owned-job supervision for the UIA drivers.
+  Native confirmation regression execution remains pending. `/contracts-only`
+  public refs now exercise contracts without starting two complete builds.
+- ARM64 signed OLD/NEW bundles and entered native acceptance at 11:55 UTC.
+  It remains running; no complete accepted receipt exists.
 - Removed the redundant unbounded post-NEW CIM/port scan and final parent
   package query. Existing bounded automatic-window/selected-gateway health and
   disposable-removal checks retain those invariants. Local selected-gateway and
@@ -74,8 +89,9 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   run [`43846856927`](https://github.com/OneWhitepaper/Aino/actions/runs/43846856927)
   is frozen on `validation/windows-installer-public/20261116-native-observation`.
   Its Windows contracts job `133229083523` passed all seven observation tests
-  including native package/process probes; x64/ARM64 package jobs are in progress.
-  No diagnostic receipt yet identifies the deployment/activation stall cause.
+  including native package/process probes; x64 failed at unchanged package
+  registration and ARM64 remains running. Further native diagnostics are needed
+  to establish the replacement cause.
 - Public standard-runner run [`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955)
   completed at `f5d12ce3dc`. Windows contracts job `133083110675` passed: 145
   Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113

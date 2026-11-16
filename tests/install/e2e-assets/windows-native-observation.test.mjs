@@ -84,8 +84,9 @@ test('a real observation timeout retains the last native phase before returning 
       powershell: process.execPath, probeArgs: () => [script] }), false)
     const result = JSON.parse(fs.readFileSync(path.join(root, 'native-observation.json'), 'utf8'))
     assert.equal(result.status, 'unaccepted')
-    assert.equal(result.phase, 'package-query-timeout')
+    assert.equal(result.phase, 'observation-timeout')
     assert.equal(result.packageQuery, 'timeout')
+    assert.equal(result.deadlineOperation, 'package')
     assert.ok(performance.now() - start < 8000, 'event diagnostics must also remain bounded')
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
@@ -114,6 +115,32 @@ else process.exit(9)
     assert.equal(result.phase, 'new-observed')
     assert.deepEqual(result.installed, installed)
     assert.deepEqual(result.process, fresh)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('the overall deadline preserves confirmed OLD state instead of inventing a native query fault', async () => {
+  const { observeNativeUpdate } = await subject()
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-observe-last-query-'))
+  const request = path.join(root, 'request.json')
+  const script = path.join(root, 'probe.cjs')
+  fs.writeFileSync(request, JSON.stringify({ oldPid: 100, identity: 'Aino.Contract', startedAt: new Date().toISOString() }))
+  fs.writeFileSync(script, `
+const fs = require('node:fs'), counter = process.argv[3]
+if (process.argv[2] === 'package') {
+  if (fs.existsSync(counter)) setInterval(() => {}, 1000)
+  else { fs.writeFileSync(counter, 'seen'); console.log(JSON.stringify({state:'old',version:'1.0.0.0'})) }
+} else if (process.argv[2] === 'process') console.log(JSON.stringify({newMain:[],oldPayloadCount:1}))
+else console.log(JSON.stringify({queryStatus:'ok',matchedCount:0}))
+`)
+  try {
+    assert.equal(await observeNativeUpdate(request, { timeoutMs: 2500, queryMs: 1000,
+      powershell: process.execPath, probeArgs: operation => [script, operation, path.join(root, 'queried')] }), false)
+    const result = JSON.parse(fs.readFileSync(path.join(root, 'native-observation.json'), 'utf8'))
+    assert.equal(result.phase, 'waiting-for-package')
+    assert.equal(result.packageQuery, 'ok')
+    assert.equal(result.version, '1.0.0.0')
+    assert.equal(result.oldPayloadCount, 1)
+    assert.equal(result.deadlineOperation, 'package')
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -151,6 +178,8 @@ test('the real Windows process probe observes the owned main PID and its executa
     assert.equal(result.status, 'ok')
     assert.equal(result.data.oldMainCount, 1)
     assert.ok(result.data.oldPayloadCount >= 1)
+    assert.ok(result.data.oldNodeCount >= 1)
+    assert.ok(result.data.oldPayloadProcesses.some(row => row.processId === process.pid && row.category === 'node'))
     const row = result.data.newMain.find(row => row.ProcessId === process.pid)
     assert.equal(row?.ExecutablePath.toLowerCase(), process.execPath.toLowerCase())
     assert.ok(Number.isFinite(Date.parse(row.CreationDate)))

@@ -125,7 +125,7 @@ def test_native_observation_projects_typed_failure_stages_without_private_eviden
         "status": "unaccepted", "phase": "waiting-for-package", "samples": 20,
         "packageQuery": "ok", "processQuery": "ok", "waiterStage": "failed", "waiterHresult": "0x80073D02",
         "version": "1.0.0.0", "oldPayloadCount": 3, "oldMainCount": 0,
-        "newMainCount": 0, "installerCount": 1,
+        "newMainCount": 0, "installerCount": 1, "deadlineOperation": "package",
         "events": {"queryStatus": "ok", "matchedCount": 5, "errorCount": 1,
                    "eventIds": [400, 401], "hresults": ["0x80073D02"], "raw": SECRET},
         "last": {"commandLine": SECRET, "path": SECRET, "processes": [SECRET]},
@@ -134,14 +134,41 @@ def test_native_observation_projects_typed_failure_stages_without_private_eviden
     result = json.loads(output.read_text(encoding="utf-8"))
     assert result["observation"]["phase"] == "waiting-for-package"
     assert result["observation"]["oldPayloadCount"] == 3
+    assert result["observation"]["deadlineOperation"] == "package"
     assert result["observation"]["hresults"] == ["0x80073D02"]
     assert result["observation"]["waiterHresult"] == "0x80073D02"
     assert result["status"] == "unaccepted"
     assert SECRET not in output.read_text(encoding="utf-8")
 
 
+def test_installer_confirmation_and_remaining_process_facts_survive_without_window_or_process_payloads(tmp_path):
+    write_json(tmp_path, "hermes-bundled-update/proof/click.json", {
+        "ok": True, "exited": True, "appInstallerObserved": True, "appInstallerConfirmed": False,
+        "installerAction": "Confirm", "installerState": "no-confirmation-control",
+        "visibleWindowCount": 2, "matchingWindowCount": 1,
+        "installerWindow": {"title": SECRET, "controls": [SECRET]},
+    })
+    write_json(tmp_path, "hermes-bundled-update/proof/native-observation.json", {
+        "status": "unaccepted", "phase": "waiting-for-package", "oldPythonCount": 1,
+        "oldNodeCount": 0, "oldOtherCount": 0,
+        "installerQuery": "ok", "installerState": "confirmation-available",
+        "installerVisibleWindowCount": 2, "installerMatchingWindowCount": 1, "installerConfirmButtonCount": 1,
+        "installer": {"windows": [SECRET]},
+        "last": {"processes": [{"commandLine": SECRET, "path": SECRET}]},
+    })
+    output = export_public_receipts(tmp_path, SOURCE, "x64")
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["updateTrigger"]["installerState"] == "no-confirmation-control"
+    assert result["updateTrigger"]["appInstallerConfirmed"] is False
+    assert result["observation"]["oldPythonCount"] == 1
+    assert result["observation"]["installerState"] == "confirmation-available"
+    assert SECRET not in output.read_text(encoding="utf-8")
+    assert result["status"] == "unaccepted"
+
+
 @pytest.mark.parametrize("field,value", [("phase", SECRET), ("oldPayloadCount", True),
-                                         ("events.hresults", [SECRET])])
+                                         ("events.hresults", [SECRET]), ("deadlineOperation", SECRET),
+                                         ("installerState", SECRET), ("oldPythonCount", True)])
 def test_malformed_observation_is_never_copied_to_the_public_receipt(tmp_path, field, value):
     document = {"status": "unaccepted", "phase": "waiting-for-process", "oldPayloadCount": 0,
                 "events": {"hresults": ["0x80073D02"]}}

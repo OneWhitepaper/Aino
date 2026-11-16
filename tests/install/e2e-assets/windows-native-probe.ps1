@@ -1,6 +1,6 @@
 ﻿# Native calls run in a killable child; only explicit disposable cleanup mutates state.
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('package','process','events','cleanup')][string]$Operation,
+    [Parameter(Mandatory=$true)][ValidateSet('package','process','installer','events','cleanup')][string]$Operation,
     [Parameter(Mandatory=$true)][string]$RequestPath,
     [string]$NewExecutable=''
 )
@@ -47,14 +47,32 @@ switch ($Operation) {
     'process' {
         $rows = @(Get-CimInstance -ClassName Win32_Process -OperationTimeoutSec 10)
         $oldRoot = $request.old.location.TrimEnd('\') + '\'
+        $oldPayload = @($rows | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($oldRoot, [StringComparison]::OrdinalIgnoreCase) })
+        $oldDetails = @($oldPayload | ForEach-Object {
+            $category = switch -Regex ([IO.Path]::GetFileName($_.ExecutablePath)) {
+                '^python(?:[0-9.]+|w)?[.]exe$' { 'python'; break }
+                '^node[.]exe$' { 'node'; break }
+                default { 'other' }
+            }
+            @{ processId=$_.ProcessId; parentProcessId=$_.ParentProcessId; executablePath=$_.ExecutablePath;
+               birth=$_.CreationDate.ToUniversalTime().ToString('o'); category=$category }
+        })
         # Only the manifest/stamp-verified package probe can supply NEW's path.
         $main = @($rows | Where-Object { $NewExecutable -and $_.ExecutablePath -and $_.ExecutablePath -ieq $NewExecutable -and $_.CommandLine -notmatch '(?:^|\s)--type(?:=|\s)' })
         @{ oldMainCount=@($rows | Where-Object { $_.ProcessId -eq $request.oldPid }).Count;
-            oldPayloadCount=@($rows | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($oldRoot, [StringComparison]::OrdinalIgnoreCase) }).Count;
+            oldPayloadCount=$oldPayload.Count; oldPayloadProcesses=$oldDetails;
+            oldPythonCount=@($oldDetails | Where-Object { $_.category -ceq 'python' }).Count;
+            oldNodeCount=@($oldDetails | Where-Object { $_.category -ceq 'node' }).Count;
+            oldOtherCount=@($oldDetails | Where-Object { $_.category -ceq 'other' }).Count;
             newMain=@($main | ForEach-Object { @{ ProcessId=$_.ProcessId; ExecutablePath=$_.ExecutablePath; CreationDate=$_.CreationDate.ToUniversalTime().ToString('o') } });
             installerCount=@($rows | Where-Object { $_.Name -in @('AppInstaller.exe', 'AppInstallerFullTrustAppServiceClient.exe') -and
                 $_.ExecutablePath -and $_.ExecutablePath.StartsWith((Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_'), [StringComparison]::OrdinalIgnoreCase) }).Count
         } | ConvertTo-Json -Depth 5 -Compress
+    }
+    'installer' {
+        Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+        . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+        Get-InstallerWindowSnapshot $request.displayName | ConvertTo-Json -Depth 10 -Compress
     }
     'events' {
         $events = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-AppXDeploymentServer/Operational';

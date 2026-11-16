@@ -242,8 +242,11 @@ try {
     Descriptor $m.new 'new.msixbundle'
     $nativeAttemptStarted = [DateTime]::UtcNow.ToString('o')
     Write-AcceptanceStage 'OLD chat passed; invoking the real native Update action'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Assets 'windows-bundled-drive-update.ps1') -OldProcessId $oldProcess.ProcessId -ProofDir $Proof -ResultPath (Join-Path $Proof 'click.json')
-    if ($LASTEXITCODE -ne 0) { throw 'Real in-app update trigger failed' }
+    $triggerCode = Invoke-OutsideRunnerJob 'native-update-trigger' $Work 'powershell.exe' @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Assets 'windows-bundled-drive-update.ps1'),
+        '-OldProcessId', ([string]$oldProcess.ProcessId), '-ProofDir', $Proof,
+        '-ResultPath', (Join-Path $Proof 'click.json'), '-ExpectedDisplayName', 'Aino') 18
+    if ($triggerCode -ne 0) { throw 'Real in-app update trigger failed' }
     $click = Get-Content -Raw (Join-Path $Proof 'click.json') | ConvertFrom-Json
     if (-not $click.ok -or -not $click.exited) { throw 'In-app trigger receipt is not successful' }
     $closed = Join-Path $Proof 'old-process-closed.json'
@@ -255,7 +258,7 @@ try {
     Write-AcceptanceStage 'Waiting for native package replacement and automatic NEW launch (bounded native queries)'
     $observed = Invoke-NativeObserver $Node $Assets $Proof @{
         identity=$m.new.identity; arch=$Arch; new=$m.new;
-        old=@{ version=$m.old.version; location=$old.package.InstallLocation };
+        displayName='Aino'; old=@{ version=$m.old.version; location=$old.package.InstallLocation };
         oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate.ToUniversalTime().ToString('o');
         startedAt=$nativeAttemptStarted
     }

@@ -80,9 +80,11 @@ function Invoke-NativeCancelRecovery($Settings, [scriptblock]$PublishOld, [scrip
         $nativeEnvironment = Publish-NativeRelaunchEnvironment (Join-Path $oldOut 'native-relaunch-environment.json') $Settings.Work $Settings.UserData
         & $PublishNew | Out-Host
         $clickPath = Join-Path $out 'cancel-click.json'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Settings.Assets 'windows-bundled-drive-update.ps1') `
-            -OldProcessId $ready.pid -ProofDir $out -ResultPath $clickPath -InstallerAction Cancel -ExpectedDisplayName 'Aino'
-        if ($LASTEXITCODE -ne 0) { throw 'OS App Installer cancellation was not observed; absence of its UI is not success' }
+        $triggerCode = Invoke-OutsideRunnerJob 'native-cancel-trigger' $Settings.Work 'powershell.exe' @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Settings.Assets 'windows-bundled-drive-update.ps1'),
+            '-OldProcessId', ([string]$ready.pid), '-ProofDir', $out, '-ResultPath', $clickPath,
+            '-InstallerAction', 'Cancel', '-ExpectedDisplayName', 'Aino') 18
+        if ($triggerCode -ne 0) { throw 'OS App Installer cancellation was not observed; absence of its UI is not success' }
         $click = Get-Content -Raw -LiteralPath $clickPath | ConvertFrom-Json
         if (-not $click.ok -or -not $click.exited -or -not $click.appInstallerObserved -or -not $click.appInstallerCancelled -or -not $click.newVisibleWindow -or
             $click.installerAction -cne 'Cancel' -or $click.action -notin @('cancel-button', 'window-close')) {

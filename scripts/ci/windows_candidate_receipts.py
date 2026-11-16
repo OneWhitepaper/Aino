@@ -54,6 +54,8 @@ _NATIVE_RULES = {
     "userStatePreserved": _boolean, "uninstallPreservedUserState": _boolean,
     "oldPid": _count, "newPid": _count, "oldVersion": _version, "newVersion": _version,
 }
+_INSTALLER_STATE = _enum("not-observed", "window-not-bound", "confirmation-available",
+                         "no-confirmation-control", "confirmation-invoked", "cancelled", "ambiguous-window")
 _DOCUMENTS = {
     "cleanup": ("aino-windows-installer/cleanup-receipt.json", {"certificateCleanup": _CLEANUP}),
     "nativeAcceptance": ("hermes-bundled-update/proof/acceptance.json", _NATIVE_RULES),
@@ -80,15 +82,26 @@ _DOCUMENTS = {
         "authentication.authenticationPreservedWithoutLogin": _boolean,
         "authentication.authenticatedProfileRequests": _count, "authentication.freshAuthenticationRequests": _count,
     }),
+    "updateTrigger": ("hermes-bundled-update/proof/click.json", {
+        "ok": _boolean, "exited": _boolean, "appInstallerObserved": _boolean,
+        "appInstallerConfirmed": _boolean, "appInstallerCancelled": _boolean,
+        "installerAction": _enum("Confirm", "Cancel"), "installerState": _INSTALLER_STATE,
+        "visibleWindowCount": _count, "matchingWindowCount": _count,
+        "newVisibleWindow": _boolean, "processStartedForAttempt": _boolean,
+    }),
     "observation": ("hermes-bundled-update/proof/native-observation.json", {
         "status": _enum("observing", "observed", "unaccepted"),
         "phase": _enum("starting", "observation-timeout", "supervisor-timeout", "waiting-for-package", "waiting-for-process", "new-observed",
                        "invalid-package", "invalid-process", "package-query-timeout", "package-query-failed",
                        "package-query-invalid", "process-query-timeout", "process-query-failed", "process-query-invalid"),
         "samples": _count, "version": _version,
+        "deadlineOperation": _enum("package", "process"),
         "packageQuery": _enum("ok", "timeout", "failed", "invalid", "not-run"),
         "processQuery": _enum("ok", "timeout", "failed", "invalid", "not-run"),
         "oldPayloadCount": _count, "oldMainCount": _count, "newMainCount": _count, "installerCount": _count,
+        "oldPythonCount": _count, "oldNodeCount": _count, "oldOtherCount": _count,
+        "installerQuery": _enum("ok", "timeout", "failed", "invalid"), "installerState": _INSTALLER_STATE,
+        "installerVisibleWindowCount": _count, "installerMatchingWindowCount": _count, "installerConfirmButtonCount": _count,
         "waiterStage": _enum("not-observed", "starting", "ready", "parent-exited", "query-started",
                              "package-changed", "launched", "parent-timeout", "package-timeout", "failed"),
         "waiterHresult": lambda value: _hresults([value]),

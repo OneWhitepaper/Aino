@@ -1,8 +1,9 @@
 # Windows installation and update acceptance
 
-Status: diagnostic public run `43846856927` at `c0ff3179dc` is in progress.
-Its Windows contracts passed; native package replacement and automatic NEW have
-not yet produced complete receipts. Earlier run `43819576334` failed/stalled at
+Status: diagnostic public run `43846856927` at `c0ff3179dc` has a failed
+x64 native leg and an ARM64 leg still running. Windows contracts passed. The
+x64 observer confirmed unchanged OLD registration throughout its 15-minute
+budget; automatic NEW has not been accepted. Earlier run `43819576334` failed/stalled at
 that stage and was cancelled. Neither architecture has a complete accepted
 native lifecycle. Distribution is held; this document does not
 authorize installer, release, feed or website publication, or a merge to `main`. The user
@@ -34,7 +35,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
 | Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
 | Diagnostic Windows contracts (`c0ff3179dc`, run `43846856927`, job `133229083523`) | SUCCESS: 149 Python (four skips), existing JS/SDK/updater/state/UIA contracts and all seven native-observation tests passed, including real PowerShell provenance/process queries and killed-child deadlines |
-| Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | In progress; complete acceptance and stall cause are pending |
+| Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | x64 failed at package replacement; ARM64 still running; neither has complete acceptance |
 | Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
 | Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
@@ -206,9 +207,9 @@ Commit `c0ff3179dc` is frozen on
 `validation/windows-installer-public/20261116-native-observation` for run
 [`43846856927`](https://github.com/OneWhitepaper/Aino/actions/runs/43846856927).
 Windows contracts job `133229083523` passed, including all seven observation tests
-on the actual host. The x64 and ARM64 candidate jobs are still in progress.
-Native diagnostic reproduction is pending and these changes do not establish a
-successful update. Use its evidence to distinguish deployment from activation.
+on the actual host. The x64 leg completed with failure at 11:42 UTC; ARM64
+remains in progress. The failure evidence below distinguishes package
+replacement from activation, but does not establish a successful update.
 Automatic NEW, cancellation/manual reopen and
 final uninstall/reinstall preservation are still not accepted. Distribution and
 `main` remain unchanged, and the other chat's worktree and desktop process remain
@@ -235,12 +236,54 @@ timeout/reaping and pre-exit heartbeat tests were first red, then passed with
 the existing candidate contracts (46 passed, one Windows skip). Those additions
 are also outside the current frozen run and do not certify native acceptance.
 
-At 11:26:47 UTC the x64 leg reached the actual replacement observer after ZIP
-migration, 25 state checks and preparation recovery passed. Its first three
-minutes reported successful package/process queries, `waiting-for-package`, one
-OLD payload process, no NEW main process and waiter stage `query-started`.
-Those are interim observations within the budget, not a timeout or proof that
-the surviving process caused it; deployment events remain pending.
+### Completed x64 diagnosis and next bounded checks
+
+The x64 leg reached the actual replacement observer at 11:26:47 UTC, after ZIP
+migration, 25 state checks and preparation recovery passed. It completed 282
+samples by 11:41:49 UTC with package/process queries working, OLD version
+`2026.7666.791.0` unchanged, one OLD payload process, no OLD main process, one
+installer process and no NEW main process. The relaunch waiter progressed from
+`query-started` to `package-timeout`. The final bounded deployment query
+succeeded but found no matching deployment events or HRESULTs. The package
+cleanup succeeded and certificate/trust cleanup recorded `removed`. Curated
+receipt artifact `14222743163` is `unaccepted`.
+
+This establishes failure before package replacement. It does not identify the
+remaining payload process as the cause or establish that activation itself is
+broken. No gateway shutdown or forceful production update change is inferred.
+ARM64 finished signed OLD/NEW packaging and entered native acceptance at
+11:55 UTC; its final outcome is still pending.
+
+The last shortened probe in x64 exhausted the overall observation budget and
+incorrectly overwrote the confirmed OLD state with `package-query-timeout`.
+The follow-up distinguishes `deadlineOperation` from a native query's own
+20-second deadline and preserves the last complete sample. A real child-process
+regression reproduced that classification error before the fix.
+
+The follow-up also reuses the existing strict cancellation window binding for
+confirmation: inspect every verified App Installer window, exclude windows
+visible before this attempt, bind the product, and refuse ambiguous matches.
+The earlier confirmation branch considered only the first top-level window and
+reported that no dialog appeared even when a window had been observed without
+an actionable button. New typed trigger receipts distinguish these states.
+Raw window/control snapshots remain local. An owned native-control regression
+covers helper/foreign windows, existing windows and disabled confirmation;
+actual Windows execution of this addition is pending.
+
+Package/process heartbeats now count remaining Python, Node and other OLD
+payload processes and retain exact PID, parent, path and birth facts only in
+local diagnostics. On observation failure a separate 15-second UIA probe records
+visible/matching installer windows and confirmation availability; together with
+the ten-second event query it remains within the 940-second observer supervisor.
+Both update/cancel UIA drivers now use the existing owned-job supervisor with
+an 18-minute deadline. A stuck provider cannot turn the UIA polling budget into
+an unbounded native wait. The 13 acceptance gates and public artifact selection
+are unchanged; arbitrary window/process text is never projected.
+
+A public opt-in ref ending in `/contracts-only` runs the standard Windows
+contracts without the two large candidate builds. Use that focused native
+verification before another full package run. Ordinary and frozen refs stay
+separate; no prior run is silently replaced.
 
 ## Remaining native receipts
 

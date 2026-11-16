@@ -88,24 +88,40 @@ export async function observeNativeUpdate(requestFile, { timeoutMs = 900_000, qu
   const args = probeArgs ?? ((operation, extra = []) => ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', probe, '-Operation', operation, '-RequestPath', requestFile, ...extra])
   const deadline = performance.now() + timeoutMs
-  const query = (operation, extra = []) => runProbe(powershell, args(operation, extra), Math.max(1, Math.min(queryMs, deadline - performance.now())))
+  let deadlineOperation
+  const query = async (operation, extra = []) => {
+    const remaining = deadline - performance.now()
+    const value = await runProbe(powershell, args(operation, extra), Math.max(1, Math.min(queryMs, remaining)))
+    if (remaining < queryMs && performance.now() >= deadline) deadlineOperation = operation
+    return value
+  }
   let last = {}, heartbeat = 0, result = { phase: 'starting' }, samples = 0
   while (performance.now() < deadline) {
     save(path.join(directory, 'native-query-progress.json'), { operation: 'package', startedAt: new Date().toISOString() })
     const pkg = await query('package')
     if (performance.now() >= deadline) {
-      last = { ...last, package: pkg }
-      result = { phase: pkg.status === 'ok' ? 'observation-timeout' : `package-query-${pkg.status}` }
+      // A final probe inherits only the remaining overall budget. Its forced
+      // end says nothing about the native query's own deadline or prior facts.
+      if (!deadlineOperation || !samples) {
+        last = { ...last, package: pkg }
+        result = { phase: (deadlineOperation || pkg.status === 'ok') ? 'observation-timeout' : `package-query-${pkg.status}` }
+      }
       break
     }
     save(path.join(directory, 'native-query-progress.json'), { operation: 'process', startedAt: new Date().toISOString() })
     const processes = await query('process', pkg.data?.state === 'target' ? ['-NewExecutable', pkg.data.installed.exe] : [])
+    if (deadlineOperation) {
+      if (!samples) { last = { package: pkg, processes }; result = { phase: 'observation-timeout' } }
+      break
+    }
     result = classifyObservation(pkg, processes, request)
     const waiter = readWaiterProgress(path.join(os.tmpdir(), 'hermes-relaunch-waiter.log'), request)
     last = { package: pkg, processes, waiter, observedAt: new Date().toISOString() }
     samples++
     const safe = { phase: result.phase, packageQuery: pkg.status, processQuery: processes.status,
       version: pkg.data?.version, oldPayloadCount: processes.data?.oldPayloadCount,
+      oldPythonCount: processes.data?.oldPythonCount, oldNodeCount: processes.data?.oldNodeCount,
+      oldOtherCount: processes.data?.oldOtherCount,
       oldMainCount: processes.data?.oldMainCount, newMainCount: processes.data?.newMain?.length,
       installerCount: processes.data?.installerCount, waiterStage: waiter.stage,
       ...(waiter.hresult ? { waiterHresult: waiter.hresult } : {}) }
@@ -123,6 +139,7 @@ export async function observeNativeUpdate(requestFile, { timeoutMs = 900_000, qu
   }
   // Separate bounded event query after the observation budget: it cannot hide the timeout.
   const events = await runProbe(powershell, args('events'), Math.min(10_000, timeoutMs))
+  const installer = await runProbe(powershell, args('installer'), Math.min(15_000, timeoutMs))
   const safeEvents = events.status === 'ok' ? events.data : { queryStatus: events.status }
   const safe = { status: 'unaccepted', phase: result.phase, samples,
     packageQuery: last.package?.status ?? 'not-run', processQuery: last.processes?.status ?? 'not-run',
@@ -130,8 +147,15 @@ export async function observeNativeUpdate(requestFile, { timeoutMs = 900_000, qu
     ...(last.waiter?.hresult ? { waiterHresult: last.waiter.hresult } : {}),
     version: last.package?.data?.version, oldPayloadCount: last.processes?.data?.oldPayloadCount,
     oldMainCount: last.processes?.data?.oldMainCount, newMainCount: last.processes?.data?.newMain?.length,
-    installerCount: last.processes?.data?.installerCount }
-  save(receiptFile, { ...safe, last })
+    installerCount: last.processes?.data?.installerCount,
+    oldPythonCount: last.processes?.data?.oldPythonCount, oldNodeCount: last.processes?.data?.oldNodeCount,
+    oldOtherCount: last.processes?.data?.oldOtherCount,
+    installerQuery: installer.status, installerState: installer.data?.installerState,
+    installerVisibleWindowCount: installer.data?.visibleWindowCount,
+    installerMatchingWindowCount: installer.data?.matchingWindowCount,
+    installerConfirmButtonCount: installer.data?.confirmButtonCount,
+    ...(deadlineOperation ? { deadlineOperation } : {}) }
+  save(receiptFile, { ...safe, installer, last })
   console.log(`[native-observe] ${JSON.stringify(safe)}`)
   return false
 }

@@ -32,8 +32,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ProofDir,
     [string]$ResultPath = "",
     [ValidateSet('Confirm', 'Cancel')][string]$InstallerAction = 'Confirm',
-    # Cancel is destructive to a system window: bind it to this test's product.
-    [string]$ExpectedDisplayName = '',
+    # Both OS actions must bind to this test's product.
+    [Parameter(Mandatory=$true)][string]$ExpectedDisplayName,
     # How long to keep looking for the in-app button (the app may still be
     # booting its backend when the driver starts).
     [int]$ButtonTimeoutSec = 300,
@@ -46,9 +46,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Disposable CI runner required' }
-if ($InstallerAction -eq 'Cancel' -and [string]::IsNullOrWhiteSpace($ExpectedDisplayName)) {
-    throw 'Cancel requires ExpectedDisplayName for the package under test'
-}
+if ([string]::IsNullOrWhiteSpace($ExpectedDisplayName)) { throw 'ExpectedDisplayName is required' }
 . (Join-Path $PSScriptRoot 'desktop-smoke-windows.ps1')
 $oldProcess = Get-Process -Id $OldProcessId
 $oldBirth = $oldProcess.StartTime
@@ -96,109 +94,7 @@ function Find-AppWindow {
     return $null
 }
 
-function Find-InvokableButton {
-    # Depth-first walk for a button whose Name matches one of the regexes.
-    param($Root, [string[]]$Patterns, [switch]$UpdateNavigation)
-    $cond = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-        [System.Windows.Automation.ControlType]::Button)
-    $buttons = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
-    if ($UpdateNavigation) {
-        $observed = @(foreach ($button in $buttons) {
-            try {
-                $current = $button.Current
-                @{ Element=$button; Name=$current.Name; IsEnabled=$current.IsEnabled; IsOffscreen=$current.IsOffscreen }
-            } catch { continue }
-        })
-        return Get-UpdateNavigationButton $observed
-    }
-    foreach ($b in $buttons) {
-        try { $current = $b.Current } catch { continue }
-        if ($current.IsOffscreen -or -not $current.IsEnabled) { continue }
-        $name = $current.Name
-        if (-not $name) { continue }
-        foreach ($pat in $Patterns) {
-            if ($name -match $pat) { return @{ Element = $b; Name = $name } }
-        }
-    }
-    return $null
-}
-
-function Invoke-Button($Element) {
-    if ($Element.Current.IsOffscreen -or -not $Element.Current.IsEnabled) { return $false }
-    $invoke = $null
-    if ($Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
-        $invoke.Invoke()
-        return $true
-    }
-    # Fall back to a legacy click through the legacy pattern.
-    $legacy = $null
-    if ($Element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)) {
-        try { $legacy.DoDefaultAction(); return $true } catch {}
-    }
-    return $false
-}
-
-function Get-VerifiedInstallerWindows {
-    $installerPackages = @(Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller')
-    if ($installerPackages.Count -ne 1) { throw 'Cannot identify one installed Windows App Installer package' }
-    $installerRoot = $installerPackages[0].InstallLocation.TrimEnd('\') + '\'
-    $root = [System.Windows.Automation.AutomationElement]::RootElement
-    foreach ($candidate in @(Get-Process -Name 'AppInstaller' -ErrorAction SilentlyContinue)) {
-        if (-not $candidate.Path.StartsWith($installerRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
-        $condition = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $candidate.Id)
-        foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)) {
-            if ($window.Current.NativeWindowHandle -eq 0 -or $window.Current.IsOffscreen) { continue }
-            [pscustomobject]@{ Element=$window; ProcessId=$candidate.Id; Birth=$candidate.StartTime;
-                Handle=$window.Current.NativeWindowHandle; Title=$window.Current.Name }
-        }
-    }
-}
-
-function Find-TestInstallerWindow([datetime]$ClickedAt, [string]$DisplayName, [object[]]$PreviouslyVisible) {
-    $boundWindows = @()
-    $productPattern = '(?i)(?<![\p{L}\p{N}])' + [regex]::Escape($DisplayName) + '(?![\p{L}\p{N}])'
-    foreach ($candidate in @(Get-VerifiedInstallerWindows)) {
-        $startedForAttempt = $candidate.Birth -ge $ClickedAt
-        $wasVisible = @($PreviouslyVisible | Where-Object { $_.ProcessId -eq $candidate.ProcessId -and
-            $_.Birth -eq $candidate.Birth -and $_.Handle -eq $candidate.Handle }).Count -gt 0
-        if ($wasVisible) { continue }
-        $names = @($candidate.Title)
-        foreach ($element in $candidate.Element.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
-            $names += $element.Current.Name
-        }
-        if (-not (($names -join "`n") -match $productPattern)) { continue }
-        $boundWindows += [pscustomobject]@{ Element=$candidate.Element; ProcessId=$candidate.ProcessId; Birth=$candidate.Birth;
-            Handle=$candidate.Handle; Title=$candidate.Title; NewVisibleWindow=(-not $wasVisible); ProcessStartedForAttempt=$startedForAttempt }
-    }
-    if ($boundWindows.Count -gt 1) { throw 'Refusing to cancel: more than one new App Installer window matches this product' }
-    if ($boundWindows.Count -eq 1) { return $boundWindows[0] }
-    return $null
-}
-
-function Invoke-TestInstallerCancel($Window) {
-    $hit = Find-InvokableButton -Root $Window.Element -Patterns @('^Cancel$', '^Cancel (?:update|installation)$', '^取消(?:更新|安装)?$')
-    if ($hit -and (Invoke-Button $hit.Element)) { return 'cancel-button' }
-    $pattern = $null
-    if ($Window.Element.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) {
-        $pattern.Close()
-        return 'window-close'
-    }
-    throw 'The identified App Installer window exposes neither Cancel nor WindowPattern.Close'
-}
-
-function Test-InstallerWindowClosed($Window) {
-    $candidate = Get-Process -Id $Window.ProcessId -ErrorAction SilentlyContinue
-    if (-not $candidate -or $candidate.StartTime -ne $Window.Birth) { return $true }
-    $root = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $Window.ProcessId)
-    foreach ($current in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)) {
-        if ($current.Current.NativeWindowHandle -eq $Window.Handle -and -not $current.Current.IsOffscreen) { return $false }
-    }
-    return $true
-}
+. (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
 
 # 1. the in-app Update trigger ------------------------------------------------
 
@@ -225,7 +121,7 @@ while ((Get-Date) -lt $deadline -and -not $clicked) {
             Save-Shot "01-before-update-click"
             Write-Host "  [uia] clicking button '$($hit.Name)'"
             $visibleBeforeAttempt = @()
-            if ($InstallerAction -eq 'Cancel') { $visibleBeforeAttempt = @(Get-VerifiedInstallerWindows) }
+            $visibleBeforeAttempt = @(Get-VerifiedInstallerWindows)
             $attemptedAt = Get-Date
             if (Invoke-Button $hit.Element) {
                 $clicked = $hit
@@ -266,9 +162,12 @@ $installerWindow = $null
 $installerActionTaken = $null
 $newVisibleWindow = $false
 $processStartedForAttempt = $false
+$installerSnapshot = @{ installerState='not-observed'; visibleWindowCount=0; matchingWindowCount=0 }
 while ((Get-Date) -lt $cDeadline -and -not $confirmed -and -not $installerCancelled) {
     if ($InstallerAction -eq 'Cancel') {
-        $boundWindow = Find-TestInstallerWindow $updateClickedAt $ExpectedDisplayName $installerVisibleBeforeClick
+        $windows = @(Get-VerifiedInstallerWindows)
+        $installerSnapshot = Get-InstallerWindowSnapshot $ExpectedDisplayName $windows
+        $boundWindow = Find-TestInstallerWindow $updateClickedAt $ExpectedDisplayName $installerVisibleBeforeClick $windows
         if ($boundWindow) {
             $installerObserved = $true
             $installerPid = $boundWindow.ProcessId
@@ -297,22 +196,23 @@ while ((Get-Date) -lt $cDeadline -and -not $confirmed -and -not $installerCancel
         if (-not $installerCancelled) { Start-Sleep -Milliseconds 200 }
         continue
     }
-    $installer = Get-Process -Name "AppInstaller" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($installer) {
-        $root = [System.Windows.Automation.AutomationElement]::RootElement
-        $cond = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $installer.Id)
-        $win = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
-        if ($win) {
-            $installerObserved = $true
-            $installerPid = $installer.Id
-            $installerWindow = @{ handle=$win.Current.NativeWindowHandle; title=$win.Current.Name }
-            $hit = Find-InvokableButton -Root $win -Patterns @('^Update$', '^Install$', '^(Reinstall|Update) .*', '^更新$', '^安装$', '^重新安装$')
-            if ($hit) {
-                Save-Shot "02-appinstaller-confirm"
-                Write-Host "  [uia] App Installer dialog: clicking '$($hit.Name)'"
-                if (Invoke-Button $hit.Element) { $confirmed = $true; $installerActionTaken = 'confirm-button' }
-            }
+    # Reuse cancellation's exact system-package/product/new-window binding.
+    # A helper window or another product's installer must never hide the target.
+    $windows = @(Get-VerifiedInstallerWindows)
+    $installerSnapshot = Get-InstallerWindowSnapshot $ExpectedDisplayName $windows
+    $installerSnapshot | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $ProofDir 'installer-window-observation.json')
+    $boundWindow = Find-TestInstallerWindow $updateClickedAt $ExpectedDisplayName $installerVisibleBeforeClick $windows
+    if ($boundWindow) {
+        $installerObserved = $true
+        $installerPid = $boundWindow.ProcessId
+        $installerWindow = @{ handle=$boundWindow.Handle; title=$boundWindow.Title }
+        $newVisibleWindow = $boundWindow.NewVisibleWindow
+        $processStartedForAttempt = $boundWindow.ProcessStartedForAttempt
+        $hit = Find-InvokableButton $boundWindow.Element @('^Update$', '^Install$', '^(Reinstall|Update) .*', '^更新$', '^安装$', '^重新安装$')
+        if ($hit) {
+            Save-Shot '02-appinstaller-confirm'
+            Write-Host "  [uia] identified App Installer dialog: clicking '$($hit.Name)'"
+            if (Invoke-Button $hit.Element) { $confirmed = $true; $installerActionTaken = 'confirm-button' }
         }
     }
     # The app quits before App Installer opens; keep watching its confirmation.
@@ -322,6 +222,8 @@ if ($InstallerAction -eq 'Cancel' -and -not $installerCancelled) {
     Save-Shot 'zz-appinstaller-cancel-ui-missing'
     @{ ok=$false; clicked=$clicked.Name; installerAction=$InstallerAction; appInstallerObserved=$installerObserved;
         appInstallerCancelled=$false; appInstallerConfirmed=$false; installerPid=$installerPid; installerWindow=$installerWindow;
+            installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
+            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount;
         action=$installerActionTaken; newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt;
         exited=((Get-AppPids).Count -eq 0) } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
@@ -329,7 +231,8 @@ if ($InstallerAction -eq 'Cancel' -and -not $installerCancelled) {
 }
 if ($installerCancelled) { Write-Host "  [uia] identified App Installer window cancelled via $installerActionTaken" }
 elseif ($confirmed) { Write-Host "  [uia] App Installer confirmation clicked" }
-else { Write-Host "  [uia] no App Installer dialog appeared (OnLaunch ShowPrompt=false + real source registration): ok" }
+elseif ($installerSnapshot.visibleWindowCount -gt 0) { Write-Host "  [uia] installer UI observed without a confirmation action: state=$($installerSnapshot.installerState); package replacement remains unverified" }
+else { Write-Host '  [uia] no verified visible App Installer window observed; package replacement remains unverified' }
 Save-Shot "03-after-trigger"
 
 # 3. wait for the app to exit (the hand-off quits it; never kill it here) -----
@@ -342,7 +245,9 @@ while ((Get-Date) -lt $eDeadline) {
         Write-Host "  [uia] OLD app exited for the package swap"
         @{ ok = $true; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; exited = $true;
             installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
-            installerPid=$installerPid; installerWindow=$installerWindow; action=$installerActionTaken;
+            installerPid=$installerPid; installerWindow=$installerWindow;
+            installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
+            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
             newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |
             ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
         exit 0
@@ -352,7 +257,9 @@ while ((Get-Date) -lt $eDeadline) {
 Save-Shot "zz-app-never-exited"
 @{ ok = $false; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; exited = $false;
     installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
-    installerPid=$installerPid; installerWindow=$installerWindow; action=$installerActionTaken;
+    installerPid=$installerPid; installerWindow=$installerWindow;
+            installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
+            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
     newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
 throw "the $ProcessName process never exited after the update trigger ($ExitTimeoutSec s) - a surviving process would hold package files during the swap"
