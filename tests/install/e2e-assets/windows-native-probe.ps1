@@ -70,8 +70,8 @@ switch ($Operation) {
         } | ConvertTo-Json -Depth 5 -Compress
     }
     'installer' {
-        Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
         . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+        Initialize-InstallerAutomation
         Get-InstallerWindowSnapshot $request.displayName | ConvertTo-Json -Depth 10 -Compress
     }
     'events' {

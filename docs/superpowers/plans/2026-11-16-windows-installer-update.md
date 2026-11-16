@@ -52,18 +52,27 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
-- Focused `43867819708` passed Windows Python/JS/SDK/updater suites, then
-  failed the new UIA fixture at enabled Update selection. The intended window
-  had been selected; actual control visibility before/after activating the
-  owned window is now recorded. Native binding runs early in contracts. This
-  is still failed fixture evidence, not a proven production App Installer bug.
+- Focused `43873843738` at `6bd68031f5` succeeded. The owned Win32 Update
+  control was Pane before explicit signed-framework provider registration and
+  Button afterwards. Separate-thread/process pumping alone did not fix it
+  (`43872149732`). Shared UIA initialization now serves the actual installer
+  driver and timeout observer without relaxing Button/product/ownership checks.
+  The successful run passed 158 Python (four skips), 74 JS (nine skips), eight
+  extractor, eight SDK and 113 updater/state tests, plus native observation,
+  PowerShell driver/environment and descriptor suites. Latest-source shared
+  initialization and process-tree metrics still need a focused Windows receipt.
+- Heartbeats now include the actual owned descendant tree, since a waiting
+  launcher's CPU/RSS hid active build/signing workers. The real nested-worker
+  regression was first red, then green with 125 related local Python tests
+  (two Windows skips). Counts distinguish partial sampling; arguments and
+  environment stay excluded. The current full run does not include this follow-up.
 - Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
   Its Windows Python contracts passed 158 tests (four skips), including the four
   actual worker/tree cleanup tests. Contracts then stopped at a preexisting
   native listener test's 5-second unit-test default (three independently
   30-second-bounded native scans). Its explicit 120-second native-test budget
-  keeps all assertions; a focused Windows rerun is pending. UIA additions have
-  not yet executed in this run. No native acceptance has been promoted.
+  keeps all assertions; focused run `43867819708` passed the JS step. UIA
+  additions have not executed in the full run. No native acceptance has been promoted.
 - Focused standard-runner run `43864177745` at `2c747067ee` skipped large
   builds and found a real candidate timeout-cleanup defect before UIA execution:
   Windows venv launcher PID 5940 was killed but worker PID 8420 remained. Logged
@@ -71,7 +80,8 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   bounded Job Object/probe path. Explicit real-grandchild regressions failed in
   both paths before the fix and now pass locally, with a separate live sibling
   preserved. The launcher/worker PID distinction is retained in the test.
-  Windows revalidation is pending; this is not a proven package-stall cause.
+  All four real tree/timeout cases passed on Windows in `43866276951`; this
+  remains separate from the unproven package-stall cause.
 - Product-bound installer snapshots now project validated HRESULT arrays as
   well as fixed window states/counts; raw window/process payloads stay local.
   Latest local verification: 124 Python passed, two Windows skips; seven observer
@@ -98,10 +108,15 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   message concealed unhandled dialogs. Added a native-control contract and safe
   trigger-state projection, OLD runtime process counts, a bounded final UIA
   observation and existing 18-minute owned-job supervision for the UIA drivers.
-  Native confirmation regression execution remains pending. `/contracts-only`
+  Native confirmation fixture passed in `43873843738`; actual package-swap
+  acceptance remains outstanding. `/contracts-only`
   public refs now exercise contracts without starting two complete builds.
-- ARM64 signed OLD/NEW bundles and entered native acceptance at 11:55 UTC.
-  It remains running; no complete accepted receipt exists.
+- ARM64 job `133229083991` also failed in `43846856927`. Migration and
+  preparation passed; 250 complete observations kept OLD `2026.7666.1523.0`
+  unchanged, with one OLD payload process, two installer processes and no
+  OLD/NEW main. The waiter reached package-timeout; event lookup succeeded
+  with no matching deployment/HRESULT. Artifact `14226887326` is unaccepted;
+  owned-package cleanup and disposable certificate/trust removal succeeded.
 - Removed the redundant unbounded post-NEW CIM/port scan and final parent
   package query. Existing bounded automatic-window/selected-gateway health and
   disposable-removal checks retain those invariants. Local selected-gateway and
@@ -114,8 +129,8 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   is frozen on `validation/windows-installer-public/20261116-native-observation`.
   Its Windows contracts job `133229083523` passed all seven observation tests
   including native package/process probes; x64 failed at unchanged package
-  registration and ARM64 remains running. Further native diagnostics are needed
-  to establish the replacement cause.
+  registration and ARM64 also failed at unchanged OLD registration. Further
+  native diagnostics are needed to establish the replacement cause.
 - Public standard-runner run [`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955)
   completed at `f5d12ce3dc`. Windows contracts job `133083110675` passed: 145
   Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113

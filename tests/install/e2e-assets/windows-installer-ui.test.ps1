@@ -51,7 +51,7 @@ if ($Fixture) {
         $targetForm.Show()
         $timer.Start()
         # Keep the provider's Windows-message pump alive while another process
-        # performs UIA. Calling UIA from this thread silently fell back to Pane.
+        # performs UIA, avoiding UI Automation/Windows-message reentrancy.
         [System.Windows.Forms.Application]::Run()
     } finally {
         $timer.Stop(); $timer.Dispose()
@@ -83,14 +83,11 @@ try {
         '-ReadyFile', "`"$readyPath`"", '-ReadyEvent', $readyName, '-StopEvent', $stopName)
     if (-not $readySignal.WaitOne(30000)) { throw 'The separate UI owner did not start its message pump within 30 seconds' }
     $handles = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
-    # Compare the default Win32 proxy mapping against explicit registration of
+    # Compare the default Win32 control against explicit registration of
     # Microsoft's signed framework provider; keep the actual Button contract.
     $before = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$handles.button)
     Write-Output "fixture provider before: type=$($before.Current.ControlType.ProgrammaticName) class=$($before.Current.ClassName) framework=$($before.Current.FrameworkId) patterns=$((@($before.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName })) -join ',')"
-    $assemblyName = [System.Windows.Automation.AutomationElement].Assembly.GetName()
-    $assemblyName.Name = 'UIAutomationClientsideProviders'
-    $proxyAssembly = [Reflection.Assembly]::Load($assemblyName)
-    [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($proxyAssembly.GetName())
+    Initialize-InstallerAutomation
     Write-Output 'fixture framework provider explicitly registered'
     $clicked = Get-Date
     $helper = Window-Record $handles.helper

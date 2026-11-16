@@ -1,4 +1,14 @@
 ﻿# Shared native UIA observation and identity checks for the installed update journey.
+function Initialize-InstallerAutomation {
+    Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+    # WinPS can expose an ordinary Win32 Button as Pane without its client-side
+    # provider. Use the signed framework provider; never relax the Button filter.
+    $assemblyName = [System.Windows.Automation.AutomationElement].Assembly.GetName()
+    $assemblyName.Name = 'UIAutomationClientsideProviders'
+    $proxyAssembly = [Reflection.Assembly]::Load($assemblyName)
+    [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($proxyAssembly.GetName())
+}
+
 function Find-InvokableButton {
     # Depth-first walk for a button whose Name matches one of the regexes.
     param($Root, [string[]]$Patterns, [switch]$UpdateNavigation)

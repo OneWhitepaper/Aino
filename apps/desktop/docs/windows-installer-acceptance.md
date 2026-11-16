@@ -1,10 +1,11 @@
 # Windows installation and update acceptance
 
-Status: diagnostic public run `43846856927` at `c0ff3179dc` has a failed
-x64 native leg and an ARM64 leg still running. Windows contracts passed. The
-x64 observer confirmed unchanged OLD registration throughout its 15-minute
-budget; automatic NEW has not been accepted. Earlier run `43819576334` failed/stalled at
-that stage and was cancelled. Neither architecture has a complete accepted
+Status: diagnostic public run `43846856927` at `c0ff3179dc` failed both
+x64 and ARM64 native legs before package replacement. Windows contracts passed.
+Both observers confirmed unchanged OLD registration throughout their budgets;
+automatic NEW has not been accepted. Fresh run `43866276951` at `385b1b3453`
+is still building/running, with no accepted native receipt. Earlier run
+`43819576334` failed/stalled at that stage and was cancelled. Neither architecture has a complete accepted
 native lifecycle. Distribution is held; this document does not
 authorize installer, release, feed or website publication, or a merge to `main`. The user
 authorized test-signing acceptance first; production signing and ordinary
@@ -35,7 +36,8 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
 | Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
 | Diagnostic Windows contracts (`c0ff3179dc`, run `43846856927`, job `133229083523`) | SUCCESS: 149 Python (four skips), existing JS/SDK/updater/state/UIA contracts and all seven native-observation tests passed, including real PowerShell provenance/process queries and killed-child deadlines |
-| Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | x64 failed at package replacement; ARM64 still running; neither has complete acceptance |
+| Focused Windows provider/timeout contracts (`6bd68031f5`, run `43873843738`, job `133321640396`) | SUCCESS: explicit framework UIA registration changes the same Win32 control from Pane to Button; all existing Python/JS/SDK/updater/native-observation suites passed |
+| Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | Both failed at unchanged OLD registration; no automatic NEW; both owned-package and disposable-trust cleanups succeeded |
 | Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
 | Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
@@ -251,8 +253,13 @@ receipt artifact `14222743163` is `unaccepted`.
 This establishes failure before package replacement. It does not identify the
 remaining payload process as the cause or establish that activation itself is
 broken. No gateway shutdown or forceful production update change is inferred.
-ARM64 finished signed OLD/NEW packaging and entered native acceptance at
-11:55 UTC; its final outcome is still pending.
+ARM64 also failed at package replacement. After first-MSIX migration and
+preparation recovery passed, it observed 250 complete samples with unchanged
+OLD `2026.7666.1523.0`, one OLD payload process, no OLD/NEW main process and
+two installer processes. Its waiter reached `package-timeout`; the event query
+succeeded without matching events or HRESULTs. Receipt artifact `14226887326`
+is `unaccepted`; owned-package cleanup and disposable certificate/trust cleanup
+succeeded. These observations still do not identify the replacement cause.
 
 The last shortened probe in x64 exhausted the overall observation budget and
 incorrectly overwrote the confirmed OLD state with `package-query-timeout`.
@@ -268,7 +275,7 @@ reported that no dialog appeared even when a window had been observed without
 an actionable button. New typed trigger receipts distinguish these states.
 Raw window/control snapshots remain local. An owned native-control regression
 covers helper/foreign windows, existing windows and disabled confirmation;
-actual Windows execution of this addition is pending.
+native fixture verification is tracked below.
 
 Package/process heartbeats now count remaining Python, Node and other OLD
 payload processes and retain exact PID, parent, path and birth facts only in
@@ -290,8 +297,9 @@ replacement cause. The shared Hermes process-tree cleanup now handles logged
 commands; the existing bounded probe/Windows Job Object path handles captured
 commands. Real grandchild fixtures first reproduced the leak in both paths,
 then passed on Mac; a live independent sibling is preserved. Tests no longer
-mistake a launcher's PID for its worker. This correction still requires the
-Windows rerun. Local verification passed 124 Python tests (two Windows skips),
+mistake a launcher's PID for its worker. All four actual timeout/tree cleanup
+regressions passed on Windows in run `43866276951`. The earlier local
+verification passed 124 Python tests (two Windows skips),
 seven observer Node tests (two Windows skips), four descriptor tests, eight
 selected-gateway/handoff tests and PowerShell parsing.
 
@@ -304,20 +312,42 @@ host skips), including all four real timeout/tree-ownership regressions. The
 next JS step hit an existing native listener test's 5-second default while it
 performs three 30-second-bounded OS scans; 73 other JS tests passed. The follow-up
 sets a 120-second test budget while preserving every scan and ownership assertion.
-Its Windows rerun is pending; candidate builds at `385b1b3453` remain independent.
+The focused Windows run `43867819708` passed this JS step with the corrected
+budget; candidate builds at `385b1b3453` remain independent.
 
 Installer-window diagnostics also extract only bounded, validated HRESULTs from
 the identified product's window/control text. They can expose a native error
 when deployment events are absent without uploading arbitrary UI text.
 
 Focused run `43867819708` at `c4e84dec21` passed the native Python, JS
-harness, SDK and updater suites, then failed the new owned-window UIA fixture:
-its selected product did not expose an invokable Update button. Product selection
-itself had returned the intended window. The fixture now records the actual
-button visibility/enabled flags before and after activating that owned window;
-no real installer is invoked. This native check runs before dependency/SDK work
-so a driver failure is reported early. The cause and passing receipt remain
-pending; it is not treated as a production App Installer result.
+harness, SDK and updater suites, then failed the new owned-window UIA fixture.
+Later runs established that its Update control was enabled/on-screen but
+exposed as `ControlType.Pane`, even for a standard Win32 BUTTON. A separate STA
+UI owner/message pump (`43872149732`) did not fix this, ruling out UI-thread
+isolation as the sufficient cause. The fixture keeps that separation to follow
+Microsoft's [UIA threading guidance](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/ui-automation-threading-issues).
+
+Run `43873843738` at `6bd68031f5`, job `133321640396`, succeeded. Its same
+owned control changed from `Pane`, class `Button`, framework `Win32`, no
+patterns, to `ControlType.Button` after explicit registration of Microsoft's
+signed `UIAutomationClientsideProviders` assembly. This establishes the missing
+client-side provider initialization in this PowerShell UIA context. The shared
+initializer now serves both the actual update driver and final installer probe;
+the strict Button/product/process/new-window filters remain unchanged. Native
+contracts covered helper/foreign windows, previous-window rejection, enabled
+and disabled confirmation, HRESULT projection and owned-fixture cleanup. The
+successful run also passed 158 Python (four skips), 74 JS (nine skips), eight
+extractor cases, eight SDK cases, 113 updater/state tests and the existing
+PowerShell/observation/environment/descriptor suites. The shared-initializer
+integration still requires the latest-source focused Windows receipt. This
+fix does not yet prove the cause of the earlier package-replacement stall.
+
+Launcher-only heartbeats also concealed real descendant activity. A real nested
+worker regression failed before the process-tree metrics and then passed with
+all 125 related Python tests on Mac (two Windows skips). Root counters remain
+separate; tree CPU, RSS, optional I/O and sampled-versus-discovered process
+counts identify partial observations without publishing commands/environment.
+Latest-source Windows revalidation of this addition is pending.
 
 A public opt-in ref ending in `/contracts-only` runs the standard Windows
 contracts without the two large candidate builds. Use that focused native

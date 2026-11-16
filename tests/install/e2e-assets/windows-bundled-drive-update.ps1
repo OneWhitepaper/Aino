@@ -95,6 +95,7 @@ function Find-AppWindow {
 }
 
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+Initialize-InstallerAutomation
 
 # 1. the in-app Update trigger ------------------------------------------------
 
