@@ -1,5 +1,7 @@
 # Named-member group redesign: verification
 
+Historical acceptance record: `$TMPDIR/...` references below identify evidence from the original machine's temporary directory. They describe that run, are not commands to execute, and do not imply the raw logs are included in this checkout or still available. Committed screenshots retain their existing links.
+
 Date: 2026-11-09. Worktree: `agent-hub-bot-repair/Aino`; branch: `codex/bot-creation-context-repair`.
 
 ## Result
@@ -8,11 +10,11 @@ Replaced the group page presentation and related group creation/legacy flows. Na
 
 ## Automated checks
 
-- 213 related test files, 1637 tests passed: `/tmp/aino-human-group-regression-complete.log`.
-- Full desktop `npm run typecheck`, exit 0: `/tmp/aino-human-group-typecheck-release.log`.
-- Development `HERMES_DESKTOP_BUILD_FLAVOR=development npm run build`, exit 0: `/tmp/aino-human-group-build-complete.log`.
-- Targeted ESLint: 0 errors; 4 existing no-restricted-globals warnings in `group-chat-view.inline-code.test.tsx` and `group-chat-view.wrap.test.tsx`: `/tmp/aino-human-group-lint-complete.log`.
-- Impeccable detector: `[]`, `/tmp/aino-human-group-detector-complete.json`.
+- 213 related test files, 1637 tests passed: `$TMPDIR/aino-human-group-regression-complete.log`.
+- Full desktop `npm run typecheck`, exit 0: `$TMPDIR/aino-human-group-typecheck-release.log`.
+- Development `HERMES_DESKTOP_BUILD_FLAVOR=development npm run build`, exit 0: `$TMPDIR/aino-human-group-build-complete.log`.
+- Targeted ESLint: 0 errors; 4 existing no-restricted-globals warnings in `group-chat-view.inline-code.test.tsx` and `group-chat-view.wrap.test.tsx`: `$TMPDIR/aino-human-group-lint-complete.log`.
+- Impeccable detector: `[]`, `$TMPDIR/aino-human-group-detector-complete.json`.
 - `git diff --check` passed.
 
 The tests cover exact same-name/renamed recipients, copy/cut/paste, removed members, foreign source/room metadata rejection, malformed clipboard data, IME and selection, punctuation/colon address parsing, plain-text paste, attachments, Enter/form validation, and exact journaled retries. Legacy scope includes durable room, owner connection/profile and source-qualified member routes.
@@ -45,16 +47,16 @@ Hosted sessions now follow their profile with a valid unset model. A narrowly ch
 
 Automated evidence:
 
-- Backend: 14 files, 157 tests passed; final added retired-member guards and follow-model checks: 30 tests passed. `/tmp/aino-group-backend-tests.log`, `/tmp/aino-group-backend-final-targeted.log`.
-- Desktop: 23 files, 263 tests passed. `/tmp/aino-group-runtime-desktop-tests.log`.
-- Full desktop typecheck, build and targeted ESLint passed. `/tmp/aino-group-runtime-typecheck-release.log`, `/tmp/aino-group-runtime-build-release.log`, `/tmp/aino-group-runtime-client-lint-release.log`.
+- Backend: 14 files, 157 tests passed; final added retired-member guards and follow-model checks: 30 tests passed. `$TMPDIR/aino-group-backend-tests.log`, `$TMPDIR/aino-group-backend-final-targeted.log`.
+- Desktop: 23 files, 263 tests passed. `$TMPDIR/aino-group-runtime-desktop-tests.log`.
+- Full desktop typecheck, build and targeted ESLint passed. `$TMPDIR/aino-group-runtime-typecheck-release.log`, `$TMPDIR/aino-group-runtime-build-release.log`, `$TMPDIR/aino-group-runtime-client-lint-release.log`.
 - Backend Ruff, generated gateway contracts and diff checks passed. Backend changes have no code-health findings. Whole-worktree health still lists earlier, unrelated desktop changes; this runtime repair does not claim those are cleared.
 
 The isolated development home also lacked its original on-disk installation identity. A fresh canonical start minted a different identity and correctly refused the historical room. A read-only audit proved one current-user-owned, all-local room, one original identity, no transfers or peer/replica resources, and no persisted references to the newly minted identity. The new file was backed up, then the original installation identity was restored atomically between canonical idle stop and ensure. No database, room authority or owner was manually edited; no authority takeover or permission bypass was added. This was a one-time repair to the isolated development environment, not an automatic adoption policy.
 
 Real native-desktop acceptance used the existing room `35b28be9-f1e9-4fcb-aba5-209e89a186fc` and GLM-5.3-Flash. One addressed member replied “群聊已连接”; all three members then separately replied “已就绪”, without tools. The exact pending send survived the restart and was retried once. Independent read-only checks confirmed all three original session IDs remained, all policies restored successfully, four new member messages and four settled turns, no new failed turn, and an idle, unblocked runtime. Old events 1–23 remain; no pre-repair content fingerprint existed, so no byte-for-byte history claim is made.
 
-Live evidence: `/tmp/aino-group-runtime-status-final.json`, `/tmp/aino-group-runtime-verification-final.json`, `/tmp/aino-group-install-identity-repair-result.json`. Current development gateway PID at acceptance: 1761. No commit, push, deployment or installer was produced.
+Live evidence: `$TMPDIR/aino-group-runtime-status-final.json`, `$TMPDIR/aino-group-runtime-verification-final.json`, `$TMPDIR/aino-group-install-identity-repair-result.json`. Current development gateway PID at acceptance: 1761. No commit, push, deployment or installer was produced.
 
 ## Current robot names in historical replies, 2026-11-09
 
@@ -62,9 +64,9 @@ The user chose to show each seated robot's current name for historical replies a
 
 Checks passed:
 
-- Related UI regression: 26 files, 268 tests. `/tmp/aino-group-names-tests-final.log`.
-- Full desktop typecheck, development build and changed-file ESLint. `/tmp/aino-group-names-typecheck-final.log`, `/tmp/aino-group-names-build.log`, `/tmp/aino-group-names-lint.log`.
-- Impeccable detector returned `[]`. `/tmp/aino-group-names-detector.json`.
+- Related UI regression: 26 files, 268 tests. `$TMPDIR/aino-group-names-tests-final.log`.
+- Full desktop typecheck, development build and changed-file ESLint. `$TMPDIR/aino-group-names-typecheck-final.log`, `$TMPDIR/aino-group-names-build.log`, `$TMPDIR/aino-group-names-lint.log`.
+- Impeccable detector returned `[]`. `$TMPDIR/aino-group-names-detector.json`.
 - `git diff --check` passed.
 
 Reloaded the idle native desktop from the final development build, opened the existing group and inspected historical replies. All three robot headings display 测试, 创建修复验证 and 默认模型验收 in place of internal IDs. Native evidence: `desktop-readable-author-names.png` in the screenshot directory above. No model message was sent, gateway restarted or model configuration changed during this name-display acceptance. No commit, push, deployment or installer was produced.
@@ -77,18 +79,18 @@ The existing `hermes model` command now supports noninteractive `--list --json` 
 
 Automated verification passed:
 
-- Backend and contract regression: 15 files, 159 tests, `/tmp/aino-conversation-model-regression-final.log`.
-- Desktop regression: 6 files, 81 tests, `/tmp/aino-conversation-model-ui-final.log`; subsequent final SDK and hidden-workspace coverage: 12 and 23 tests. Signed-out provider SDK coverage: 48 tests.
+- Backend and contract regression: 15 files, 159 tests, `$TMPDIR/aino-conversation-model-regression-final.log`.
+- Desktop regression: 6 files, 81 tests, `$TMPDIR/aino-conversation-model-ui-final.log`; subsequent final SDK and hidden-workspace coverage: 12 and 23 tests. Signed-out provider SDK coverage: 48 tests.
 - Owner request, model binding and group-follow suites: 52 tests; the selected-conversation group suite is included in the backend regression.
-- Full desktop typecheck and final development build: `/tmp/aino-conversation-model-typecheck-final.log`, `/tmp/aino-conversation-model-build-final.log`.
+- Full desktop typecheck and final development build: `$TMPDIR/aino-conversation-model-typecheck-final.log`, `$TMPDIR/aino-conversation-model-build-final.log`.
 - Changed-file ESLint, Ruff and generated contracts passed. The SDK preparation helper has CC 16. Independent frozen review found no remaining functional blocker.
-- Whole dirty-worktree health still reports 20 earlier unrelated UI findings, `/tmp/aino-conversation-model-health-release.log`; this task does not claim those cleared. New model-switch sources have no health findings.
+- Whole dirty-worktree health still reports 20 earlier unrelated UI findings, `$TMPDIR/aino-conversation-model-health-release.log`; this task does not claim those cleared. New model-switch sources have no health findings.
 
 The isolated acceptance launcher originally resolved the old editable CLI checkout even though its native gateway used this worktree. An initial test was stopped through the desktop. Only the temporary harness launcher/PATH was corrected to use the current checkout, with its previous wrapper backed up. The packaged app already prioritizes its own launcher; no production resolver or system CLI was changed. The original erroneous Alibaba/default/name triple on profile 测试 was separately backed up and restored to blank inheritance before final acceptance. Other configuration was preserved.
 
 Real acceptance used the final built native desktop and canonically restarted idle gateway (PID 54313). An addressed message to 测试 queried six actual Aino models, selected `g3-deepseek-v4.1-flash`, and received `scheduled / next_message`. A second addressed message received “DeepSeek 群聊验收通过”. Read-only database checks confirmed actual `deepseek-v4.1-flash` usage with `billing_provider=aino`, one call, 52,210 input and 8 output tokens. This verifies the route independently of the robot's self-report. The selected route is stored only for that room/member conversation. The other two group sessions retain GLM, no selection, and zero new calls; all profile default fields match the pre-next-message snapshot. The final reply called no tools. Existing failures and the interrupted harness test remain in history.
 
-Live evidence: `/tmp/aino-model-route-baseline.json`, `/tmp/aino-model-route-final.json`, `/tmp/aino-model-route-acceptance-summary.json`, `/tmp/aino-conversation-model-runtime-restart-final.json`. Native screenshot: `desktop-group-deepseek-selection.png` in the screenshot directory above. This acceptance did not exercise a second live room or private chat inference; isolation for those paths is covered by the owner/scope tests and unchanged defaults. No API change, commit, push, deployment or installer was produced.
+Live evidence: `$TMPDIR/aino-model-route-baseline.json`, `$TMPDIR/aino-model-route-final.json`, `$TMPDIR/aino-model-route-acceptance-summary.json`, `$TMPDIR/aino-conversation-model-runtime-restart-final.json`. Native screenshot: `desktop-group-deepseek-selection.png` in the screenshot directory above. This acceptance did not exercise a second live room or private chat inference; isolation for those paths is covered by the owner/scope tests and unchanged defaults. No API change, commit, push, deployment or installer was produced.
 
 ## Real task activity in the group status line, 2026-11-09
 
@@ -98,11 +100,11 @@ The existing hosted `info` read exposes activity only for the exact running admi
 
 Verification passed:
 
-- Final desktop regression: 8 files, 95 tests, `/tmp/aino-group-live-ui-final.log`, including 16 new live-activity cases and the faster poll/history-cache behavior.
-- Final backend regression: 14 files, 127 tests, 1 Linux-only skip on macOS, `/tmp/aino-group-live-backend-final.log`. The approval fixtures were subsequently moved to a focused file to meet file-size limits; both service/approval files passed all 39 tests, `/tmp/aino-room-approval-service-final.log`.
-- Full desktop typecheck, development build and changed-file ESLint: `/tmp/aino-group-live-typecheck.log`, `/tmp/aino-group-live-build.log`, `/tmp/aino-group-live-lint-final.log`.
+- Final desktop regression: 8 files, 95 tests, `$TMPDIR/aino-group-live-ui-final.log`, including 16 new live-activity cases and the faster poll/history-cache behavior.
+- Final backend regression: 14 files, 127 tests, 1 Linux-only skip on macOS, `$TMPDIR/aino-group-live-backend-final.log`. The approval fixtures were subsequently moved to a focused file to meet file-size limits; both service/approval files passed all 39 tests, `$TMPDIR/aino-room-approval-service-final.log`.
+- Full desktop typecheck, development build and changed-file ESLint: `$TMPDIR/aino-group-live-typecheck.log`, `$TMPDIR/aino-group-live-build.log`, `$TMPDIR/aino-group-live-lint-final.log`.
 - Ruff, generated gateway contracts and `git diff --check` passed. Independent review found no remaining blocker. Whole-worktree health still lists unrelated earlier UI changes; this task's new/changed activity code has no findings.
 
-Real native acceptance used the final built renderer and idle canonical gateway restart to PID 68342. An addressed message asked 测试 to read and edit only `/tmp/aino-group-status-acceptance-20261109.txt`, run an eight-second command, then reply. The 250ms read-only state trace observed queued → thinking → reading → thinking → editing → thinking → running_command → thinking → idle, always on one exact member/task/generation. The temporary fixture contains the requested new line and the member replied “实时状态验收完成”. Native AX observed Thinking; the screenshot caught Running command; the completed screenshot shows the activity strip and Stop retired. Read/edit lasted under a second, so no claim is made that every short phase remained visible in the 750ms desktop sample. Browser/search/image categories are covered by automated events, not exercised with live external tools in this acceptance. Runtime ended idle, failed/cancelled counts unchanged, settled increased by one.
+Real native acceptance used the final built renderer and idle canonical gateway restart to PID 68342. An addressed message asked 测试 to read and edit only `$TMPDIR/aino-group-status-acceptance-20261109.txt`, run an eight-second command, then reply. The 250ms read-only state trace observed queued → thinking → reading → thinking → editing → thinking → running_command → thinking → idle, always on one exact member/task/generation. The temporary fixture contains the requested new line and the member replied “实时状态验收完成”. Native AX observed Thinking; the screenshot caught Running command; the completed screenshot shows the activity strip and Stop retired. Read/edit lasted under a second, so no claim is made that every short phase remained visible in the 750ms desktop sample. Browser/search/image categories are covered by automated events, not exercised with live external tools in this acceptance. Runtime ended idle, failed/cancelled counts unchanged, settled increased by one.
 
-Evidence: `/tmp/aino-group-activity-before.json`, `/tmp/aino-group-activity-after.json`, `/tmp/aino-group-activity-live-trace.json`, `/tmp/aino-group-activity-runtime-restart.json`. Native screenshots: `desktop-group-live-command.png`, `desktop-group-live-after-command.png`, with provenance hashes in the screenshot directory. Existing history and the previous model selection remain. No commit, push, API deployment or installer was produced.
+Evidence: `$TMPDIR/aino-group-activity-before.json`, `$TMPDIR/aino-group-activity-after.json`, `$TMPDIR/aino-group-activity-live-trace.json`, `$TMPDIR/aino-group-activity-runtime-restart.json`. Native screenshots: `desktop-group-live-command.png`, `desktop-group-live-after-command.png`, with provenance hashes in the screenshot directory. Existing history and the previous model selection remain. No commit, push, API deployment or installer was produced.

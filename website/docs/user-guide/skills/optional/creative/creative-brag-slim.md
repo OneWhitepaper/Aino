@@ -21,7 +21,7 @@ Launch video from a project or URL, upstream-maintained.
 | License | MIT |
 | Platforms | linux, macos, windows |
 | Tags | `video`, `launch-video`, `marketing`, `motion-graphics`, `share-copy` |
-| Related skills | [`brag`](../../optional/creative/creative-brag.md), [`hyperframes`](../../optional/creative/creative-hyperframes.md) |
+| Related skills | [`brag`](../../optional/creative/creative-brag.md), [`hyperframes`](../../bundled/creative/creative-hyperframes.md) |
 
 ## Reference: full SKILL.md
 

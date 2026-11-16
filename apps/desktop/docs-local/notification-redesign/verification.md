@@ -1,5 +1,7 @@
 # Notification redesign verification
 
+Historical acceptance record: `$TMPDIR/...` references below identify evidence from the original machine's temporary directory. They describe that run, are not commands to execute, and do not imply the raw logs are included in this checkout or still available. Committed screenshots retain their existing links.
+
 Date: 2026-11-09. Source checkout: `codex/bot-creation-context-repair`.
 Scope and ownership: [implementation.md](./implementation.md).
 
@@ -38,8 +40,8 @@ Scope and ownership: [implementation.md](./implementation.md).
   source-only scan does not assess rendered contrast; rendered review below is
   separate evidence. Specialized surface scans were also reviewed.
 
-Raw full-suite result: `/tmp/aino-notifications-ui-results.json`.
-Final local logs: `/tmp/aino-notifications-final-{targeted,typecheck,lint,build,detect}.log`.
+Raw full-suite result: `$TMPDIR/aino-notifications-ui-results.json`.
+Final local logs: `$TMPDIR/aino-notifications-final-{targeted,typecheck,lint,build,detect}.log`.
 
 ## Rendered behavior
 

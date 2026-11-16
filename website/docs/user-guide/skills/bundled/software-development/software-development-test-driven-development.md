@@ -1,14 +1,14 @@
 ---
-title: "Test Driven Development — TDD: enforce RED-GREEN-REFACTOR, tests before code"
+title: "Test Driven Development — Build behavior with a verified red-green-refactor loop"
 sidebar_label: "Test Driven Development"
-description: "TDD: enforce RED-GREEN-REFACTOR, tests before code"
+description: "Build behavior with a verified red-green-refactor loop"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
 # Test Driven Development
 
-TDD: enforce RED-GREEN-REFACTOR, tests before code.
+Build behavior with a verified red-green-refactor loop.
 
 ## Skill metadata
 
@@ -16,12 +16,12 @@ TDD: enforce RED-GREEN-REFACTOR, tests before code.
 |---|---|
 | Source | Bundled (installed by default) |
 | Path | `skills/software-development/test-driven-development` |
-| Version | `1.1.0` |
-| Author | Hermes Agent (adapted from obra/superpowers) |
+| Version | `1.2.0` |
+| Author | Jesse Vincent (@obra); Aino contributors (Hermes Agent adaptation) |
 | License | MIT |
 | Platforms | linux, macos, windows |
-| Tags | `testing`, `tdd`, `development`, `quality`, `red-green-refactor` |
-| Related skills | [`systematic-debugging`](../../bundled/software-development/software-development-systematic-debugging.md), [`subagent-driven-development`](../../optional/software-development/software-development-subagent-driven-development.md) |
+| Tags | `testing`, `tdd`, `regression`, `behavior-contracts` |
+| Related skills | [`systematic-debugging`](../../bundled/software-development/software-development-systematic-debugging.md), [`verification-before-completion`](../../bundled/software-development/software-development-verification-before-completion.md) |
 
 ## Reference: full SKILL.md
 
@@ -29,352 +29,123 @@ TDD: enforce RED-GREEN-REFACTOR, tests before code.
 The following is the complete skill definition that Hermes loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
 :::
 
-# Test-Driven Development (TDD)
+# Test-Driven Development Skill
 
-## Overview
-
-Write the test first. Watch it fail. Write minimal code to pass.
-
-**Core principle:** If you didn't watch the test fail, you don't know if it tests the right thing.
-
-**Violating the letter of the rules is violating the spirit of the rules.**
+Write a focused behavior test, observe its intended failure, and implement
+only enough to make it pass. Specify externally meaningful behavior rather
+than preserve the current shape of the code.
 
 ## When to Use
 
-**Always:**
-- New features
-- Bug fixes
-- Refactoring
-- Behavior changes
-
-**Exceptions (ask the user first):**
-- Throwaway prototypes
-- Generated code
-- Configuration files
-
-Thinking "skip TDD just this once"? Stop. That's rationalization.
-
-## The Iron Law
-
-```
-NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
-```
+- Adding a behavior, fixing a reproducible bug, or changing a contract.
+- Refactoring logic whose behavior needs protection.
+- Repairing a boundary involving state, configuration, security, or I/O.
 
-Write code before the test? Delete it. Start over.
+Choose verification proportional to the change. A reversible visual tweak
+or prose edit may need direct inspection instead of a fabricated unit test;
+follow the user's and repository's explicit testing requirements.
 
-**No exceptions:**
-- Don't keep it as "reference"
-- Don't "adapt" it while writing tests
-- Don't look at it
-- Delete means delete
+## Prerequisites
 
-Implement fresh from tests. Period.
+- A clear acceptance condition and the code path responsible for it.
+- The project-managed runtime, fixtures, and required test command.
+- Native `read_file`, `search_files`, `patch`, and `terminal` tools.
+- Temporary state that cannot touch real accounts or user data.
 
-## Red-Green-Refactor Cycle
+## How to Run
 
-### RED — Write Failing Test
+1. Select one observable behavior and write its smallest useful test.
+2. Run it and confirm failure for the intended missing or broken behavior.
+3. Implement the minimal coherent fix and rerun the test.
+4. Refactor with the tests green, then run relevant integration checks.
 
-Write one minimal test showing what should happen.
+Read [references/testing-patterns.md](https://github.com/NousResearch/hermes-agent/blob/main/skills/software-development/test-driven-development/references/testing-patterns.md) when
+choosing mocks, regression seams, or asynchronous assertions.
 
-**Good test:**
-```python
-def test_retries_failed_operations_3_times():
-    attempts = 0
-    def operation():
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            raise Exception('fail')
-        return 'success'
+## Quick Reference
 
-    result = retry_operation(operation)
+| Stage | Question | Exit condition |
+| --- | --- | --- |
+| Red | Does the check detect the required behavior? | Expected failure observed |
+| Green | What is the smallest correct implementation? | Focused test passes |
+| Refactor | Can structure improve without changing behavior? | Checks still pass |
+| Integrate | Does the surrounding product still work? | Integration evidence |
 
-    assert result == 'success'
-    assert attempts == 3
-```
-Clear name, tests real behavior, one thing.
+## Procedure
 
-**Bad test:**
-```python
-def test_retry_works():
-    mock = MagicMock()
-    mock.side_effect = [Exception(), Exception(), 'success']
-    result = retry_operation(mock)
-    assert result == 'success'  # What about retry count? Timing?
-```
-Vague name, tests mock not real code.
+### Red: specify the behavior
 
-**Requirements:**
-- One behavior per test
-- Clear descriptive name ("and" in name? Split it)
-- Real code, not mocks (unless truly unavoidable)
-- Name describes behavior, not implementation
+Choose a name describing the input or transition and expected result.
+Arrange realistic state, call the public boundary, and assert the outcome
+a caller or user depends on. Keep unrelated setup in existing fixtures.
 
-### Verify RED — Watch It Fail
+For a bug, reproduce the actual failing sequence. A regression that starts
+after the broken transition cannot prove the transition was repaired.
 
-**MANDATORY. Never skip.**
+Use real code inside the boundary under test. Mock only dependencies that
+are nondeterministic, expensive, unsafe, or outside the contract. Avoid
+asserting private calls merely because the implementation uses them.
 
-```bash
-# Use terminal tool to run the specific test
-pytest tests/test_feature.py::test_specific_behavior -v
-```
+Run the specific test through the supported runner. Read the failure and
+exit status. Syntax errors, missing packages, broken fixtures, and an
+unrelated exception do not establish the intended red state.
 
-Confirm:
-- Test fails (not errors from typos)
-- Failure message is expected
-- Fails because the feature is missing
+If the new test passes immediately, check whether the behavior already
+exists, the assertions are meaningful, or setup bypassed the failing path.
+Do not change an expectation merely to obtain a failure.
 
-**Test passes immediately?** You're testing existing behavior. Fix the test.
+### Green: implement one contract
 
-**Test errors?** Fix the error, re-run until it fails correctly.
+Apply the smallest change that satisfies the behavior and preserves the
+public contract. Prefer extending a shared implementation to creating an
+alternate path that only the test reaches.
 
-### GREEN — Minimal Code
+Run the focused test. If it fails, use its evidence to correct the
+implementation. Do not weaken the expected behavior or add production
+branches that detect test inputs.
 
-Write the simplest code to pass the test. Nothing more.
+Add edge cases when they define distinct requirements: empty input,
+ownership, cancellation, retries, recovery, or concurrent transitions.
+Keep each assertion connected to the requested behavior.
 
-**Good:**
-```python
-def add(a, b):
-    return a + b  # Nothing extra
-```
+If production work already exists, preserve user changes. Where feasible,
+demonstrate red in an isolated baseline checkout or by temporarily
+reverting only your own patch, then restore it exactly. Never delete
+unrelated work to perform the exercise.
 
-**Bad:**
-```python
-def add(a, b):
-    result = a + b
-    logging.info(f"Adding {a} + {b} = {result}")  # Extra!
-    return result
-```
+### Refactor: improve structure with coverage
 
-Don't add features, refactor other code, or "improve" beyond the test.
+Once green, remove duplication, improve names, and clarify responsibilities.
+Rerun focused tests after each meaningful change.
 
-**Cheating is OK in GREEN:**
-- Hardcode return values
-- Copy-paste
-- Duplicate code
-- Skip edge cases
+Test helpers should simplify setup without concealing behavior.
+Production abstractions need real consumers; a test is not justification
+for an otherwise unused manager or wrapper.
 
-We'll fix it in REFACTOR.
+### Integrate: cover the real boundary
 
-### Verify GREEN — Watch It Pass
+Run the relevant suite and project-required checks. Configuration,
+persistence, identity, and I/O changes often need real imports and a
+temporary isolated data directory beyond mocked unit tests.
 
-**MANDATORY.**
+For UI behavior, verify interactions in the real renderer or supported
+harness, including affected loading, empty, error, and recovery states.
+Static assertions cannot prove geometry or responsiveness.
 
-```bash
-# Run the specific test
-pytest tests/test_feature.py::test_specific_behavior -v
+## Pitfalls
 
-# Then run ALL tests to check for regressions
-pytest tests/ -q
-```
+- A test added afterward without showing it catches the original bug.
+- Testing the mock, source text, or implementation structure.
+- Catching every exception and asserting that none escaped.
+- Depending on real user storage, live credentials, or wall-clock sleeps.
+- Adding redundant tests instead of one strong behavior contract.
+- Treating all failures as new without checking the baseline.
 
-Confirm:
-- Test passes
-- Other tests still pass
-- Output pristine (no errors, warnings)
+## Verification
 
-**Test fails?** Fix the code, not the test.
+Keep evidence of the intended red result and final green result. State
+which behavior each test protects and which integration checks passed.
+A test that was not executed is a proposed check, not evidence.
 
-**Other tests fail?** Fix regressions now.
-
-### REFACTOR — Clean Up
-
-After green only:
-- Remove duplication
-- Improve names
-- Extract helpers
-- Simplify expressions
-
-Keep tests green throughout. Don't add behavior.
-
-**If tests fail during refactor:** Undo immediately. Take smaller steps.
-
-### Repeat
-
-Next failing test for next behavior. One cycle at a time.
-
-## Avoid Horizontal Slices
-
-Do **not** write all tests first and then all implementation. That is horizontal slicing: RED becomes "write a pile of imagined tests" and GREEN becomes "make the pile pass." It produces brittle tests because the tests are designed before the implementation has taught you what behavior and interface actually matter.
-
-Use vertical tracer bullets instead:
-
-```text
-WRONG:
-  RED:   test1, test2, test3, test4
-  GREEN: impl1, impl2, impl3, impl4
-
-RIGHT:
-  RED→GREEN: test1→impl1
-  RED→GREEN: test2→impl2
-  RED→GREEN: test3→impl3
-```
-
-A tracer bullet is one end-to-end behavior slice. It proves the path works, teaches you about the interface, and keeps each next test grounded in what you just learned.
-
-## Why Order Matters
-
-**"I'll write tests after to verify it works"**
-
-Tests written after code pass immediately. Passing immediately proves nothing:
-- Might test the wrong thing
-- Might test implementation, not behavior
-- Might miss edge cases you forgot
-- You never saw it catch the bug
-
-Test-first forces you to see the test fail, proving it actually tests something.
-
-**"I already manually tested all the edge cases"**
-
-Manual testing is ad-hoc. You think you tested everything but:
-- No record of what you tested
-- Can't re-run when code changes
-- Easy to forget cases under pressure
-- "It worked when I tried it" ≠ comprehensive
-
-Automated tests are systematic. They run the same way every time.
-
-**"Deleting X hours of work is wasteful"**
-
-Sunk cost fallacy. The time is already gone. Your choice now:
-- Delete and rewrite with TDD (high confidence)
-- Keep it and add tests after (low confidence, likely bugs)
-
-The "waste" is keeping code you can't trust.
-
-**"TDD is dogmatic, being pragmatic means adapting"**
-
-TDD IS pragmatic:
-- Finds bugs before commit (faster than debugging after)
-- Prevents regressions (tests catch breaks immediately)
-- Documents behavior (tests show how to use code)
-- Enables refactoring (change freely, tests catch breaks)
-
-"Pragmatic" shortcuts = debugging in production = slower.
-
-**"Tests after achieve the same goals — it's spirit not ritual"**
-
-No. Tests-after answer "What does this do?" Tests-first answer "What should this do?"
-
-Tests-after are biased by your implementation. You test what you built, not what's required. Tests-first force edge case discovery before implementing.
-
-## Common Rationalizations
-
-| Excuse | Reality |
-|--------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
-| "I'll test after" | Tests passing immediately prove nothing. |
-| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
-| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
-| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
-| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "Test hard = design unclear" | Listen to the test. Hard to test = hard to use. |
-| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
-| "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
-| "Existing code has no tests" | You're improving it. Add tests for the code you touch. |
-
-## Red Flags — STOP and Start Over
-
-If you catch yourself doing any of these, delete the code and restart with TDD:
-
-- Code before test
-- Test after implementation
-- Test passes immediately on first run
-- Can't explain why test failed
-- Tests added "later"
-- Rationalizing "just this once"
-- "I already manually tested it"
-- "Tests after achieve the same purpose"
-- "Keep as reference" or "adapt existing code"
-- "Already spent X hours, deleting is wasteful"
-- "TDD is dogmatic, I'm being pragmatic"
-- "This is different because..."
-
-**All of these mean: Delete code. Start over with TDD.**
-
-## Verification Checklist
-
-Before marking work complete:
-
-- [ ] Every new function/method has a test
-- [ ] Watched each test fail before implementing
-- [ ] Each test failed for expected reason (feature missing, not typo)
-- [ ] Wrote minimal code to pass each test
-- [ ] All tests pass
-- [ ] Output pristine (no errors, warnings)
-- [ ] Tests use real code (mocks only if unavoidable)
-- [ ] Edge cases and errors covered
-
-Can't check all boxes? You skipped TDD. Start over.
-
-## When Stuck
-
-| Problem | Solution |
-|---------|----------|
-| Don't know how to test | Write the wished-for API. Write the assertion first. Ask the user. |
-| Test too complicated | Design too complicated. Simplify the interface. |
-| Must mock everything | Code too coupled. Use dependency injection. |
-| Test setup huge | Extract helpers. Still complex? Simplify the design. |
-
-## Hermes Agent Integration
-
-### Running Tests
-
-Use the `terminal` tool to run tests at each step:
-
-```python
-# RED — verify failure
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# GREEN — verify pass
-terminal("pytest tests/test_feature.py::test_name -v")
-
-# Full suite — verify no regressions
-terminal("pytest tests/ -q")
-```
-
-### With delegate_task
-
-When dispatching subagents for implementation, enforce TDD in the goal:
-
-```python
-delegate_task(
-    goal="Implement [feature] using strict TDD",
-    context="""
-    Follow test-driven-development skill:
-    1. Write failing test FIRST
-    2. Run test to verify it fails
-    3. Write minimal code to pass
-    4. Run test to verify it passes
-    5. Refactor if needed
-    6. Commit
-
-    Project test command: pytest tests/ -q
-    Project structure: [describe relevant files]
-    """,
-    toolsets=['terminal', 'file']
-)
-```
-
-### With systematic-debugging
-
-Bug found? Write failing test reproducing it. Follow TDD cycle. The test proves the fix and prevents regression.
-
-Never fix bugs without a test.
-
-## Testing Anti-Patterns
-
-- **Testing mock behavior instead of real behavior** — mocks should verify interactions, not replace the system under test
-- **Testing implementation details** — test behavior/results, not internal method calls
-- **Happy path only** — always test edge cases, errors, and boundaries
-- **Brittle tests** — tests should verify behavior, not structure; refactoring shouldn't break them
-
-## Final Rule
-
-```
-Production code → test exists and failed first
-Otherwise → not TDD
-```
-
-No exceptions without the user's explicit permission.
+Adapted from [Superpowers](https://github.com/obra/superpowers/tree/main/skills/test-driven-development).
+The upstream MIT notice is included in `LICENSE`.

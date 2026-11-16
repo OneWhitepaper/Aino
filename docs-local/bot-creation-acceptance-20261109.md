@@ -1,5 +1,7 @@
 # Agent Hub creation repair — acceptance
 
+Historical acceptance record: `$TMPDIR/...` references below identify evidence from the original machine's temporary directory. They describe that run, are not commands to execute, and do not imply the raw logs are included in this checkout or still available. Committed screenshots retain their existing links.
+
 Branch: `codex/bot-creation-context-repair`, based on `97299a64d9`.
 Worktree: `/Users/zizimutou/.codex/worktrees/agent-hub-bot-repair/Aino`.
 
@@ -31,11 +33,11 @@ The old empty-chat selection initially did not repaint in the long-running rende
 
 ## Verification
 
-- Desktop affected regression: 126 files, 1096 tests passed (`/tmp/aino-bot-fix-regression-final2.log`).
-- A final test-fixture type correction was followed by 71 routing/canonical tests passing (`/tmp/aino-bot-fix-routing-final.log`).
-- Python integration/identity/profile regression: 7 files, 59 tests passed (`/tmp/aino-bot-python-final.log`).
-- Full desktop typecheck passed (`/tmp/aino-bot-fix-typecheck-final3.log`).
-- Final development build passed (`/tmp/aino-bot-fix-build-final3.log`).
+- Desktop affected regression: 126 files, 1096 tests passed (`$TMPDIR/aino-bot-fix-regression-final2.log`).
+- A final test-fixture type correction was followed by 71 routing/canonical tests passing (`$TMPDIR/aino-bot-fix-routing-final.log`).
+- Python integration/identity/profile regression: 7 files, 59 tests passed (`$TMPDIR/aino-bot-python-final.log`).
+- Full desktop typecheck passed (`$TMPDIR/aino-bot-fix-typecheck-final3.log`).
+- Final development build passed (`$TMPDIR/aino-bot-fix-build-final3.log`).
 - ESLint for changed TypeScript files and `git diff --check` passed.
 
 These are affected-area checks, not a claim that the entire repository test suite ran.
@@ -54,8 +56,8 @@ The screenshot robot `创建修复验证` had no canonical session and no saved 
 
 Final verification after the foreground-open repair and post-navigation cancellation guard:
 
-- Affected desktop regression: 125 files / 1159 tests passed (`/tmp/aino-bot-recovery-cancel-tests.log`).
-- Final development build passed (`/tmp/aino-bot-recovery-cancel-build.log`).
+- Affected desktop regression: 125 files / 1159 tests passed (`$TMPDIR/aino-bot-recovery-cancel-tests.log`).
+- Final development build passed (`$TMPDIR/aino-bot-recovery-cancel-build.log`).
 - Navigation agent ran the full desktop typecheck, affected ESLint and a separate 180-test regression successfully.
 - Independent read-only review confirmed that navigation cancellation cleans up listeners, never retries into a page the user left, and does not mark a cancelled session as failed.
 - Force-reloaded the real desktop with the final build and reopened both early test robots. Both displayed `Aino 内置模型: GLM-5.3-Flash` with no error; the screenshot robot is left visible.

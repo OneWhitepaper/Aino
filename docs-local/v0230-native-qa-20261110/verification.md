@@ -1,5 +1,7 @@
 # Aino v0.23.0 native acceptance — 2026-11-10
 
+Historical acceptance record: `$TMPDIR/...` references below identify evidence from the original machine's temporary directory. They describe that run, are not commands to execute, and do not imply the raw logs are included in this checkout or still available. Committed screenshots retain their existing links.
+
 Local evidence only. Do not add this directory or its screenshots to a public commit.
 
 ## Execution
@@ -77,13 +79,13 @@ Local evidence only. Do not add this directory or its screenshots to a public co
 
 ## Automated validation owned by this agent
 
-- Bot/group plus locale UI tests: **164 files, 1303 tests passed** — `/tmp/aino-bots-merge-final-tests.log`.
-- Renderer TypeScript: passed — `/tmp/aino-bots-merge-final-types.log`.
-- Bot/group ESLint: exit 0, 0 errors / 7 warnings — `/tmp/aino-bots-merge-final-lint.log`.
-- Bot/group code health: 0 findings — `/tmp/aino-bots-health-final.json`.
-- Electron platform full final rerun: **452 files passed / 11 skipped; 4360 tests passed / 66 skipped**, exit 0 — `/tmp/aino-v0230-platforms-final2.log`.
-- Remote lifecycle focused tests: **90 passed / 1 skipped** after tightening the mock's termination matcher; the real ownership gate was not weakened — `/tmp/aino-v0230-remote-focused.log`.
-- Portal real-Electron test: focused passed; then passed in the final full rerun without increasing timeouts or changing production code — `/tmp/aino-v0230-portal-focused.log`.
+- Bot/group plus locale UI tests: **164 files, 1303 tests passed** — `$TMPDIR/aino-bots-merge-final-tests.log`.
+- Renderer TypeScript: passed — `$TMPDIR/aino-bots-merge-final-types.log`.
+- Bot/group ESLint: exit 0, 0 errors / 7 warnings — `$TMPDIR/aino-bots-merge-final-lint.log`.
+- Bot/group code health: 0 findings — `$TMPDIR/aino-bots-health-final.json`.
+- Electron platform full final rerun: **452 files passed / 11 skipped; 4360 tests passed / 66 skipped**, exit 0 — `$TMPDIR/aino-v0230-platforms-final2.log`.
+- Remote lifecycle focused tests: **90 passed / 1 skipped** after tightening the mock's termination matcher; the real ownership gate was not weakened — `$TMPDIR/aino-v0230-remote-focused.log`.
+- Portal real-Electron test: focused passed; then passed in the final full rerun without increasing timeouts or changing production code — `$TMPDIR/aino-v0230-portal-focused.log`.
 
 The parent agent owns final repository-wide checks, CI, PR and merge status.
 

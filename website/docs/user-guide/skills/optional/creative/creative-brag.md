@@ -21,7 +21,7 @@ Project launch video via Hyperframes, upstream-maintained.
 | License | MIT |
 | Platforms | linux, macos, windows |
 | Tags | `video`, `launch-video`, `marketing`, `hyperframes`, `motion-graphics`, `share-copy` |
-| Related skills | [`brag-slim`](../../optional/creative/creative-brag-slim.md), [`hyperframes`](../../optional/creative/creative-hyperframes.md) |
+| Related skills | [`brag-slim`](../../optional/creative/creative-brag-slim.md), [`hyperframes`](../../bundled/creative/creative-hyperframes.md) |
 
 ## Reference: full SKILL.md
 
