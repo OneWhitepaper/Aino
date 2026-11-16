@@ -87,14 +87,11 @@ try {
     # Microsoft's signed framework provider; keep the actual Button contract.
     $before = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$handles.button)
     Write-Output "fixture provider before: type=$($before.Current.ControlType.ProgrammaticName) class=$($before.Current.ClassName) framework=$($before.Current.FrameworkId) patterns=$((@($before.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName })) -join ',')"
-    $proxyBefore = @([System.Windows.Automation.ClientSettings]::GetProxyFactoryMappingTable())
-    Write-Output "fixture proxy mapping count before: $($proxyBefore.Count)"
     $assemblyName = [System.Windows.Automation.AutomationElement].Assembly.GetName()
     $assemblyName.Name = 'UIAutomationClientsideProviders'
     $proxyAssembly = [Reflection.Assembly]::Load($assemblyName)
     [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($proxyAssembly.GetName())
-    $proxyAfter = @([System.Windows.Automation.ClientSettings]::GetProxyFactoryMappingTable())
-    Write-Output "fixture proxy mapping count after: $($proxyAfter.Count)"
+    Write-Output 'fixture framework provider explicitly registered'
     $clicked = Get-Date
     $helper = Window-Record $handles.helper
     $target = Window-Record $handles.target
