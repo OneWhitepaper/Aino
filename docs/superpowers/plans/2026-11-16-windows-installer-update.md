@@ -26,9 +26,12 @@
 - [x] Extend Windows acceptance to assert account workspace, historical conversation, Bot/profile and model configuration preservation; detect missing or altered records. Native execution is tracked separately below.
 - [x] Add private artifact-only Windows SDK/deployment verification, including failure/cancel paths and uninstall retaining external data; forbid implicit public workflow execution and installer publication. Native execution is tracked separately below.
 - [x] Run targeted local tests, typecheck and repository checks; run Windows SDK/native contracts and record host/signing limits.
-- [x] Review the production patch and produce an acceptance report distinguishing implementation, contracts and outstanding native receipts.
-- [ ] Accept the corrected-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
-- [ ] Verify the Windows 10 22H2 and standard-user lifecycle on an actual supported desktop host.
+- [x] Record the earlier production/acceptance reviews and distinguish implementation, contracts and outstanding native receipts. Review of the latest fixes is tracked below.
+- [x] Implement explicit public receipts-only execution and complete, fail-closed 13-gate proof projection; independent review of `006d35b6b3` is clean.
+- [x] Implement source-only apply and bounded UIA About scrolling at `f5d12ce3dc`; local Python, Electron, PowerShell, type/lint and repository checks pass.
+- [x] Complete independent review of `f5d12ce3dc` (no Critical/Important findings) and start public standard-runner run `43801657955`; its Windows contracts job passed. Native results remain pending.
+- [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
+- [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
 
 ## Verification commands
 
@@ -41,115 +44,90 @@ scripts/run_tests.sh tests/scripts/test_release_artifacts.py tests/scripts/test_
 python scripts/check
 ```
 
-Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public native execution remains pending.
+Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; acceptance requires all 13 complete and consistent evidence gates, and absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public x64/ARM64 native jobs in run `43801657955` remain in progress.
 
-## Native evidence so far
+## Current progress as of 2026-11-16
 
-- At `c374f48e67`, private run `43747784200` completed the Windows SDK/contracts job:
-  10 Python behaviors (including actual signing-key/trust creation and cleanup), eight real
-  SDK pack/unpack identities, 65 Electron updater/state contracts, GUI-environment restoration,
-  and App Installer descriptor checks passed. Host: Windows Server 2025, not Windows 10.
-- Source `c374f48e67` completed OLD/NEW package build, signing and verification. Native
-  deployment, UI cancellation and automatic relaunch remain unaccepted. Final production
-  source `00e438fc2b` is building separately on x64 and ARM64 in private run `43754848326`.
-- The actual published `v0.1.5` ZIP-to-MSIX migration is implemented with pinned artifact
-  hashes and a natural gateway-owner transition. It requires the existing encrypted login
-  and original database rows, without re-login or stopping the old gateway in the harness.
-- Private reuse run `43756740982` passed the real SessionDB preflight but timed out downloading
-  the 2.61 GB historical ZIP on its first transport attempt. It was cancelled to retain
-  diagnostics and switch to live stage output; this was not a native installation failure.
-- At `4f07b05322`, NEW, native OLD, preparation recovery and cancelled-update reopen all require
-  retained encrypted authentication, authenticated profile reads and zero new login requests.
-  Scoped review passed; related Vitest results: 61 passed / 4 host-specific skips. The full
-  repository check passed all 15 checks. Private run `43762437470` uses this stricter harness
-  against the pinned signed `c374f48e67` artifacts; no native pass is claimed yet.
-- `43762437470` was superseded before native installation by `43763420107` at
-  `412de61082`. Its known-size historical download uses bounded concurrent HTTP ranges,
-  verifies each range and the complete size/SHA-256, and cleans partial files on failure.
-  Related Vitest results: 70 passed / 4 host-specific skips; six extractor tests and all
-  15 repository checks passed. Independent scoped transport review found no important issue.
-  This is acceptance transport only; production update ownership is unchanged.
-- The real Windows contract run `43765756070` passed 48 Python, 65 JS harness (nine host
-  skips), six extractor, eight SDK manifest cases, 68 updater/state and four descriptor
-  tests. The expanded latest run `43769016653` passed 48 Python, 67 JS harness (nine host
-  skips), eight extractor, the SDK cases, 68 updater/state and four descriptor tests.
-- `7a99f718bb` stages the exact historical ZIP from its original GitHub Actions archive,
-  binding outer metadata/digest and the original inner size/digest. Real run `43766175820`
-  proved workflow-token access, complete verification/extraction and released-app login.
-  Its chat checkpoint exposed a harness response-shape error, not an accepted migration.
-- `e7d0c02447` observes the actual automatically relaunched NEW PID and native window before
-  closing it, verifying its encrypted account, actual home, model and original history.
-  Authentication is scoped to NEW's own startup interval. Independent review and local
-  contracts passed; actual Windows UIA observation remains outstanding.
-- `01a8dc64e9` corrects the model observation to the existing scoped
-  `/api/providers/custom-endpoints.current` contract. The prior `/api/config.model` object
-  assumption was wrong; the endpoint deliberately returns the model as a string. Strict
-  model/provider/base-URL checks remain. Reaccept `43769016653` used
-  signed production source `00e438fc2b` (artifact `14181849856`) and harness `01a8dc64e9`.
-- `43769016653` verified the exact historical archive, launched released `v0.1.5`,
-  signed in to the synthetic account, sent a prompt and received the expected mock reply.
-  It then failed because the idle-composer locator recognized only English labels;
-  the actual UI exposed Chinese `语音` and `发送`. This is a harness failure before
-  installation, not a migration or update pass. The locator now recognizes the exact
-  English and Chinese primary actions, retaining transcript and streaming guards.
-- The full desktop typecheck exposed missing composite-project entries for the new
-  acceptance drivers. They are now included explicitly; the full renderer, Electron,
-  E2E and builder typecheck passes. Fresh local production contracts: 63 passed;
-  candidate/runner Python contracts: 51 passed, one native-Windows skip; repository
-  checks: all 15 passed.
-- Full current-source builds `43767548248` remain in progress on x64 and Windows 11 ARM64.
-  They predate only the final harness response correction; keep signed artifacts for reuse.
-  Native installation/update/cancel/uninstall acceptance has not passed yet.
-- Private reaccept `43771648784` at `9cfa1d343c` uses the same exact signed
-  `00e438fc2b` x64 pair with localized idle detection. Its real Windows contracts
-  job passed; the native journey is still running. No production source changed
-  after the signed pair was built.
-- Fresh complete `tests-js` checks passed under PM's locked Node/pnpm and runtime
-  interpreter: 376 tests passed, five platform skips, typecheck and ESLint passed.
-  The initial broad run used the ambient pnpm and an interpreter without the
-  icon dependency; selecting the existing PM environment resolved those failures
-  without source or dependency changes. Release artifact/naming tests: 13 passed.
-- The current acceptance matrix is recorded in
-  `apps/desktop/docs/windows-installer-acceptance.md`. Both independent full
-  production/acceptance review and the localized-control follow-up found no P1/P2.
-- Subsequent compatibility review found an existing update-checker defect:
-  Microsoft's documented `Package.Current` instance cannot query update
-  availability directly. The checker now resolves the current user's exact
-  package through the actual PyWinRT 3.2.1 method
-  `find_package_by_user_security_id_package_full_name` before checking it.
-  `winrt-windows-management-deployment` is now a bounded Windows dependency;
-  `hermes pm lock` added only its pinned metadata, with no existing upgrades.
-  Current-object denial and lookup failures are covered by red-to-green behavior
-  tests; related Python tests: 18 passed, one native Windows skip. Independent
-  review found no P1/P2. A new signed build is required for this production fix;
-  old candidates remain diagnostics only.
-- Full build `43767548248` completed x64 OLD/NEW signing and verification but
-  its older harness failed on the already-fixed `/api/config.model` object
-  assumption. Its x64 artifact is `14185791158`. ARM64 remains running; preserve
-  its outputs. This run is not native installation acceptance.
-- Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
-  website or production feed has been published or promoted.
-- Reaccept `43771648784` passed released ZIP chat, first MSIX installation and
-  retained encrypted login. Its external Node observer then received `EPERM`
-  launching a `WindowsApps` Python. That partial journey is not accepted migration.
-- `695dd00c8f` uses the preflighted fixture Python for external observation on
-  Windows, with the actual owner still bound to the installed payload interpreter.
-  POSIX interpreter/site binding remains intact. Wrong-executable and real Windows
-  listener regression contracts retain the identity and containment requirements.
-  Complete local tests-js checks passed (376 tests, five host skips), desktop
-  typecheck passed, four Python health contracts and all 15 repository checks passed.
-- Windows job `133004500705` at `695dd00c8f` passed 69 Python, 73 JavaScript
-  harness (nine host skips), eight SDK manifest cases, 68 updater/state and four
-  descriptor tests. This includes the real Windows listener observation contract.
-- Reaccept `43776705547` correctly rejected an artifact whose overall origin run
-  was still active. No package was installed. Reaccept `43777044333` uses the
-  exact completed-run artifact `14181849856` with the same corrected harness;
-  it remains diagnostic because that signed source predates the checker fix.
-- `8b9079cd28` uses the actual localized DevTools confirmation phrase and UTF-8
-  BOM for Windows PowerShell 5.1. Five pure driver contracts passed locally on
-  PowerShell 7.5.4; actual 5.1 and UI execution remain separate receipts.
-  `c345989a37` adds that existing driver suite to private candidate contracts.
-- Full production-only review through `c345989a37` found no reproducible P1/P2.
-  It confirmed no changes to durable account/Bot/history paths and no reachable
-  Mac/Linux update regression. Actual Win10 19045 and ordinary-user execution
-  still cannot be established by elevated hosted CI or disposable signing trust.
+- `006d35b6b3` completes the existing public workflow's explicit opt-in and safe
+  receipts-only output. The projection requires 13 matching candidate, migration,
+  automatic-NEW, recovery, state and cleanup gates before reporting accepted;
+  incomplete diagnostics remain unaccepted. Independent review is clean. Local
+  Python contracts passed 111 tests with two native Windows skips; repository,
+  staged and hook checks passed. The root pushed reviewed `f5d12ce3dc` to the
+  public opt-in ref and started run `43801657955`.
+- `f5d12ce3dc` contains the two fixes diagnosed from the actual latest x64 run.
+  Apply now reads the current package's registered source using the existing
+  checker's `--source-only` mode, preserving identity, configured-source and URI
+  checks without repeating networked availability. Unknown/source errors still
+  stop before side effects. The existing UIA driver scrolls the matched About
+  inside the bound OLD window, then refreshes visibility/enabled state and the
+  whole navigation selection; ready/busy Check now retains priority.
+- Local verification for `f5d12ce3dc`: 29 Python tests passed with one native
+  Windows projection probe skipped on Mac; 72 related Electron tests passed;
+  seven pure PowerShell contract groups passed on macOS PowerShell 7.5.4. Full
+  desktop typecheck, changed-file lint/format, all 15 repository checks and the
+  commit hook passed. UTF-8 BOM and CRLF remain in the Windows scripts. Independent
+  review is clean with no Critical/Important findings.
+- Public run [`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955)
+  at `f5d12ce3dc` passed Windows contracts job `133083110675`: 145 Python passed
+  (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state
+  tests across 14 files including source-only flow, seven Windows PowerShell 5.1
+  process/navigation/localization groups including offscreen About, the GUI
+  environment suite and four descriptor tests. Pure PowerShell contracts do not
+  prove actual UIA scrolling. Both x64/ARM64 native jobs completed checkout and
+  started setup, and remain in progress; public standard-runner admission was not
+  blocked by the private-repository billing limitation.
+- Root froze `validation/windows-installer-public/20261116` at `f5d12ce3dc`;
+  documentation updates use a separate ref to avoid restarting native builds.
+  Packages and disposable signing keys remain in the ephemeral runner; only curated
+  receipts may be uploaded. There is no installer/release/feed/site publication,
+  `main` merge, production signing or production-trust acceptance.
+
+## Latest native evidence
+
+Current public run `43801657955` is testing the reviewed `f5d12ce3dc` source on
+standard x64/ARM64 runners; complete native results remain pending.
+
+Earlier private run
+[`43783849762`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43783849762)
+uses the earlier signed source `27bbc1d8f2de0a28b51f83bb07cd0c787586fea4`.
+Its x64 job failed after verified partial progress; its Windows 11 ARM64 job is
+still in progress and has no accepted receipt.
+
+- On Windows Server 2025 x64, OLD/NEW build, signing and verification passed.
+  Released v0.1.5 ZIP chat, first-MSIX installation, retained encrypted login
+  without re-login, original history, natural gateway-owner rotation and all 25
+  account/Bot/configuration/file checks passed. Candidate cleanup recorded removal.
+- The actual installed Electron checker returned exit 2, `AVAILABLE`, the
+  registered loopback source URI and empty stderr. The PackageManager lookup and
+  identity workaround therefore worked on that host.
+- Preparation recovery hid the descriptor before apply, whose repeated networked
+  availability check timed out after 20 seconds before the HTTP404 download
+  stage. Later the separate UIA main path stalled at Settings/My account with
+  About below the viewport, exhausting 300 seconds without scrolling. There is
+  no evidence that this second failure was another checker timeout. These two
+  causes motivated `f5d12ce3dc`, which still needs native revalidation.
+- Actual automatic NEW, preparation recovery, observed OS cancellation/manual
+  OLD reopen and uninstall/reinstall preservation remain unaccepted. Windows
+  Server 2025 x64 does not establish Windows 11 x64 or Windows 10 19045 desktop
+  runtime coverage. Both desktop lifecycles and standard-user execution remain
+  untested. Only test signing is authorized; production trust is deferred.
+
+## Historical evidence summary
+
+Earlier runs `43767548248` and `43775234306` have completed with failures and are
+diagnostic only; neither architecture is still building in those runs. Their
+signed packages predate the latest production fixes. Earlier harness corrections
+covered historical ZIP transport and hash verification, localized composer/model
+observations, external `WindowsApps` interpreter access and navigation priority.
+Diagnostic `43777044333` on older source `00e438fc2b` passed ZIP-to-first-MSIX
+migration and all 25 data checks before failing later update/recovery gates.
+
+Separate Windows contracts at `03e2136520` in run `43784313536` passed 69 Python,
+74 JS (nine host skips), 71 updater/state, eight SDK manifest cases, four descriptor
+tests and six actual Windows PowerShell 5.1 groups. Earlier complete tests-js
+verification passed 376 tests with five host skips. These results retain their
+original scope: contracts and a 19045 SDK manifest floor do not establish complete
+native acceptance or actual Windows 10 desktop compatibility. The current matrix
+and unchanged reproducible manual handoff are in
+`apps/desktop/docs/windows-installer-acceptance.md`.
