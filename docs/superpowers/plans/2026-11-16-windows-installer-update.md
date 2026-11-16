@@ -52,11 +52,17 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 ## Current progress as of 2026-11-16
 
 - Added owned-child CPU/memory/I/O/output heartbeats and final progress receipts
-  after x64's final bundle-sign command remained silent much longer than the
-  preceding run. Native signing/packing/verification now have independent
+  because the initial live-log view did not expose whether a silent tool was
+  active. Later output showed x64 had already completed migration; that view
+  alone does not prove a stalled signer. Signing/packing/verification have independent
   30-minute budgets. Real-child tests failed before the implementation; 46
   related tests now pass (one Windows skip). This follow-up is outside frozen
   run `43846856927`; the earlier deployment/activation cause remains unproven.
+- The x64 replacement observer began at 11:26:47 UTC after migration, 25 state
+  checks and preparation recovery passed. Its first three minutes show healthy
+  native queries, `waiting-for-package`, one OLD payload process, zero NEW main
+  processes and waiter stage `query-started`. This is interim evidence inside
+  the budget; deployment events and root-cause confirmation are still pending.
 - Removed the redundant unbounded post-NEW CIM/port scan and final parent
   package query. Existing bounded automatic-window/selected-gateway health and
   disposable-removal checks retain those invariants. Local selected-gateway and

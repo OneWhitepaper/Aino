@@ -224,17 +224,23 @@ handoff contracts passed locally (eight JavaScript and 17 Python tests; one
 Windows-only Python skip), as did PowerShell parsing. These follow-up changes
 are not included in frozen run `43846856927` and need native reacceptance.
 
-The diagnostic run also exposed insufficient build-stage visibility: x64's
-final bundle-signing command remained without new output substantially longer
-than the preceding run's three-minute signing step. This precedes deployment
-and does not identify the earlier update stall's cause. A follow-up harness
-change records minute-by-minute activity of the exact owned child (CPU, memory,
+The initial live-log view remained on final bundle signing; later loaded output
+showed migration had already completed. That view alone does not establish a
+stalled signer or its duration. A follow-up harness change records
+minute-by-minute activity of the exact owned child (CPU, memory,
 available I/O counters and output size) and retains a final progress receipt.
 Signing, bundle creation and signature verification each have a 30-minute
 budget instead of inheriting the five-hour complete-build budget. Real-child
 timeout/reaping and pre-exit heartbeat tests were first red, then passed with
 the existing candidate contracts (46 passed, one Windows skip). Those additions
 are also outside the current frozen run and do not certify native acceptance.
+
+At 11:26:47 UTC the x64 leg reached the actual replacement observer after ZIP
+migration, 25 state checks and preparation recovery passed. Its first three
+minutes reported successful package/process queries, `waiting-for-package`, one
+OLD payload process, no NEW main process and waiter stage `query-started`.
+Those are interim observations within the budget, not a timeout or proof that
+the surviving process caused it; deployment events remain pending.
 
 ## Remaining native receipts
 
