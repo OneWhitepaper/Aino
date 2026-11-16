@@ -130,6 +130,7 @@ if (process.argv[2] === 'package') {
   if (fs.existsSync(counter)) setInterval(() => {}, 1000)
   else { fs.writeFileSync(counter, 'seen'); console.log(JSON.stringify({state:'old',version:'1.0.0.0'})) }
 } else if (process.argv[2] === 'process') console.log(JSON.stringify({newMain:[],oldPayloadCount:1}))
+else if (process.argv[2] === 'installer') console.log(JSON.stringify({installerState:'no-confirmation-control',hresults:['0x80073D02']}))
 else console.log(JSON.stringify({queryStatus:'ok',matchedCount:0}))
 `)
   try {
@@ -141,6 +142,8 @@ else console.log(JSON.stringify({queryStatus:'ok',matchedCount:0}))
     assert.equal(result.version, '1.0.0.0')
     assert.equal(result.oldPayloadCount, 1)
     assert.equal(result.deadlineOperation, 'package')
+    assert.equal(result.installerState, 'no-confirmation-control')
+    assert.deepEqual(result.installerHresults, ['0x80073D02'])
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 

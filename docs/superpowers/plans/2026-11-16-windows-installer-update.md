@@ -52,6 +52,18 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Focused standard-runner run `43864177745` at `2c747067ee` skipped large
+  builds and found a real candidate timeout-cleanup defect before UIA execution:
+  Windows venv launcher PID 5940 was killed but worker PID 8420 remained. Logged
+  cleanup now reuses Hermes tree termination; captured probes use its existing
+  bounded Job Object/probe path. Explicit real-grandchild regressions failed in
+  both paths before the fix and now pass locally, with a separate live sibling
+  preserved. The launcher/worker PID distinction is retained in the test.
+  Windows revalidation is pending; this is not a proven package-stall cause.
+- Product-bound installer snapshots now project validated HRESULT arrays as
+  well as fixed window states/counts; raw window/process payloads stay local.
+  Latest local verification: 124 Python passed, two Windows skips; seven observer
+  Node passed, two Windows skips; PowerShell parsing passed.
 - Added owned-child CPU/memory/I/O/output heartbeats and final progress receipts
   because the initial live-log view did not expose whether a silent tool was
   active. Later output showed x64 had already completed migration; that view

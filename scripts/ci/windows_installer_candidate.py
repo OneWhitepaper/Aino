@@ -76,7 +76,15 @@ def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None,
     child_env = {key: value for key, value in env.items() if key.upper() != "PSMODULEPATH"}
     budget = timeout if timeout is not None else (18000 if log else 300)
     if log is None:
-        return subprocess.check_output(argv, cwd=ROOT, env=child_env, text=True, encoding="utf-8", timeout=budget).strip()
+        from hermes_cli._subprocess_compat import bounded_probe_run
+
+        result = bounded_probe_run(argv, cwd=ROOT, env=child_env, timeout=budget, raise_on_spawn_failure=True)
+        if result is None:
+            raise subprocess.TimeoutExpired(argv, budget)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="", flush=True)
+        result.check_returncode()
+        return result.stdout.strip()
     _run_logged(argv, child_env, log, budget)
     return ""
 
@@ -156,8 +164,11 @@ def _run_logged(argv: list[str], env: Mapping[str, str], log: Path, timeout: flo
             try:
                 _wait_for_logged_child(process, argv, reader, decoder, log, timeout)
             except BaseException:
-                process.kill()
-                process.wait()
+                from hermes_cli._subprocess_compat import kill_process_tree
+
+                # Retained Popen ownership includes Windows launcher workers.
+                kill_process_tree(process)
+                process.wait(timeout=5)
                 raise
             finally:
                 output.flush()

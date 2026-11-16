@@ -10,7 +10,9 @@ import time
 import psutil
 import pytest
 
+from hermes_cli._subprocess_compat import kill_process_tree, pid_exists_stdlib
 from scripts.ci import windows_installer_candidate as candidate
+from tests.waiting import wait_until
 
 
 def test_silent_owned_tool_times_out_with_activity_evidence_and_is_reaped(tmp_path):
@@ -29,8 +31,35 @@ def test_silent_owned_tool_times_out_with_activity_evidence_and_is_reaped(tmp_pa
     assert proof["status"] == "timed-out"
     assert proof["operation"] == "bundle-sign"
     assert proof["elapsedSeconds"] >= 2
-    assert proof["pid"] == int(pid_file.read_text())
+    # Windows venv python.exe is a launcher; its actual worker has another PID.
+    assert not psutil.pid_exists(proof["pid"])
     assert proof["outputBytes"] == 0
+
+
+@pytest.mark.parametrize("logged", [True, False])
+def test_timeout_removes_a_real_owned_grandchild_and_preserves_an_unrelated_sibling(tmp_path, logged):
+    pid_file = tmp_path / "grandchild.pid"
+    worker = (
+        "import os,sys; from pathlib import Path; from tests.waiting import wait_until; "
+        "file=Path(sys.argv[1]); file.write_text(str(os.getpid())); "
+        "wait_until(file.with_suffix('.stop').exists, timeout=30, what='fixture release')"
+    )
+    launcher = "import subprocess,sys,threading; subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]]); threading.Event().wait(30)"
+    sibling = subprocess.Popen([sys.executable, "-c", "import threading; threading.Event().wait(30)"])
+    try:
+        started = time.monotonic()
+        with pytest.raises(subprocess.TimeoutExpired):
+            candidate.run([sys.executable, "-c", launcher, worker, str(pid_file)], os.environ,
+                          log=tmp_path / "timeout.log" if logged else None, timeout=4)
+        assert time.monotonic() - started < 12
+        assert not pid_exists_stdlib(int(pid_file.read_text())), "the actual owned worker survived its launcher"
+        assert sibling.poll() is None, "an independent sibling must not be included in timeout cleanup"
+    finally:
+        kill_process_tree(sibling)
+        sibling.wait(timeout=5)
+        if pid_file.exists() and pid_exists_stdlib(int(pid_file.read_text())):
+            pid_file.with_suffix(".stop").touch()
+            wait_until(lambda: not pid_exists_stdlib(int(pid_file.read_text())), timeout=5, what="fixture worker exit")
 
 
 def test_running_tool_heartbeat_exposes_activity_before_completion_without_private_arguments(tmp_path, monkeypatch):

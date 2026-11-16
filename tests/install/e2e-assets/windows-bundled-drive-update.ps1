@@ -162,7 +162,7 @@ $installerWindow = $null
 $installerActionTaken = $null
 $newVisibleWindow = $false
 $processStartedForAttempt = $false
-$installerSnapshot = @{ installerState='not-observed'; visibleWindowCount=0; matchingWindowCount=0 }
+$installerSnapshot = @{ installerState='not-observed'; visibleWindowCount=0; matchingWindowCount=0; hresults=@() }
 while ((Get-Date) -lt $cDeadline -and -not $confirmed -and -not $installerCancelled) {
     if ($InstallerAction -eq 'Cancel') {
         $windows = @(Get-VerifiedInstallerWindows)
@@ -223,7 +223,7 @@ if ($InstallerAction -eq 'Cancel' -and -not $installerCancelled) {
     @{ ok=$false; clicked=$clicked.Name; installerAction=$InstallerAction; appInstallerObserved=$installerObserved;
         appInstallerCancelled=$false; appInstallerConfirmed=$false; installerPid=$installerPid; installerWindow=$installerWindow;
             installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
-            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount;
+            installerHresults=$installerSnapshot.hresults; visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount;
         action=$installerActionTaken; newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt;
         exited=((Get-AppPids).Count -eq 0) } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
@@ -247,7 +247,7 @@ while ((Get-Date) -lt $eDeadline) {
             installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
             installerPid=$installerPid; installerWindow=$installerWindow;
             installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
-            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
+            installerHresults=$installerSnapshot.hresults; visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
             newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |
             ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
         exit 0
@@ -259,7 +259,7 @@ Save-Shot "zz-app-never-exited"
     installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
     installerPid=$installerPid; installerWindow=$installerWindow;
             installerState=$(if ($confirmed) { 'confirmation-invoked' } elseif ($installerCancelled) { 'cancelled' } else { $installerSnapshot.installerState });
-            visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
+            installerHresults=$installerSnapshot.hresults; visibleWindowCount=$installerSnapshot.visibleWindowCount; matchingWindowCount=$installerSnapshot.matchingWindowCount; action=$installerActionTaken;
     newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
 throw "the $ProcessName process never exited after the update trigger ($ExitTimeoutSec s) - a surviving process would hold package files during the swap"

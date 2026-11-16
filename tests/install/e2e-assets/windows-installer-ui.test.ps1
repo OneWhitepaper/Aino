@@ -12,7 +12,7 @@ $button.Text = 'Update'
 $button.AccessibleName = 'Update'
 $target.Controls.Add($button)
 $helper.Text = 'Installer helper'
-$target.Text = 'Install Aino'
+$target.Text = 'Install Aino 0x80073d02'
 $foreign.Text = 'Install AnotherProduct'
 $clicked = Get-Date
 $birth = $clicked.AddSeconds(-5)
@@ -45,6 +45,9 @@ try {
     $snapshot = Get-InstallerWindowSnapshot 'Aino' $candidates
     if ($snapshot.installerState -cne 'confirmation-available' -or $snapshot.visibleWindowCount -ne 3 -or $snapshot.matchingWindowCount -ne 1) {
         throw 'Visible helper/foreign windows and the actionable product must be reported separately'
+    }
+    if (@($snapshot.hresults).Count -ne 1 -or $snapshot.hresults[0] -cne '0x80073D02') {
+        throw 'A product-bound installer HRESULT must be retained without arbitrary window text'
     }
     $button.Enabled = $false
     [System.Windows.Forms.Application]::DoEvents()

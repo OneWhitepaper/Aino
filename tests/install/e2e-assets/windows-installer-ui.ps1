@@ -122,10 +122,16 @@ function Get-InstallerWindowSnapshot([string]$DisplayName, [object[]]$Candidates
     })
     $matching = @($windows | Where-Object { $_.productMatches })
     $confirmCount = @($matching | Where-Object { $_.confirmAvailable }).Count
+    $codes = @($matching | ForEach-Object {
+        $names = @($_.title) + @($_.controls | ForEach-Object { $_.name })
+        [regex]::Matches(($names -join "`n"), '(?i)\b0x[89a-f][0-9a-f]{7}\b') | ForEach-Object {
+            $_.Value.ToUpperInvariant().Replace('0X', '0x')
+        }
+    } | Sort-Object -Unique | Select-Object -First 20)
     $state = if ($windows.Count -eq 0) { 'not-observed' }
         elseif ($matching.Count -eq 0) { 'window-not-bound' }
         elseif ($matching.Count -gt 1) { 'ambiguous-window' }
         elseif ($confirmCount -gt 0) { 'confirmation-available' } else { 'no-confirmation-control' }
     return @{ installerState=$state; visibleWindowCount=$windows.Count; matchingWindowCount=$matching.Count;
-        confirmButtonCount=$confirmCount; windows=$windows }
+        confirmButtonCount=$confirmCount; hresults=$codes; windows=$windows }
 }

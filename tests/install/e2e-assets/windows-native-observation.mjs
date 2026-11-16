@@ -151,6 +151,7 @@ export async function observeNativeUpdate(requestFile, { timeoutMs = 900_000, qu
     oldPythonCount: last.processes?.data?.oldPythonCount, oldNodeCount: last.processes?.data?.oldNodeCount,
     oldOtherCount: last.processes?.data?.oldOtherCount,
     installerQuery: installer.status, installerState: installer.data?.installerState,
+    installerHresults: installer.data?.hresults,
     installerVisibleWindowCount: installer.data?.visibleWindowCount,
     installerMatchingWindowCount: installer.data?.matchingWindowCount,
     installerConfirmButtonCount: installer.data?.confirmButtonCount,

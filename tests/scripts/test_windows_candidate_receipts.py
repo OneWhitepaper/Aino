@@ -145,7 +145,7 @@ def test_installer_confirmation_and_remaining_process_facts_survive_without_wind
     write_json(tmp_path, "hermes-bundled-update/proof/click.json", {
         "ok": True, "exited": True, "appInstallerObserved": True, "appInstallerConfirmed": False,
         "installerAction": "Confirm", "installerState": "no-confirmation-control",
-        "visibleWindowCount": 2, "matchingWindowCount": 1,
+        "visibleWindowCount": 2, "matchingWindowCount": 1, "installerHresults": ["0x80073D02"],
         "installerWindow": {"title": SECRET, "controls": [SECRET]},
     })
     write_json(tmp_path, "hermes-bundled-update/proof/native-observation.json", {
@@ -153,6 +153,7 @@ def test_installer_confirmation_and_remaining_process_facts_survive_without_wind
         "oldNodeCount": 0, "oldOtherCount": 0,
         "installerQuery": "ok", "installerState": "confirmation-available",
         "installerVisibleWindowCount": 2, "installerMatchingWindowCount": 1, "installerConfirmButtonCount": 1,
+        "installerHresults": ["0x80073D02"],
         "installer": {"windows": [SECRET]},
         "last": {"processes": [{"commandLine": SECRET, "path": SECRET}]},
     })
@@ -162,13 +163,15 @@ def test_installer_confirmation_and_remaining_process_facts_survive_without_wind
     assert result["updateTrigger"]["appInstallerConfirmed"] is False
     assert result["observation"]["oldPythonCount"] == 1
     assert result["observation"]["installerState"] == "confirmation-available"
+    assert result["observation"]["installerHresults"] == ["0x80073D02"]
+    assert result["updateTrigger"]["installerHresults"] == ["0x80073D02"]
     assert SECRET not in output.read_text(encoding="utf-8")
     assert result["status"] == "unaccepted"
 
 
 @pytest.mark.parametrize("field,value", [("phase", SECRET), ("oldPayloadCount", True),
                                          ("events.hresults", [SECRET]), ("deadlineOperation", SECRET),
-                                         ("installerState", SECRET), ("oldPythonCount", True)])
+                                         ("installerState", SECRET), ("oldPythonCount", True), ("installerHresults", [SECRET])])
 def test_malformed_observation_is_never_copied_to_the_public_receipt(tmp_path, field, value):
     document = {"status": "unaccepted", "phase": "waiting-for-process", "oldPayloadCount": 0,
                 "events": {"hresults": ["0x80073D02"]}}

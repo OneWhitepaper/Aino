@@ -280,6 +280,25 @@ an 18-minute deadline. A stuck provider cannot turn the UIA polling budget into
 an unbounded native wait. The 13 acceptance gates and public artifact selection
 are unchanged; arbitrary window/process text is never projected.
 
+The first focused run
+[`43864177745`](https://github.com/OneWhitepaper/Aino/actions/runs/43864177745)
+at `2c747067ee` correctly skipped candidate builds, but failed before UIA tests.
+The actual Windows venv `python.exe` launcher (PID 5940) owned the real worker
+(PID 8420); the timeout terminated only the launcher and the worker survived.
+This is a candidate-supervision defect, independent of the unproven package
+replacement cause. The shared Hermes process-tree cleanup now handles logged
+commands; the existing bounded probe/Windows Job Object path handles captured
+commands. Real grandchild fixtures first reproduced the leak in both paths,
+then passed on Mac; a live independent sibling is preserved. Tests no longer
+mistake a launcher's PID for its worker. This correction still requires the
+Windows rerun. Local verification passed 124 Python tests (two Windows skips),
+seven observer Node tests (two Windows skips), four descriptor tests, eight
+selected-gateway/handoff tests and PowerShell parsing.
+
+Installer-window diagnostics also extract only bounded, validated HRESULTs from
+the identified product's window/control text. They can expose a native error
+when deployment events are absent without uploading arbitrary UI text.
+
 A public opt-in ref ending in `/contracts-only` runs the standard Windows
 contracts without the two large candidate builds. Use that focused native
 verification before another full package run. Ordinary and frozen refs stay
