@@ -30,6 +30,13 @@ try {
     if ($null -eq $selected -or $selected.Handle -ne $target.Handle.ToInt32()) {
         throw 'Confirmation must search beyond the first helper and unrelated product window'
     }
+    $buttonElement = [System.Windows.Automation.AutomationElement]::FromHandle($button.Handle)
+    Write-Output "fixture Update before activation: enabled=$($buttonElement.Current.IsEnabled) offscreen=$($buttonElement.Current.IsOffscreen)"
+    # Activate the target before querying an on-screen control among three fixtures.
+    $target.BringToFront()
+    $target.Activate()
+    [System.Windows.Forms.Application]::DoEvents()
+    Write-Output "fixture Update after activation: enabled=$($buttonElement.Current.IsEnabled) offscreen=$($buttonElement.Current.IsOffscreen)"
     $hit = Find-InvokableButton $selected.Element @('^Update$')
     if ($null -eq $hit -or $hit.Name -cne 'Update') { throw 'The selected product must expose its actual enabled Update button' }
     if (-not $selected.NewVisibleWindow -or $selected.ProcessStartedForAttempt) {

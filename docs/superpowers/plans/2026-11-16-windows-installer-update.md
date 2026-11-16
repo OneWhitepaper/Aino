@@ -52,6 +52,11 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Focused `43867819708` passed Windows Python/JS/SDK/updater suites, then
+  failed the new UIA fixture at enabled Update selection. The intended window
+  had been selected; actual control visibility before/after activating the
+  owned window is now recorded. Native binding runs early in contracts. This
+  is still failed fixture evidence, not a proven production App Installer bug.
 - Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
   Its Windows Python contracts passed 158 tests (four skips), including the four
   actual worker/tree cleanup tests. Contracts then stopped at a preexisting

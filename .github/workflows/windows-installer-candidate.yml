@@ -81,6 +81,12 @@ jobs:
           @{ os=$os.Caption; version=$os.Version; productType=$os.ProductType; desktopRuntimeTested=$false } |
             ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $out 'host.json')
 
+      - name: Verify native installer window binding
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-installer-ui.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Install locked contract dependencies
         shell: bash
         run: pnpm install --frozen-lockfile --filter "{./apps/desktop}..." --filter "{./tests-js}..." --ignore-scripts
@@ -146,8 +152,6 @@ jobs:
           node --test tests/install/e2e-assets/windows-native-observation.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/observation.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-bundled-processes.test.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-installer-ui.test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-native-environment.test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

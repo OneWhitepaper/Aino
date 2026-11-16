@@ -310,6 +310,15 @@ Installer-window diagnostics also extract only bounded, validated HRESULTs from
 the identified product's window/control text. They can expose a native error
 when deployment events are absent without uploading arbitrary UI text.
 
+Focused run `43867819708` at `c4e84dec21` passed the native Python, JS
+harness, SDK and updater suites, then failed the new owned-window UIA fixture:
+its selected product did not expose an invokable Update button. Product selection
+itself had returned the intended window. The fixture now records the actual
+button visibility/enabled flags before and after activating that owned window;
+no real installer is invoked. This native check runs before dependency/SDK work
+so a driver failure is reported early. The cause and passing receipt remain
+pending; it is not treated as a production App Installer result.
+
 A public opt-in ref ending in `/contracts-only` runs the standard Windows
 contracts without the two large candidate builds. Use that focused native
 verification before another full package run. Ordinary and frozen refs stay
