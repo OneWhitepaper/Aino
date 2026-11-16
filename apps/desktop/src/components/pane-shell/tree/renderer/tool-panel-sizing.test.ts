@@ -40,7 +40,11 @@ describe('shared desktop tool width', () => {
     expect(sizingPaneIds(tools, 'column', ctx([files.id], saved))).toEqual([browser.id])
     expect(saved.files.widthOverride).toBe(516)
     expect(
-      fixedTrackSize(group([browser.id, 'hermes-bots:routines']), 'row', ctx([], { 'hermes-bots:routines': saved.files }))
+      fixedTrackSize(
+        group([browser.id, 'hermes-bots:routines']),
+        'row',
+        ctx([], { 'hermes-bots:routines': saved.files })
+      )
     ).toBe('516px')
   })
 })

@@ -269,8 +269,7 @@ export const $workspaceIsPage = atom(false)
 
 /** Durable pages use the full work area; navigation stays available. This is
  * presentation only: other pane instances and the saved tiling tree survive. */
-export const workspacePageKeepsPane = (paneId: string): boolean =>
-  paneId === 'workspace'
+export const workspacePageKeepsPane = (paneId: string): boolean => paneId === 'workspace'
 
 /** Page-owned controls (kanban's board switcher) projected into the workspace
  *  panel's tab-header space while `$workspaceIsPage` holds — the page's title
