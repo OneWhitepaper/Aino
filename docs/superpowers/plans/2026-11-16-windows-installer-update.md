@@ -4,7 +4,7 @@
 
 **Goal:** Provide installable Windows candidates and exercise the existing App Installer update lifecycle while preserving ZIP users' state.
 
-**Architecture:** Retain the existing MSIX/App Installer owner, build stamp and graceful handoff. Generate candidates in an isolated private CI job with a disposable test certificate; never confuse test signing with production release acceptance. Reuse the canonical `%APPDATA%/Aino` data root rather than copying account state into a second root.
+**Architecture:** Retain the existing MSIX/App Installer owner, build stamp and graceful handoff. Generate candidates in isolated standard hosted CI with a disposable test certificate; private jobs retain inputs and explicit public jobs retain curated receipts only; never confuse test signing with production release acceptance. Reuse the canonical `%APPDATA%/Aino` data root rather than copying account state into a second root.
 
 **Tech Stack:** Electron 44, electron-builder, Windows SDK, PowerShell, existing Python bundle/release scripts and Vitest.
 
@@ -17,13 +17,14 @@
 - User confirmed no production signing resources and requested test-signing acceptance first. A disposable CI certificate proves test deployment only; production trust is deferred to a future release.
 - User confirmed Windows 10 22H2 (19045) and Windows 11. Preserve all extensions. SDK validation and actual installation are separate claims; Windows 10 desktop validation requires that OS.
 - No website, stable feed, public release or production certificate store mutation.
+- Public `OneWhitepaper/Aino` execution is explicitly opted in by a `validation/windows-installer-public/**` push, or by the same feature prefix plus `public-receipts-only=true` dispatch when GitHub permits it. Use only standard `windows-latest`/`windows-11-arm`; retain a typed receipt projection, never public binary/raw-workspace artifacts. Private execution/reuse remains unchanged.
 
 ## Tasks
 
 - [x] Validate existing install stamp, App Installer strategy/recovery and package-identity baseline tests.
 - [x] Add default installation/update candidate output using the existing bundle build and descriptor generator, isolated from public distribution. Validate exact commit, architecture, signer, native identity and digest.
 - [x] Extend Windows acceptance to assert account workspace, historical conversation, Bot/profile and model configuration preservation; detect missing or altered records. Native execution is tracked separately below.
-- [x] Add private artifact-only Windows SDK/deployment verification, including failure/cancel paths and uninstall retaining external data; forbid public workflow execution/publication. Native execution is tracked separately below.
+- [x] Add private artifact-only Windows SDK/deployment verification, including failure/cancel paths and uninstall retaining external data; forbid implicit public workflow execution and installer publication. Native execution is tracked separately below.
 - [x] Run targeted local tests, typecheck and repository checks; run Windows SDK/native contracts and record host/signing limits.
 - [x] Review the production patch and produce an acceptance report distinguishing implementation, contracts and outstanding native receipts.
 - [ ] Accept the corrected-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
@@ -40,7 +41,7 @@ scripts/run_tests.sh tests/scripts/test_release_artifacts.py tests/scripts/test_
 python scripts/check
 ```
 
-CI may store encrypted-access GitHub artifacts in the private validation repository only. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests.
+Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public native execution remains pending.
 
 ## Native evidence so far
 

@@ -1,6 +1,7 @@
-"""Build test-signed MSIX/AppInstaller pairs on a private disposable Actions runner.
+"""Build test-signed MSIX/AppInstaller pairs on a disposable Actions runner.
 
 These artifacts are acceptance inputs, never release or channel publication inputs.
+Public execution is an explicit receipts-only feature-branch capability.
 The private key stays nonexportable in CurrentUser. Only its public certificate is
 trusted in LocalMachine TrustedPeople; both are removed after acceptance.
 """
@@ -30,19 +31,33 @@ if str(ROOT) not in sys.path:
 
 TAGS = ("v0.1.6", "v0.1.7")
 MINIMUM_WINDOWS = "10.0.19045.0"
+PUBLIC_REPOSITORY = "OneWhitepaper/Aino"
+PUBLIC_REF_PREFIX = "refs/heads/validation/windows-installer-public/"
 
 
-def admit(env: Mapping[str, str], event: dict) -> str:
-    """Reject public, self-hosted, nonmanual and unpinned execution before mutation."""
+def _public_opt_in(env: Mapping[str, str], event: dict) -> bool:
+    inputs = event.get("inputs", {})
+    explicit_dispatch = (env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+                         and (inputs.get("public-receipts-only") is True
+                              or inputs.get("public-receipts-only") == "true"))
+    return (env.get("GITHUB_REPOSITORY") == PUBLIC_REPOSITORY
+            and env.get("GITHUB_REF", "").startswith(PUBLIC_REF_PREFIX)
+            and (env.get("GITHUB_EVENT_NAME") == "push" or explicit_dispatch)
+            and not any(inputs.get(key) for key in ("reuse-run-id", "reuse-artifact-id", "reuse-source-commit")))
+
+
+def admit(env: Mapping[str, str], event: dict, *, public_receipts_only: bool = False) -> str:
+    """Reject implicit public, self-hosted and unpinned execution before mutation."""
     repository = event.get("repository", {})
     manual = env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
     candidate_push = (env.get("GITHUB_EVENT_NAME") == "push"
                       and env.get("GITHUB_REF", "").startswith("refs/heads/validation/windows-installer/"))
-    if (env.get("GITHUB_ACTIONS") != "true" or not (manual or candidate_push)
+    visibility_admitted = (repository.get("private") is False and _public_opt_in(env, event)
+                           if public_receipts_only else repository.get("private") is True and (manual or candidate_push))
+    if (env.get("GITHUB_ACTIONS") != "true" or not visibility_admitted
             or env.get("RUNNER_ENVIRONMENT") != "github-hosted" or env.get("RUNNER_OS") != "Windows"
-            or repository.get("private") is not True
             or repository.get("full_name") != env.get("GITHUB_REPOSITORY")):
-        raise ValueError("Private repository manual dispatch on a disposable hosted Windows runner required")
+        raise ValueError("Admitted private or explicit public receipts-only hosted Windows workflow required")
     commit = env.get("GITHUB_SHA", "")
     if not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError("Exact workflow source commit required")
@@ -108,11 +123,13 @@ def powershell(script: str, env: Mapping[str, str]) -> str:
                 "$ErrorActionPreference='Stop'; " + script], env)
 
 
-def check_prerequisites(env: Mapping[str, str], out: Path) -> None:
+def check_prerequisites(env: Mapping[str, str], out: Path, *, public_receipts_only: bool = False) -> None:
     repository = json.loads(run(["gh", "repo", "view", env["GITHUB_REPOSITORY"],
                                  "--json", "isPrivate,nameWithOwner"], env))
-    if repository.get("isPrivate") is not True or repository.get("nameWithOwner") != env["GITHUB_REPOSITORY"]:
-        raise ValueError("GitHub API did not confirm the candidate repository is private")
+    if (repository.get("isPrivate") is not (not public_receipts_only)
+            or repository.get("nameWithOwner") != env["GITHUB_REPOSITORY"]
+            or (public_receipts_only and env["GITHUB_REPOSITORY"] != PUBLIC_REPOSITORY)):
+        raise ValueError("GitHub API did not confirm the admitted candidate repository visibility")
     powershell(r"""
     Get-Command Add-AppxPackage -ErrorAction Stop | Out-Null
     $installer = @(Get-AppxPackage -Name Microsoft.DesktopAppInstaller)
@@ -232,12 +249,12 @@ def bundle_candidate(slot: str, tag: str, arch: str, env: dict[str, str], out: P
                                                "url": f"http://127.0.0.1/{slot}.msixbundle"}}
 
 
-def execute(arch: str, execute_e2e: bool) -> None:
+def execute(arch: str, execute_e2e: bool, *, public_receipts_only: bool = False) -> None:
     from pm.store import current_target
     from scripts.bundles.desktop_prepare import require_source
 
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8-sig"))
-    commit = admit(os.environ, event)
+    commit = admit(os.environ, event, public_receipts_only=public_receipts_only)
     if current_target() != f"win32-{arch}":
         raise ValueError("Native Windows runner architecture must match the candidate")
     require_source(ROOT, commit)
@@ -256,7 +273,7 @@ def execute(arch: str, execute_e2e: bool) -> None:
     receipt = {"schema": 1, "candidateOnly": True, "testSigning": True, "sourceCommit": commit,
                "arch": arch, "minimumWindows": MINIMUM_WINDOWS, "status": "building"}
     try:
-        check_prerequisites(env, out)
+        check_prerequisites(env, out, public_receipts_only=public_receipts_only)
         env["AINO_PRIVATE_CANDIDATE"] = "true"
         thumbprint = create_certificate(env)
         sides = {}
@@ -300,10 +317,10 @@ def execute(arch: str, execute_e2e: bool) -> None:
                 run(["git", "update-ref", "-d", f"refs/tags/{claim}", claim_object], env)
 
 
-def cleanup() -> None:
+def cleanup(*, public_receipts_only: bool = False) -> None:
     """Actions always-step backstop when cancellation interrupts the main finally."""
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8-sig"))
-    admit(os.environ, event)
+    admit(os.environ, event, public_receipts_only=public_receipts_only)
     out = Path(os.environ["RUNNER_TEMP"]).resolve() / "aino-windows-installer"
     state = out / "certificate-state.json"
     if state.is_file():
@@ -322,11 +339,21 @@ def main() -> None:
     parser.add_argument("--arch", choices=("x64", "arm64"), default="x64")
     parser.add_argument("--execute-e2e", action="store_true", help="Run native acceptance before deleting test trust")
     parser.add_argument("--cleanup", action="store_true", help="Remove only this job's disposable certificate")
+    parser.add_argument("--public-receipts-only", action="store_true", help="Explicit public feature-branch build; packages must never be uploaded")
+    parser.add_argument("--collect-public-receipts", action="store_true", help="Project safe native results into the public upload file")
     args = parser.parse_args()
-    if args.cleanup:
-        cleanup()
+    if args.collect_public_receipts:
+        if not args.public_receipts_only or args.cleanup or args.execute_e2e:
+            parser.error("Public receipt collection requires only --public-receipts-only and --arch")
+        from scripts.ci.windows_candidate_receipts import export_public_receipts
+
+        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8-sig"))
+        commit = admit(os.environ, event, public_receipts_only=True)
+        export_public_receipts(Path(os.environ["RUNNER_TEMP"]).resolve(), commit, args.arch)
+    elif args.cleanup:
+        cleanup(public_receipts_only=args.public_receipts_only)
     else:
-        execute(args.arch, args.execute_e2e)
+        execute(args.arch, args.execute_e2e, public_receipts_only=args.public_receipts_only)
 
 
 if __name__ == "__main__":

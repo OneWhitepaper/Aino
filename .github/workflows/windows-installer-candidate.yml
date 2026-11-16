@@ -1,10 +1,11 @@
 name: Private Windows installer candidate
 
-# Test signing and local-only AppInstaller feeds. This never calls a release,
+# Test signing and local-only AppInstaller feeds. Public opt-in retains receipts
+# only, never packages or raw diagnostics. This never calls a release,
 # channel, R2, Store, Azure signing or public upload workflow.
 on:
   push:
-    branches: ['validation/windows-installer/**']
+    branches: ['validation/windows-installer/**', 'validation/windows-installer-public/**']
   workflow_dispatch:
     inputs:
       include-arm64:
@@ -13,6 +14,10 @@ on:
         default: false
       contracts-only:
         description: Run contracts without building or reaccepting packages
+        type: boolean
+        default: false
+      public-receipts-only:
+        description: Explicit public OneWhitepaper/Aino feature-branch acceptance; retain safe receipts only
         type: boolean
         default: false
       reuse-run-id:
@@ -43,7 +48,11 @@ concurrency:
 
 jobs:
   windows-contracts:
-    if: github.event.repository.private == true
+    if: >-
+      github.event.repository.private == true ||
+      (github.repository == 'OneWhitepaper/Aino' && github.event.repository.private == false &&
+      startsWith(github.ref, 'refs/heads/validation/windows-installer-public/') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.public-receipts-only)))
     name: Windows SDK and native updater contracts
     runs-on: windows-latest
     timeout-minutes: 45
@@ -80,6 +89,7 @@ jobs:
         shell: bash
         run: |
           scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
+            tests/scripts/test_windows_installer_public.py tests/scripts/test_windows_candidate_receipts.py \
             tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
             tests/scripts/install/test_windows_fixture_python.py \
             tests/scripts/install/test_bundled_gateway_health.py \
@@ -155,10 +165,18 @@ jobs:
           retention-days: 7
 
   candidate:
-    if: github.event.repository.private == true && !inputs.contracts-only
+    if: >-
+      !inputs.contracts-only && (github.event.repository.private == true ||
+      (github.repository == 'OneWhitepaper/Aino' && github.event.repository.private == false &&
+      startsWith(github.ref, 'refs/heads/validation/windows-installer-public/') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.public-receipts-only)) &&
+      inputs.reuse-run-id == '' && inputs.reuse-artifact-id == '' && inputs.reuse-source-commit == ''))
     name: Test-signed installer (${{ matrix.target.arch }})
     runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 360
+    env:
+      CANDIDATE_ARCH: ${{ matrix.target.arch }}
+      CANDIDATE_PUBLIC_RECEIPTS_ONLY: ${{ github.event.repository.private == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -185,14 +203,15 @@ jobs:
         # separate acceptance driver after OLD and NEW packaging finishes.
         shell: pwsh
         env:
-          CANDIDATE_ARCH: ${{ matrix.target.arch }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --execute-e2e
+          $mode = @()
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -eq 'true') { $mode += '--public-receipts-only' }
+          python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --execute-e2e @mode
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Reaccept exact private signed candidates
-        if: inputs.reuse-run-id != ''
+        if: github.event.repository.private == true && inputs.reuse-run-id != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -208,10 +227,31 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          python scripts/ci/windows_installer_candidate.py --cleanup
+          $mode = @()
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -eq 'true') { $mode += '--public-receipts-only' }
+          python scripts/ci/windows_installer_candidate.py --cleanup @mode
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/ci/windows_candidate_reaccept.py --cleanup
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -ne 'true') {
+            python scripts/ci/windows_candidate_reaccept.py --cleanup
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Curate public receipts without copying packages or raw diagnostics
+        id: public_receipts
+        if: always() && github.event.repository.private == false
+        shell: pwsh
+        run: |
+          python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --public-receipts-only --collect-public-receipts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve only the curated public receipt
+        if: always() && github.event.repository.private == false && steps.public_receipts.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aino-windows-public-receipts-${{ matrix.target.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/aino-windows-public-receipts/receipts.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Preserve private acceptance artifacts and diagnostics
         if: always() && github.event.repository.private == true

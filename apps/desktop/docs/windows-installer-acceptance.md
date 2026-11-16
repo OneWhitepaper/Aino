@@ -140,6 +140,42 @@ contracts. The initial diagnostic fixture assumed the interpreter shared its
 temporary volume; it now uses an existing sibling file to test path escape.
 No production code or signed payload changed for that test correction.
 
+## Public standard-runner receipts-only execution
+
+Native execution on the public `OneWhitepaper/Aino` repository is allowed only
+through the explicit `validation/windows-installer-public/**` branch prefix.
+Pushing that feature branch starts fresh x64/ARM64 jobs on the standard
+`windows-latest` and `windows-11-arm` runners; no default-branch merge is needed.
+Normal public branches, pull requests, forks, self-hosted runners and implicit
+public execution are rejected. Once GitHub exposes this workflow for dispatch,
+the equivalent request is:
+
+```sh
+gh workflow run windows-installer-candidate.yml --repo OneWhitepaper/Aino \
+  --ref validation/windows-installer-public/<feature> \
+  -f public-receipts-only=true -f include-arm64=true
+```
+
+The dispatch input alone does not admit `main` or another branch prefix. Public
+reuse inputs are rejected: the same existing builder creates a fresh test-signed
+OLD/NEW pair in the ephemeral runner workspace, then uses the unchanged native
+acceptance driver and signing-key/trust cleanup. Only `contents: read` and
+`actions: read` are granted. There are no production signing secrets, paid larger
+runners, release/feed uploads or installer publication.
+
+Public artifacts contain only the generated
+`aino-windows-public-receipts/receipts.json`, a typed projection of fixed source,
+architecture, package digest/version and native gate/status fields. Candidate
+build status, complete native acceptance and cleanup remain separate; missing
+or invalid native receipts do not establish acceptance. Raw logs, screenshots,
+account/environment/history payloads, certificates/state, private keys, installers,
+ZIPs and the full workspace are never selected for public artifact upload. Raw
+diagnostics stay in the ephemeral runner and the masked Actions console. Private
+candidate/reuse artifact behavior and origin validation remain unchanged.
+
+The new public path has not yet produced native acceptance evidence. Windows 10,
+standard-user and production-trust claims still require their separate receipts.
+
 ## Remaining native receipts
 
 The required end-to-end receipt is `proof/acceptance.json` with status `accepted`.
