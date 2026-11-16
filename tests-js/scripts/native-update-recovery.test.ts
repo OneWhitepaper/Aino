@@ -2,13 +2,57 @@ import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 
-import { assertPreparationRecovery, runNativeRecovery, withUnavailableDescriptor } from '../../tests/install/e2e-assets/native-update-recovery.ts'
+import { assertPreparationRecovery, inspectNativeChecker, runNativeRecovery, withUnavailableDescriptor } from '../../tests/install/e2e-assets/native-update-recovery.ts'
 
 import { type ElectronApplication, type Page } from './e2e-driver-deps.ts'
 import { signInPlatformFixture } from './platform-account-fixture.ts'
+
+test('checker diagnostics run through the installed main process and retain failed checker output', async (): Promise<void> => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'native-checker-diagnostic-'))
+  const root = path.join(directory, 'payload')
+
+  for (const relative of ['tools', 'repo', 'site']) { fs.mkdirSync(path.join(root, relative), { recursive: true }) }
+  const python = path.join(root, 'tools', 'python')
+  fs.writeFileSync(python, '')
+  const stamp = { payload: 'bundled', runtime: { storePython: 'tools/python', repoDir: 'repo', sitePackages: 'site' } }
+  fs.writeFileSync(path.join(directory, 'install-stamp.json'), JSON.stringify(stamp))
+  const output = { code: 1, stdout: '{"available":null,"error":"check failed"}', stderr: 'native checker failure', error: 'check failed' }
+  const evaluations: unknown[] = []
+  const execFile = vi.fn((_python, _argv, _options, done) => done({ code: 1, message: 'check failed' }, output.stdout, 'native checker failure'))
+
+  const app = { evaluate: async (callback: { toString: () => string }, runtime: unknown) => {
+    evaluations.push(runtime)
+
+    const run = vm.runInNewContext(`(${callback.toString()})`, {
+      process: { env: { NATIVE_IDENTITY_WITNESS: 'retained' }, getBuiltinModule: () => ({ execFile }) }, setTimeout, clearTimeout,
+    })
+
+    return run(undefined, runtime)
+  } } as unknown as ElectronApplication
+
+  vi.useFakeTimers()
+
+  try {
+    expect(await inspectNativeChecker(app, root)).toEqual(output)
+    expect(evaluations).toEqual([{ python, pythonPath: ['repo', 'site'].map(relative => path.join(root, relative)).join(path.delimiter) }])
+    expect(execFile).toHaveBeenCalledWith(python, ['-P', '-m', 'hermes_cli.windows_appinstaller_update'], {
+      encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024, windowsHide: true,
+      env: { NATIVE_IDENTITY_WITNESS: 'retained', PYTHONPATH: ['repo', 'site'].map(relative => path.join(root, relative)).join(path.delimiter) },
+    }, expect.any(Function))
+    execFile.mockImplementation(() => {})
+    const hanging = inspectNativeChecker(app, root)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(await hanging).toEqual({ code: 1, stdout: '', stderr: '', error: 'Native checker diagnostic timed out after 20000ms' })
+    stamp.runtime.storePython = path.relative(root, process.execPath)
+    fs.writeFileSync(path.join(directory, 'install-stamp.json'), JSON.stringify(stamp))
+    await expect(inspectNativeChecker(app, root)).rejects.toThrow('escapes the verified installation')
+    expect(evaluations).toHaveLength(2)
+  } finally { vi.useRealTimers(); fs.rmSync(directory, { recursive: true, force: true }) }
+})
 
 test('a deliberately unavailable feed is restored even when its native observation fails', async (): Promise<void> => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'native-feed-recovery-'))

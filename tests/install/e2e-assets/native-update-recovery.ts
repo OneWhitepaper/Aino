@@ -10,6 +10,7 @@ import { readInstallationCommit } from '../../../tests-js/scripts/desktop-smoke-
 import { _electron, type ElectronApplication, expect, type Page, z } from '../../../tests-js/scripts/e2e-driver-deps.ts'
 
 import { runInstalledDesktopSmoke } from './desktop-smoke.ts'
+import { within } from './smoke-env.mjs'
 
 const require = createRequire(import.meta.url)
 const { openAbout, waitForUpdate } = require('./update-ui.cjs')
@@ -45,6 +46,30 @@ const recoveryOptions = z.object({
 })
 type RecoveryOptions = z.infer<typeof recoveryOptions>
 
+/** Run the same read-only checker from the installed main process's inherited context. */
+export async function inspectNativeChecker(app: ElectronApplication, root: string) {
+  const stamp = z.object({ payload: z.literal('bundled'), runtime: z.object({
+    storePython: z.string(), repoDir: z.string(), sitePackages: z.string()
+  }) }).parse(JSON.parse(fs.readFileSync(path.join(root, '..', 'install-stamp.json'), 'utf8')))
+  const python = path.join(root, stamp.runtime.storePython)
+  const imports = [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(relative => path.join(root, relative))
+  if (![python, ...imports].every(candidate => within(root, candidate))) { throw new Error('Checker diagnostic escapes the verified installation') }
+  return app.evaluate(async (_electron, runtime) => {
+    const { execFile } = process.getBuiltinModule('node:child_process')!
+    return await new Promise<{ code: number; stdout: string; stderr: string; error?: string }>(resolve => {
+      const deadline = setTimeout(() => resolve({ code: 1, stdout: '', stderr: '', error: 'Native checker diagnostic timed out after 20000ms' }), 20_000)
+      execFile(runtime.python, ['-P', '-m', 'hermes_cli.windows_appinstaller_update'], {
+        encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024, windowsHide: true,
+        env: { ...process.env, PYTHONPATH: runtime.pythonPath },
+      }, (error, stdout, stderr) => {
+        clearTimeout(deadline)
+        resolve({ code: typeof error?.code === 'number' ? error.code : error ? 1 : 0,
+          stdout, stderr, ...(error ? { error: error.message } : {}) })
+      })
+    })
+  }, { python, pythonPath: imports.join(path.delimiter) })
+}
+
 async function preparationFailure(app: ElectronApplication, page: Page, options: RecoveryOptions) {
   const beforePid = await app.evaluate(() => process.pid)
   const ready = path.join(options.out, 'preparation-chat-ready.json')
@@ -54,6 +79,8 @@ async function preparationFailure(app: ElectronApplication, page: Page, options:
   const log = (message: string): void => { console.log(`[native-recovery] ${message}`) }
   const shot = (target: Page, name: string) => target.screenshot({ path: path.join(options.out, `${name}.png`) })
   await openAbout(page, { prepare: () => prepareWindowForInput(app, page), log, shot })
+  const checker = await inspectNativeChecker(app, options.root)
+  fs.writeFileSync(path.join(options.out, 'native-checker-before-apply.json'), JSON.stringify(checker, null, 2) + '\n')
   const update = await waitForUpdate(page, { log, shot })
   const error = await withUnavailableDescriptor(options.descriptor!, async () => {
     await update.click()

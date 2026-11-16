@@ -207,6 +207,7 @@ describe('AppInstallerStrategy.apply', () => {
     'retains an unknown registered-source error before any update side effects: %s',
     async (error: string): Promise<void> => {
       const progress: string[] = []
+
       const { deps, calls } = makeDeps({
         feedBaseUrl: '',
         run: async () => ({ code: 1, stdout: JSON.stringify({ available: null, error }) }),
