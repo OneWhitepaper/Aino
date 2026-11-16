@@ -32,6 +32,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Native SDK pack/unpack at 19045 floor                          | Eight cases passed on Windows Server 2025                                        |
 | Windows Python and acceptance-harness contracts                | 69 Python and 73 JS passed; nine platform skips                                  |
 | Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed                                |
+| Windows PowerShell 5.1 driver contracts                        | Five process/English/Chinese confirmation contracts passed                       |
 | Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference                        |
 | Real ZIP to MSIX retained-login migration                      | Partial: first MSIX installed, retained login observed; complete journey pending |
 | In-app update and actual automatic NEW workspace               | Pending                                                                          |
@@ -93,6 +94,9 @@ Python contracts passed, and all 15 repository checks passed. Windows job
 `133004500705` passed the new real-listener and expected-interpreter contracts
 at harness `695dd00c8f`. The full local candidate/checker/health selection passed
 67 tests, with two Windows-only tests skipped on Mac and covered by that job.
+Job `133008078342` at `c345989a37` also passed all five driver contracts through
+actual Windows PowerShell 5.1. This proves phrase selection and script encoding;
+actual UI typing remains part of the complete native journey.
 
 Diagnostic reaccept `43776705547` stopped before installation because the
 selected artifact's overall origin workflow was still active. The origin
@@ -113,6 +117,46 @@ Repeat the native lifecycle on a Windows 10 22H2 desktop and retain its actual O
 receipt. A 19045 manifest or a Server SDK run cannot establish that OS's runtime
 compatibility. Before release, separately verify production-signed installation
 and update without disposable test certificate trust.
+
+## Windows 10 and standard-user handoff
+
+Use a disposable Windows 10 22H2 desktop VM and a dedicated standard user. Record
+the actual OS caption, build (`10.0.19045`), desktop product type, architecture,
+App Installer version and user token. Use only synthetic account data. Do not
+set CI admission variables to run CI-only scripts on an ordinary machine.
+
+1. Obtain the exact private OLD/NEW pair containing the corrected source, its
+   public certificate and source/hash receipts. Verify package identity,
+   architecture, signer and validity. Candidate certificates expire after two
+   days; rebuild expired candidates rather than changing the clock or trust checks.
+2. An administrator may preinstall only that public certificate in
+   `LocalMachine\\TrustedPeople`, retaining its thumbprint for cleanup. Sign out
+   of the administrator. Installation, app execution, update and uninstall must
+   then run under the standard user without elevation.
+3. Use the existing descriptor writer and loopback feed helper to serve OLD
+   through one `.appinstaller` URI. Use the isolated account/inference fixtures;
+   keep the app's normal `%APPDATA%\\Aino` resolution within this dedicated user.
+4. In released v0.1.5 ZIP, create a unique ordinary chat, Bot and model selection.
+   Save the actual account home and durable message IDs. Close normally, leaving
+   the gateway to its ordinary lifecycle. Install OLD through `.appinstaller` and
+   launch from Start. Verify retained encrypted login, original data and natural
+   old-gateway replacement.
+5. Publish NEW at the same local descriptor URI. Trigger the update from Settings
+   and observe package replacement and automatic app restart. Record OLD/NEW
+   PID and birth time; inspect the actual automatic NEW before any manual launch.
+   Verify account, home, history, model and a new completed chat turn.
+6. From separate OLD VM snapshots, test descriptor HTTP 404 and an observed Aino
+   App Installer cancellation. A preparation failure must leave the same window
+   usable. A cancelled install must permit manual OLD reopen with retained login
+   and data. Missing cancellation UI is unmet coverage.
+7. Uninstall and verify package/Start registration removal with external data
+   retained; reinstall and inspect that data. Save per-stage screenshots,
+   package/source/hash, account-home and synthetic-history receipts, marking
+   failed or untested steps explicitly.
+8. Remove only this test's package and disposable data. An administrator removes
+   only the recorded temporary certificate thumbprint. This establishes a
+   pretrusted standard-user lifecycle, not production signing trust. Production
+   installation without manually added trust requires its own acceptance.
 
 The account fixture uses the real desktop bridge and encrypted local token store,
 but synthetic authentication and mock inference. It does not certify production
