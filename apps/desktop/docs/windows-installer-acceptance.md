@@ -32,9 +32,9 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Repository `scripts/check`                                     | All 15 checks passed                                                             |
 | Independent production and acceptance review                   | No P1/P2 findings                                                                |
 | Native SDK pack/unpack at 19045 floor                          | Eight cases passed on Windows Server 2025                                        |
-| Windows Python and acceptance-harness contracts                | 69 Python and 73 JS passed; nine platform skips                                  |
-| Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed                                |
-| Windows PowerShell 5.1 driver contracts                        | Five process/English/Chinese confirmation contracts passed                       |
+| Windows Python and acceptance-harness contracts                | 69 Python and 74 JS passed; nine platform skips                                  |
+| Windows updater/state and descriptor contracts                 | 71 updater/state and four descriptor tests passed                                |
+| Windows PowerShell 5.1 driver contracts                        | Six process, localization and navigation-priority contracts passed               |
 | Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference                        |
 | Real ZIP to MSIX retained-login migration                      | Passed on diagnostic source `00e438fc2b`; current-source reaccept pending          |
 | In-app update and actual automatic NEW workspace               | Pending                                                                          |
@@ -130,6 +130,15 @@ and harness typechecks, changed-file lint and all 15 repository checks passed.
 Neither the diagnostic manual-card failure nor the screenshots distinguish
 old API denial from missing package identity; that requires the new receipt.
 Older signed pairs remain useful diagnostics but cannot certify this source.
+
+Private contracts run
+[`43784313536`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43784313536)
+at harness `03e2136520` passed the complete updated Windows contract selection:
+69 Python, 74 JavaScript (nine unrelated host skips), 71 updater/state, eight
+native SDK cases, four descriptor tests and six Windows PowerShell 5.1 driver
+contracts. The initial diagnostic fixture assumed the interpreter shared its
+temporary volume; it now uses an existing sibling file to test path escape.
+No production code or signed payload changed for that test correction.
 
 ## Remaining native receipts
 
