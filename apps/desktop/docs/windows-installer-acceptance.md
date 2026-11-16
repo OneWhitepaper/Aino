@@ -3,6 +3,8 @@
 Status: update-checker correction implemented; native acceptance is in progress.
 Distribution is held. This document does not authorize publishing installers or
 production feeds.
+The user requested test-signing acceptance first; production signing and ordinary
+production trust are deferred until release preparation.
 
 ## Scope
 

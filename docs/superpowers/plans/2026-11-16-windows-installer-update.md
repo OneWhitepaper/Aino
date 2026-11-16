@@ -14,7 +14,7 @@
 
 - Original UI worktree remains untouched; work is isolated on `codex/windows-installer-update`.
 - Keep Copilot key registration, native aliases, profiles, account isolation and local data.
-- Production signing credentials are currently absent. A disposable CI certificate proves test deployment only.
+- User confirmed no production signing resources and requested test-signing acceptance first. A disposable CI certificate proves test deployment only; production trust is deferred to a future release.
 - User confirmed Windows 10 22H2 (19045) and Windows 11. Preserve all extensions. SDK validation and actual installation are separate claims; Windows 10 desktop validation requires that OS.
 - No website, stable feed, public release or production certificate store mutation.
 
@@ -24,8 +24,10 @@
 - [x] Add default installation/update candidate output using the existing bundle build and descriptor generator, isolated from public distribution. Validate exact commit, architecture, signer, native identity and digest.
 - [x] Extend Windows acceptance to assert account workspace, historical conversation, Bot/profile and model configuration preservation; detect missing or altered records. Native execution is tracked separately below.
 - [x] Add private artifact-only Windows SDK/deployment verification, including failure/cancel paths and uninstall retaining external data; forbid public workflow execution/publication. Native execution is tracked separately below.
-- [ ] Run targeted local tests, typecheck and repository checks. Run available Windows private CI and record precise limits where no native host/signing credentials exist.
-- [ ] Review the patch and produce an acceptance report distinguishing implemented, locally tested, Windows-tested and blocked production-signing/OS-specific checks.
+- [x] Run targeted local tests, typecheck and repository checks; run Windows SDK/native contracts and record host/signing limits.
+- [x] Review the production patch and produce an acceptance report distinguishing implementation, contracts and outstanding native receipts.
+- [ ] Accept the corrected-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
+- [ ] Verify the Windows 10 22H2 and standard-user lifecycle on an actual supported desktop host.
 
 ## Verification commands
 
