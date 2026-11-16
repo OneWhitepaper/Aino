@@ -1,11 +1,12 @@
 # Windows installation and update acceptance
 
-Status: source-only apply and native navigation fixes at `f5d12ce3dc` passed
-independent review. Public run `43801657955` has passed its Windows contracts job;
-x64/ARM64 native jobs are in progress and no complete native lifecycle has been
-accepted. Distribution is held; this document does not authorize installer,
-release, feed or website publication, or a merge to `main`. The user authorized test-signing acceptance first; production
-signing and ordinary production trust remain deferred to release preparation.
+Status as of 2026-11-17: public run `43885861128` completed with failed x64 and
+ARM64 native lifecycle jobs. Released-ZIP migration and descriptor-404 recovery
+passed on both hosts, but automatic NEW activation timed out; no complete native
+lifecycle has been accepted. The user has authorized source integration into
+`main`; installer, release, feed and website publication remain prohibited.
+Production signing and ordinary production trust remain deferred to release
+preparation. Source integration does not waive any native acceptance gate.
 
 ## Scope
 
@@ -21,7 +22,43 @@ The `.appinstaller` entry point registers updates. Installing a bundle alone doe
 not establish that subscription. Existing ZIP users install the first MSIX
 manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 
-## Evidence as of 2026-11-16
+## Latest completed public receipts
+
+The [native run `43885861128`](https://github.com/OneWhitepaper/Aino/actions/runs/43885861128)
+tested source `ee3525258c762ac19dc25feb6e29511e6df59d24`. Its Windows contracts job
+passed, as did the separate [contracts-only run `43885299701`](https://github.com/OneWhitepaper/Aino/actions/runs/43885299701)
+at that same source. Both test-signed native jobs completed with status
+`unaccepted`; their curated `receipts.json` files identify these results:
+
+| Gate | x64 | ARM64 |
+| --- | --- | --- |
+| Actual host | Windows Server 2025, `10.0.26100`, elevated | Windows 11 ARM64, `10.0.26200`, elevated |
+| Test-signed OLD/NEW provenance | Passed | Passed |
+| Released v0.1.5 ZIP to first MSIX, same data root and written history | Passed | Passed |
+| Installed update checker | `AVAILABLE`, exit 2 | `AVAILABLE`, exit 2 |
+| Descriptor HTTP 404 preparation failure | Passed; same OLD process remains usable | Passed; same OLD process remains usable |
+| Native update trigger/observation | `window-not-bound`; no matching installer window | Confirmation invoked; later `no-confirmation-control`; observed HRESULT `0x800706D9` |
+| Automatic NEW package/process/window | Failed: `package-timeout`; no NEW main process | Failed: `package-timeout`; no NEW main process |
+| Cancellation, manual OLD reopen, final user-state and full native acceptance receipts | Missing; not accepted | Missing; not accepted |
+| Disposable certificate cleanup | Removed | Removed |
+
+The observed ARM64 HRESULT does not by itself establish a production-code root
+cause. Successful migration, preparation recovery and contracts do not establish
+automatic update, relaunch or remaining lifecycle behavior. The x64 Server host
+does not establish Windows 10 22H2 or Windows 11 x64 desktop compatibility;
+neither elevated job establishes the standard-user lifecycle or production trust.
+All acceptance gates and publication restrictions remain unchanged. No candidate
+from these runs may be promoted or published.
+
+The source audit at `0334597e83` also passed 146 Python tests (three Windows-only
+tests skipped on Mac), 107 Electron/updater/preview tests, one Windows packaging
+configuration contract, three download/history contracts and 12 ZIP/descriptor
+tests. These local contracts do not replace the missing native receipts.
+
+## Historical evidence as of 2026-11-16
+
+The following snapshot predates the completed public run above. References to
+jobs being in progress describe that earlier snapshot, not current acceptance.
 
 | Check | Result |
 | --- | --- |
@@ -145,9 +182,10 @@ ZIPs and the full workspace are never selected for public artifact upload. Raw
 diagnostics stay in the ephemeral runner and the masked Actions console. Private
 candidate/reuse artifact behavior and origin validation remain unchanged.
 
-Public native results remain pending while both native jobs run. The standard
-x64 runner is Windows Server 2025; the ARM64 runner is Windows 11 ARM64. Neither establishes Windows 11
-x64 desktop, Windows 10 19045 desktop, standard-user or production-trust acceptance.
+The later public run `43885861128` has now completed with failed native jobs, as
+recorded above. The standard x64 runner is Windows Server 2025; the ARM64 runner
+is Windows 11 ARM64. Neither establishes Windows 11 x64 desktop, Windows 10
+19045 desktop, standard-user or production-trust acceptance.
 
 ## Remaining native receipts
 
