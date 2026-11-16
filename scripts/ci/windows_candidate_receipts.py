@@ -42,6 +42,11 @@ def _count(value: object) -> bool:
     return type(value) is int and 0 <= value <= 2**63 - 1
 
 
+def _hresults(value: object) -> bool:
+    return (type(value) is list and len(value) <= 20
+            and all(type(code) is str and re.fullmatch(r"0x[89A-F][0-9A-F]{7}", code) for code in value))
+
+
 _STATUS = _enum("accepted", "failed", "passed", "not-run", "building", "packaged")
 _CLEANUP = _enum("removed", "not-created")
 _NATIVE_RULES = {
@@ -74,6 +79,21 @@ _DOCUMENTS = {
         "status": _STATUS, "pid": _count, "startedAt": _count, "observedAt": _count,
         "authentication.authenticationPreservedWithoutLogin": _boolean,
         "authentication.authenticatedProfileRequests": _count, "authentication.freshAuthenticationRequests": _count,
+    }),
+    "observation": ("hermes-bundled-update/proof/native-observation.json", {
+        "status": _enum("observing", "observed", "unaccepted"),
+        "phase": _enum("starting", "observation-timeout", "supervisor-timeout", "waiting-for-package", "waiting-for-process", "new-observed",
+                       "invalid-package", "invalid-process", "package-query-timeout", "package-query-failed",
+                       "package-query-invalid", "process-query-timeout", "process-query-failed", "process-query-invalid"),
+        "samples": _count, "version": _version,
+        "packageQuery": _enum("ok", "timeout", "failed", "invalid", "not-run"),
+        "processQuery": _enum("ok", "timeout", "failed", "invalid", "not-run"),
+        "oldPayloadCount": _count, "oldMainCount": _count, "newMainCount": _count, "installerCount": _count,
+        "waiterStage": _enum("not-observed", "starting", "ready", "parent-exited", "query-started",
+                             "package-changed", "launched", "parent-timeout", "package-timeout", "failed"),
+        "waiterHresult": lambda value: _hresults([value]),
+        "events.queryStatus": _enum("ok", "timeout", "failed", "invalid"),
+        "events.matchedCount": _count, "events.errorCount": _count, "events.hresults": _hresults,
     }),
 }
 

@@ -1,4 +1,4 @@
-# The successful update keeps its own receipts even when a recovery case fails.
+﻿# The successful update keeps its own receipts even when a recovery case fails.
 # These helpers only operate on the package and explicit roots owned by the caller.
 function Wait-RecoveryEvidence($Run, [string]$File, [int]$TimeoutSeconds = 360) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -113,7 +113,7 @@ function Invoke-NativeCancelRecovery($Settings, [scriptblock]$PublishOld, [scrip
     } finally {
         Restore-NativeRelaunchEnvironment $nativeEnvironment
         if ($driver) { Stop-OutsideRunnerJob $driver }
-        if ($installed) { Remove-DesktopJourneyPackage $Settings.Identity }
+        if ($installed) { Remove-NativeJourneyPackage $Settings.Node $Settings.Assets $out $Settings.Identity }
     }
     Write-RecoveryOutcome $out $result
     return [pscustomobject]$result

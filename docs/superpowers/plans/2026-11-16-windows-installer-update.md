@@ -31,6 +31,8 @@
 - [x] Implement source-only apply and bounded UIA About scrolling at `f5d12ce3dc`; local Python, Electron, PowerShell, type/lint and repository checks pass.
 - [x] Complete independent review of `f5d12ce3dc` (no Critical/Important findings) and start public standard-runner run `43801657955`; its Windows contracts job passed. Both native jobs completed with a driver UIA error after migration and preparation recovery passed.
 - [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. x64 later failed and ARM64 stalled at replacement/automatic NEW; neither is accepted.
+- [x] Add bounded package/process observations, OLD-bound waiter-stage diagnostics, deployment HRESULT projection and bounded disposable cleanup; flush migration/recovery evidence before potentially blocking teardown. Product gateway behavior remains unchanged pending evidence.
+- [ ] Reproduce the native replacement/activation stall with these diagnostics, identify the failed phase, then fix and reaccept it.
 - [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
 - [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
 

@@ -176,10 +176,31 @@ Windows contracts passed in job `133139302779`.
   artifacts. Raw waiter and deployment failure evidence is not present in those
   public receipts, so no production fix is inferred from this combined timeout.
 
-Before another costly full rebuild, extend the existing observation to retain
-bounded package-version, process and waiter-stage diagnostics and enforce its
-deadline around native calls. Use the resulting evidence to distinguish failed
-deployment from failed activation. Automatic NEW, cancellation/manual reopen and
+The follow-up diagnostic change separates package replacement from automatic NEW.
+The existing journey now queries package provenance and process identity in owned
+PowerShell children, each bounded to 20 seconds within a monotonic 15-minute budget.
+A separate observer supervisor stops its owned diagnostic tree after 940 seconds;
+deployment-event collection has a separate ten-second limit and disposable-package
+cleanup has a 90-second limit. Neither observer nor supervisor launches the app or
+installer. A successful observation still requires the manifest/stamp-verified
+NEW executable, one fresh main PID and a later birth time than OLD.
+
+The observer writes progress before each native query and emits a heartbeat every
+30 seconds. Its receipt distinguishes package/query failures from waiting for a
+new process, counts remaining OLD payload processes and binds waiter progress to
+the exact OLD PID, identity and attempt time. The production waiter adds stage
+logging only; gateway lifecycle semantics are unchanged. A surviving canonical
+gateway holding OLD package files remains a hypothesis until native process and
+deployment evidence establishes it. The public projection exposes only fixed
+stages, typed counts/versions and validated HRESULTs, and does not relax any of
+the 13 acceptance gates. Successful migration evidence is flushed before the
+update, and recovery receipts are flushed before cleanup.
+
+Local child-timeout, phase/provenance, safe-projection tests and PowerShell parsing
+are covered; actual Windows probes are also wired into the existing contracts job.
+Native diagnostic reproduction is pending and these changes do not establish a
+successful update. Use its evidence to distinguish deployment from activation.
+Automatic NEW, cancellation/manual reopen and
 final uninstall/reinstall preservation are still not accepted. Distribution and
 `main` remain unchanged, and the other chat's worktree and desktop process remain
 untouched.

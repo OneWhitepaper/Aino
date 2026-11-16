@@ -1,4 +1,4 @@
-# Native package replacement acceptance. Never run on a developer desktop.
+﻿# Native package replacement acceptance. Never run on a developer desktop.
 param(
     [string]$ManifestUrl,
     [string]$CandidateManifest,
@@ -37,6 +37,7 @@ New-Item -ItemType Directory -Path $env:HOME | Out-Null
 . (Join-Path $Assets 'desktop-smoke-windows.ps1')
 . (Join-Path $Assets 'windows-native-environment.ps1')
 . (Join-Path $Assets 'windows-bundled-recovery.ps1')
+. (Join-Path $Assets 'windows-native-observation.ps1')
 $Node = if ($env:HERMES_E2E_NODE) { $env:HERMES_E2E_NODE } else { (Get-Command node.exe).Source }
 function Run-Node([string[]]$Argv) {
     & $Node @Argv
@@ -184,6 +185,7 @@ try {
         userData=$migration.userData; hermesHome=$migration.hermesHome; extractedPayloadRemoved=$true;
         artifactReceipt='released-zip-artifact.json'; historyReceipt='released-zip/released-zip-opened.json';
         migrationReceipt='first-msix/released-zip-migration.json' }
+    $publishedZipMigration | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'published-zip-migration.json')
     $startAppId = "$($old.package.PackageFamilyName)!$($m.old.applicationId)"
     $shortcutDeadline = (Get-Date).AddSeconds(30)
     do {
@@ -238,6 +240,7 @@ try {
     $oldProcess | Select-Object ProcessId, CreationDate, ExecutablePath | ConvertTo-Json | Set-Content (Join-Path $Proof 'old-process.json')
     $nativeEnvironment = Publish-NativeRelaunchEnvironment (Join-Path $Proof 'native-relaunch-environment.json') $Work $env:HERMES_DESKTOP_USER_DATA_DIR
     Descriptor $m.new 'new.msixbundle'
+    $nativeAttemptStarted = [DateTime]::UtcNow.ToString('o')
     Write-AcceptanceStage 'OLD chat passed; invoking the real native Update action'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Assets 'windows-bundled-drive-update.ps1') -OldProcessId $oldProcess.ProcessId -ProofDir $Proof -ResultPath (Join-Path $Proof 'click.json')
     if ($LASTEXITCODE -ne 0) { throw 'Real in-app update trigger failed' }
@@ -249,23 +252,18 @@ try {
         if ((Test-Path -LiteralPath $oldDriver.ExitFile) -or (Get-Date) -ge $closedDeadline) { throw 'OLD Playwright ownership did not release after native process close' }
         Start-Sleep -Milliseconds 200
     }
-    $deadline = (Get-Date).AddMinutes(15)
-    Write-AcceptanceStage 'Waiting for native package replacement and automatic NEW launch'
-    $new = $null; $newRows = @()
-    do {
-        $pkg = Get-AppxPackage -Name $m.new.identity
-        if ($pkg -and $pkg.Version.ToString() -ceq $m.new.version) {
-            $new = Installed $m.new
-            $newRows = Main-Processes $new.exe
-            if ($newRows.Count -eq 1) { break }
-        }
-        Start-Sleep -Seconds 2
-    } while ((Get-Date) -lt $deadline)
-    if (-not $new -or $newRows.Count -ne 1) { throw 'Native update did not automatically relaunch the new package' }
-    $newProcess = $newRows[0]
+    Write-AcceptanceStage 'Waiting for native package replacement and automatic NEW launch (bounded native queries)'
+    $observed = Invoke-NativeObserver $Node $Assets $Proof @{
+        identity=$m.new.identity; arch=$Arch; new=$m.new;
+        old=@{ version=$m.old.version; location=$old.package.InstallLocation };
+        oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate.ToUniversalTime().ToString('o');
+        startedAt=$nativeAttemptStarted
+    }
+    $new = $observed.installed
+    $newProcess = $observed.process
+    $newProcess.CreationDate = [DateTime]::Parse($newProcess.CreationDate)
     if ($newProcess.CreationDate -le $oldProcess.CreationDate) { throw 'New process was not created after OLD' }
-    $stale = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($old.package.InstallLocation + '\', [StringComparison]::OrdinalIgnoreCase) })
-    if ($stale.Count) { throw 'Old payload processes remain alive' }
+    if ($observed.oldPayloadCount) { throw 'Old payload processes remain alive' }
     $healthy = $false
     $deadline = (Get-Date).AddMinutes(3)
     do {
@@ -314,7 +312,7 @@ try {
     Write-AcceptanceStage 'NEW retained login, history and chat passed; checking uninstall preservation'
     $acceptance = @{ ok=$true; oldVersion=$m.old.version; newVersion=$m.new.version; oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; stamp=$new.stamp; automaticRelaunch=$true; candidateOnly=[bool]$CandidateManifest; userStatePreserved=$true }
     $acceptance | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'native-update-success.json')
-    Remove-DesktopJourneyPackage $m.old.identity
+    Remove-NativeJourneyPackage $Node $Assets $Proof $m.old.identity
     $installed = $false
     Verify-UserState uninstall
     # Cancellation is last: its bounded OS waiter cannot race the successful
@@ -328,14 +326,14 @@ try {
     if (-not $publishedZipMigration.tested) { $publishedZipMigration.status='failed'; $publishedZipMigration.error=$_.Exception.Message }
     throw
 } finally {
+    $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
+    $publishedZipMigration | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'published-zip-migration.json')
     Restore-NativeRelaunchEnvironment $nativeEnvironment
     if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -ErrorAction SilentlyContinue }
     if ($oldDriver) { Stop-OutsideRunnerJob $oldDriver }
     if (-not $server.HasExited) { Stop-Process -Id $server.Id -ErrorAction SilentlyContinue }
     # Disposable runner teardown only, scoped to the package installed by this leg.
-    if ($installed) { Remove-DesktopJourneyPackage $m.old.identity }
-    $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')
-    $publishedZipMigration | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'published-zip-migration.json')
+    if ($installed) { Remove-NativeJourneyPackage $Node $Assets $Proof $m.old.identity }
 }
 
 if ($acceptance) {

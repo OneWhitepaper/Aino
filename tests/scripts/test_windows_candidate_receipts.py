@@ -120,6 +120,43 @@ def test_missing_malformed_oversized_and_untyped_receipts_never_claim_acceptance
     assert all(summary.get("status") != "accepted" for summary in result.values() if isinstance(summary, dict))
 
 
+def test_native_observation_projects_typed_failure_stages_without_private_evidence(tmp_path):
+    write_json(tmp_path, "hermes-bundled-update/proof/native-observation.json", {
+        "status": "unaccepted", "phase": "waiting-for-package", "samples": 20,
+        "packageQuery": "ok", "processQuery": "ok", "waiterStage": "failed", "waiterHresult": "0x80073D02",
+        "version": "1.0.0.0", "oldPayloadCount": 3, "oldMainCount": 0,
+        "newMainCount": 0, "installerCount": 1,
+        "events": {"queryStatus": "ok", "matchedCount": 5, "errorCount": 1,
+                   "eventIds": [400, 401], "hresults": ["0x80073D02"], "raw": SECRET},
+        "last": {"commandLine": SECRET, "path": SECRET, "processes": [SECRET]},
+    })
+    output = export_public_receipts(tmp_path, SOURCE, "x64")
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["observation"]["phase"] == "waiting-for-package"
+    assert result["observation"]["oldPayloadCount"] == 3
+    assert result["observation"]["hresults"] == ["0x80073D02"]
+    assert result["observation"]["waiterHresult"] == "0x80073D02"
+    assert result["status"] == "unaccepted"
+    assert SECRET not in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("field,value", [("phase", SECRET), ("oldPayloadCount", True),
+                                         ("events.hresults", [SECRET])])
+def test_malformed_observation_is_never_copied_to_the_public_receipt(tmp_path, field, value):
+    document = {"status": "unaccepted", "phase": "waiting-for-process", "oldPayloadCount": 0,
+                "events": {"hresults": ["0x80073D02"]}}
+    target = document
+    *parents, key = field.split(".")
+    for parent in parents:
+        target = target[parent]
+    target[key] = value
+    write_json(tmp_path, "hermes-bundled-update/proof/native-observation.json", document)
+    output = export_public_receipts(tmp_path, SOURCE, "x64")
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["observation"] == {"document": "invalid"}
+    assert SECRET not in output.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("source,arch", [("main", "x64"), (SOURCE, "amd64"), (None, "x64")])
 def test_export_rejects_unpinned_authority_before_creating_output(tmp_path, source, arch):
     before = set(tmp_path.iterdir())

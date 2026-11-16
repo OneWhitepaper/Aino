@@ -1,4 +1,4 @@
-# Wait outside the package until the original app exits and Windows publishes its update.
+﻿# Wait outside the package until the original app exits and Windows publishes its update.
 param(
   [Parameter(Mandatory = $true)][int]$ProcessId,
   [Parameter(Mandatory = $true)][long]$ProcessStartTimeMs,
@@ -49,6 +49,8 @@ try {
     Start-Sleep -Milliseconds $PollMillis
   }
 
+  Write-WaiterLog 'parent exited; waiting for package version change'
+  Write-WaiterLog 'package query started'
   while ((Get-Date) -le $deadline) {
     $current = Get-AppxPackage -Name $IdentityName | Select-Object -First 1
     if ($current -and $current.Version -ne $fromVersion -and $current.PackageFamilyName -eq $familyName) {
