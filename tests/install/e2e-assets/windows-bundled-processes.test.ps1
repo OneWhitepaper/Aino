@@ -1,4 +1,4 @@
-﻿# Pure driver contracts only; no package installation or live process changes.
+﻿# Driver contracts; the Windows arm uses owned UIA windows, never package installation.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'desktop-smoke-windows.ps1')
@@ -160,3 +160,49 @@ $invoked = Invoke-UpdateNavigationButton $null -Refresh {
 } -Scroll { throw 'A busy check must not scroll About' } -Invoke { throw 'A busy check must not invoke About' }
 if ($invoked) { throw 'A busy check unexpectedly navigated' }
 Write-Output 'PASS: offscreen About scrolls before a fresh visible invoke; changed, disabled or busy selections wait'
+
+# The pure navigation contracts cannot exercise the Windows API used to bind an
+# About element to its window. Use real controls on Windows to catch API errors
+# before a package build reaches its native update trigger.
+if ($env:OS -eq 'Windows_NT') {
+    Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
+    $form = New-Object System.Windows.Forms.Form
+    $other = New-Object System.Windows.Forms.Form
+    $button = New-Object System.Windows.Forms.Button
+    $form.Text = 'Aino update navigation contract'
+    $form.ShowInTaskbar = $false
+    $button.Text = 'About'
+    $button.AccessibleName = 'About'
+    $form.Controls.Add($button)
+    try {
+        $form.Show()
+        [System.Windows.Forms.Application]::DoEvents()
+        $window = [System.Windows.Automation.AutomationElement]::FromHandle($form.Handle)
+        $aboutElement = [System.Windows.Automation.AutomationElement]::FromHandle($button.Handle)
+        if ($aboutElement.Current.IsOffscreen -or -not $aboutElement.Current.IsEnabled) {
+            throw 'The owned native About control did not become visible and enabled'
+        }
+        # Resolve the window independently: CLR reference equality is not a
+        # substitute for UIA element identity across provider reads.
+        $sameWindow = [System.Windows.Automation.AutomationElement]::FromHandle($form.Handle)
+        if (-not (Show-UpdateAbout $aboutElement $sameWindow)) {
+            throw 'A real native About element must bind to its own window'
+        }
+        $foreignWindow = [System.Windows.Automation.AutomationElement]::FromHandle($other.Handle)
+        if (Show-UpdateAbout $aboutElement $foreignWindow) {
+            throw 'An About element must not scroll through a different window'
+        }
+        $button.Enabled = $false
+        [System.Windows.Forms.Application]::DoEvents()
+        if (Show-UpdateAbout $aboutElement $window) {
+            throw 'A disabled native About control must not be scrolled'
+        }
+        Write-Output 'PASS: native UIA About binding accepts its window and rejects foreign or disabled controls'
+    } finally {
+        $form.Close()
+        $form.Dispose()
+        $other.Dispose()
+    }
+} else {
+    Write-Output 'SKIP: native UIA About binding requires Windows'
+}

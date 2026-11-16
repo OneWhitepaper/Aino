@@ -1,11 +1,12 @@
 # Windows installation and update acceptance
 
-Status: source-only apply and native navigation fixes at `f5d12ce3dc` passed
-independent review. Public run `43801657955` has passed its Windows contracts job;
-x64/ARM64 native jobs are in progress and no complete native lifecycle has been
-accepted. Distribution is held; this document does not authorize installer,
-release, feed or website publication, or a merge to `main`. The user authorized test-signing acceptance first; production
-signing and ordinary production trust remain deferred to release preparation.
+Status: public run `43801657955` completed. Its Windows contracts passed, but both
+native architectures failed at an incorrect UIA method call in the acceptance
+driver, after migration and preparation recovery passed. No complete native
+lifecycle has been accepted. Distribution is held; this document does not authorize
+installer, release, feed or website publication, or a merge to `main`. The user
+authorized test-signing acceptance first; production signing and ordinary
+production trust remain deferred to release preparation.
 
 ## Scope
 
@@ -28,73 +29,50 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Public receipts-only mode and complete acceptance projection (`006d35b6b3`) | 111 Python passed; two native Windows skips on Mac; independent review clean |
 | Source-only checker contracts (`f5d12ce3dc`) | 29 Python passed; one native Windows projection probe skipped on Mac |
 | Related Electron updater/checker/descriptor contracts (`f5d12ce3dc`) | 72 passed across six files |
-| PowerShell navigation/process/localization contracts (`f5d12ce3dc`) | Seven groups passed on Windows PowerShell 5.1, including the offscreen-About contract; native UIA execution remains pending |
-| Full desktop renderer, Electron, E2E and builder typecheck; changed-file lint | Passed for `f5d12ce3dc` |
-| Repository `scripts/check` and commit hook | All 15 checks and the hook passed for `f5d12ce3dc` |
-| Independent review of source-only apply and UIA scrolling | Clean for `f5d12ce3dc`; no Critical/Important findings |
-| Latest public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
-| Latest private x64 signed OLD/NEW pair (`27bbc1d8f2`, run `43783849762`) | Build, signing and verification passed; native job failed later |
-| Released v0.1.5 ZIP chat and first-MSIX retained-login migration | Passed on x64 at `27bbc1d8f2`, including original history, natural gateway rotation and all 25 data checks |
-| Actual installed PackageManager update query | Raw checker exit 2, `AVAILABLE`, registered loopback source and empty stderr observed on x64 at `27bbc1d8f2` |
-| Latest private x64 candidate cleanup | Recorded removed; this does not turn the failed lifecycle into acceptance |
-| In-app update and actual automatic NEW workspace | Pending; no complete accepted receipt |
-| Preparation failure, OS cancellation/manual OLD reopen and uninstall preservation | Pending native revalidation after `f5d12ce3dc` |
-| Windows 11 ARM64 native lifecycle | Public `f5d12ce3dc` job in run `43801657955` in progress; older private `27bbc1d8f2` job also in progress; no accepted receipt |
-| x64 runtime host coverage | Windows Server 2025 observed; Windows 11 x64 desktop and Windows 10 19045 desktop remain untested |
-| Standard-user native lifecycle | Untested; elevated hosted CI does not establish this claim |
-| Production signing and ordinary production trust | Untested and deferred; only test signing is authorized |
-| Public standard-runner execution | Run `43801657955` started at frozen `f5d12ce3dc`; contracts succeeded and x64/ARM64 native jobs remain in progress; curated receipts only |
+| Full desktop typecheck, changed-file lint, repository checks and independent review (`f5d12ce3dc`) | Passed; review found no Critical/Important findings |
+| Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
+| Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
+| Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
+| Actual installed PackageManager update query | Both architectures returned exit 2, `AVAILABLE`, registered loopback source and empty stderr |
+| Preparation HTTP404 recovery | Passed on both architectures: real descriptor HTTP404, same usable OLD process and intact state |
+| Actual Update trigger | Both failed before handoff: `AutomationElement` has no `Compare` method |
+| Automatic NEW, observed OS cancellation/manual OLD reopen, final uninstall/reinstall | Not reached; no complete accepted receipt |
+| Disposable signing key/trust cleanup | Recorded removed on both architectures; both public receipts remain `unaccepted` |
+| Runtime host coverage | x64: Windows Server 2025; ARM64: Windows 11 ARM64. Windows 11 x64 desktop and Windows 10 19045 desktop remain untested |
+| Standard-user lifecycle and production trust | Untested; both hosted jobs were elevated; only test signing is authorized |
 
-The latest completed x64 native job in
-[`43783849762`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43783849762)
-used signed source `27bbc1d8f2de0a28b51f83bb07cd0c787586fea4` on Windows Server
-2025. It completed released ZIP chat, first-MSIX installation, retained encrypted
-login without another sign-in, original chat-row checks, natural replacement of
-the ZIP gateway and all 25 account/Bot/configuration/file preservation checks.
-The bounded checker receipt from the actual installed Electron main process
-reported `AVAILABLE` with its registered update URI. This confirms the
-`PackageManager.FindPackageForUser` correction on that host. Candidate cleanup
-recorded removal. These are concrete partial results, not a complete native pass.
+The completed public run
+[`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955)
+tested signed source `f5d12ce3dcc253cd9bc3dc9e070e2b88f747da5f`. Native x64 job
+`133083109738` and ARM64 job `133083108952` both passed released ZIP migration,
+the 25 preservation checks and actual HTTP404 preparation recovery. The prior
+source-only apply correction therefore passed this native recovery scenario.
 
-The job then exposed two independent failures:
+Both jobs then failed at `Show-UpdateAbout`: the driver called
+`System.Windows.Automation.AutomationElement.Compare`, which does not exist.
+The documented API is `System.Windows.Automation.Automation.Compare`. Pure
+navigation contracts had passed because they did not call the Windows UIA API.
+This is an acceptance-driver defect; the logs do not establish a failure of the
+actual native update handoff, which was not reached.
 
-- The recovery fixture hid the descriptor before clicking Update. Apply repeated
-  the networked Windows availability check to obtain the registered source and
-  reached its 20-second deadline before descriptor preparation could return HTTP
-  404. The screenshot shows the checker timeout, not a descriptor-download error.
-- The later UIA driver opened Settings/My account, where About was below the
-  sidebar viewport. It discarded offscreen controls and never scrolled, so no
-  Update button was reached within 300 seconds. That screenshot does not establish
-  a second checker timeout or an identity failure.
+The correction uses that documented API and exercises the actual helper against
+owned native Windows controls: the About element must bind to an independently
+resolved instance of its own window, reject another window, and reject a disabled
+button. The driver retains its original process identity guard before scrolling.
+Local PowerShell 7.5.4 parsing and seven pure contract groups pass; the native
+UIA group is skipped on Mac and requires Windows execution before acceptance.
+UTF-8 BOM and CRLF remain in the Windows scripts.
 
-`f5d12ce3dc` separates fresh authoritative source resolution from networked
-availability inside the existing checker: apply uses `--source-only`, retaining
-identity, configured-source and URI checks and errors before side effects. The
-full availability check still reports unknown honestly. The existing UIA driver
-now scrolls the matched About element only within the identified OLD window,
-refreshes selection and checks visibility/enabled state before invocation, while
-preserving ready/busy Check now priority. Both changes have local red-to-green
-contracts and passed independent review with no Critical/Important findings.
-Public Windows contracts also passed, including the seven actual Windows
-PowerShell 5.1 groups. Those pure contracts do not establish native UIA scrolling;
-the x64/ARM64 installed lifecycle jobs remain in progress. The ARM64 job of the
-older private `27bbc1d8f2` run also remains in progress on Windows 11 ARM64.
+Work continues only in `aino-windows-native-acceptance/Aino`, branch
+`codex/windows-native-acceptance`, based on `b121c42af7`. The other chat's browser
+fix `0334597e83` in `aino-windows-installer/Aino` is excluded and preserved.
+Neither the other chat's files nor its desktop process are used by this run.
 
-Earlier private executions are historical diagnostics. Runs `43767548248` and
-`43775234306` have completed with failures; their older signed pairs are no longer
-building and cannot certify the latest fixes. Earlier transport, localized
-composer, model-response and external `WindowsApps` interpreter-observation
-failures were corrected in the existing harness. Diagnostic run `43777044333`
-proved migration and 25 data checks on older source `00e438fc2b`, then failed
-update/recovery gates. The later separate Windows contract run `43784313536`
-passed the corrected path-escape fixture without changing that signed payload.
-Prior full tests-js verification passed 376 tests with five host skips; that was
-an earlier contract result, not a native lifecycle result for `f5d12ce3dc`.
-
-Windows Server 2025 SDK pack/unpack at a 19045 manifest floor is not Windows 10
-19045 runtime evidence and is not Windows 11 x64 desktop evidence. Actual Windows
-11 x64 desktop, Windows 10 22H2 desktop, standard-user execution and production
-trust each still need their own host receipts. No candidate has been promoted.
+Earlier private runs, including completed failed run `43783849762`, are
+historical diagnostics. They cannot certify the latest source. Earlier transport,
+localized composer and process-observation fixes remain in the existing harness.
+Windows Server SDK pack/unpack at a 19045 manifest floor is not Windows 10 desktop
+or Windows 11 x64 desktop runtime evidence. No candidate has been promoted.
 
 ## Public standard-runner receipts-only execution
 
@@ -103,9 +81,10 @@ projection at `006d35b6b3`, and the native fixes at `f5d12ce3dc`, passed indepen
 review. The root pushed `f5d12ce3dc` to
 `OneWhitepaper/Aino:validation/windows-installer-public/20261116`, starting
 [`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955).
-Its contracts job `133083110675` completed successfully; x64 and ARM64 native
-jobs checked out the source, started setup and remain in progress. Public standard
-runner admission was not blocked by the private-repository billing limitation.
+Its contracts job `133083110675` completed successfully. Both native jobs have
+completed with failures at the same UIA method call, after migration and HTTP404
+preparation recovery passed. Public standard-runner admission was not blocked
+by the private-repository billing limitation.
 The opt-in ref remains frozen at `f5d12ce3dc`; documentation updates use a separate
 ref so they do not restart the two package builds.
 
@@ -145,9 +124,10 @@ ZIPs and the full workspace are never selected for public artifact upload. Raw
 diagnostics stay in the ephemeral runner and the masked Actions console. Private
 candidate/reuse artifact behavior and origin validation remain unchanged.
 
-Public native results remain pending while both native jobs run. The standard
-x64 runner is Windows Server 2025; the ARM64 runner is Windows 11 ARM64. Neither establishes Windows 11
-x64 desktop, Windows 10 19045 desktop, standard-user or production-trust acceptance.
+Both public native receipts are `unaccepted`; the UIA correction requires a new
+run. The standard x64 runner is Windows Server 2025; the ARM64 runner is Windows
+11 ARM64. Neither establishes Windows 11 x64 desktop, Windows 10 19045 desktop,
+standard-user or production-trust acceptance.
 
 ## Remaining native receipts
 

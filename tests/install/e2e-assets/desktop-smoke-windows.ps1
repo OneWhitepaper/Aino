@@ -44,6 +44,39 @@ function Invoke-UpdateNavigationButton($Button, [scriptblock]$Refresh, [scriptbl
     return [bool](& $Invoke $fresh.Element)
 }
 
+function Show-UpdateAbout($Element, $Window) {
+    if (-not $Element.Current.IsEnabled -or
+        $Element.Current.Name -notmatch '^(About|关于|關於)$') { return $false }
+    # Only ancestors below this identified OLD window may receive a scroll.
+    $ancestors = [System.Collections.Generic.List[object]]::new()
+    $parent = $Element
+    $bound = $false
+    for ($depth = 0; $depth -lt 32; $depth++) {
+        if ([System.Windows.Automation.Automation]::Compare($parent, $Window)) { $bound = $true; break }
+        $parent = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($parent)
+        if ($null -eq $parent) { return $false }
+        $ancestors.Add($parent)
+    }
+    if (-not $bound) { return $false }
+    $item = $null
+    if ($Element.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$item)) {
+        $item.ScrollIntoView()
+    }
+    foreach ($ancestor in $ancestors) {
+        if (-not $Element.Current.IsEnabled) { return $false }
+        if (-not $Element.Current.IsOffscreen) { return $true }
+        if ([System.Windows.Automation.Automation]::Compare($ancestor, $Window)) { break }
+        $scroll = $null
+        if (-not $ancestor.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$scroll) -or
+            -not $scroll.Current.VerticallyScrollable) { continue }
+        for ($attempt = 0; $attempt -lt 4 -and $Element.Current.IsOffscreen; $attempt++) {
+            $scroll.Scroll([System.Windows.Automation.ScrollAmount]::NoAmount, [System.Windows.Automation.ScrollAmount]::LargeIncrement)
+        }
+        break
+    }
+    return $Element.Current.IsEnabled -and -not $Element.Current.IsOffscreen
+}
+
 function Start-DesktopJourneyMock([string]$Node, [string]$Assets, [string]$Work, [string]$HermesHome, [string]$Out) {
     New-Item -ItemType Directory -Path $Out -Force | Out-Null
     $urlFile = Join-Path $Work 'chat-mock-url'
