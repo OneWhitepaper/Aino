@@ -51,6 +51,12 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Added owned-child CPU/memory/I/O/output heartbeats and final progress receipts
+  after x64's final bundle-sign command remained silent much longer than the
+  preceding run. Native signing/packing/verification now have independent
+  30-minute budgets. Real-child tests failed before the implementation; 46
+  related tests now pass (one Windows skip). This follow-up is outside frozen
+  run `43846856927`; the earlier deployment/activation cause remains unproven.
 - Removed the redundant unbounded post-NEW CIM/port scan and final parent
   package query. Existing bounded automatic-window/selected-gateway health and
   disposable-removal checks retain those invariants. Local selected-gateway and

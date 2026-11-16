@@ -1,10 +1,10 @@
 # Windows installation and update acceptance
 
-Status: follow-up public run `43819576334` at `3fd5e9c26c` is completed with
-conclusion `cancelled`: Windows contracts passed, x64 failed while waiting for
-package replacement/automatic NEW, and the stalled ARM64 leg was cancelled after
-29 minutes without progress at that same stage. Neither architecture has a
-complete accepted native lifecycle. Distribution is held; this document does not
+Status: diagnostic public run `43846856927` at `c0ff3179dc` is in progress.
+Its Windows contracts passed; native package replacement and automatic NEW have
+not yet produced complete receipts. Earlier run `43819576334` failed/stalled at
+that stage and was cancelled. Neither architecture has a complete accepted
+native lifecycle. Distribution is held; this document does not
 authorize installer, release, feed or website publication, or a merge to `main`. The user
 authorized test-signing acceptance first; production signing and ordinary
 production trust remain deferred to release preparation.
@@ -223,6 +223,18 @@ of repeating `Get-AppxPackage` in the parent. The selected-gateway and native
 handoff contracts passed locally (eight JavaScript and 17 Python tests; one
 Windows-only Python skip), as did PowerShell parsing. These follow-up changes
 are not included in frozen run `43846856927` and need native reacceptance.
+
+The diagnostic run also exposed insufficient build-stage visibility: x64's
+final bundle-signing command remained without new output substantially longer
+than the preceding run's three-minute signing step. This precedes deployment
+and does not identify the earlier update stall's cause. A follow-up harness
+change records minute-by-minute activity of the exact owned child (CPU, memory,
+available I/O counters and output size) and retains a final progress receipt.
+Signing, bundle creation and signature verification each have a 30-minute
+budget instead of inheriting the five-hour complete-build budget. Real-child
+timeout/reaping and pre-exit heartbeat tests were first red, then passed with
+the existing candidate contracts (46 passed, one Windows skip). Those additions
+are also outside the current frozen run and do not certify native acceptance.
 
 ## Remaining native receipts
 

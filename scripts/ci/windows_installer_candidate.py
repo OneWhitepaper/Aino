@@ -25,6 +25,8 @@ import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 
+import psutil
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -33,6 +35,8 @@ TAGS = ("v0.1.6", "v0.1.7")
 MINIMUM_WINDOWS = "10.0.19045.0"
 PUBLIC_REPOSITORY = "OneWhitepaper/Aino"
 PUBLIC_REF_PREFIX = "refs/heads/validation/windows-installer-public/"
+CHILD_HEARTBEAT_SECONDS = 60.0
+NATIVE_TOOL_TIMEOUT_SECONDS = 1800
 
 
 def _public_opt_in(env: Mapping[str, str], event: dict) -> bool:
@@ -64,14 +68,16 @@ def admit(env: Mapping[str, str], event: dict, *, public_receipts_only: bool = F
     return commit
 
 
-def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None) -> str:
+def run(argv: list[str], env: Mapping[str, str], *, log: Path | None = None,
+        timeout: float | None = None) -> str:
     print("candidate: " + subprocess.list2cmdline(argv), flush=True)
     # pwsh -> Python -> powershell.exe bypasses PowerShell 7's WinPS path cleanup.
     # Each child must rebuild its own module path, including nested build/E2E scripts.
     child_env = {key: value for key, value in env.items() if key.upper() != "PSMODULEPATH"}
+    budget = timeout if timeout is not None else (18000 if log else 300)
     if log is None:
-        return subprocess.check_output(argv, cwd=ROOT, env=child_env, text=True, encoding="utf-8", timeout=300).strip()
-    _run_logged(argv, child_env, log)
+        return subprocess.check_output(argv, cwd=ROOT, env=child_env, text=True, encoding="utf-8", timeout=budget).strip()
+    _run_logged(argv, child_env, log, budget)
     return ""
 
 
@@ -93,22 +99,62 @@ def _emit_log_tail(reader: BinaryIO, decoder: io.IncrementalNewlineDecoder, *, f
             print(text, end="", flush=True)
 
 
-def _run_logged(argv: list[str], env: Mapping[str, str], log: Path) -> None:
+def _child_progress(process, owner, log: Path, started: float, status: str, *, emit: bool = True) -> None:
+    value = {"operation": log.stem, "pid": process.pid, "status": status,
+             "elapsedSeconds": round(time.monotonic() - started, 3), "outputBytes": log.stat().st_size,
+             "returncode": process.poll(), "queryStatus": "gone"}
+    try:
+        if owner is not None and owner.is_running():
+            with owner.oneshot():
+                cpu = owner.cpu_times()
+                value.update(queryStatus="ok", cpuSeconds=round(cpu.user + cpu.system, 3),
+                             rssBytes=owner.memory_info().rss, childCount=len(owner.children()))
+                if counters := getattr(owner, "io_counters", None):
+                    io_stats = counters()
+                    value.update(readBytes=io_stats.read_bytes, writeBytes=io_stats.write_bytes)
+    except psutil.NoSuchProcess:
+        value["queryStatus"] = "gone"
+    except psutil.AccessDenied:
+        value["queryStatus"] = "inaccessible"
+    destination = log.with_suffix(".progress.json")
+    temporary = destination.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(value) + "\n", encoding="utf-8")
+    temporary.replace(destination)
+    if emit:
+        print("[candidate-progress] " + json.dumps(value), flush=True)
+
+
+def _wait_for_logged_child(process, argv, reader, decoder, log: Path, timeout: float) -> None:
+    started = time.monotonic()
+    deadline = started + timeout
+    heartbeat = started + CHILD_HEARTBEAT_SECONDS
+    try:
+        owner = psutil.Process(process.pid)
+    except psutil.NoSuchProcess:
+        owner = None
+    while process.poll() is None:
+        now = time.monotonic()
+        if now >= deadline:
+            _child_progress(process, owner, log, started, "timed-out")
+            raise subprocess.TimeoutExpired(argv, timeout)
+        try:
+            process.wait(timeout=min(2, deadline - now, max(0.01, heartbeat - now)))
+        except subprocess.TimeoutExpired:
+            _emit_log_tail(reader, decoder)
+        if process.poll() is None and time.monotonic() >= heartbeat:
+            _child_progress(process, owner, log, started, "running")
+            heartbeat = time.monotonic() + CHILD_HEARTBEAT_SECONDS
+    _child_progress(process, owner, log, started, "completed" if process.returncode == 0 else "failed", emit=False)
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, argv)
+
+
+def _run_logged(argv: list[str], env: Mapping[str, str], log: Path, timeout: float) -> None:
     with log.open("wb") as output, log.open("rb") as reader:
         decoder = io.IncrementalNewlineDecoder(codecs.getincrementaldecoder("utf-8-sig")(errors="replace"), translate=True)
         with subprocess.Popen(argv, cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT) as process:
-            deadline = time.monotonic() + 18000
             try:
-                while process.poll() is None:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise subprocess.TimeoutExpired(argv, 18000)
-                    try:
-                        process.wait(timeout=min(2, remaining))
-                    except subprocess.TimeoutExpired:
-                        _emit_log_tail(reader, decoder)
-                if process.returncode:
-                    raise subprocess.CalledProcessError(process.returncode, argv)
+                _wait_for_logged_child(process, argv, reader, decoder, log, timeout)
             except BaseException:
                 process.kill()
                 process.wait()
@@ -229,7 +275,7 @@ def bundle_candidate(slot: str, tag: str, arch: str, env: dict[str, str], out: P
     package = single(release.glob(f"*-{tag[1:]}-win-{arch}.msix"))
     contract = verify_package_contract(package, env["AZURE_SIGN_PUBLISHER"], arch)
     signature = [tools["signtool"], "sign", "/fd", "SHA256", "/s", "My", "/sha1", thumbprint]
-    run([*signature, str(package)], env, log=out / f"{slot}-package-sign.log")
+    run([*signature, str(package)], env, log=out / f"{slot}-package-sign.log", timeout=NATIVE_TOOL_TIMEOUT_SECONDS)
     metadata = out / f"{slot}-metadata.json"
     record("windows", arch, release, tag, env["GITHUB_SHA"], metadata)
     row = json.loads(metadata.read_text(encoding="utf-8-sig"))
@@ -238,9 +284,10 @@ def bundle_candidate(slot: str, tag: str, arch: str, env: dict[str, str], out: P
     shutil.copy2(package, staging / package.name)
     bundle = out / f"{slot}.msixbundle"
     run([tools["makeappx"], "bundle", "/o", "/bv", row["version"], "/d", str(staging), "/p", str(bundle)],
-        env, log=out / f"{slot}-bundle.log")
-    run([*signature, str(bundle)], env, log=out / f"{slot}-bundle-sign.log")
-    run([tools["signtool"], "verify", "/pa", "/v", str(bundle)], env, log=out / f"{slot}-bundle-verify.log")
+        env, log=out / f"{slot}-bundle.log", timeout=NATIVE_TOOL_TIMEOUT_SECONDS)
+    run([*signature, str(bundle)], env, log=out / f"{slot}-bundle-sign.log", timeout=NATIVE_TOOL_TIMEOUT_SECONDS)
+    run([tools["signtool"], "verify", "/pa", "/v", str(bundle)], env,
+        log=out / f"{slot}-bundle-verify.log", timeout=NATIVE_TOOL_TIMEOUT_SECONDS)
     shutil.rmtree(staging)
     write_appinstaller(out / f"{slot}.appinstaller", identity=row["identity"], publisher=row["publisher"],
                        version=row["version"], self_uri=f"http://127.0.0.1/{slot}.appinstaller",
