@@ -49,6 +49,7 @@ if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Disposable CI runner required' }
 if ($InstallerAction -eq 'Cancel' -and [string]::IsNullOrWhiteSpace($ExpectedDisplayName)) {
     throw 'Cancel requires ExpectedDisplayName for the package under test'
 }
+. (Join-Path $PSScriptRoot 'desktop-smoke-windows.ps1')
 $oldProcess = Get-Process -Id $OldProcessId
 $oldBirth = $oldProcess.StartTime
 $ProcessName = $oldProcess.ProcessName
@@ -97,11 +98,20 @@ function Find-AppWindow {
 
 function Find-InvokableButton {
     # Depth-first walk for a button whose Name matches one of the regexes.
-    param($Root, [string[]]$Patterns)
+    param($Root, [string[]]$Patterns, [switch]$UpdateNavigation)
     $cond = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::Button)
     $buttons = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    if ($UpdateNavigation) {
+        $observed = @(foreach ($button in $buttons) {
+            try {
+                $current = $button.Current
+                @{ Element=$button; Name=$current.Name; IsEnabled=$current.IsEnabled; IsOffscreen=$current.IsOffscreen }
+            } catch { continue }
+        })
+        return Get-UpdateNavigationButton $observed
+    }
     foreach ($b in $buttons) {
         $name = ""
         try { $name = $b.Current.Name } catch {}
@@ -222,7 +232,7 @@ while ((Get-Date) -lt $deadline -and -not $clicked) {
             } else { Write-Host "  [uia] invoke pattern unavailable; retrying" }
         } else {
             # Use the visible settings flow; never call the updater bridge.
-            $navigation = Find-InvokableButton -Root $win -Patterns @('^Open settings$', '^About$', '^Check now$', '^打开设置$', '^设置$', '^关于$', '^立即检查$', 'choose a provider later')
+            $navigation = Find-InvokableButton -Root $win -UpdateNavigation
             if ($navigation) { [void](Invoke-Button $navigation.Element) }
         }
     }

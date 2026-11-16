@@ -9,6 +9,24 @@ function Get-DevToolsPastePhrase([string]$Names) {
     return $null
 }
 
+function Get-UpdateNavigationButton([object[]]$Buttons) {
+    $visible = @($Buttons | Where-Object { -not $_.IsOffscreen })
+    $checks = @($visible | Where-Object { $_.Name -match '^(Check now|立即检查|立即檢查)$' })
+    foreach ($button in $checks) {
+        if ($button.IsEnabled) { return $button }
+    }
+    if ($checks.Count -gt 0 -or @($visible | Where-Object { $_.Name -match '^(Checking…|检查中…|檢查中…)$' }).Count -gt 0) {
+        return $null
+    }
+    # Settings keeps About mounted before its check button in the UIA tree.
+    foreach ($pattern in @('^(About|关于|關於)$', '^(Open settings|打开设置|设置|開啟設定|設定)$', 'choose a provider later')) {
+        foreach ($button in $visible) {
+            if ($button.IsEnabled -and $button.Name -match $pattern) { return $button }
+        }
+    }
+    return $null
+}
+
 function Start-DesktopJourneyMock([string]$Node, [string]$Assets, [string]$Work, [string]$HermesHome, [string]$Out) {
     New-Item -ItemType Directory -Path $Out -Force | Out-Null
     $urlFile = Join-Path $Work 'chat-mock-url'

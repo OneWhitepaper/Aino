@@ -53,3 +53,45 @@ if ((Get-DevToolsPastePhrase $chineseWarning) -cne '允许粘贴') { throw 'Chin
 Write-Output 'PASS: Chinese DevTools warning types its exact confirmation phrase'
 if ($null -ne (Get-DevToolsPastePhrase "Console`nConsole prompt")) { throw 'Paste confirmation requires an observed warning' }
 Write-Output 'PASS: no paste confirmation is typed without an observed warning'
+
+function Navigation-Button([string]$Name, [bool]$Enabled=$true, [bool]$Offscreen=$false) {
+    return @{ Element=[object]::new(); Name=$Name; IsEnabled=$Enabled; IsOffscreen=$Offscreen }
+}
+function Assert-NavigationButton([object[]]$Buttons, $Expected, [string]$Message) {
+    $actual = Get-UpdateNavigationButton $Buttons
+    if ($null -eq $Expected) {
+        if ($null -ne $actual) { throw $Message }
+    } elseif ($null -eq $actual -or -not [object]::ReferenceEquals($actual.Element, $Expected.Element)) {
+        throw $Message
+    }
+}
+
+foreach ($names in @(
+    @('Open settings', 'About', 'Check now', 'Checking…'),
+    @('打开设置', '关于', '立即检查', '检查中…'),
+    @('開啟設定', '關於', '立即檢查', '檢查中…')
+)) {
+    $settings = Navigation-Button $names[0]
+    $about = Navigation-Button $names[1]
+    $check = Navigation-Button $names[2]
+    Assert-NavigationButton @($settings, $about, $check) $check 'Check must win over earlier Settings/About controls'
+    Assert-NavigationButton @($settings, $about) $about 'About must win over an earlier Settings control'
+    $about.IsEnabled = $false
+    Assert-NavigationButton @($about, $settings) $settings 'Disabled About must not be invoked'
+    $about.IsEnabled = $true
+
+    foreach ($busyName in @($names[2], $names[3])) {
+        $busy = Navigation-Button $busyName $false
+        Assert-NavigationButton @($settings, $about, $busy) $null 'Busy checks must wait without fallback navigation'
+        Assert-NavigationButton @($busy, $about, $check) $check 'An actionable check must win over another busy control'
+        $busy.IsOffscreen = $true
+        Assert-NavigationButton @($busy, $about) $about 'Offscreen checks must not block visible navigation'
+    }
+    $check.IsOffscreen = $true
+    Assert-NavigationButton @($check, $about) $about 'Offscreen checks must not be invoked'
+}
+$later = Navigation-Button 'Choose a provider later'
+$settings = Navigation-Button 'Open settings'
+Assert-NavigationButton @($later, $settings) $settings 'Settings must win over the onboarding fallback'
+Assert-NavigationButton @($later) $later 'The existing onboarding fallback must remain available'
+Write-Output 'PASS: actionable checks precede navigation; busy checks wait; English and both Chinese locales agree'
