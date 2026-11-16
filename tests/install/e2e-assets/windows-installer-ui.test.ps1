@@ -7,10 +7,24 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.For
 $helper = New-Object System.Windows.Forms.Form
 $target = New-Object System.Windows.Forms.Form
 $foreign = New-Object System.Windows.Forms.Form
-$button = New-Object System.Windows.Forms.Button
-$button.Text = 'Update'
-$button.AccessibleName = 'Update'
-$target.Controls.Add($button)
+# WinForms' legacy accessibility on this runner exposes its managed button as
+# Pane. Exercise the actual Win32 BUTTON provider instead of weakening the
+# production Button filter to click arbitrary named panes.
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class AinoInstallerControlFixture {
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    public static extern IntPtr CreateWindowEx(int exStyle, string className, string text,
+        uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu,
+        IntPtr instance, IntPtr parameter);
+    [DllImport("user32.dll")]
+    public static extern bool EnableWindow(IntPtr window, bool enabled);
+}
+'@
+$buttonHandle = [AinoInstallerControlFixture]::CreateWindowEx(0, 'BUTTON', 'Update', 0x50010000,
+    16, 16, 120, 32, $target.Handle, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero)
+if ($buttonHandle -eq [IntPtr]::Zero) { throw 'Could not create the owned standard Win32 button' }
 $helper.Text = 'Installer helper'
 $target.Text = 'Install Aino 0x80073d02'
 $foreign.Text = 'Install AnotherProduct'
@@ -30,7 +44,7 @@ try {
     if ($null -eq $selected -or $selected.Handle -ne $target.Handle.ToInt32()) {
         throw 'Confirmation must search beyond the first helper and unrelated product window'
     }
-    $buttonElement = [System.Windows.Automation.AutomationElement]::FromHandle($button.Handle)
+    $buttonElement = [System.Windows.Automation.AutomationElement]::FromHandle($buttonHandle)
     Write-Output "fixture Update before activation: enabled=$($buttonElement.Current.IsEnabled) offscreen=$($buttonElement.Current.IsOffscreen)"
     # Activate the target before querying an on-screen control among three fixtures.
     $target.BringToFront()
@@ -62,7 +76,7 @@ try {
     if (@($snapshot.hresults).Count -ne 1 -or $snapshot.hresults[0] -cne '0x80073D02') {
         throw 'A product-bound installer HRESULT must be retained without arbitrary window text'
     }
-    $button.Enabled = $false
+    [void][AinoInstallerControlFixture]::EnableWindow($buttonHandle, $false)
     [System.Windows.Forms.Application]::DoEvents()
     if ($null -ne (Find-InvokableButton $selected.Element @('^Update$'))) { throw 'Disabled Update must remain unavailable' }
     if ((Get-InstallerWindowSnapshot 'Aino' $candidates).installerState -cne 'no-confirmation-control') {
