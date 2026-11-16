@@ -30,7 +30,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Repository `scripts/check`                                     | All 15 checks passed                                                             |
 | Independent production and acceptance review                   | No P1/P2 findings                                                                |
 | Native SDK pack/unpack at 19045 floor                          | Eight cases passed on Windows Server 2025                                        |
-| Windows Python and acceptance-harness contracts                | 48 Python and 71 JS passed; nine platform skips                                  |
+| Windows Python and acceptance-harness contracts                | 69 Python and 73 JS passed; nine platform skips                                  |
 | Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed                                |
 | Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference                        |
 | Real ZIP to MSIX retained-login migration                      | Partial: first MSIX installed, retained login observed; complete journey pending |
@@ -89,8 +89,17 @@ of the corrected production source.
 
 Fresh observer-change verification: complete `tests-js` checks passed (65 files,
 376 tests, five host skips), full desktop typecheck passed, four gateway-health
-Python contracts passed, and all 15 repository checks passed. The new Windows
-listener contract still requires the private Windows run.
+Python contracts passed, and all 15 repository checks passed. Windows job
+`133004500705` passed the new real-listener and expected-interpreter contracts
+at harness `695dd00c8f`. The full local candidate/checker/health selection passed
+67 tests, with two Windows-only tests skipped on Mac and covered by that job.
+
+Diagnostic reaccept `43776705547` stopped before installation because the
+selected artifact's overall origin workflow was still active. The origin
+admission rule remains strict. `43777044333` instead uses the already completed
+origin run's exact artifact `14181849856`, with signed source `00e438fc2b`.
+This diagnostic source lacks the checker correction, so even a complete pass
+cannot certify the corrected `ec74611f0d` production source.
 
 ## Remaining native receipts
 

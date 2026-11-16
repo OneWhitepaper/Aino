@@ -126,3 +126,27 @@ CI may store encrypted-access GitHub artifacts in the private validation reposit
   its outputs. This run is not native installation acceptance.
 - Windows 10 22H2 runtime and production-signing receipts are still missing. No package,
   website or production feed has been published or promoted.
+- Reaccept `43771648784` passed released ZIP chat, first MSIX installation and
+  retained encrypted login. Its external Node observer then received `EPERM`
+  launching a `WindowsApps` Python. That partial journey is not accepted migration.
+- `695dd00c8f` uses the preflighted fixture Python for external observation on
+  Windows, with the actual owner still bound to the installed payload interpreter.
+  POSIX interpreter/site binding remains intact. Wrong-executable and real Windows
+  listener regression contracts retain the identity and containment requirements.
+  Complete local tests-js checks passed (376 tests, five host skips), desktop
+  typecheck passed, four Python health contracts and all 15 repository checks passed.
+- Windows job `133004500705` at `695dd00c8f` passed 69 Python, 73 JavaScript
+  harness (nine host skips), eight SDK manifest cases, 68 updater/state and four
+  descriptor tests. This includes the real Windows listener observation contract.
+- Reaccept `43776705547` correctly rejected an artifact whose overall origin run
+  was still active. No package was installed. Reaccept `43777044333` uses the
+  exact completed-run artifact `14181849856` with the same corrected harness;
+  it remains diagnostic because that signed source predates the checker fix.
+- `8b9079cd28` uses the actual localized DevTools confirmation phrase and UTF-8
+  BOM for Windows PowerShell 5.1. Five pure driver contracts passed locally on
+  PowerShell 7.5.4; actual 5.1 and UI execution remain separate receipts.
+  `c345989a37` adds that existing driver suite to private candidate contracts.
+- Full production-only review through `c345989a37` found no reproducible P1/P2.
+  It confirmed no changes to durable account/Bot/history paths and no reachable
+  Mac/Linux update regression. Actual Win10 19045 and ordinary-user execution
+  still cannot be established by elevated hosted CI or disposable signing trust.
