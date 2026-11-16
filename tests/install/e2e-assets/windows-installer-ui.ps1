@@ -1,12 +1,27 @@
 ﻿# Shared native UIA observation and identity checks for the installed update journey.
 function Initialize-InstallerAutomation {
     Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-    # WinPS can expose an ordinary Win32 Button as Pane without its client-side
-    # provider. Use the signed framework provider; never relax the Button filter.
-    $assemblyName = [System.Windows.Automation.AutomationElement].Assembly.GetName()
-    $assemblyName.Name = 'UIAutomationClientsideProviders'
-    $proxyAssembly = [Reflection.Assembly]::Load($assemblyName)
-    [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($proxyAssembly.GetName())
+    if (-not ('AinoInstallerAutomation' -as [type])) {
+        # UIA's default-provider loader walks ReflectedType on the call stack.
+        # PowerShell dynamic frames have none; a concrete non-inlined CLR frame
+        # supplies the assembly reference on the very first provider load.
+        Add-Type -ReferencedAssemblies @(
+            [System.Windows.Automation.AutomationElement].Assembly.Location,
+            [System.Windows.Automation.ControlType].Assembly.Location) -TypeDefinition @'
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Windows.Automation;
+public static class AinoInstallerAutomation {
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void Initialize() {
+        AssemblyName name = typeof(AutomationElement).Assembly.GetName();
+        name.Name = "UIAutomationClientsideProviders";
+        ClientSettings.RegisterClientSideProviderAssembly(name);
+    }
+}
+'@
+    }
+    [AinoInstallerAutomation]::Initialize()
 }
 
 function Find-InvokableButton {

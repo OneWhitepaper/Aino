@@ -78,17 +78,14 @@ $readySignal = [Threading.EventWaitHandle]::new($false, [Threading.EventResetMod
 $stopSignal = [Threading.EventWaitHandle]::new($false, [Threading.EventResetMode]::ManualReset, $stopName)
 $fixtureProcess = $null
 try {
+    # This must be the first UIA call, exactly like the real driver/probe.
+    Initialize-InstallerAutomation
+    Write-Output 'PASS: shared installer automation initializes from a cold process'
     $fixtureProcess = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -NoNewWindow -PassThru -ArgumentList @(
         '-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Fixture',
         '-ReadyFile', "`"$readyPath`"", '-ReadyEvent', $readyName, '-StopEvent', $stopName)
     if (-not $readySignal.WaitOne(30000)) { throw 'The separate UI owner did not start its message pump within 30 seconds' }
     $handles = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
-    # Compare the default Win32 control against explicit registration of
-    # Microsoft's signed framework provider; keep the actual Button contract.
-    $before = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$handles.button)
-    Write-Output "fixture provider before: type=$($before.Current.ControlType.ProgrammaticName) class=$($before.Current.ClassName) framework=$($before.Current.FrameworkId) patterns=$((@($before.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName })) -join ',')"
-    Initialize-InstallerAutomation
-    Write-Output 'fixture framework provider explicitly registered'
     $clicked = Get-Date
     $helper = Window-Record $handles.helper
     $target = Window-Record $handles.target
