@@ -37,6 +37,12 @@ try {
     $target.Activate()
     [System.Windows.Forms.Application]::DoEvents()
     Write-Output "fixture Update after activation: enabled=$($buttonElement.Current.IsEnabled) offscreen=$($buttonElement.Current.IsOffscreen)"
+    Write-Output "fixture direct button: name=$($buttonElement.Current.Name) type=$($buttonElement.Current.ControlType.ProgrammaticName)"
+    $controls = @($selected.Element.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition))
+    Write-Output "fixture selected descendants: $($controls.Count)"
+    foreach ($control in $controls) {
+        Write-Output "fixture descendant: name=$($control.Current.Name) type=$($control.Current.ControlType.ProgrammaticName) enabled=$($control.Current.IsEnabled) offscreen=$($control.Current.IsOffscreen)"
+    }
     $hit = Find-InvokableButton $selected.Element @('^Update$')
     if ($null -eq $hit -or $hit.Name -cne 'Update') { throw 'The selected product must expose its actual enabled Update button' }
     if (-not $selected.NewVisibleWindow -or $selected.ProcessStartedForAttempt) {
