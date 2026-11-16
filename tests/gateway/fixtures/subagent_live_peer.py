@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import sys
 import threading
 import time
 import traceback
@@ -33,6 +34,10 @@ class Peer(BaseHTTPRequestHandler):
 
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        if not self.path.endswith('/chat/completions'):
+            self.send_response(404)
+            self.end_headers()
+            return
         messages = request.get('messages', [])
         system, answered = json.dumps(messages[:1]), any(m.get('role') == 'tool' for m in messages)
         if ORCHESTRATOR in system:
@@ -104,7 +109,7 @@ async def probe(release, started):
     from hermes_cli.dashboard_auth.ws_tickets import mint_ticket
 
     runner = GatewayRunner()
-    await initialize_session_authority(runner, profile_id='fixture', instance_id='subagent-live')
+    authority = await initialize_session_authority(runner, profile_id=os.environ['HERMES_HOME'], instance_id='subagent-live')
     api = await start_gateway_api(runner)
     web_server.app.state.auth_required = True
     origin = api.api_origin.replace('http:', 'ws:')
@@ -115,9 +120,25 @@ async def probe(release, started):
 
     receipt, viewers = {}, []
     try:
+        managed = len(sys.argv) > 1 and sys.argv[1] == 'managed-controls'
         owner, peer, foreign = viewers[:] = [await viewer(a) for a in ('owner', 'peer_operator', 'foreign_viewer')]
         sid = (await owner.rpc('session.create', request_id='live-parent', source='gui',
-                               toolsets=['terminal', 'delegation']))['session_id']
+                               toolsets=['terminal', 'delegation'],
+                               **({'model_source': 'aino', 'model_id': 'catalog-live'} if managed else {})))['session_id']
+        if managed:
+            from datetime import UTC, datetime, timedelta
+            account = {'platform_origin': os.environ['OPENAI_BASE_URL'].removesuffix('/v1'), 'user_id': 'fixture-account'}
+            selected = {'session_id': sid, 'owner': account, 'model_id': 'catalog-live'}
+            controller = await viewer('owner')
+            viewers.append(controller)
+            ticket = await owner.rpc('session.managed_model_ticket', **selected)
+            claim = await controller.rpc('session.claim_managed_model', **selected, session_ticket=ticket['session_ticket'])
+            bound = await controller.rpc('session.bind_managed_model', **selected,
+                binding_revision=claim['binding_revision'], credential_id='fixture-device', api_key='loopback-only',
+                base_url=os.environ['OPENAI_BASE_URL'], model='local-live', api_mode='chat_completions',
+                expires_at=(datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+                capabilities={'tools': True, 'vision': False, 'reasoning': False}, context_window=131072)
+            assert bound.get('bound'), bound
         other = (await foreign.rpc('session.create', request_id='live-other', source='gui', toolsets=[]))['session_id']
         await owner.rpc('session.resume', session_id=sid)
         await peer.rpc('session.resume', session_id=sid)
@@ -125,12 +146,30 @@ async def probe(release, started):
         await owner.rpc('prompt.submit', session_id=sid, input_id='delegate', text='delegate it')
 
         # The leaf's command marks its start: its tool-call turn is stored before the tool runs.
+        if managed:
+            await async_wait_until(lambda: started.exists() or any(e['type'] == 'error' or
+                                   e.get('payload', {}).get('outcome') == 'failed'
+                                   for e in peer.events), timeout=40, what='the managed child to start or fail')
+            assert started.exists(), [(e['type'], e.get('payload', {})) for e in peer.events
+                                      if e['type'] in {'error', 'message.complete'}]
         await async_wait_until(started.exists, timeout=40, what='the leaf terminal command to start')
+        await async_wait_until(lambda: any(e['type'] == 'message.complete' and
+                                           e.get('payload', {}).get('text') == 'PARENT_DONE' for e in peer.events),
+                               timeout=40, what='the parent to return while its child is running')
+        route = authority.sessions[sid].route
+        await async_wait_until(lambda: runner._running_agents.get(route) is None,
+                               timeout=10, what='the parent running slot to settle')
+        receipt['parent_idle'] = runner._resident_agent_for(route) is not None
         rows = receipt['list'] = (await peer.rpc('subagent.list', session_id=sid)).get('subagents') or []
         child = next(r for r in rows if r.get('depth') == 0)
         leaf = next(r for r in rows if r.get('depth') == 1)
         receipt['leaf_running'] = await peer.rpc('session.transcript', session_id=sid, subagent_id=leaf['subagent_id'])
         receipt['child_running'] = await peer.rpc('session.transcript', session_id=sid, subagent_id=child['subagent_id'])
+        if len(sys.argv) > 1:
+            receipt['steer_after_parent'] = await peer.rpc('subagent.steer', session_id=sid,
+                                                          subagent_id=child['subagent_id'], text='Keep the same goal')
+            receipt['stop_after_parent'] = await peer.rpc('subagent.interrupt', session_id=sid,
+                                                         subagent_id=leaf['subagent_id'])
         release.write_text('go')
 
         await async_wait_until(lambda: any(f['type'] == 'subagent.complete' and f['subagent_id'] == child['subagent_id']
@@ -164,8 +203,8 @@ def main():
     url = f'http://127.0.0.1:{peer.server_port}/v1'
     os.environ.update(OPENAI_API_KEY='loopback-only', OPENAI_BASE_URL=url, TERMINAL_ENV='local')
     (home / 'config.yaml').write_text(
-        f'model:\n  default: local-live\n  provider: custom\n  base_url: {url}\n'
-        'streaming:\n  enabled: false\ndelegation:\n  max_spawn_depth: 2\n'
+        f'model:\n  default: local-live\n  provider: custom\n  base_url: {url}\n  context_length: 131072\n'
+        'streaming:\n  enabled: false\ndelegation:\n  max_spawn_depth: 2\n  gateway_mode: background\n'
         'auxiliary:\n  title_generation:\n    enabled: false\n')
     try:
         asyncio.run(probe(release, started))

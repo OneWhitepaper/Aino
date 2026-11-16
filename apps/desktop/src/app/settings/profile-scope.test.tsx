@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PRODUCT_NAME } from '@/lib/brand'
 import type { ProfileInfo } from '@/types/hermes'
 
 // Keep store/profile's side-effecting imports inert — same seam as
@@ -51,7 +52,7 @@ describe('SettingsProfileScope', () => {
     fireEvent.click(screen.getByRole('button', { name: 'coder' }))
     expect($settingsScopeOverride.get()).toBe('coder')
 
-    fireEvent.click(screen.getByRole('button', { name: 'default' }))
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAME }))
     expect($settingsScopeOverride.get()).toBeNull()
   })
 
@@ -88,7 +89,7 @@ describe('SettingsProfileScope', () => {
 
     render(<SettingsProfileScope />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'default' }))
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAME }))
     expect($settingsScopeOverride.get()).toBe('default')
 
     const note = document.querySelector('[role="status"]')
@@ -112,6 +113,31 @@ describe('SettingsProfileScope', () => {
     expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy()
     // Canonical slug when neither is set.
     expect(screen.getByRole('button', { name: 'weather-man' })).toBeTruthy()
+  })
+
+  it('brands the unnamed default scope while retaining user labels and the internal default identity', () => {
+    $profiles.set([profile('default', true), profile('coder')])
+    $activeGatewayProfile.set('coder')
+    const { rerender } = render(<SettingsProfileScope compact />)
+
+    expect(screen.getByRole('combobox').textContent).toBe('coder')
+    $settingsScopeOverride.set('default')
+    rerender(<SettingsProfileScope compact />)
+    expect(screen.getByRole('combobox').textContent).toBe(PRODUCT_NAME)
+    expect(screen.getByRole('status').textContent).toContain(PRODUCT_NAME)
+    expect($settingsScopeOverride.get()).toBe('default')
+
+    $profiles.set([profile('default', true, { display_name: 'My Assistant' }), profile('coder')])
+    rerender(<SettingsProfileScope compact />)
+    expect(screen.getByRole('combobox').textContent).toBe('My Assistant')
+
+    $profiles.set([
+      profile('default', true, { display_name: 'My Assistant', bot_title: 'Personal Bot' }),
+      profile('coder')
+    ])
+    rerender(<SettingsProfileScope compact />)
+    expect(screen.getByRole('combobox').textContent).toBe('Personal Bot')
+    expect($settingsScopeOverride.get()).toBe('default')
   })
 
   it('keeps selection keyed on the canonical name while showing the presentation label', () => {

@@ -325,6 +325,9 @@ importers:
       node-pty:
         specifier: 1.1.0
         version: 1.1.0
+      open-bot-avatar:
+        specifier: 0.2.1
+        version: 0.2.1
       pele:
         specifier: 1.13.0
         version: 1.13.0
@@ -5219,6 +5222,9 @@ packages:
 
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
+
+  open-bot-avatar@0.2.1:
+    resolution: {integrity: sha512-J0SBBtSt0sIIbuUeekkdURJcS1O5k/en7zlYrGzfX8HXPv7zR4mArl3Dqipt3RIez0LXvAXiP9uN7n1tcwrlcw==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -11550,6 +11556,8 @@ snapshots:
       oniguruma-parser: 0.12.2
       regex: 6.1.0
       regex-recursion: 6.0.2
+
+  open-bot-avatar@0.2.1: {}
 
   optionator@0.9.4:
     dependencies:

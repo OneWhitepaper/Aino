@@ -15,7 +15,11 @@ import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from 
 
 import { findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { $layoutTree } from '@/components/pane-shell/tree/store'
+import { measureWindowControlsOverlayWidth, windowControlsOverlay } from '@/lib/window-controls-overlay'
 import { $connection } from '@/store/session'
+import { $zoomPercent } from '@/store/zoom'
+
+import { desktopWindowChrome } from '../../../shared/window-chrome'
 
 // ---------------------------------------------------------------------------
 // Rects
@@ -46,8 +50,6 @@ export function intersect(a: Rect, b: Rect): Rect | null {
 // Native window controls rect
 // ---------------------------------------------------------------------------
 
-/** Height of the band the native controls live in. */
-const CONTROLS_BAND_HEIGHT = 34
 /** Width of the macOS traffic-light cluster measured from the buttons' x. */
 const MACOS_LIGHTS_WIDTH = 58
 const MACOS_FALLBACK_BUTTON_X = 12
@@ -55,6 +57,7 @@ const MACOS_FALLBACK_BUTTON_X = 12
 interface ConnectionLike {
   windowButtonPosition?: { x: number; y: number } | null
   nativeOverlayWidth?: number | null
+  customWindowControls?: boolean
   isFullscreen?: boolean | null
 }
 
@@ -74,11 +77,18 @@ export function windowControlsRect(connection: ConnectionLike | null, viewportWi
     return null
   }
 
-  // Windows / WSLg: native overlay on the top-right.
-  const overlayWidth = connection?.nativeOverlayWidth ?? 0
+  const zoomFactor = window.hermesDesktop?.zoom?.factor?.() ?? $zoomPercent.get() / 100
+  const factor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1
+  const customControls = connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
+
+  // Native fallback widths are DIP; WCO measurements and custom captions are
+  // already CSS pixels. Main scales the native band to preserve its CSS height.
+  const overlayWidth =
+    measureWindowControlsOverlayWidth(windowControlsOverlay()) ??
+    (connection?.nativeOverlayWidth ?? 0) / (customControls ? 1 : factor)
 
   if (overlayWidth > 0) {
-    return { x: viewportWidth - overlayWidth, y: 0, width: overlayWidth, height: CONTROLS_BAND_HEIGHT }
+    return { x: viewportWidth - overlayWidth, y: 0, width: overlayWidth, height: desktopWindowChrome.titlebarHeight }
   }
 
   // macOS: traffic lights on the top-left. windowButtonPosition === null means
@@ -97,7 +107,7 @@ export function windowControlsRect(connection: ConnectionLike | null, viewportWi
 
   const x = pos?.x ?? MACOS_FALLBACK_BUTTON_X
 
-  return { x: 0, y: 0, width: x + MACOS_LIGHTS_WIDTH, height: CONTROLS_BAND_HEIGHT }
+  return { x: 0, y: 0, width: (x + MACOS_LIGHTS_WIDTH) / factor, height: desktopWindowChrome.titlebarHeight }
 }
 
 // ---------------------------------------------------------------------------
@@ -126,10 +136,16 @@ function readControlsRect(): Rect | null {
 
 function subscribeControlsRect(cb: () => void) {
   const unsubConnection = $connection.subscribe(() => cb())
+  const unsubZoom = $zoomPercent.subscribe(() => cb())
+  const wco = windowControlsOverlay()
+
+  wco?.addEventListener('geometrychange', cb)
   window.addEventListener('resize', cb)
 
   return () => {
     unsubConnection()
+    unsubZoom()
+    wco?.removeEventListener('geometrychange', cb)
     window.removeEventListener('resize', cb)
   }
 }

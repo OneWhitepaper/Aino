@@ -2,7 +2,8 @@ import { compactNumber } from '@hermes/shared'
 import { useContext } from 'react'
 
 import { formatElapsed } from '@/components/chat/activity-timer'
-import { DisclosureCaret } from '@/components/ui/disclosure-caret'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 
@@ -47,35 +48,41 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
     return null
   }
 
-  return (
-    <div
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--aino-text-caption)] leading-5 text-muted-foreground tabular-nums"
-      data-slot="aui_reply-metrics"
-    >
+  const content = (
+    <div className="flex min-w-0 flex-wrap gap-x-6 gap-y-2 text-[length:var(--aino-text-caption)] leading-5 text-muted-foreground tabular-nums">
       {elapsed && <span className="whitespace-nowrap">{elapsed}</span>}
-      {details.length > 0 && (
-        <details className="group/reply-metrics min-w-0 max-w-full open:basis-full">
-          <summary
-            aria-label={copy.details}
-            className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
-            data-slot="disclosure-toggle"
-          >
-            <span>{copy.details}</span>
-            <span className="flex h-5 shrink-0 items-center" data-slot="disclosure-caret">
-              <DisclosureCaret className="group-open/reply-metrics:rotate-90" open={false} />
-            </span>
-          </summary>
-          <div className="my-1.5 flex flex-wrap gap-x-6 gap-y-1 rounded-md bg-(--ui-bg-quinary) px-3 py-2">
-            {details.map(detail => (
-              <span className="min-w-0 [overflow-wrap:anywhere]" key={detail}>
-                {detail}
-              </span>
-            ))}
-          </div>
-        </details>
-      )}
-      {metrics?.billing && <ReplyCost billing={metrics.billing} />}
+      {details.map(detail => (
+        <span className="min-w-0 [overflow-wrap:anywhere]" key={detail}>
+          {detail}
+        </span>
+      ))}
       {metrics?.non_aino_model_calls && <span className="basis-full">{copy.nonAinoModelCalls}</span>}
+    </div>
+  )
+
+  if (metrics?.billing) {
+    return (
+      <ReplyCost billing={metrics.billing} entryLabel={copy.usageAndCost}>
+        {content}
+      </ReplyCost>
+    )
+  }
+
+  return (
+    <div data-slot="aui_reply-metrics">
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button className="text-[length:var(--aino-text-caption)] font-normal" size="inline" variant="link">
+            {copy.usageAndCost}
+          </Button>
+        </DialogTrigger>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{copy.usageAndCost}</DialogTitle>
+          </DialogHeader>
+          {content}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

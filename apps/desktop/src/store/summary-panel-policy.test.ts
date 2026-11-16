@@ -110,6 +110,15 @@ it('follows the visible narrow overlay rather than its saved docked expansion', 
     $narrowOverlayPaneIds.set(new Set())
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(true)
+    $narrowOverlayPaneIds.set(new Set(['files']))
+    await Promise.resolve()
+    const { syncWorkspaceRoute } = await import('@/app/routes')
+    syncWorkspaceRoute('/settings')
+    $narrowOverlayPaneIds.set(new Set())
+    await Promise.resolve()
+    expect(h.summary.$summaryOpen.get()).toBe(false)
+    syncWorkspaceRoute('/local-existing-chat')
+    expect(h.summary.$summaryOpen.get()).toBe(false)
   } finally {
     h.dispose()
   }
@@ -125,6 +134,58 @@ it('ignores transient visibility gaps while preview contributions are reconciled
     h.tree.restoreTreePane('files')
     await Promise.resolve()
     expect(h.summary.$summaryOpen.get()).toBe(false)
+  } finally {
+    h.dispose()
+  }
+})
+
+it.each([
+  { route: '/profiles', open: true },
+  { route: '/profiles', open: false },
+  { route: '/settings', open: true },
+  { route: '/settings', open: false }
+])('preserves the summary choice ($open) through $route and return to the same chat', async ({ route, open }) => {
+  const h = await setup()
+
+  try {
+    const { registry } = await import('@/contrib/registry')
+    const { syncWorkspaceRoute } = await import('@/app/routes')
+
+    const publishWorkspace = (headerVeto: boolean) =>
+      registry.register({
+        id: 'workspace',
+        area: 'panes',
+        data: { placement: 'main', uncloseable: true, headerVeto },
+        render: () => null
+      })
+
+    h.tree.restoreTreePane('files')
+    await Promise.resolve()
+    h.summary.$summaryOpen.set(open)
+    syncWorkspaceRoute(route)
+    publishWorkspace(true)
+    await Promise.resolve()
+    expect(h.summary.$summaryOpen.get()).toBe(open)
+    syncWorkspaceRoute('/local-existing-chat')
+    publishWorkspace(false)
+    await Promise.resolve()
+    expect(h.summary.$summaryOpen.get()).toBe(open)
+  } finally {
+    h.dispose()
+  }
+})
+
+it('does not treat an unregistered saved preview as an open tool panel', async () => {
+  const h = await setup()
+
+  try {
+    const { group, split } = await import('@/components/pane-shell/tree/model')
+    const { $toolPanelVisible } = await import('./summary-panel-policy')
+    h.summary.$summaryOpen.set(true)
+    h.tree.$layoutTree.set(split('row', [group(['workspace']), group(['preview-tile:previous-session'])]))
+    await Promise.resolve()
+    expect($toolPanelVisible.get()).toBe(false)
+    expect(h.summary.$summaryOpen.get()).toBe(true)
   } finally {
     h.dispose()
   }

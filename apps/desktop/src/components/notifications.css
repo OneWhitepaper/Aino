@@ -113,9 +113,45 @@ body:has([data-slot='dialog-content'][data-state='open']) .notification-summary 
 .notification-popover {
   display: flex;
   flex-direction: column;
-  width: min(380px, calc(100vw - 16px));
+  width: min(340px, calc(100vw - 24px));
   max-height: min(40rem, var(--radix-popover-content-available-height, calc(100dvh - 4rem)));
   overflow: hidden;
+}
+.notification-popover .notification-panel-header {
+  padding: 13px;
+}
+.notification-popover .notification-panel-header h2 {
+  font-weight: 550;
+}
+.notification-popover .notification-panel-body {
+  padding: 13px;
+  font-size: var(--aino-text-caption);
+}
+.notification-popover .notification-list-item {
+  gap: 9px;
+}
+.notification-popover .notification-list-item > span > span {
+  font-size: var(--aino-text-section);
+  line-height: 1.7;
+}
+.notification-popover .notification-list-item small,
+.notification-popover .notification-list-context .notification-metadata {
+  font-size: var(--aino-text-micro);
+}
+.notification-popover .notification-list-item > svg,
+.notification-popover .notification-list-item > .codicon {
+  width: 17px;
+  height: 17px;
+  margin-block-start: 2px;
+}
+.notification-popover .notification-panel-footer {
+  gap: 6px 12px;
+  padding: 9px 13px;
+  font-size: var(--aino-text-micro);
+}
+.notification-popover .notification-panel-footer > button {
+  min-height: 26px;
+  font-size: var(--aino-text-section);
 }
 .notification-popover .notification-panel {
   flex: 1;

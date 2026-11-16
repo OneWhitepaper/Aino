@@ -50,13 +50,13 @@ const zhHantBaseOverrides = {
     startHere: '從這裡開始',
     featuredHint: '先瞭解技能，再按需新增',
     browseHint: '依用途瀏覽，可先查看詳情，再決定是否新增。',
-    installedHint: '管理目前工作區的啟用狀態，變更將於新對話中生效。',
+    installedHint: '管理目前助手啟用的能力，變更將於新對話中生效。',
     installedKind: (kind: string) => `已安裝${kind}`,
     howToUse: '如何使用',
     usageHint: '使用方式與操作步驟以技能指令或來源文件為準。',
     capabilityGuide: '瞭解這些能力',
     capabilityGuideDescription:
-      '技能提供任務步驟與知識；外掛程式擴充功能；連接器連結外部服務；工具集控制目前工作區可呼叫的工具。',
+      '技能提供任務步驟與知識；外掛程式擴充功能；連接器連結外部服務；工具集控制目前助手可呼叫的工具。',
 
     pageTitle: '技能與工具',
     pageDescription: '為你的智慧體新增知識、工作流程與外部能力。',
@@ -498,16 +498,18 @@ const zhHantBaseOverrides = {
   },
 
   summary: {
-    aria: '工作階段資源',
-    title: '工作階段資源',
-    close: '關閉工作階段資源',
+    description: '本次對話的產物、任務和執行記錄集中在這裡。',
+    aria: '對話摘要',
+    title: '對話摘要',
+    close: '收起對話摘要',
+    currentSession: '目前對話',
     environment: {
       title: '環境資訊',
       project: '專案',
       workingDirectory: '工作目錄',
       model: '模型',
       provider: '提供方',
-      profile: '設定檔',
+      profile: '機器人',
       branch: '分支',
       connection: '連線狀態',
       noProject: '未開啟專案',
@@ -516,7 +518,7 @@ const zhHantBaseOverrides = {
       remote: '遠端'
     },
     changes: {
-      title: '工作區變更',
+      title: '專案變更',
       files: count => `${count} 個檔案`,
       additions: '新增',
       deletions: '刪除',
@@ -540,10 +542,11 @@ const zhHantBaseOverrides = {
       push: '推送',
       reviewAndCommit: '審查、提交或建立 PR',
       clean: '沒有領先或落後的提交',
-      unavailable: '此工作區暫時無法使用 Git',
-      noRepository: '此工作區不是 Git 儲存庫'
+      unavailable: '目前專案暫時無法使用 Git',
+      noRepository: '目前專案不是 Git 儲存庫'
     },
     agents: {
+      history: count => `歷史子任務（${count}）`,
       title: '子代理',
       running: count => `執行中 ${count}`,
       completed: count => `已完成 ${count}`,
@@ -574,15 +577,17 @@ const zhHantBaseOverrides = {
       attachments: '附件',
       previews: '預覽',
       links: '連結',
-      none: '此工作階段沒有來源',
+      none: '新增檔案或網頁後顯示在這裡。',
       open: '開啟來源'
     },
     outputs: {
+      none: '本次對話還沒有產生檔案。',
       title: '輸出內容',
       create: '建立檔案或網頁',
       prompt: '幫我建立檔案或網頁：'
     },
     plan: {
+      history: count => `歷史計畫（${count}）`,
       title: '任務計畫',
       progress: (done, total) => `已完成 ${done} / ${total} 項`,
       recorded: '工作階段中最後記錄的計畫',

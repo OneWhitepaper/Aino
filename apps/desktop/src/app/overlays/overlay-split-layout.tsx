@@ -199,11 +199,15 @@ export interface OverlayNavGroup extends OverlayNavLink {
 export function OverlayNav({
   footer,
   fullPage = false,
-  groups
+  groups,
+  responsive = !fullPage
 }: {
   footer?: ReactNode
   fullPage?: boolean
   groups: OverlayNavGroup[]
+  /** A full-page settings surface can keep every destination available in the
+   *  compact dropdown without reserving a second column in narrow windows. */
+  responsive?: boolean
 }) {
   const { t } = useI18n()
   const navId = useId()
@@ -233,7 +237,7 @@ export function OverlayNav({
 
   return (
     <>
-      <OverlaySidebar className={fullPage ? undefined : RAIL_HIDDEN} fullPage={fullPage}>
+      <OverlaySidebar className={responsive ? RAIL_HIDDEN : undefined} fullPage={fullPage}>
         {groups.map(group => {
           const hasChildren = Boolean(group.children?.length)
           const expanded = group.searchExpanded || (disclosures[group.id] ?? group.active)
@@ -326,14 +330,16 @@ export function OverlayNav({
         {footer && <div className="mt-auto flex items-center gap-1 pt-2">{footer}</div>}
       </OverlaySidebar>
 
-      {/* Full-page Settings keeps its grouped rail at every width. Other
-          overlays retain the shared compact dropdown in their titlebar. */}
-      {!fullPage && (
+      {responsive && (
         <div
           className={cn(
-            'pointer-events-none relative z-20 h-[calc(var(--titlebar-height)+0.1875rem)] items-center justify-between gap-2 pl-3 pr-[calc(var(--titlebar-tools-right,0.75rem)+2.25rem)]',
+            'pointer-events-none relative z-20 items-center justify-between gap-2',
+            fullPage
+              ? 'min-w-0'
+              : 'h-[calc(var(--titlebar-height)+0.1875rem)] pl-3 pr-[calc(var(--titlebar-tools-right,0.75rem)+2.25rem)]',
             BAR_HIDDEN
           )}
+          data-aino-overlay-nav-dropdown=""
         >
           <div className="pointer-events-auto min-w-0 [-webkit-app-region:no-drag]">
             <TabDropdown

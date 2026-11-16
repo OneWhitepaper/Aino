@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
@@ -9,7 +9,7 @@ import { ResponseProcess } from './response-group'
 afterEach(cleanup)
 
 it('keeps technical diagnostics in the disclosure while retaining every measured value', () => {
-  const view = render(
+  render(
     <I18nProvider configClient={null} initialLocale="en">
       <ReplyMetrics
         durationS={30}
@@ -29,35 +29,34 @@ it('keeps technical diagnostics in the disclosure while retaining every measured
     </I18nProvider>
   )
 
-  const details = view.container.querySelector('details')!
-  expect(details).not.toBeNull()
-  expect(details.open).toBe(false)
-  const summary = details.querySelector('summary')!
-  expect(summary.textContent).not.toMatch(/token|18%|92%/)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const entry = screen.getByRole('button', { name: 'Usage and cost' })
+  expect(entry.textContent).not.toMatch(/token|18%|92%/)
+  fireEvent.click(entry)
+  const details = screen.getByRole('dialog')
 
   for (const value of ['320', '~18%', '47 token/s', '92%', '240', '80', '180 / 1k']) {
     expect(details.textContent).toContain(value)
   }
 
-  expect(view.container.textContent).toContain('30s')
+  expect(details.textContent).toContain('30s')
 })
 
 it('offers the disclosure for totals-only history and preserves measured zero values', () => {
-  const view = render(
+  render(
     <I18nProvider configClient={null} initialLocale="en">
       <ReplyMetrics metrics={{ total_tokens: 0, context_percent: 0, cache_hit_pct: 0 }} />
     </I18nProvider>
   )
 
-  const details = view.container.querySelector('details')
-  expect(details).not.toBeNull()
-  expect(details!.querySelector('summary')?.textContent?.trim()).toBeTruthy()
-  expect(details!.textContent).toContain('0 token')
-  expect(details!.textContent).toContain('0%')
+  fireEvent.click(screen.getByRole('button', { name: 'Usage and cost' }))
+  const details = screen.getByRole('dialog')
+  expect(details.textContent).toContain('0 token')
+  expect(details.textContent).toContain('0%')
 })
 
 it('keeps usage details accessible when the process header already shows the duration', () => {
-  const view = render(
+  render(
     <I18nProvider configClient={null} initialLocale="en">
       <ResponseProcess.Provider value={{ enabled: true, open: false, answerMessageId: 'answer' }}>
         <ReplyMetrics durationS={30} metrics={{ input_tokens: 42 }} />
@@ -65,10 +64,10 @@ it('keeps usage details accessible when the process header already shows the dur
     </I18nProvider>
   )
 
-  const details = view.container.querySelector('details')!
-  expect(details.querySelector('summary')?.textContent?.trim()).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Usage and cost' }))
+  const details = screen.getByRole('dialog')
   expect(details.textContent).toContain('42')
-  expect(view.container.textContent).not.toContain('0:30')
+  expect(details.textContent).not.toContain('0:30')
 })
 
 it('neutrally labels explicit non-Aino calls without claiming a local provider charged', () => {
@@ -78,6 +77,7 @@ it('neutrally labels explicit non-Aino calls without claiming a local provider c
     </I18nProvider>
   )
 
+  fireEvent.click(screen.getByRole('button', { name: '用量与费用' }))
   const label = screen.getByText('此回复使用了 Aino 以外的模型调用。')
   expect(label).toBeTruthy()
   expect(label.textContent).not.toMatch(/费用|收费|计费/)
@@ -113,6 +113,7 @@ it('keeps the Aino cost surface alongside a mixed-turn non-Aino disclosure', () 
     </I18nProvider>
   )
 
+  fireEvent.click(screen.getByRole('button', { name: '用量与费用' }))
   expect(screen.getByText('此回复使用了 Aino 以外的模型调用。')).toBeTruthy()
   expect(screen.getByText('登录原账户后查看费用')).toBeTruthy()
 })

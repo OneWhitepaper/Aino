@@ -1,0 +1,87 @@
+.aino-activity-rail {
+  display: flex;
+  flex: 0 0 var(--aino-activity-width);
+  flex-direction: column;
+  align-items: center;
+  width: var(--aino-activity-width);
+  min-height: 0;
+  gap: 10px;
+  padding: 11px 0 10px;
+  border-right: 1px solid var(--aino-workbench-divider);
+  background: var(--aino-navigation-rail);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.aino-activity-rail .aino-activity-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 9px;
+  color: var(--ui-text-secondary);
+}
+
+.aino-activity-button > svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.65;
+}
+.aino-activity-button[data-active] {
+  background: var(--ui-row-active-background);
+  color: var(--ui-text-primary);
+}
+.aino-activity-separator {
+  width: 22px;
+  min-height: 1px;
+  background: var(--aino-workbench-divider);
+  margin: 3px 0;
+}
+.aino-activity-spacer {
+  flex: 1;
+  min-height: 12px;
+}
+.aino-activity-rail .aino-activity-update {
+  position: relative;
+  color: var(--ui-blue);
+  background: color-mix(in srgb, currentColor 9%, var(--aino-navigation-rail));
+}
+:where(.dark) .aino-activity-rail .aino-activity-update {
+  color: color-mix(in srgb, var(--ui-blue) 65%, var(--ui-text-primary));
+}
+.aino-activity-rail .aino-activity-update:hover {
+  background: color-mix(in srgb, currentColor 14%, var(--aino-navigation-rail));
+}
+.aino-activity-rail .aino-activity-update:active {
+  background: color-mix(in srgb, currentColor 18%, var(--aino-navigation-rail));
+}
+.aino-activity-rail .aino-activity-update[data-update-state='attention'] {
+  color: var(--ui-yellow);
+}
+.aino-activity-update-mark {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--aino-navigation-rail);
+}
+.aino-activity-account {
+  flex: none;
+}
+.aino-activity-account .aino-activity-button {
+  padding: 3px;
+}
+
+@media (max-width: 820px) {
+  :root {
+    --aino-activity-width: 3rem;
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --aino-activity-width: 2.75rem;
+  }
+}

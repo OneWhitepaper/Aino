@@ -2,6 +2,7 @@ import { Codicon, type PluginContext, useValue, WORKSPACE_AVATAR_AREA } from '@h
 
 import { avatarColor, botAppearance, BotFace, startFaceClock, stopFaceClock } from './avatar'
 import { isBackfilledFacePng } from './avatar-image'
+import { BotChatActions, BotChatIdentity } from './bot-chat-identity'
 import { $botMeta, $lastRoster } from './data'
 import { botRosterMeta, botWorkspaceOwnerKey } from './routing'
 
@@ -18,11 +19,15 @@ export function registerBotWorkspaceAvatar(ctx: PluginContext): void {
     ctx.onDispose(stopFaceClock)
   }
 
+  const avatarFor = (ownerKey: string, size: number) => <BotWorkspaceAvatar ownerKey={ownerKey} size={size} />
+
   ctx.register({
     id: 'workspace-avatar',
     area: WORKSPACE_AVATAR_AREA,
     data: {
-      avatarFor: (ownerKey: string, size: number) => <BotWorkspaceAvatar ownerKey={ownerKey} size={size} />
+      avatarFor,
+      headerFor: (ownerKey: string) => <BotChatIdentity avatarFor={avatarFor} ownerKey={ownerKey} />,
+      actionsFor: (ownerKey: string, sessionId: string) => <BotChatActions ownerKey={ownerKey} sessionId={sessionId} />
     }
   })
 }

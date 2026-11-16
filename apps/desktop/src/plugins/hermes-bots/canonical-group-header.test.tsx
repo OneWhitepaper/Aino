@@ -89,7 +89,8 @@ it('keeps management actions in group info and exposes compact accessible header
   expect(info.getAttribute('aria-expanded')).toBe('false')
   fireEvent.click(info)
   expect(onInfo).toHaveBeenCalledWith(true)
-  fireEvent.click(screen.getByRole('button', { name: 'Search messages' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions' }), { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Search messages' }))
   expect(onSearch).toHaveBeenCalledOnce()
 
   rerender(<CanonicalGroupHeader {...common} canStop infoOpen onInfoOpenChange={onInfo} onStop={vi.fn()} />)

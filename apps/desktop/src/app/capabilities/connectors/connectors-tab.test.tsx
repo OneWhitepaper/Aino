@@ -1,13 +1,22 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { useMemo } from 'react'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { type ProfileScope, profileScopeKey } from '@/hermes'
 import { I18nProvider } from '@/i18n'
 import { queryClient } from '@/lib/query-client'
 import { setPrimaryGateway, setPrimaryGatewayConnectionId } from '@/store/gateway'
 
 import { ConnectorsTab } from './connectors-tab'
+import { resetRouteLinksForTests } from './data/deep-link'
+import {
+  connectorsAccountsQueryKey,
+  connectorsCatalogQueryKey,
+  connectorsListQueryKey,
+  pluginServersQueryKey
+} from './data/keys'
 
 const localController = vi.hoisted(() => ({
   config: {},
@@ -28,10 +37,47 @@ afterEach(() => {
   cleanup()
   queryClient.clear()
   setPrimaryGateway(null)
+  setPrimaryGatewayConnectionId(null)
+  resetRouteLinksForTests()
   vi.clearAllMocks()
 })
 
 describe('the local MCP directory', () => {
+  it.each(['local', 'studio'])(
+    'keeps the %s profile pin and opened card after consuming its deep link',
+    async connectionId => {
+      setPrimaryGatewayConnectionId('local')
+      const scope = { connectionId, profile: 'writer' }
+
+      for (const owner of [scope, 'default']) {
+        queryClient.setQueryData(connectorsListQueryKey(owner), { available: true, connectors: [] })
+        queryClient.setQueryData(connectorsCatalogQueryKey(owner), { connectors: [] })
+        queryClient.setQueryData(connectorsAccountsQueryKey(owner), { accounts: [] })
+        queryClient.setQueryData(pluginServersQueryKey(owner), [])
+      }
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <I18nProvider configClient={null} initialLocale="en">
+            <MemoryRouter
+              initialEntries={[
+                `/capabilities?tab=connectors&server=bundled-weather&profile=writer&connection=${connectionId}`
+              ]}
+            >
+              <RouteScopedConnectors />
+            </MemoryRouter>
+          </I18nProvider>
+        </QueryClientProvider>
+      )
+
+      await waitFor(() => expect(screen.getByTestId('connector-route').textContent).not.toContain('server='))
+      expect(screen.getByTestId('connector-route').textContent).toContain('profile=writer')
+      expect(screen.getByTestId('connector-route').textContent).toContain(`connection=${connectionId}`)
+      expect(screen.getByTestId('connector-scope').textContent).toBe(`${connectionId}::writer`)
+      expect(screen.getByRole('dialog', { name: 'Bundled Weather' })).toBeTruthy()
+    }
+  )
+
   it('loads the hosted directory by default while keeping custom, bundled and plugin servers usable', async () => {
     const rpc = vi.fn(async (method: string) => {
       if (method === 'connectors.list') {
@@ -105,3 +151,23 @@ describe('the local MCP directory', () => {
     expect(screen.getByLabelText('Command to launch')).toBeTruthy()
   })
 })
+
+function RouteScopedConnectors() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  const profile = params.get('profile') || 'default'
+  const connectionId = params.get('connection')
+
+  const scope: ProfileScope = useMemo(
+    () => (connectionId ? { connectionId, profile } : profile),
+    [connectionId, profile]
+  )
+
+  return (
+    <>
+      <span data-testid="connector-route">{search}</span>
+      <span data-testid="connector-scope">{profileScopeKey(scope)}</span>
+      <ConnectorsTab gateway={null} key={profileScopeKey(scope)} profile={scope} />
+    </>
+  )
+}

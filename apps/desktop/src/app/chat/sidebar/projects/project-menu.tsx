@@ -15,15 +15,13 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useI18n } from '@/i18n'
 import { isDesktopFsRemoteMode } from '@/lib/desktop-fs'
 import { cn } from '@/lib/utils'
-import { $panesFlipped, dismissAutoProject, restoreAutoProject } from '@/store/layout'
+import { dismissAutoProject, restoreAutoProject } from '@/store/layout'
 import { notify } from '@/store/notifications'
 import { $profileScope, ALL_PROFILES } from '@/store/profile'
 import {
@@ -34,13 +32,11 @@ import {
   openProjectFolders,
   openProjectRename,
   revealPath,
-  setActiveProject,
-  setProjectAppearance
+  setActiveProject
 } from '@/store/projects'
 
 import { SIDEBAR_FOCUS_VISIBLE } from '../chrome'
 
-import { ProjectAppearancePicker } from './project-appearance'
 import type { SidebarProjectTree } from './workspace-groups'
 
 // Shared per-project state + handlers, so the kebab dropdown and the row's
@@ -92,9 +88,7 @@ function useProjectActions({
     }
   }
 
-  // Rename / add folder / set active — explicit projects only (auto ones lack a
-  // materialized record). Appearance is handled per-surface (popover vs submenu)
-  // by the caller since its picker chrome differs.
+  // Rename / add folder / set active require an explicit project record.
   const identityItems: ActionItemSpec[] = project.isAuto
     ? []
     : [
@@ -186,18 +180,15 @@ function useProjectActions({
     />
   )
 
-  return { closeItem, confirmDialog, dangerItem, identityItems, ownerUnknown, pathItems }
+  return { closeItem, confirmDialog, dangerItem, identityItems, pathItems }
 }
 
-// Per-project actions. The kebab keeps its row-anchored Appearance popover; the
-// right-click menu (ProjectContextMenu) renders the same actions with Appearance
-// as a submenu. Hidden until the row is hovered, matching the + affordance.
+// The kebab and right-click menu share the same project actions.
 export function ProjectMenu({
   project,
   isActive,
   scoped = false,
-  onExitScope,
-  anchorRef
+  onExitScope
 }: {
   project: SidebarProjectTree
   isActive: boolean
@@ -205,125 +196,45 @@ export function ProjectMenu({
   // now-defunct scope.
   scoped?: boolean
   onExitScope?: () => void
-  // Anchor the appearance popover to the whole row instead of the kebab, so it
-  // opens flush against the sidebar's content-facing edge — otherwise a
-  // right-side sidebar drags the picker across the entire panel (the kebab
-  // lives at the row's outer edge). Falls back to the kebab when absent.
-  anchorRef?: React.RefObject<HTMLElement | null>
 }) {
   const { t } = useI18n()
   const p = t.sidebar.projects
-  const [appearanceOpen, setAppearanceOpen] = useState(false)
-  // Open toward the content area: right when the sidebar is on the left, left
-  // when the panes are flipped (sidebar on the right).
-  const panesFlipped = useStore($panesFlipped)
 
-  const { closeItem, confirmDialog, dangerItem, identityItems, ownerUnknown, pathItems } = useProjectActions({
+  const { closeItem, confirmDialog, dangerItem, identityItems, pathItems } = useProjectActions({
     isActive,
     onExitScope,
     project,
     scoped
   })
 
-  // Appearance writes route through the adopt-aware helper: an auto project is
-  // materialized on its first change (its id then changes), so close the picker
-  // on adopt to stop a second write double-creating from a now-stale node.
-  const applyAppearance = async (patch: { color?: null | string; icon?: null | string }) => {
-    if (await setProjectAppearance(project, patch)) {
-      setAppearanceOpen(false)
-    }
-  }
-
-  // Set color / pick an icon — shown for explicit projects and for auto ones
-  // (where selecting adopts the repo as a real project so the look sticks).
-  const appearanceItem = (
-    <DropdownMenuItem disabled={ownerUnknown} onSelect={() => setAppearanceOpen(true)}>
-      <Codicon name="symbol-color" size="0.875rem" />
-      <span>{p.menuAppearance}</span>
-    </DropdownMenuItem>
-  )
-
-  // When anchorRef is absent, PopoverAnchor wraps the trigger so the
-  // appearance popover positions against this button. Keep asChild chains free
-  // of non-forwarding wrappers (#67500).
-  const triggerButton = (
-    <DropdownMenuTrigger asChild>
-      <button
-        aria-label={p.menu}
-        className={cn(
-          'grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100',
-          SIDEBAR_FOCUS_VISIBLE,
-          // In the project header reveal on the whole header hover; in overview
-          // rows reveal on the row hover.
-          scoped ? 'group-hover/section:opacity-100' : 'group-hover/workspace:opacity-100'
-        )}
-        onClick={event => event.stopPropagation()}
-        type="button"
-      >
-        <Codicon name="ellipsis" size="0.75rem" />
-      </button>
-    </DropdownMenuTrigger>
-  )
-
-  const trigger = anchorRef ? triggerButton : <PopoverAnchor asChild>{triggerButton}</PopoverAnchor>
-
   return (
-    <Popover onOpenChange={setAppearanceOpen} open={appearanceOpen}>
-      {/* Position the appearance popover against the row (when a ref is wired);
-          the kebab is only the dropdown trigger then. */}
-      {anchorRef ? <PopoverAnchor virtualRef={anchorRef as React.RefObject<HTMLElement>} /> : null}
+    <>
       <DropdownMenu>
-        {trigger}
-        {/* Closing the menu refocuses the trigger (also the popover anchor),
-            which the appearance popover would read as focus-outside and die on.
-            Suppress that refocus so it survives. */}
-        <DropdownMenuContent
-          align="end"
-          className="w-48"
-          onCloseAutoFocus={event => event.preventDefault()}
-          sideOffset={6}
-        >
-          {project.isAuto ? (
-            // Inherited (auto) repos can still be themed — the change adopts the
-            // repo as a real project. Rename / add-folder / set-active stay out
-            // until then (they need the materialized record).
-            project.path && (
-              <>
-                {appearanceItem}
-                <DropdownMenuSeparator />
-              </>
-            )
-          ) : (
-            <>
-              {identityItems.slice(0, 1).map(item => renderActionItem(DROPDOWN_KIT, item))}
-              {appearanceItem}
-              {identityItems.slice(1).map(item => renderActionItem(DROPDOWN_KIT, item))}
-              <DropdownMenuSeparator />
-            </>
-          )}
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label={p.menu}
+            className={cn(
+              'grid size-4 shrink-0 place-items-center rounded-sm bg-transparent text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100',
+              SIDEBAR_FOCUS_VISIBLE,
+              scoped ? 'group-hover/section:opacity-100' : 'group-hover/workspace:opacity-100'
+            )}
+            onClick={event => event.stopPropagation()}
+            type="button"
+          >
+            <Codicon name="ellipsis" size="0.75rem" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48" sideOffset={6}>
+          {identityItems.map(item => renderActionItem(DROPDOWN_KIT, item))}
+          {identityItems.length > 0 && <DropdownMenuSeparator />}
           {pathItems.map(item => renderActionItem(DROPDOWN_KIT, item))}
           <DropdownMenuSeparator />
           {renderActionItem(DROPDOWN_KIT, closeItem)}
           {dangerItem && renderActionItem(DROPDOWN_KIT, dangerItem)}
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent
-        align="start"
-        className="w-auto p-2"
-        onClick={event => event.stopPropagation()}
-        side={panesFlipped ? 'left' : 'right'}
-        sideOffset={6}
-      >
-        <ProjectAppearancePicker
-          color={project.color ?? null}
-          icon={project.icon ?? null}
-          noColorLabel={p.noColor}
-          onColor={color => void applyAppearance({ color })}
-          onIcon={icon => void applyAppearance({ icon })}
-        />
-      </PopoverContent>
       {confirmDialog}
-    </Popover>
+    </>
   )
 }
 
@@ -336,8 +247,6 @@ interface ProjectContextMenuProps {
 }
 
 // Wrap a project row so right-clicking it opens the same actions as its kebab.
-// The kebab's row-anchored Appearance popover can't nest in a context menu, so
-// here Appearance is a submenu with the same swatch + icon picker.
 export function ProjectContextMenu({
   project,
   isActive,
@@ -348,40 +257,17 @@ export function ProjectContextMenu({
   const { t } = useI18n()
   const p = t.sidebar.projects
 
-  const { closeItem, confirmDialog, dangerItem, identityItems, ownerUnknown, pathItems } = useProjectActions({
+  const { closeItem, confirmDialog, dangerItem, identityItems, pathItems } = useProjectActions({
     isActive,
     onExitScope,
     project,
     scoped
   })
 
-  const canTheme = !project.isAuto || Boolean(project.path)
-
-  const applyAppearance = (patch: { color?: null | string; icon?: null | string }) => {
-    void setProjectAppearance(project, patch)
-  }
-
   const items = (kit: MenuKit) => (
     <>
       {identityItems.map(item => renderActionItem(kit, item))}
-      {canTheme && (
-        <kit.Sub>
-          <kit.SubTrigger disabled={ownerUnknown}>
-            <Codicon name="symbol-color" size="0.875rem" />
-            <span>{p.menuAppearance}</span>
-          </kit.SubTrigger>
-          <kit.SubContent className="w-auto p-2">
-            <ProjectAppearancePicker
-              color={project.color ?? null}
-              icon={project.icon ?? null}
-              noColorLabel={p.noColor}
-              onColor={color => applyAppearance({ color })}
-              onIcon={icon => applyAppearance({ icon })}
-            />
-          </kit.SubContent>
-        </kit.Sub>
-      )}
-      {(identityItems.length > 0 || canTheme) && <kit.Separator />}
+      {identityItems.length > 0 && <kit.Separator />}
       {pathItems.map(item => renderActionItem(kit, item))}
       <kit.Separator />
       {renderActionItem(kit, closeItem)}

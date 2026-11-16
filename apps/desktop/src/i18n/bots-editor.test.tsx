@@ -56,7 +56,7 @@ it('keeps a new bot draft when the language changes and localizes advanced contr
   mount(<CreateAgentDialog onClose={() => undefined} open roster={[{ connectionId: 'local', name: 'default' }]} />)
   const zh = translateBotsIn('zh')
   expect(screen.getByText(zh('editor.newDescription'))).toBeTruthy()
-  const nameField = screen.getByText(i18n.t.profiles.nameLabel).parentElement!
+  const nameField = screen.getByText(zh('navigation.name')).parentElement!
   fireEvent.change(within(nameField).getByRole('textbox'), { target: { value: 'draft-test' } })
   fireEvent.click(screen.getByRole('button', { name: zh('bot.advanced') }))
   expect(screen.getByText(zh('editor.cloneFrom'))).toBeTruthy()

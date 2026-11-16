@@ -12,6 +12,9 @@ import {
   removePane
 } from './model'
 
+/** One desktop tool host keeps its proportion as Files, Browser and Terminal change. */
+export const TOOL_PANEL_DEFAULT_WIDTH = 'var(--aino-tool-panel-width, clamp(22rem, 34vw, 650px))'
+
 /** A closed standing Files tab returns to the persisted tool workspace after reload. */
 export function unifiedToolGroup(node: LayoutNode): GroupNode | undefined {
   if (node.type === 'group') {

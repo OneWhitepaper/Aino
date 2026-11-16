@@ -156,9 +156,9 @@ it('uses one apply boundary for both sources without modifying a live conversati
   fireEvent.click(screen.getByRole('button', { name: 'Aino built-in models' }))
   expect(screen.queryByRole('combobox', { name: 'Provider' })).toBeNull()
   expect(api.saveConfig).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Choose an Aino built-in model' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /Aino models/ }))
   fireEvent.click(await screen.findByRole('option', { name: /Chosen built-in model/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm choice' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(api.saveConfig).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Apply as default' }))
   await waitFor(() =>

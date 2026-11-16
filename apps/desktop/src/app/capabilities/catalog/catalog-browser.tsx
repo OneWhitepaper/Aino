@@ -56,6 +56,7 @@ interface CatalogBrowserProps {
   matchInstalled?: (entry: CatalogEntry) => CatalogEntry | undefined
   actions?: ReactNode
   headerActions?: ReactNode
+  initialInstalledOnly?: boolean
   installedPending?: boolean
   notice?: ReactNode
   renderInstalledDetail?: (entry: CatalogEntry) => ReactNode
@@ -484,6 +485,7 @@ export const CatalogBrowser = memo(function CatalogBrowser({
   matchInstalled,
   actions,
   headerActions,
+  initialInstalledOnly,
   installedPending,
   notice,
   renderInstalledDetail,
@@ -508,7 +510,7 @@ export const CatalogBrowser = memo(function CatalogBrowser({
     setDetailOpen(false)
   }
 
-  const filters = useCatalogFilters(kind, resetSelection)
+  const filters = useCatalogFilters(kind, resetSelection, initialInstalledOnly)
   const { facets, sort } = filters
 
   // Clearing the query only widens results, and a deep link clears it while selecting its target.

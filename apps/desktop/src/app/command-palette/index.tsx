@@ -80,6 +80,7 @@ import { $projectTree, goToProject, openFolderAsProject, requestStartWorkSession
 import { $cronSessions, $messagingSessions, $sessions } from '@/store/session'
 import { $unconfirmedPinWrites } from '@/store/session-pin-sync'
 import { $removedSessionIds } from '@/store/session-removal'
+import { setSettingsScope } from '@/store/settings-scope'
 import { runGatewayRestart } from '@/store/system-actions'
 import { requestActiveUpdate } from '@/store/updates'
 import { canOpenNewWindow, openNewWindow } from '@/store/windows'
@@ -668,7 +669,16 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     }
   }, [pendingSeed])
 
-  const go = useCallback((path: string) => () => navigateToWorkspacePage(navigate, path), [navigate])
+  const go = useCallback(
+    (path: string) => () => {
+      if (path.split('?')[0] === SETTINGS_ROUTE && page !== 'settings') {
+        setSettingsScope('default')
+      }
+
+      navigateToWorkspacePage(navigate, path)
+    },
+    [navigate, page]
+  )
 
   // Sessions: plain select = open beside what's already loaded (focus existing
   // tile/main, else a new tab — main only when it's a blank draft);

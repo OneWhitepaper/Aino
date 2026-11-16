@@ -4,7 +4,6 @@ import { useStore } from '@nanostores/react'
 import { useState } from 'react'
 
 import { SubagentControls } from '@/app/chat/composer/status-stack/subagent-controls'
-import { CompactMarkdown } from '@/components/chat/compact-markdown'
 import { $workspaceMode, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -45,17 +44,7 @@ function SubagentDetail({ item, session }: { item: SubagentPanelRow; session: Su
     session.runtimeId &&
     session.owner &&
     collaborationOwnerKey(knownOwnerForSession(session.runtimeId)) === collaborationOwnerKey(session.owner) &&
-    native.some(task => task.id === childId && !task.id.startsWith('delegate-tool:'))
-  )
-
-  const activity = row.activity.length > 0 && (
-    <ol aria-label={t.agents.extendedTranscript} className="subagent-panel-activity">
-      {row.activity.map((entry, index) => (
-        <li key={`${row.id}:${index}`}>
-          <CompactMarkdown text={entry} />
-        </li>
-      ))}
-    </ol>
+    native.some(task => task.id === childId && task.canControl !== false && !task.id.startsWith('delegate-tool:'))
   )
 
   return (
@@ -65,24 +54,18 @@ function SubagentDetail({ item, session }: { item: SubagentPanelRow; session: Su
         {row.model && <span>{displayModelName(row.model)}</span>}
       </div>
       <p className="subagent-panel-goal">{row.goal}</p>
-      {(running || !row.sessionId) && activity}
       <SubagentPanelTranscript
         live={controllable}
         owner={session.owner}
         parentRuntimeId={session.runtimeId}
         row={row}
       />
-      {!running && row.sessionId && activity && (
-        <details className="mt-6">
-          <summary className="cursor-pointer text-(--ui-text-secondary)">{t.agents.extendedTranscript}</summary>
-          {activity}
-        </details>
-      )}
       {controllable && session.runtimeId && (
         <div className="subagent-panel-controls">
           <SubagentControls sessionId={session.runtimeId} setText={setText} subagentId={childId} text={text} />
         </div>
       )}
+      {running && !controllable && <p className="text-(--ui-text-secondary)">{t.agents.controlUnavailable}</p>}
     </div>
   )
 }

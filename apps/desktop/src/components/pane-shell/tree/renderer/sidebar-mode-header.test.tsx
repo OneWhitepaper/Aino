@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { SidebarModeHeader, type SidebarModeItem } from './sidebar-mode-header'
 
-vi.mock('@/components/brand-mark', () => ({ BrandMark: () => <span aria-hidden="true" /> }))
+vi.mock('@/components/brand-mark', () => ({ BrandMark: () => <span aria-hidden="true" data-testid="brand-mark" /> }))
 
 const items: SidebarModeItem[] = [
   { id: 'sessions', title: 'Aino', description: 'Projects, files and conversations' },
@@ -19,6 +19,36 @@ beforeAll(() => {
 afterEach(cleanup)
 
 describe('SidebarModeHeader', () => {
+  it('keeps the Bot heading text only while preserving the ordinary conversation brand', () => {
+    const props = {
+      items: [...items, { id: 'hermes-bots:pane', title: 'Bot' }],
+      menuLabel: 'Switch mode',
+      navigation: 'rail' as const,
+      onSelect: vi.fn()
+    }
+    const view = render(<SidebarModeHeader {...props} activeId="hermes-bots:pane" />)
+    expect(screen.getByText('Bot')).toBeTruthy()
+    expect(screen.queryByTestId('brand-mark')).toBeNull()
+    view.rerender(<SidebarModeHeader {...props} activeId="sessions" />)
+    expect(screen.getByTestId('brand-mark')).toBeTruthy()
+  })
+  it('leaves mode navigation to the activity rail while keeping scoped session search', () => {
+    const onSelect = vi.fn()
+    render(
+      <SidebarModeHeader
+        activeId="sessions"
+        items={items}
+        menuLabel="Switch mode"
+        navigation="rail"
+        onSelect={onSelect}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /Switch mode/ })).toBeNull()
+    expect(screen.getByText('Aino')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Search sessions' })).toBeTruthy()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('requests an existing pane selection and waits for the owner to update the current title', async () => {
     const onSelect = vi.fn()
 
@@ -42,7 +72,8 @@ describe('SidebarModeHeader', () => {
     rerender(
       <SidebarModeHeader activeId="sessions" items={items.slice(0, 1)} menuLabel="Switch mode" onSelect={onSelect} />
     )
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Switch mode/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Search sessions' })).toBeTruthy()
     expect(screen.queryByRole('menu')).toBeNull()
     expect(screen.getByText('Aino')).toBeTruthy()
     expect(onSelect).toHaveBeenCalledTimes(1)

@@ -13,8 +13,9 @@ const { openRosterBot, openSession, prepareBotSource } = vi.hoisted(() => ({
   prepareBotSource: vi.fn(async () => undefined)
 }))
 
-vi.mock('@hermes/plugin-sdk', () => ({
+vi.mock('@hermes/plugin-sdk', async () => ({
   BOT_CHAT_SESSION_HYDRATION_TIMEOUT_MS: 60_000,
+  atom: (await import('nanostores')).atom,
   haptic: () => undefined,
   host: { openSession, notifyError: vi.fn() }
 }))

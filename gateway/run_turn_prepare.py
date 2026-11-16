@@ -64,7 +64,7 @@ def _resolve_policy_agent_runtime(runner, policy, *, source=None, fallback=True)
             raise RuntimeStoreError('awaiting_managed_credentials')
         state = managed_state(authority, sid)
         key = binding_key(authority, sid)
-        binding = get_registry().get(key, state)
+        binding = get_registry().get_for_runtime(key, state)
         if binding is None:
             raise RuntimeStoreError('awaiting_managed_credentials')
         identity = (binding.owner, binding.model_id, binding.model, binding.base_url, binding.api_mode)
@@ -73,7 +73,7 @@ def _resolve_policy_agent_runtime(runner, policy, *, source=None, fallback=True)
             # Group grants are live room/member delegations: a captured key must not
             # outlive membership or ownership revocation between HTTP requests.
             managed_state(authority, sid)
-            held = get_registry().get(key, state)
+            held = get_registry().get_for_runtime(key, state)
             if held is None or identity != (held.owner, held.model_id, held.model, held.base_url, held.api_mode):
                 raise RuntimeStoreError('awaiting_managed_credentials')
             return held

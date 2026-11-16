@@ -1,9 +1,15 @@
 import { useStore } from '@nanostores/react'
 
 import { useSessionView } from '@/app/chat/session-view'
-import { WORKSPACE_AVATAR_AREA, type WorkspaceAvatarContribution } from '@/components/pane-shell/workspace-scope'
+import {
+  $workspaceOwnerLabels,
+  WORKSPACE_AVATAR_AREA,
+  type WorkspaceAvatarContribution
+} from '@/components/pane-shell/workspace-scope'
 import { Codicon } from '@/components/ui/codicon'
 import { useContributions } from '@/contrib/react/use-contributions'
+import { useI18n } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { useStoresSelector } from '@/lib/use-session-slice'
 import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
 import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
@@ -11,6 +17,7 @@ import { $sessionStates, $sessionTiles, storedSessionIdForRuntimeId } from '@/st
 
 /** Identity follows this message's conversation, including a background split. */
 export function AssistantIdentity() {
+  const { t } = useI18n()
   const view = useSessionView()
   const runtimeId = useStore(view.$runtimeId)
   const viewStoredId = useStore(view.$storedId)
@@ -36,6 +43,7 @@ export function AssistantIdentity() {
   )
 
   const portraits = useContributions(WORKSPACE_AVATAR_AREA)
+  const ownerLabels = useStore($workspaceOwnerLabels)
 
   if (!storedId) {
     return null
@@ -43,24 +51,30 @@ export function AssistantIdentity() {
 
   if (!botSession) {
     return (
-      <img
-        alt=""
-        aria-hidden="true"
-        data-slot="aui_assistant-brand"
-        src={`${import.meta.env.BASE_URL}apple-touch-icon.png`}
-      />
+      <>
+        <img
+          alt=""
+          aria-hidden="true"
+          data-slot="aui_assistant-brand"
+          src={`${import.meta.env.BASE_URL}apple-touch-icon.png`}
+        />
+        <span data-slot="aui_assistant-name">{PRODUCT_NAME}</span>
+      </>
     )
   }
 
   const portrait =
     ownerKey &&
     portraits
-      .map(item => (item.data as WorkspaceAvatarContribution | undefined)?.avatarFor?.(ownerKey, 32))
+      .map(item => (item.data as WorkspaceAvatarContribution | undefined)?.avatarFor?.(ownerKey, 25))
       .find(Boolean)
 
   return (
-    <span aria-hidden="true" data-slot="aui_assistant-avatar">
-      {portrait || <Codicon name="hubot" size="1.5rem" />}
-    </span>
+    <>
+      <span aria-hidden="true" data-slot="aui_assistant-avatar">
+        {portrait || <Codicon name="hubot" size="1.5rem" />}
+      </span>
+      <span data-slot="aui_assistant-name">{(ownerKey && ownerLabels[ownerKey]) || t.common.bots}</span>
+    </>
   )
 }

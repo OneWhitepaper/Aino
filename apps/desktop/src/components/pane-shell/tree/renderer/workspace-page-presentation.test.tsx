@@ -105,6 +105,9 @@ it.each([false, true])('keeps an ordinary file draft while a page covers the wor
     </KeepAlivePanes>
   )
 
+  const navigation = screen.getByRole('navigation')
+  const navigationTrack = container.querySelector('[data-tree-track="navigation"]') as HTMLElement
+  expect(screen.getByRole('tab', { name: 'Agent Hub' })).toBeTruthy()
   const editor = screen.getByRole('textbox', { name: 'Unsaved file' }) as HTMLTextAreaElement
   fireEvent.change(editor, { target: { value: 'Keep my unsaved work' } })
   editor.focus()
@@ -112,8 +115,11 @@ it.each([false, true])('keeps an ordinary file draft while a page covers the wor
 
   act(() => $workspaceIsPage.set(true))
   expect(screen.getByRole('main').textContent).toBe('Page contents')
-  expect(screen.getByRole('navigation').textContent).toBe('Navigation')
-  expect(screen.getByRole('tab', { name: 'Agent Hub' })).toBeTruthy()
+  expect(screen.queryByRole('navigation')).toBeNull()
+  expect(screen.queryByRole('tab', { name: 'Agent Hub' })).toBeNull()
+  expect(navigationTrack.style.display).toBe('none')
+  expect(navigation.isConnected).toBe(true)
+  expect(navigation.closest('[data-pane-hidden]')?.hasAttribute('inert')).toBe(true)
   // jsdom and Testing Library do not implement inert; native input blocking is covered in Electron.
   expect(editor.ownerDocument.activeElement).not.toBe(editor)
   expect(editor.isConnected).toBe(true)
@@ -128,6 +134,9 @@ it.each([false, true])('keeps an ordinary file draft while a page covers the wor
   expect($hiddenTreePanes.get()).toBe(hidden)
 
   act(() => $workspaceIsPage.set(false))
+  expect(screen.getByRole('navigation')).toBe(navigation)
+  expect(navigationTrack.style.display).not.toBe('none')
+  expect(screen.getByRole('tab', { name: 'Agent Hub' })).toBeTruthy()
   expect(screen.getByRole('textbox', { name: 'Unsaved file' })).toBe(editor)
   editor.focus()
   expect(editor.ownerDocument.activeElement).toBe(editor)

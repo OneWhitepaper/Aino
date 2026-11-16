@@ -1,0 +1,174 @@
+/* Companion layout uses the current Aino theme. Ordinary side threads and
+   group chats retain their own composition and transcript measures. */
+[data-bot-workspace] {
+  --aino-tool-panel-width: clamp(390px, calc((100vw - 304px) * 0.42), 650px);
+}
+
+[data-bot-workspace] [data-aino-workspace-frame] {
+  border-radius: 0;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] {
+  --aino-conversation-width: 47.5rem;
+  --aino-conversation-inset: clamp(1.5rem, 4vw, 3.25rem);
+  --aino-radius-composer: 1.75rem;
+  --composer-input-min-height: 1.875rem;
+  --aino-composer-min-height: 6.375rem;
+  --aino-composer-padding: 0;
+  --composer-control-size: 2rem;
+  --composer-control-primary-size: 2.0625rem;
+  --conversation-turn-gap: 2rem;
+  --conversation-text-base-size: 0.875rem;
+  --conversation-base-line-height: 1.9;
+}
+
+[data-chat-surface][data-bot-chat] [data-slot='bot-conversation-header'] {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 4.25rem;
+  min-width: 0;
+  padding: 0.8125rem 1.5rem;
+  color: var(--ui-text-primary);
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-surface'] {
+  border-color: var(--ui-stroke-secondary) !important;
+  box-shadow: none;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-surface']:focus-within {
+  border-color: var(--ui-stroke-primary) !important;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='aui_assistant-message-root'] {
+  padding-inline-start: 0;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='aui_response-process-header'] {
+  min-height: 1.625rem;
+  margin-inline-start: 0;
+  padding-inline-start: 2.1875rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='aui_assistant-name'] {
+  min-height: 1.625rem;
+  margin-block-end: 0.9375rem;
+  padding-block-start: 0;
+  padding-inline-start: 2.1875rem;
+  color: var(--ui-text-primary);
+  font-weight: 500;
+  line-height: 1.625rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-bot-composer-layout] {
+  grid-template-rows: minmax(3.375rem, auto) 3rem;
+  row-gap: 0;
+  column-gap: 0.3125rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-input-cell'] {
+  padding: 1.0625rem 1.3125rem 0.4375rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-rich-input'] {
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.6875rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-leading-controls'],
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-trailing-controls'] {
+  align-self: stretch;
+  padding-block: 0.1875rem 0.6875rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-leading-controls'] {
+  padding-inline-start: 0.75rem;
+}
+
+[data-chat-surface][data-bot-chat][data-conversation-layout] [data-slot='composer-trailing-controls'] {
+  padding-inline-end: 0.75rem;
+}
+
+[data-chat-surface][data-bot-chat] .aino-composer-controls {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+[data-chat-surface][data-bot-chat] .aino-composer-model-controls {
+  margin-inline-start: auto;
+}
+
+[data-chat-surface][data-bot-chat] [data-slot='bot-composer-note'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 1.4375rem;
+  padding: 0.5rem 0.3125rem 0;
+  color: var(--ui-text-secondary);
+  font-size: 0.625rem;
+  line-height: 1rem;
+}
+
+[data-chat-surface][data-bot-chat] [data-slot='bot-composer-note'] button {
+  justify-self: start;
+  font: inherit;
+  color: inherit;
+}
+
+/* The same live editor sits between two flexible spaces; it is never remounted
+   or duplicated when the first message replaces the welcome state. */
+[data-chat-surface][data-bot-welcome][data-conversation-layout] [data-slot='composer-bounds'] {
+  flex: 1 1 0;
+  min-height: 8rem;
+}
+
+[data-chat-surface][data-bot-welcome][data-conversation-layout] [data-slot='aui_thread-content'] {
+  height: 100%;
+  padding-block: 0;
+}
+
+[data-chat-surface][data-bot-welcome]
+  [data-slot='aui_thread-content']
+  > div:has(> [data-slot='aui_empty-placeholder']) {
+  gap: 0;
+}
+
+[data-chat-surface][data-bot-welcome][data-conversation-layout] [data-slot='aui_empty-placeholder'] {
+  justify-content: flex-end;
+  padding-block: 0 1.6875rem;
+}
+
+[data-chat-surface][data-bot-welcome][data-conversation-layout] [data-slot='composer-dock']:not([data-popped-out]) {
+  padding-bottom: 0;
+}
+
+[data-chat-surface][data-bot-welcome] [data-slot='bot-composer-suggestions'] {
+  flex: 1 1 0;
+  align-self: center;
+  width: var(--aino-conversation-content-width);
+  min-height: 4rem;
+  padding-block: 1.0625rem 1.5rem;
+  margin-inline-end: var(--aino-conversation-scrollbar);
+}
+
+@container (max-width: 34rem) {
+  [data-chat-surface][data-bot-chat] [data-slot='bot-conversation-header'] {
+    min-height: 3.375rem;
+    padding: 0.5rem 1rem;
+  }
+}
+
+@media (max-height: 42rem) {
+  [data-chat-surface][data-bot-welcome][data-conversation-layout] [data-slot='composer-bounds'] {
+    min-height: 6.5rem;
+  }
+
+  [data-chat-surface][data-bot-welcome] [data-slot='bot-composer-suggestions'] {
+    min-height: 3.5rem;
+    padding-block-start: 0.75rem;
+  }
+}

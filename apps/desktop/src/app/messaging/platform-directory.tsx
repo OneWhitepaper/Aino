@@ -228,20 +228,14 @@ function PlatformCard({
 
   return (
     <button aria-label={name} className="messaging-platform-card" data-tone={tone} onClick={onSelect} type="button">
-      <span className="messaging-platform-identity">
-        <PlatformAvatar className="messaging-platform-avatar" platformId={platform.id} platformName={platform.name} />
-        <span className="messaging-platform-name">{name}</span>
-        <span className="messaging-platform-badge">
-          {platform.configured ? m.directory.configured : m.states.not_configured}
-        </span>
-      </span>
-      <span className="messaging-platform-description">
-        {localizedMessagingPlatformDescription(locale, platform.id, platform.description)}
-      </span>
-      <span className="messaging-platform-footer">
-        <span className="messaging-platform-meta">
-          <StatusDot tone={tone} />
-          <span>{platform.state ? m.states[platform.state] || platform.state.replace(/_/g, ' ') : m.unknown}</span>
+      <PlatformAvatar className="messaging-platform-avatar" platformId={platform.id} platformName={platform.name} />
+      <span className="messaging-platform-copy">
+        <span className="messaging-platform-identity">
+          <span className="messaging-platform-name">{name}</span>
+          <span className="messaging-platform-meta">
+            <StatusDot tone={tone} />
+            <span>{platform.state ? m.states[platform.state] || platform.state.replace(/_/g, ' ') : m.unknown}</span>
+          </span>
           {pendingCount > 0 && (
             <span aria-label={m.pendingAria(pendingCount)} className="messaging-pending-count">
               {m.pendingRequests(pendingCount)}
@@ -249,10 +243,13 @@ function PlatformCard({
           )}
           {platform.id === 'wecom' && <span className="messaging-send-only">{m.directory.sendOnly}</span>}
         </span>
-        <span aria-hidden="true" className="messaging-configure-action">
-          {platform.onboarding && !platform.configured ? m.qrSetup.reconnect : m.directory.configure}
-          <ChevronRight />
+        <span className="messaging-platform-description">
+          {localizedMessagingPlatformDescription(locale, platform.id, platform.description)}
         </span>
+      </span>
+      <span aria-hidden="true" className="messaging-configure-action">
+        {platform.onboarding && !platform.configured ? m.qrSetup.reconnect : m.directory.configure}
+        <ChevronRight />
       </span>
     </button>
   )

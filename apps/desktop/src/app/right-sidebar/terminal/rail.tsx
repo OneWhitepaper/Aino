@@ -80,7 +80,7 @@ export function TerminalRail() {
 
   return (
     <div
-      className="relative z-40 flex h-9 min-w-0 shrink-0 items-center border-b border-(--ui-stroke-tertiary) bg-(--aino-surface-bg) [-webkit-app-region:no-drag]"
+      className="relative z-40 flex h-[43px] min-w-0 shrink-0 items-center border-b border-(--ui-stroke-tertiary) bg-(--ui-editor-surface-background) px-1.5 [-webkit-app-region:no-drag]"
       // Keep collapsed sidebars from revealing over terminal tab controls.
       data-suppress-pane-reveal=""
     >
@@ -150,8 +150,8 @@ function TerminalRailItem({ active, canCloseOthers, index, term, toggleHint }: T
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'flex h-full max-w-56 shrink-0 items-center gap-1 px-2',
-            active ? 'bg-(--aino-surface-active)' : 'hover:bg-(--aino-surface-hover)'
+            'flex h-full max-w-56 shrink-0 items-center gap-1 border-b-2 px-2',
+            active ? 'border-(--ui-text-secondary)' : 'border-transparent hover:bg-(--aino-surface-hover)'
           )}
           data-tree-tab={term.id}
           {...middleClickHandlers(() => closeTerminal(term.id))}
@@ -162,7 +162,7 @@ function TerminalRailItem({ active, canCloseOthers, index, term, toggleHint }: T
               aria-label={label}
               aria-selected={active}
               className={cn(
-                'flex h-full min-w-0 items-center gap-2 text-[length:var(--aino-text-ui)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--aino-focus-ring)',
+                'flex h-full min-w-0 items-center gap-1.5 text-[length:var(--aino-text-section)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--aino-focus-ring)',
                 active ? 'text-(--ui-text-primary)' : 'text-(--ui-text-secondary)'
               )}
               // ⌘-click closes (the pane-tab gesture); a plain click selects.

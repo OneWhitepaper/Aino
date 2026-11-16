@@ -16,10 +16,25 @@ import {
   slashIconElement
 } from '@/components/assistant-ui/directive-text'
 import { referenceKind, referenceRe, unwrapReferenceValue } from '@/components/assistant-ui/reference-kinds'
+import { containsIndex, markdownLiteralRanges } from '@/lib/markdown-literals'
 
 import { slashCommandMatches, type SlashCommandScanOptions } from './slash-refs'
 
+interface ComposerContentOptions extends SlashCommandScanOptions {
+  sourcePrefix?: string
+  sourceSuffix?: string
+}
+
 export const RICH_INPUT_SLOT = 'composer-rich-input'
+
+/** An unmarked break belongs to Chromium; rendered source breaks carry their own marker. */
+function isScaffoldBreak(node: ChildNode | null): node is HTMLBRElement {
+  return node?.nodeName === 'BR' && !(node as HTMLElement).hasAttribute('data-composer-break')
+}
+
+function hasPlaceholderBreak(editor: HTMLElement): boolean {
+  return editor.childNodes.length === 1 && isScaffoldBreak(editor.firstChild)
+}
 
 /** Chromium's litter: editing beside a `contenteditable=false` chip splits the
  *  line and leaves zero-length text nodes behind. They render as nothing and
@@ -173,7 +188,9 @@ function appendTextWithBreaks(target: DocumentFragment | HTMLElement, text: stri
 
   lines.forEach((line, index) => {
     if (index > 0) {
-      target.append(document.createElement('br'))
+      const br = document.createElement('br')
+      br.dataset.composerBreak = ''
+      target.append(br)
     }
 
     if (line) {
@@ -183,8 +200,10 @@ function appendTextWithBreaks(target: DocumentFragment | HTMLElement, text: stri
 }
 
 /** Every span of `text` that renders as a chip, in source order. */
-function chipSpans(text: string, options: SlashCommandScanOptions) {
+function chipSpans(text: string, options: ComposerContentOptions) {
   REF_RE.lastIndex = 0
+
+  const protectedRanges = markdownLiteralRanges(text, options.sourcePrefix, options.sourceSuffix)
 
   const refs = Array.from(text.matchAll(REF_RE)).map(match => {
     const start = match.index ?? 0
@@ -198,7 +217,9 @@ function chipSpans(text: string, options: SlashCommandScanOptions) {
     start: match.start
   }))
 
-  return [...refs, ...commands].sort((a, b) => a.start - b.start)
+  return [...refs, ...commands]
+    .filter(span => !containsIndex(protectedRanges, span.start))
+    .sort((a, b) => a.start - b.start)
 }
 
 /** Build the chip/text DOM for `text`. Directives hydrate back to their pills —
@@ -208,7 +229,7 @@ function chipSpans(text: string, options: SlashCommandScanOptions) {
 export function appendComposerContents(
   target: DocumentFragment | HTMLElement,
   text: string,
-  options: SlashCommandScanOptions = {}
+  options: ComposerContentOptions = {}
 ) {
   let cursor = 0
 
@@ -253,6 +274,30 @@ function composerSelectionRange(editor: HTMLElement) {
   return { range, selection }
 }
 
+/** Source before the insertion point, including when paste replaces a selection. */
+export function textBeforeSelection(editor: HTMLElement): string {
+  const hit = composerSelectionRange(editor)
+
+  return hit
+    ? serializeTextBefore(editor, hit.range.startContainer, hit.range.startOffset)
+    : serializeTextBefore(editor, editor, editor.childNodes.length)
+}
+
+/** Source after the replaced selection; table delimiters may live below the caret. */
+export function textAfterSelection(editor: HTMLElement): string {
+  const hit = composerSelectionRange(editor)
+
+  if (!hit) {
+    return ''
+  }
+
+  const probe = document.createRange()
+  probe.selectNodeContents(editor)
+  probe.setStart(hit.range.endContainer, hit.range.endOffset)
+
+  return serializeTriggerRange(probe)
+}
+
 /** Serialized text from the editor's start up to (`container`, `offset`).
  *
  *  Chips are ATOMIC here: each contributes an object-replacement placeholder
@@ -265,6 +310,10 @@ export function serializeTextBefore(editor: HTMLElement, container: Node, offset
   probe.selectNodeContents(editor)
   probe.setEnd(container, offset)
 
+  return serializeTriggerRange(probe)
+}
+
+function serializeTriggerRange(probe: Range): string {
   const scratch = document.createElement('div')
 
   scratch.append(probe.cloneContents())
@@ -306,6 +355,10 @@ function atTokenBoundary(editor: HTMLElement, range: Range | null): boolean {
  *  insert. That's how a paste into an open `@url:` scope replaces the scope
  *  instead of stacking on it (`@url:@url:\`https://…\``). */
 export function insertComposerContentsAtCaret(editor: HTMLElement, text: string, consumeBefore = 0) {
+  if (hasPlaceholderBreak(editor)) {
+    editor.replaceChildren()
+  }
+
   const scoped = consumeBefore > 0 ? rangeBeforeCaret(editor, consumeBefore) : null
 
   if (scoped) {
@@ -329,6 +382,8 @@ export function insertComposerContentsAtCaret(editor: HTMLElement, text: string,
 
   appendComposerContents(fragment, text, {
     boundaryBefore: atTokenBoundary(editor, hit?.range ?? null),
+    sourcePrefix: textBeforeSelection(editor),
+    sourceSuffix: textAfterSelection(editor),
     trailingCommitted: true
   })
 
@@ -574,7 +629,7 @@ export function composerPlainText(node: Node): string {
   // its height — not a line the user typed. Reading it as "\n" is how a
   // just-cleared composer stayed non-empty: the newline got stashed as the
   // session's draft and painted back on return.
-  if (el.dataset.slot === RICH_INPUT_SLOT && el.childNodes.length === 1 && el.firstChild?.nodeName === 'BR') {
+  if (el.dataset.slot === RICH_INPUT_SLOT && hasPlaceholderBreak(el)) {
     return ''
   }
 
@@ -890,7 +945,7 @@ export function normalizeComposerEditorDom(editor: HTMLElement) {
   // A trailing <br> right after a chip / only whitespace is a phantom line.
   const last = editor.lastChild
 
-  if (last?.nodeName === 'BR') {
+  if (isScaffoldBreak(last)) {
     let prev: ChildNode | null = last.previousSibling
 
     while (prev?.nodeType === Node.TEXT_NODE && !(prev.textContent || '').trim()) {

@@ -15,7 +15,7 @@ import type { Contribution } from '@/contrib/types'
 import type { WorkspaceMode, WorkspacePaneScope } from '../../workspace-scope'
 import type { GroupNode, LayoutNode } from '../model'
 import { allPaneIds } from '../model'
-import { isToolPanelGroup } from '../tool-panel-policy'
+import { isToolPanelGroup, TOOL_PANEL_DEFAULT_WIDTH } from '../tool-panel-policy'
 
 import type { FloatingAnchor } from './floating-rect'
 
@@ -235,6 +235,12 @@ export interface TrackContext {
 export const shownPaneIds = (group: GroupNode, ctx: TrackContext): string[] =>
   group.panes.filter(id => !ctx.paneGone(id))
 
+/** Tool width belongs to the shared host, including its temporarily hidden tabs. */
+export const sizingPaneIds = (group: GroupNode, axis: 'row' | 'column', ctx: TrackContext): string[] =>
+  axis === 'row' && isToolPanelGroup(group, ctx.paneFor)
+    ? group.panes
+    : shownPaneIds(group, ctx)
+
 /** max() of the defined CSS lengths (deduped); undefined when none — the
  *  largest-tenant basis a fixed stack and its clamps both size from. */
 export const cssMax = (values: (string | null | undefined)[]): string | undefined => {
@@ -303,10 +309,11 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
     }
 
     const overrideKey = axis === 'row' ? 'widthOverride' : 'heightOverride'
+    const toolWidth = axis === 'row' && isToolPanelGroup(node, ctx.paneFor)
 
     const declared = (id: string) => {
       const sizing = (ctx.paneFor(id)?.data ?? {}) as PaneSizing
-      const css = (axis === 'row' ? sizing.width : sizing.height) ?? null
+      const css = (axis === 'row' ? sizing.width : sizing.height) ?? (toolWidth ? TOOL_PANEL_DEFAULT_WIDTH : null)
       const override = ctx.overrides[id]?.[overrideKey]
 
       // An override only refines a pane that DECLARES a size along this axis
@@ -328,7 +335,23 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
     //  - any other zone stays fixed as long as SOME tenant declares a size —
     //    dropping a size-less pane (the terminal has height but no width)
     //    into the 237px files sidebar must not balloon it to a flex track.
-    const ids = shownPaneIds(node, ctx)
+    const ids = sizingPaneIds(node, axis, ctx)
+
+    if (toolWidth) {
+      // Newly opened tabs have no saved size; their default must not overrule
+      // an explicit resize of this host. Keep older per-tab widths intact and
+      // use their existing largest-tenant intent until the next resize/reset.
+      const savedWidths = ids.flatMap(id => {
+        const width = ctx.overrides[id]?.widthOverride
+
+        return width === undefined ? [] : [`${width}px`]
+      })
+
+      if (savedWidths.length) {
+        return cssMax(savedWidths)!
+      }
+    }
+
     const sizes = ids.map(declared)
     const declaredSizes = sizes.filter((size): size is string => size !== null)
 

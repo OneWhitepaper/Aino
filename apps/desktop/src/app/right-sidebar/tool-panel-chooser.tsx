@@ -1,15 +1,17 @@
 import './tool-panel.css'
 
 import { useStore } from '@nanostores/react'
+import { ArrowUpRight, FileDiff, Folder, Globe, MessageSquare, Network, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import type { ContextSuggestion } from '@/app/types'
 import { $newSessionTabAction, restoreTreePane } from '@/components/pane-shell/tree/store'
+import { $workspaceMode } from '@/components/pane-shell/workspace-scope'
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
 import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { SearchField } from '@/components/ui/search-field'
 import { useI18n } from '@/i18n'
+import { collaborationCopy } from '@/i18n/collaboration-capsule'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { requestGatewayForAgent } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
@@ -19,7 +21,8 @@ import { $toolSession, $toolWorkspaceCwd, toolSessionIsCurrent } from '@/store/t
 import { openToolPanelResource } from './tool-panel-actions'
 
 export function ToolPanelChooser() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const botWorkspace = useStore($workspaceMode) === 'bots'
   const copy = t.toolPanel
   const cwd = useStore($toolWorkspaceCwd)
   const session = useStore($toolSession)
@@ -103,10 +106,20 @@ export function ToolPanelChooser() {
   }
 
   const tools = [
-    { id: 'files', icon: 'folder-opened', label: t.sidebar.files, description: copy.filesDescription },
-    { id: 'browser', icon: 'globe', label: t.preview.browserTab, description: copy.browserDescription },
-    { id: 'terminal', icon: 'terminal', label: t.sidebar.terminal, description: copy.terminalDescription },
-    { id: 'review', icon: 'git-pull-request', label: t.sidebar.review, description: copy.reviewDescription }
+    { id: 'files', Icon: Folder, label: t.sidebar.files, description: copy.filesDescription },
+    { id: 'browser', Icon: Globe, label: t.preview.browserTab, description: copy.browserDescription },
+    { id: 'terminal', Icon: Terminal, label: t.sidebar.terminal, description: copy.terminalDescription },
+    { id: 'review', Icon: FileDiff, label: t.sidebar.review, description: copy.reviewDescription },
+    ...(botWorkspace
+      ? [
+          {
+            id: 'collaboration' as const,
+            Icon: Network,
+            label: collaborationCopy(locale).title,
+            description: collaborationCopy(locale).intro
+          }
+        ]
+      : [])
   ] as const
 
   const recent = tabs
@@ -125,9 +138,9 @@ export function ToolPanelChooser() {
             className="aino-tool-choice"
             key={tool.id}
             onClick={() => openToolPanelResource(tool.id)}
-            variant="outline"
+            variant="ghost"
           >
-            <Codicon name={tool.icon} size="1.25rem" />
+            <tool.Icon aria-hidden size={18} strokeWidth={1.65} />
             <span>
               <strong>{tool.label}</strong>
               <small>{tool.description}</small>
@@ -186,15 +199,15 @@ export function ToolPanelChooser() {
         <>
           <h3>{copy.collaboration}</h3>
           <Button onClick={auxiliaryChat} variant="ghost">
-            <Codicon name="comment-discussion" />
+            <MessageSquare aria-hidden size={15} strokeWidth={1.65} />
             {copy.auxiliaryChat}
-            <Codicon name="arrow-up-right" />
+            <ArrowUpRight aria-hidden size={13} strokeWidth={1.65} />
           </Button>
         </>
       )}
       {cwd && (
         <p className="aino-tool-project">
-          <Codicon name="folder" />
+          <Folder aria-hidden size={14} strokeWidth={1.65} />
           {copy.project}: <span>{cwd.split(/[/\\]/).filter(Boolean).at(-1)}</span>
         </p>
       )}

@@ -47,13 +47,11 @@ function freezeQueuedDraftText(
     terminalSelectionMissingBody: string
   }
 ): null | { text: string; displayText?: string; frozenTransport?: string } {
-  const trimmed = text.trim()
-
-  if (!trimmed) {
+  if (!text.trim()) {
     return { text }
   }
 
-  const frozen = freezeComposerTransportPayload(trimmed)
+  const frozen = freezeComposerTransportPayload(text)
 
   if (frozen.missingLabels.length > 0) {
     notify({
@@ -486,7 +484,18 @@ export function useComposerQueue({
 
       return true
     },
-    [activeQueueSessionKey, attachments, clearDraft, draftRef, scope.attachments, onSubmit, sessionId, t.composer]
+    [
+      activeQueueSessionKey,
+      attachments,
+      clearDraft,
+      draftRef,
+      scope.attachments,
+      onSubmit,
+      sessionId,
+      t.composer,
+      t.desktop.slashCommandIgnoredBody,
+      t.desktop.slashCommandIgnoredTitle
+    ]
   )
 
   // All queue drain paths share one lock + send-then-remove sequence.

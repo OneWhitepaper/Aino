@@ -85,7 +85,6 @@ export function SubagentTranscript(props: SubagentTranscriptProps) {
 
   return (
     <section className="mt-2 text-xs" data-slot="subagent-transcript">
-      <h4 className="text-(--ui-text-secondary)">{t.agents.extendedTranscript}</h4>
       {tail?.truncated && <p className="text-(--ui-text-tertiary)">{t.agents.transcriptTruncated}</p>}
       {tail?.available ? (
         <pre className="max-h-[30vh] overflow-auto overscroll-y-auto whitespace-pre-wrap break-words font-mono text-[length:var(--aino-text-caption)]">

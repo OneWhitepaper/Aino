@@ -14,6 +14,7 @@ Skills 是 agent 在需要时可以加载的按需知识文档。它们遵循**�
 
 另请参阅：
 
+- [Aino 内置工作流技能](aino-builtin-skills.md)
 - [捆绑 Skills 目录](../../reference/skills-catalog.md)
 - [官方可选 Skills 目录](../../reference/optional-skills-catalog.md)
 

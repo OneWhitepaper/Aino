@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 
 import { closeActiveTab } from '@/app/chat/close-tab'
 import { hudTargetSessionId } from '@/app/hud/handoff'
+import { navigateManagedBot, openBotSlot } from '@/app/profiles/management-navigation'
 import { setTerminalTakeover } from '@/app/right-sidebar/store'
 import { toggleTerminalPane } from '@/app/right-sidebar/terminal/reveal-focus'
 import { closeActiveTerminal, createTerminal, cycleTerminal } from '@/app/right-sidebar/terminal/terminals'
@@ -55,16 +56,7 @@ import {
 } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { toggleBrowserTab } from '@/store/preview'
-import {
-  $activeGatewayProfile,
-  $newChatProfile,
-  cycleProfile,
-  requestProfileCreate,
-  switchProfileToSlot,
-  switchToDefaultProfile,
-  toggleShowAllProfiles
-} from '@/store/profile'
-import { toggleProfileRailVisible } from '@/store/profile-rail-prefs'
+import { $activeGatewayProfile, $newChatProfile, requestProfileCreate } from '@/store/profile'
 import { openFolderAsProject } from '@/store/projects'
 import { toggleReview } from '@/store/review'
 import {
@@ -178,7 +170,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     // ahead of this action on the same chord and passes through when no tab
     // strip is eligible (#92569).
     profileSwitchHandlers[`profile.switch.${slot}`] = () => {
-      switchProfileToSlot(slot)
+      openBotSlot(slot, navigate)
     }
   }
 
@@ -373,7 +365,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     'view.toggleRightSidebar': () => (layoutHasRightSide() ? toggleToolPanelSide('right') : toggleTerminalPane()),
     'view.toggleReview': toggleReview,
     'view.toggleStatusbar': toggleStatusbarVisible,
-    'view.toggleProfileRail': toggleProfileRailVisible,
+    'view.toggleProfileRail': () => navigateToWorkspacePage(navigate, PROFILES_ROUTE),
     'view.toggleSimpleMode': toggleSimpleMode,
     'view.toggleTabStrip': () => void toggleTargetZoneTabStrip(),
     'view.showFiles': showFiles,
@@ -418,11 +410,11 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
 
     'appearance.toggleMode': () => setMode(resolvedMode === 'dark' ? 'light' : 'dark'),
 
-    'profile.default': switchToDefaultProfile,
+    'profile.default': () => navigateManagedBot({ profile: 'default' }, navigate),
     ...profileSwitchHandlers,
-    'profile.next': () => cycleProfile(1),
-    'profile.prev': () => cycleProfile(-1),
-    'profile.toggleAll': toggleShowAllProfiles,
+    'profile.next': () => navigateManagedBot({ direction: 1 }, navigate),
+    'profile.prev': () => navigateManagedBot({ direction: -1 }, navigate),
+    'profile.toggleAll': () => navigateToWorkspacePage(navigate, PROFILES_ROUTE),
     'profile.create': requestProfileCreate
   }
 

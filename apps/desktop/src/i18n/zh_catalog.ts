@@ -6,13 +6,13 @@ export const zhCatalog = {
   startHere: '从这里开始',
   featuredHint: '先了解技能，再按需添加',
   browseHint: '按用途浏览，可先查看详情，再决定是否添加。',
-  installedHint: '管理当前工作区的启用状态，更改将在新会话中生效。',
+  installedHint: '管理当前助手启用的能力，变更将在新对话中生效。',
   installedKind: (kind: string) => `已安装${kind}`,
   howToUse: '如何使用',
   usageHint: '使用方式与操作步骤以技能指令或来源文档为准。',
   capabilityGuide: '了解这些能力',
   capabilityGuideDescription:
-    '技能提供任务步骤与知识；插件扩展功能；连接器连接外部服务；工具集控制当前工作区可调用的工具。',
+    '技能提供任务步骤与知识；插件扩展功能；连接器对接外部服务；工具集控制当前助手可调用的工具。',
   originalDescription: '原文与完整说明',
   skillInstructions: '技能原始指令',
   pageTitle: '技能与工具',
@@ -103,14 +103,14 @@ export const zhCatalog = {
     essentials: '基础工具集',
     toolCount: (count: number) => count + ' 个工具',
     callCount: (count: string) => count + ' 次调用',
-    mostUsedBlurb: '此工作区最常使用的工具集。',
+    mostUsedBlurb: '当前助手最常使用的工具集。',
     essentialsBlurb: '大多数 Hermes 工作依赖的工具集。',
     themes: {
       work: { label: '浏览、办公与自动化', blurb: '操作浏览器和桌面、编辑文件、运行代码并安排任务。' },
       create: { label: '图像、音频与创作', blurb: '查看图像和视频、转录语音并生成媒体。' },
       recall: { label: '记忆与知识', blurb: '搜索 Hermes 的记忆、技能和历史记录。' },
       connect: { label: '连接与集成', blurb: '连接账户、其他智能体、智能家居及网页以外的搜索服务。' },
-      more: { label: '更多工具', blurb: '此工作区可启用的其他所有工具。' }
+      more: { label: '更多工具', blurb: '当前助手可启用的其他工具。' }
     }
   }
 } satisfies TranslationOverrides['catalog']

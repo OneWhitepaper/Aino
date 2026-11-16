@@ -1,16 +1,23 @@
 import { DEFAULT_REASONING_EFFORT } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { ChevronDown } from '@/lib/icons'
+import { Brain, ChevronDown } from '@/lib/icons'
 import { reasoningEffortClamp, reasoningEffortLabel, reasoningEffortNote } from '@/lib/reasoning-effort'
 import { cn } from '@/lib/utils'
 import { $defaultReasoningEffort } from '@/store/session'
@@ -31,7 +38,13 @@ const PILL = cn(
  *
  * Reads THIS surface's SessionView (primary or tile), like the model pill.
  */
-export function ReasoningPill({ disabled, model }: { disabled: boolean; model: ChatBarState['model'] }) {
+interface ReasoningPillProps {
+  disabled: boolean
+  model: ChatBarState['model']
+  presentation?: 'pill' | 'submenu'
+}
+
+export function ReasoningPill({ disabled, model, presentation = 'pill' }: ReasoningPillProps) {
   const copy = useI18n().t.shell.modelOptions
   const view = useSessionView()
   const reasoningEffort = useStore(view.$reasoningEffort)
@@ -39,6 +52,7 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
   const pending = useStore(view.$reasoningEffortPending)
   const defaultEffort = useStore($defaultReasoningEffort)
   const [open, setOpen] = useState(false)
+  const closeParentMenu = useContext(ModelMenuCloseContext)
 
   if (!model.reasoningMenuContent || model.supportsReasoning === false) {
     return null
@@ -64,6 +78,30 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
     if (!next) {
       releaseTypingFocus()
     }
+  }
+
+  if (presentation === 'submenu') {
+    return (
+      <DropdownMenuSub onOpenChange={setMenuOpen} open={open}>
+        <DropdownMenuSubTrigger aria-label={title} className="min-h-8" disabled={disabled}>
+          <Brain />
+          <span>{copy.effort}</span>
+          <span className="ml-auto text-(--ui-text-tertiary)">
+            {pending ? <GlyphSpinner className="opacity-50" spinner="braille" /> : label}
+          </span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-52 p-0">
+          <ModelMenuCloseContext.Provider
+            value={() => {
+              setMenuOpen(false)
+              closeParentMenu()
+            }}
+          >
+            {model.reasoningMenuContent}
+          </ModelMenuCloseContext.Provider>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    )
   }
 
   return (

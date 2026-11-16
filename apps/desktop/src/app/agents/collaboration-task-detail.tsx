@@ -13,6 +13,7 @@ import {
   steerCollaborationTask
 } from '@/store/collaboration-capsule'
 import { $collaborationCapsuleOpen } from '@/store/collaboration-capsule-view'
+import { subagentControlErrorMessage } from '@/store/subagent-control'
 
 import { openCollaborationTask, prepareCollaborationRetry } from './collaboration-navigation'
 import { collaborationTaskMeta, taskRunning } from './collaboration-presentation'
@@ -36,6 +37,7 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
   const [feedback, setFeedback] = useState('')
   const [failed, setFailed] = useState(false)
   const running = taskRunning(task)
+  const canSteer = running && task.canControl && task.acceptingSteer !== false
   const meta = collaborationTaskMeta(task, now, t.agents)
 
   const act = async (action: 'stop' | 'steer' | 'retry') => {
@@ -59,9 +61,9 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
         setInstructing(false)
         setFeedback(t.agents.steerQueued)
       }
-    } catch {
+    } catch (error) {
       setFailed(true)
-      setFeedback(action === 'retry' ? copy.unavailable : t.agents.requestRejected)
+      setFeedback(action === 'retry' ? copy.unavailable : subagentControlErrorMessage(error))
     } finally {
       setPending(false)
     }
@@ -144,7 +146,7 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
           </Button>
         ) : null}
       </div>
-      {running && task.canControl && (
+      {canSteer && (
         <Button
           className="cc-text-button cc-instruction-toggle"
           onClick={() => setInstructing(value => !value)}
@@ -155,7 +157,7 @@ export function CollaborationTaskDetail({ task, group, now, expanded, detailId }
         </Button>
       )}
       {running && !task.canControl && <p className="cc-detail-meta">{copy.readOnly}</p>}
-      {running && instructing && (
+      {canSteer && instructing && (
         <form
           className="cc-steer-form"
           onSubmit={event => {

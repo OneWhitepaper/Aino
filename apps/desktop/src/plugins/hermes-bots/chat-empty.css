@@ -1,0 +1,77 @@
+.bot-chat-welcome {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  color: var(--ui-text-primary);
+}
+
+.bot-chat-welcome h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.bot-chat-welcome p {
+  max-width: 54ch;
+  margin: 0.625rem auto 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-ui);
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+.bot-chat-start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.bot-chat-start-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4375rem;
+  min-height: 2.0625rem;
+  max-width: 100%;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 1.125rem;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.bot-chat-start-actions button:is(:hover, :focus-visible) {
+  background: var(--ui-control-hover-background);
+  border-color: var(--ui-stroke-primary);
+  color: var(--ui-text-primary);
+}
+
+.bot-chat-start-actions button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (max-height: 42rem) {
+  .bot-chat-welcome h2 {
+    font-size: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bot-chat-start-actions button {
+    transition: none;
+  }
+}

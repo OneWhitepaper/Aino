@@ -266,7 +266,9 @@ def _project(authority, ref, params, kind):
     _require_current_route(authority, ref)
     agent, records = _owner_objects(authority, ref, include_fallback_evicted=kind == 'subagents')
     if kind == 'subagents':
-        return {'subagents': [subagent_row(record) for record in records], 'delegations': []}
+        controlled = {id(r.get('agent')) for r in subagent_records(agent, include_fallback_evicted=False)}
+        return {'subagents': [subagent_row(record, can_control=id(record.get('agent')) in controlled)
+                              for record in records], 'delegations': []}
     if kind == 'tail':
         return subagent_tail(records, params['subagent_id'])
     return {'processes': process_snapshot(authority, ref, agent, records)}
@@ -590,11 +592,12 @@ def _compression_lineage(db, session_id):
     return frozenset(found if isinstance(found, (list, tuple)) else ()) | ids
 
 
-def subagent_row(record):
+def subagent_row(record, *, can_control=False):
     """One ``subagent.list`` row; ``child_session_id`` is the child's own stored session, the one
     ``session.transcript`` reads for its ``subagent_id``."""
     child = getattr(record.get('agent'), 'session_id', None)
     return {**{key: record.get(key) for key in _SUBAGENT_FIELDS},
+            'can_control': can_control,
             'child_session_id': child if isinstance(child, str) and child else None}
 
 

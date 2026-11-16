@@ -25,6 +25,9 @@ export const enModelSettings: ModelSettingsTranslations = {
   },
   pages: {
     description: 'Manage the default model and the models used for different tasks.',
+    preferences: 'Model preferences',
+    moreSettings: 'More model settings',
+    fallbackDescription: 'Choose a fallback when the main model is temporarily unavailable.',
     auxiliaryTask: 'Task',
     auxiliaryPurpose: 'Purpose',
     auxiliaryModel: 'Model',

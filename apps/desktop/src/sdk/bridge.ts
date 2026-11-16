@@ -23,6 +23,13 @@ import { getProfiles } from '@/api/profiles'
 import { getSkills, setSkillEnabled } from '@/api/skills'
 import { getToolsets, setToolsetEnabled } from '@/api/toolsets'
 import { $pluginDecisions } from '@/contrib/plugins-store'
+import { runtimeTranslations } from '@/i18n/runtime'
+import { activeGatewayConnectionId } from '@/store/gateway'
+import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
+import { $connection } from '@/store/session'
+
+import { readProfileEffectiveModel } from './profile-effective-model'
+import type { PluginProfileRoute } from './profile-request'
 
 /** Skills for a profile scope — omit `profile` for the app-wide active one. */
 export const skills = {
@@ -42,7 +49,44 @@ export const toolsets = {
 export const profiles = {
   /** The profile list as the app's own surfaces read it (same endpoint and
    *  startup timeout as the profile rail). */
-  list: (scope?: ProfileScope) => getProfiles(scope)
+  list: (scope?: ProfileScope) => getProfiles(scope),
+  /** Account-aware effective model, including scoped Aino defaults kept outside config.yaml. */
+  effectiveModel: readProfileEffectiveModel,
+  /** Import a bot through the existing native archive flow without leaving
+   *  the manager or changing the user's current conversation/layout. */
+  import: async (): Promise<null | string> =>
+    runImportProfileFlow({ management: true, scope: profileArchiveScope('import') }),
+  /** Export precisely the selected owner. Remote archives cannot use this
+   *  computer's native filesystem dialogs. */
+  export: async (profile: string, route?: PluginProfileRoute): Promise<null | string> => {
+    const name = profile.trim()
+
+    if (
+      !name ||
+      (route && (route.profile.trim() !== name || !route.targetProfile.trim() || !route.connectionId.trim()))
+    ) {
+      throw new Error('Bot archive export requires a matching profile owner')
+    }
+
+    const scope = profileArchiveScope('export', route)
+
+    return runExportProfileFlow(route?.targetProfile.trim() || name, {
+      ...scope,
+      profile: route?.targetProfile.trim() || name
+    })
+  }
+}
+
+function profileArchiveScope(action: 'export' | 'import', route?: PluginProfileRoute): { connectionId: string } {
+  const mode = route?.mode ?? $connection.get()?.mode
+
+  if (mode && mode !== 'local') {
+    throw new Error(
+      runtimeTranslations().promptNotices.desktopCommands[action === 'export' ? 'exportRemote' : 'importRemote']
+    )
+  }
+
+  return { connectionId: route?.connectionId.trim() || activeGatewayConnectionId() || 'local' }
 }
 
 /** This window's plugin enable/disable decisions (id → enabled; absence means

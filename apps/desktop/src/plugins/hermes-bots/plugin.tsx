@@ -16,6 +16,7 @@
  */
 
 import {
+  BotModeIcon,
   CHAT_EMPTY_AREA,
   COMPOSER_AREAS,
   host,
@@ -39,7 +40,7 @@ import {
 } from './bot-state'
 import { registerBotWorkspaceAvatar } from './bot-workspace-avatar'
 import { isCanonicalChatOnScreen, openBotCanonicalChat } from './canonical-chat'
-import { BotChatEmpty } from './chat-empty'
+import { BotChatEmpty, BotChatStartingActions } from './chat-empty'
 import { bindProfileSync, RoutinesPane } from './cron'
 import {
   $botMeta,
@@ -80,6 +81,7 @@ import {
 import { annotateOrphanedGroupChatMembers } from './hygiene'
 import { BOTS_LOCALES, botsText } from './i18n'
 import { displayName, rosterConnectionLabel } from './labels'
+import { BOT_MANAGER_CONTRIBUTION } from './manager'
 import { startBotRelay, stopBotRelay } from './relay'
 import { $activityToasts, openRosterBot } from './roster-actions'
 import {
@@ -95,11 +97,8 @@ import { startScreenAutoRaise } from './screen-autoraise'
 import { ProfileGroupScreenPortal } from './screen-portal'
 import { startHideSweepScheduler } from './session-sweep'
 import { $pendingBotOpen, bumpBotOpenGeneration, getBotOpenGeneration, ID, pluginText, setPluginCtx } from './shared'
-import tabBotsIcon from './tab-bots.svg'
 import type { GroupChat, RosterRow } from './types'
 import { loadBotSections } from './user-sections'
-
-const tabBotsMask = `url(${JSON.stringify(tabBotsIcon)})`
 
 function clearEditorOnAccountChange() {
   const bridge = typeof window === 'undefined' ? undefined : window.hermesDesktop?.platformAccount
@@ -141,27 +140,6 @@ function clearEditorOnAccountChange() {
     unbind()
     $editingBot.set(null)
   }
-}
-
-/** The approved Bot glyph lives with the bundled plugin so the plugin fence
- * remains honest: this module imports only its own assets and the public SDK. */
-function BotsTabIcon() {
-  return (
-    <span
-      aria-hidden
-      className="inline-block size-3.5 shrink-0 bg-current"
-      style={{
-        WebkitMaskImage: tabBotsMask,
-        WebkitMaskPosition: 'center',
-        WebkitMaskRepeat: 'no-repeat',
-        WebkitMaskSize: '100% 100%',
-        maskImage: tabBotsMask,
-        maskPosition: 'center',
-        maskRepeat: 'no-repeat',
-        maskSize: '100% 100%'
-      }}
-    />
-  )
 }
 
 // ── plugin ───────────────────────────────────────────────────────────────────
@@ -530,6 +508,7 @@ export default {
     startHideSweepScheduler(ctx)
     // Sessions sidebar: each gateway/profile group gets the profile's Screen portal
     // above its sessions, so the bot's computer is reachable from either mode.
+    ctx.register(BOT_MANAGER_CONTRIBUTION)
     ctx.register({
       id: 'screen-portal',
       area: SIDEBAR_PROFILE_GROUP_HEADER_AREA,
@@ -571,7 +550,7 @@ export default {
         width: '245px',
         collapsible: true,
         hideOnly: true,
-        tabLead: () => <BotsTabIcon />,
+        tabLead: () => <BotModeIcon className="size-3.5" />,
         tabTitle: () => <LocalizedTabTitle select={() => pluginText('roster.title', 'Bot')} />,
         tabTitleText: () => pluginText('roster.title', 'Bot'),
         sidebarDescription: () => pluginText('roster.modeDescription', 'Bots, group chats and collaboration'),
@@ -902,7 +881,8 @@ export default {
       id: 'chat-empty',
       area: CHAT_EMPTY_AREA,
       data: {
-        render: ({ sessionId }: ChatEmptyProps) => <BotChatEmpty sessionId={sessionId} />
+        render: (props: ChatEmptyProps) => <BotChatEmpty {...props} />,
+        renderComposerFooter: (props: ChatEmptyProps) => <BotChatStartingActions {...props} />
       }
     })
 

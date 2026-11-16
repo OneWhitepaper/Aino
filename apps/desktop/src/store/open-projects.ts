@@ -78,8 +78,8 @@ export function isOpenedProject(project: OpenProject, opened = $openedProjects.g
   return opened.some(entry => entry.id === project.id || Boolean(entry.path && entry.path === project.path))
 }
 
-export function forgetOpenProject(project: OpenProject): void {
-  const scope = $profileScope.get()
+export function forgetOpenProject(project: OpenProject, ownerProfile?: string): void {
+  const scope = ownerProfile ? normalizeProfileKey(ownerProfile) : $profileScope.get()
   const byProfile = $openProjectsByProfile.get()
   $openProjectsByProfile.set(
     Object.fromEntries(

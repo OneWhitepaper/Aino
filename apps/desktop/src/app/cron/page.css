@@ -1,0 +1,229 @@
+.aino-cron-page .aino-cron-page-content {
+  display: block;
+  width: 100%;
+  max-width: var(--aino-page-width, 65rem);
+  margin-inline: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: var(--aino-page-top, 2.625rem) var(--aino-page-gutter, 3.375rem) var(--aino-page-bottom, 3.125rem);
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-label);
+}
+.aino-cron-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 2.0625rem;
+}
+.aino-cron-page-header > div {
+  min-width: 0;
+}
+.aino-cron-page-header h2 {
+  margin-bottom: 0.5rem;
+  font-size: var(--aino-text-page-title);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+.aino-cron-page-header p {
+  max-width: 40rem;
+  color: var(--ui-text-secondary);
+  line-height: 1.7;
+}
+.aino-cron-page-header > button {
+  flex-shrink: 0;
+  margin-top: 0.1875rem;
+}
+.aino-cron-page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.aino-cron-page-search {
+  width: min(15rem, 60%);
+  margin-inline-start: auto;
+}
+.aino-cron-task-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  transition: background-color 150ms;
+}
+.aino-cron-task-row:hover,
+.aino-cron-task-row[data-active='true'] {
+  background: var(--ui-row-hover-background);
+}
+.aino-cron-task-row > button:last-child {
+  margin-inline-end: 0.5rem;
+}
+.aino-cron-task-select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.8125rem;
+  min-width: 0;
+  min-height: 5.6875rem;
+  padding: 1.0625rem 0.25rem;
+  text-align: start;
+}
+.aino-cron-task-select:focus-visible,
+.aino-cron-blueprints > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+.aino-cron-task-icon {
+  display: grid;
+  flex: 0 0 2.1875rem;
+  place-items: center;
+  color: var(--ui-text-secondary);
+}
+.aino-cron-task-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.3125rem;
+  min-width: 0;
+}
+.aino-cron-task-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--aino-text-label);
+  font-weight: 550;
+}
+.aino-cron-task-copy > span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-section);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.aino-cron-task-schedule {
+  max-width: 25%;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-section);
+  overflow-wrap: anywhere;
+}
+.aino-cron-task-state {
+  flex-shrink: 0;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--aino-radius-control);
+  background: var(--ui-bg-secondary);
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-micro);
+}
+.aino-cron-task-state[data-state='error'] {
+  color: var(--ui-red);
+}
+.aino-cron-task-chevron {
+  flex-shrink: 0;
+  color: var(--ui-text-tertiary);
+  transition: transform 150ms;
+}
+.aino-cron-task-chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+.aino-cron-selected-detail {
+  padding: 1.25rem 0.75rem 0 3rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.aino-cron-selected-detail [data-aino-panel-detail] {
+  overflow: visible;
+}
+.aino-cron-blueprints {
+  margin-top: 1.75rem;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+.aino-cron-blueprints > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-block: 0.9375rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--ui-text-secondary);
+}
+.aino-cron-blueprints > summary::-webkit-details-marker {
+  display: none;
+}
+.aino-cron-blueprints > summary > span:first-child {
+  flex: 1;
+}
+.aino-cron-blueprints > summary > span:nth-child(2) {
+  font-size: var(--aino-text-section);
+}
+.aino-cron-blueprints > summary > svg {
+  transition: transform 150ms;
+}
+.aino-cron-blueprints[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.aino-cron-blueprints > p {
+  margin-bottom: 0.875rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.7;
+}
+.aino-cron-blueprint-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 1.25rem;
+}
+.aino-cron-page-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.25rem;
+  color: var(--ui-red);
+  font-size: var(--aino-text-caption);
+}
+.aino-cron-page [data-aino-empty-state] {
+  min-height: 15rem;
+  font-size: var(--aino-text-caption);
+}
+.aino-cron-page-loading {
+  height: 15rem;
+}
+@media (max-width: 47.5rem) {
+  .aino-cron-page .aino-cron-page-content {
+    padding-inline: 1.5rem;
+  }
+  .aino-cron-page-header {
+    flex-wrap: wrap;
+  }
+  .aino-cron-task-select {
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+  }
+  .aino-cron-task-copy {
+    flex-basis: calc(100% - 3rem);
+  }
+  .aino-cron-task-schedule {
+    max-width: 65%;
+    margin-inline-start: 2.6875rem;
+  }
+  .aino-cron-selected-detail {
+    padding-inline: 0.5rem;
+  }
+  .aino-cron-blueprint-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aino-cron-task-row,
+  .aino-cron-task-chevron,
+  .aino-cron-blueprints > summary > svg {
+    transition: none;
+  }
+}

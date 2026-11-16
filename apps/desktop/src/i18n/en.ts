@@ -35,6 +35,7 @@ import { enProfiles } from './en_profiles'
 import { enProjects } from './en_projects'
 import { enSharedMetrics } from './en_shared_metrics'
 import { sidebarMode } from './en_sidebar_mode'
+import { enSummary } from './en_summary_surface'
 import { enThemePicker } from './en_theme_picker'
 import { enUninstallSection } from './en_uninstall_section'
 import { enUpdateChannel } from './en_update_channel'
@@ -557,7 +558,7 @@ export const en: Translations = {
     hideSidebar: 'Hide sidebar',
     showSidebar: 'Show sidebar',
     search: 'Search',
-    searchTitle: 'Search sessions, views, and actions',
+    searchTitle: 'Find conversations across Bots',
     swapSidebarSides: 'Swap sidebar sides',
     hideRightSidebar: 'Hide right sidebar',
     showRightSidebar: 'Show right sidebar',
@@ -584,7 +585,7 @@ export const en: Translations = {
     conflictWith: label => `Also bound to “${label}”`,
     categories: {
       composer: 'Composer',
-      profiles: 'Profiles',
+      profiles: 'Manage Bots',
       session: 'Session',
       navigation: 'Navigation',
       view: 'View'
@@ -594,7 +595,7 @@ export const en: Translations = {
       'nav.commandPalette': 'Open command palette',
       'nav.commandCenter': 'Open command center',
       'nav.settings': 'Open settings',
-      'nav.profiles': 'Open profiles',
+      'nav.profiles': 'Manage Bots',
       'nav.capabilities': 'Open skills',
       'nav.messaging': 'Open messaging',
       'nav.artifacts': 'Open artifacts',
@@ -633,7 +634,7 @@ export const en: Translations = {
       'view.toggleReview': 'Toggle review pane',
       'view.toggleStatusbar': 'Toggle status bar',
       'view.toggleTabStrip': 'Toggle tabs',
-      'view.toggleProfileRail': 'Toggle profile rail',
+      'view.toggleProfileRail': 'Open Bot management',
       'view.toggleSimpleMode': 'Toggle Simple mode',
       'view.showFiles': 'Show file browser',
       'view.showBrowser': 'Toggle browser',
@@ -663,29 +664,29 @@ export const en: Translations = {
       'view.tabSlot.8': 'Switch to tab 8',
       'view.tabSlot.9': 'Switch to tab 9',
       'appearance.toggleMode': 'Toggle light / dark',
-      'profile.default': 'Switch to default profile',
-      'profile.switch.1': 'Switch to profile 1',
-      'profile.switch.2': 'Switch to profile 2',
-      'profile.switch.3': 'Switch to profile 3',
-      'profile.switch.4': 'Switch to profile 4',
-      'profile.switch.5': 'Switch to profile 5',
-      'profile.switch.6': 'Switch to profile 6',
-      'profile.switch.7': 'Switch to profile 7',
-      'profile.switch.8': 'Switch to profile 8',
-      'profile.switch.9': 'Switch to profile 9',
-      'profile.switch.10': 'Switch to profile 10',
-      'profile.switch.11': 'Switch to profile 11',
-      'profile.switch.12': 'Switch to profile 12',
-      'profile.switch.13': 'Switch to profile 13',
-      'profile.switch.14': 'Switch to profile 14',
-      'profile.switch.15': 'Switch to profile 15',
-      'profile.switch.16': 'Switch to profile 16',
-      'profile.switch.17': 'Switch to profile 17',
-      'profile.switch.18': 'Switch to profile 18',
-      'profile.next': 'Next profile',
-      'profile.prev': 'Previous profile',
-      'profile.toggleAll': 'Toggle all-profiles view',
-      'profile.create': 'Create profile',
+      'profile.default': 'Switch to default bot',
+      'profile.switch.1': 'Switch to bot 1',
+      'profile.switch.2': 'Switch to bot 2',
+      'profile.switch.3': 'Switch to bot 3',
+      'profile.switch.4': 'Switch to bot 4',
+      'profile.switch.5': 'Switch to bot 5',
+      'profile.switch.6': 'Switch to bot 6',
+      'profile.switch.7': 'Switch to bot 7',
+      'profile.switch.8': 'Switch to bot 8',
+      'profile.switch.9': 'Switch to bot 9',
+      'profile.switch.10': 'Switch to bot 10',
+      'profile.switch.11': 'Switch to bot 11',
+      'profile.switch.12': 'Switch to bot 12',
+      'profile.switch.13': 'Switch to bot 13',
+      'profile.switch.14': 'Switch to bot 14',
+      'profile.switch.15': 'Switch to bot 15',
+      'profile.switch.16': 'Switch to bot 16',
+      'profile.switch.17': 'Switch to bot 17',
+      'profile.switch.18': 'Switch to bot 18',
+      'profile.next': 'Next bot',
+      'profile.prev': 'Previous bot',
+      'profile.toggleAll': 'Open Bot management',
+      'profile.create': 'Create bot',
       'composer.send': 'Send message',
       'composer.newline': 'Insert newline',
       'composer.steer': 'Steer the running turn',
@@ -971,7 +972,7 @@ export const en: Translations = {
       model: 'Model',
       chat: 'Chat',
       appearance: 'Appearance',
-      workspace: 'Workspace',
+      workspace: 'Projects & files',
       safety: 'Safety',
       memory: 'Memory & Context',
       voice: 'Voice',
@@ -987,7 +988,7 @@ export const en: Translations = {
     },
     modeOptions: {
       light: { label: 'Light', description: 'Bright desktop surfaces' },
-      dark: { label: 'Dark', description: 'Low-glare workspace' },
+      dark: { label: 'Dark', description: 'Low-glare interface' },
       system: { label: 'System', description: 'Follow OS appearance' }
     },
     appearance: {
@@ -1077,8 +1078,7 @@ export const en: Translations = {
       composerPopoutTitle: 'Floating Composer',
       composerPopoutDesc: 'Allow dragging the composer out of its dock. When off, it stays docked at the bottom.',
       fileBrowserTitle: 'File Browser',
-      fileBrowserDesc:
-        'Show the file browser beside the chat when a workspace is open. The titlebar toggle changes this too.',
+      fileBrowserDesc: 'Show the file browser beside the chat. The titlebar toggle changes this too.',
       vibeHeartsTitle: 'Vibe Hearts',
       vibeHeartsDesc:
         'Floating hearts when you say thanks, ily, good bot, or send a heart. Separate from Message Reactions above.',
@@ -1099,7 +1099,7 @@ export const en: Translations = {
       themeTitle: 'Theme',
       themeDesc: 'Desktop palettes only. The selected mode is applied on top.',
       themeSearchPlaceholder: 'Search your themes or the VS Code Marketplace…',
-      themeProfileNote: profile => `Saved for the ${profile} profile — each profile keeps its own theme.`,
+      themeProfileNote: profile => `Saved for the ${profile} bot — each bot keeps its own theme.`,
       installTitle: 'Install from VS Code',
       installDesc:
         'Paste a Marketplace extension id (e.g. dracula-theme.theme-dracula) to convert its color theme into a desktop palette.',
@@ -1342,12 +1342,12 @@ export const en: Translations = {
     },
     about: { updates: 'Updates', channel: enUpdateChannel },
     poolLimits: {
-      warmBotBackendsAria: 'Profile connections kept warm',
-      warmBotBackendsTitle: 'Profile connections kept warm',
+      warmBotBackendsAria: 'Bot connections kept warm',
+      warmBotBackendsTitle: 'Bot connections kept warm',
       warmBotBackendsDesc:
         'Limits secondary profile connections kept available for quick switching. At the limit, hover prewarming stops and excess idle connections are reaped; manually opened or active profiles are never blocked or disconnected.',
-      backendIdleTimeoutAria: 'Profile connection idle timeout in milliseconds',
-      backendIdleTimeoutTitle: 'Profile connection idle timeout (ms)',
+      backendIdleTimeoutAria: 'Bot connection idle timeout in milliseconds',
+      backendIdleTimeoutTitle: 'Bot connection idle timeout (ms)',
       backendIdleTimeoutDesc:
         'How long an unused profile connection stays open before it is closed. This disconnects only an idle socket; it does not stop the shared Hermes gateway or its background jobs.'
     },
@@ -1598,8 +1598,8 @@ export const en: Translations = {
       alreadyRunning: 'Update already in progress',
       receipt: (id: string, outcome: string) => `Receipt ${id} · ${outcome}`,
       receiptVersions: (pre: string, post: string) => `${pre} → ${post}`,
-      scopesRestored: (profiles: string) => `Restored profiles: ${profiles}`,
-      scopeNotRestored: (profile: string, error: string) => `Profile “${profile}” not restored: ${error}`
+      scopesRestored: (profiles: string) => `Restored bots: ${profiles}`,
+      scopeNotRestored: (profile: string, error: string) => `Bot “${profile}” not restored: ${error}`
     },
     gateway: {
       loading: 'Loading gateway settings...',
@@ -1762,7 +1762,7 @@ export const en: Translations = {
     },
     profileScope: {
       appliesTo: 'Applies to',
-      editsProfile: profile => `Changes on this page apply to the “${profile}” profile.`
+      editsProfile: profile => `Changes on this page apply to the “${profile}” bot.`
     },
     mcp: {
       loading: 'Loading MCP servers...',
@@ -2583,7 +2583,7 @@ export const en: Translations = {
       halfDesktopHint: 'this app, same for every profile',
       halfAgent: 'Agent',
       halfAgentIn: (profile: string) => `Agent in ${profile}`,
-      defaultProfile: 'Hermes (default)',
+      defaultProfile: 'Aino (default)',
       kindAgent: 'Agent',
       kindDesktop: 'Desktop',
       kindBoth: 'Agent + Desktop',
@@ -2773,7 +2773,7 @@ export const en: Translations = {
   },
   gatewayGroupOpen: enGatewayGroupOpen,
   agents: {
-    extendedTranscript: 'Extended transcript',
+    extendedTranscript: 'Execution log',
     transcriptTruncated: 'Showing the latest 16 KiB',
     transcriptUnavailable: 'Live transcript unavailable',
 
@@ -2796,6 +2796,9 @@ export const en: Translations = {
     steerQueued: 'Queued for the next checkpoint',
     stopRequested: 'Stop requested',
     requestRejected: 'The subagent did not accept the request',
+    controlUnavailable: 'This subagent can only be viewed from this conversation',
+    requestFinished: 'The task has finished or is wrapping up. Check the latest results',
+    requestFailed: 'The action could not be sent. Please try again',
     delegation: index => `Delegation ${index}`,
     workers: count => `${count} workers`,
     workersActive: count => `${count} active`,
@@ -3040,8 +3043,8 @@ export const en: Translations = {
       toggleStatusbar: 'Toggle status bar',
       toggleTabs: 'Toggle tabs',
       keyboardShortcuts: 'Keyboard shortcuts',
-      exportProfile: 'Export profile…',
-      importProfile: 'Import profile…',
+      exportProfile: 'Export bot…',
+      importProfile: 'Import bot…',
       toggleTerminal: 'Toggle terminal',
       toggleLogs: 'Toggle logs',
       toggleYolo: 'Toggle yolo'
@@ -3431,7 +3434,7 @@ export const en: Translations = {
       filters: 'Filters',
       status: 'Status',
       pullRequest: 'Pull request',
-      profile: 'Profile',
+      profile: 'Bot',
       project: 'Project',
       archived: 'Archived',
       resetToDefaults: 'Reset to defaults',
@@ -3466,17 +3469,18 @@ export const en: Translations = {
       reorder: 'Reorder group',
       actions: 'Group actions'
     },
-    profileRail: 'Profile rail',
+    profileRail: 'Bot rail',
     nav: {
       'new-session': 'New session',
       capabilities: 'Capabilities',
       messaging: 'Messaging',
       artifacts: 'Artifacts',
       cron: 'Scheduled jobs',
-      profiles: 'Workspaces',
+      profiles: 'Manage Bots',
 
       skills: 'Capabilities'
     },
+    viewAllSessions: 'View all conversations',
     searchAria: 'Search sessions',
     searchPlaceholder: 'Search sessions…',
     clearSearch: 'Clear search',
@@ -3490,14 +3494,14 @@ export const en: Translations = {
     logs: 'Logs',
     cronJobs: 'Cron jobs',
     groupAriaGrouped: 'Show sessions as a single list',
-    groupAriaUngrouped: 'Group sessions by workspace',
+    groupAriaUngrouped: 'Group sessions by project',
     showProjects: 'Show projects',
     showSessions: 'Show sessions',
     groupTitleGrouped: 'Ungroup sessions',
-    groupTitleUngrouped: 'Group by workspace',
+    groupTitleUngrouped: 'Group by project',
     allPinned: 'Everything here is pinned. Unpin a chat to show it in recents.',
     shiftClickHint: 'Shift-click a chat to pin',
-    noWorkspace: 'No workspace',
+    noWorkspace: 'No project',
     projectEmpty: 'No sessions yet',
     projectLoadFailed: 'Could not load sessions',
     noSessions: 'No sessions yet',
@@ -3543,7 +3547,7 @@ export const en: Translations = {
       backgroundRunning: 'Background task running',
       draftSession: 'Draft — nothing sent yet',
       handoffOrigin: platform => `Handed off from ${platform}`,
-      ownedByProfile: profile => `Profile: ${profile}`,
+      ownedByProfile: profile => `Bot: ${profile}`,
       renamed: 'Renamed',
       renameFailed: 'Rename failed',
       renameTitle: 'Rename session',
@@ -3611,6 +3615,7 @@ export const en: Translations = {
   composer: {
     message: 'Message',
     wakingProfile: profile => `Waking up ${profile}…`,
+    placeholderTo: name => `Message ${name}, or type / to use a skill`,
     placeholderStarting: 'Starting Hermes...',
     placeholderReconnecting: 'Reconnecting to Hermes…',
     placeholderFollowUp: 'Send follow-up',
@@ -3697,8 +3702,8 @@ export const en: Translations = {
       '/worktree': 'Show, list, create, or prune isolated git worktrees',
       '/compress': 'Compress this conversation context',
       '/rollback': 'List or restore filesystem checkpoints (restores keep your hand-edits; --all overrides)',
-      '/export': 'Export a profile (config, skills, theme) to a shareable archive',
-      '/import': 'Import a shared profile archive as a new profile',
+      '/export': 'Export a bot (config, skills, theme) to a shareable archive',
+      '/import': 'Import a shared bot archive as a new bot',
       '/stop': 'Stop the active turn and background processes',
       '/pause': "Pause new work globally (emergency stop); '/pause off' resumes",
       '/bg': 'Run a prompt in a separate background session',
@@ -3720,7 +3725,7 @@ export const en: Translations = {
       '/context':
         'Show detailed context window view with usage gauge, category breakdown, compression stats, and throughput',
       '/whoami': 'Show your slash command access (admin / user)',
-      '/profile': 'Switch the active Hermes profile',
+      '/profile': 'Switch the active Aino bot',
       '/codex-runtime': 'Toggle codex app-server runtime for OpenAI/Codex models',
       '/personality': 'Set a predefined personality',
       '/battery': 'Toggle a color-coded battery indicator in the status bar',
@@ -4040,7 +4045,7 @@ export const en: Translations = {
       add: 'Add'
     },
     coding: {
-      title: 'Working tree',
+      title: 'Project',
       noBranch: 'No branch',
       detached: 'detached',
       clean: 'Clean',
@@ -4617,7 +4622,7 @@ export const en: Translations = {
       toggleTokensPerSecond: 'Tokens per second',
       toggleVersion: 'Version & updates',
       toggleFreeTier: 'Free tier',
-      toggleWorkspace: 'Workspace',
+      toggleWorkspace: 'Projects & files',
       cacheHitRateTitle: 'Prompt cache hit rate this session — cached tokens cost less, so higher is cheaper',
       tokensPerSecondTitle: 'Output tokens per second, averaged over the last 10 model calls',
       togglePlanUsage: 'Plan usage',
@@ -4796,8 +4801,8 @@ export const en: Translations = {
     tab: 'Preview',
     imageFit: 'Fit to panel',
     imageActualSize: 'Actual size (100%)',
-    pin: 'Pin to workspace',
-    unpin: 'Unpin from workspace',
+    pin: 'Pin to main view',
+    unpin: 'Unpin from main view',
     closePane: 'Close preview pane',
     loading: 'Loading preview',
     unavailable: 'Preview unavailable',
@@ -5091,6 +5096,7 @@ export const en: Translations = {
       processTitle: 'Activity',
 
       replyMetrics: {
+        usageAndCost: 'Usage and cost',
         duration: 'Duration',
         tokens: 'Used',
         context: 'Context',
@@ -5505,10 +5511,10 @@ export const en: Translations = {
     yoloToggleFailed: 'Could not toggle YOLO',
     profileStatus: current =>
       `Profile: ${current}. Use /profile <name> or the "New session" picker to start a chat in another profile.`,
-    unknownProfile: 'Unknown profile',
-    noProfileNamed: (target, available) => `No profile named "${target}". Available: ${available}`,
-    newChatsProfile: name => `New chats will use profile ${name}.`,
-    setProfileFailed: 'Failed to set profile',
+    unknownProfile: 'Unknown bot',
+    noProfileNamed: (target, available) => `No bot named "${target}". Available: ${available}`,
+    newChatsProfile: name => `New chats will use bot ${name}.`,
+    setProfileFailed: 'Failed to set bot',
     sttDisabled: 'Speech-to-text is disabled in settings.',
     stopFailed: 'Stop failed',
     regenerateFailed: 'Regenerate failed',
@@ -5816,8 +5822,8 @@ export const en: Translations = {
         text: 'Sessions, settings, skills and commands all answer to the palette.'
       },
       profiles: {
-        title: 'Profiles are separate',
-        text: 'Each one is its own Hermes — own keys, own memory, own sessions.'
+        title: 'Bots are separate',
+        text: 'Each Bot has its own identity, configuration, model, skills, memory and chats.'
       },
       'composer-mentions': {
         title: 'Attach and command',
@@ -5829,7 +5835,7 @@ export const en: Translations = {
         action: 'Update now'
       },
       'right-pane': {
-        title: 'The working pane',
+        title: 'Tools beside your chat',
         text: 'Files, terminal, review and the in-app browser share the right side.'
       }
     }
@@ -5880,7 +5886,7 @@ export const en: Translations = {
       inboxStyle: 'Inbox style',
       status: 'Status',
       pullRequest: 'Pull request',
-      profile: 'Profile',
+      profile: 'Bot',
       project: 'Project',
       archived: 'Archived',
       resetDefaults: 'Reset to defaults',
@@ -5891,7 +5897,7 @@ export const en: Translations = {
         updated: 'Updated',
         project: 'Project',
         status: 'Status',
-        profile: 'Profile',
+        profile: 'Bot',
         created: 'Created',
         tokens: 'Tokens',
         cost: 'Cost',
@@ -6405,117 +6411,5 @@ export const en: Translations = {
     }
   },
 
-  summary: {
-    aria: 'Session resources',
-    title: 'Session resources',
-    close: 'Close session resources',
-    environment: {
-      title: 'Environment',
-      project: 'Project',
-      workingDirectory: 'Working directory',
-      model: 'Model',
-      provider: 'Provider',
-      profile: 'Profile',
-      branch: 'Branch',
-      connection: 'Connection',
-      noProject: 'No project is open',
-      noSession: 'No session selected',
-      local: 'Local',
-      remote: 'Remote'
-    },
-    changes: {
-      title: 'Workspace changes',
-      files: count => `${count} file${count === 1 ? '' : 's'}`,
-      additions: 'Added',
-      deletions: 'Removed',
-      staged: count => `${count} staged`,
-      noChanges: 'No uncommitted changes',
-      unavailable: 'Changes are temporarily unavailable',
-      viewDiff: 'View diff',
-      refresh: 'Refresh changes',
-      stage: 'Stage file',
-      unstage: 'Unstage file',
-      revert: 'Revert file'
-    },
-    git: {
-      title: 'Git status',
-      branch: 'Branch',
-      tracking: 'Tracking',
-      ahead: count => `${count} ahead`,
-      behind: count => `${count} behind`,
-      commit: 'Recent commit',
-      pullRequest: 'Pull request',
-      push: 'Push',
-      reviewAndCommit: 'Review, commit or create PR',
-      clean: 'No commits ahead or behind',
-      unavailable: 'Git is unavailable for this workspace',
-      noRepository: 'This workspace is not a Git repository'
-    },
-    agents: {
-      title: 'Subagents',
-      running: count => `${count} running`,
-      completed: count => `${count} completed`,
-      failed: count => `${count} failed`,
-      viewAll: 'View all agents',
-      none: 'No subagents in this session',
-      dispatched: count => `${count} dispatched`,
-      finished: 'Finished',
-      status: {
-        running: 'Running',
-        queued: 'Queued',
-        completed: 'Completed',
-        failed: 'Failed',
-        interrupted: 'Interrupted',
-        dispatched: 'Dispatched'
-      }
-    },
-    context: {
-      title: 'Context usage',
-      noData: 'No context data yet'
-    },
-    sources: {
-      title: 'Sources',
-      add: 'Add source',
-      image: 'Image attachment',
-      skill: 'Skill',
-      tool: 'Tool',
-      attachments: 'Attachments',
-      previews: 'Previews',
-      links: 'Links',
-      none: 'No sources in this session',
-      open: 'Open source'
-    },
-    outputs: {
-      title: 'Outputs',
-      create: 'Create a file or website',
-      prompt: 'Help me create a file or website: '
-    },
-    plan: {
-      title: 'Plan',
-      progress: (done, total) => `${done} of ${total} completed`,
-      recorded: 'Last recorded plan',
-      status: { pending: 'Pending', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' }
-    },
-    background: {
-      title: 'Background processes',
-      status: { running: 'Running', done: 'Completed', failed: 'Failed' }
-    },
-    resources: {
-      title: 'System resources',
-      ram: 'RAM',
-      gpu: 'GPU',
-      unavailable: 'System resources unavailable',
-      retry: 'Retry resource check'
-    },
-    state: {
-      showAll: count => `View all (${count})`,
-      showLess: 'Show less',
-      details: 'Details',
-      historyUnavailable: 'Could not load this conversation’s history',
-      loading: 'Loading…',
-      unavailable: 'Temporarily unavailable',
-      noData: 'No data yet',
-      retry: 'Retry'
-    }
-  }
+  summary: enSummary
 }

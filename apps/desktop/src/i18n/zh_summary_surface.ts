@@ -1,16 +1,18 @@
 import type { SummaryTranslations } from './types_summary_surface'
 
 export const zhSummary: SummaryTranslations = {
-  aria: '会话资源',
-  title: '会话资源',
-  close: '关闭会话资源',
+  aria: '会话摘要',
+  title: '会话摘要',
+  description: '本次会话的产物、任务和执行记录集中在这里。',
+  close: '收起会话摘要',
+  currentSession: '当前会话',
   environment: {
     title: '环境信息',
     project: '项目',
     workingDirectory: '工作目录',
     model: '模型',
     provider: '提供商',
-    profile: '工作区',
+    profile: '机器人',
     branch: '分支',
     connection: '连接状态',
     noProject: '未打开项目',
@@ -19,7 +21,7 @@ export const zhSummary: SummaryTranslations = {
     remote: '远程'
   },
   changes: {
-    title: '工作区变更',
+    title: '项目更改',
     files: count => `${count} 个文件`,
     additions: '新增',
     deletions: '删除',
@@ -43,10 +45,11 @@ export const zhSummary: SummaryTranslations = {
     push: '推送',
     reviewAndCommit: '审查、提交或创建 PR',
     clean: '无领先或落后的提交',
-    unavailable: '此工作区暂不可用 Git',
-    noRepository: '此工作区不是 Git 仓库'
+    unavailable: '当前项目暂时无法使用 Git',
+    noRepository: '当前项目不是 Git 仓库'
   },
   agents: {
+    history: count => `历史子任务（${count}）`,
     title: '子智能体',
     running: count => `运行中 ${count}`,
     completed: count => `已完成 ${count}`,
@@ -77,15 +80,17 @@ export const zhSummary: SummaryTranslations = {
     attachments: '附件',
     previews: '预览',
     links: '链接',
-    none: '此会话暂无来源',
+    none: '添加文件或网页后显示在这里。',
     open: '打开来源'
   },
   outputs: {
     title: '输出内容',
+    none: '本次会话还没有生成文件。',
     create: '创建文件或网页',
     prompt: '帮我创建文件或网页：'
   },
   plan: {
+    history: count => `历史计划（${count}）`,
     title: '任务计划',
     progress: (done, total) => `已完成 ${done} / ${total} 项`,
     recorded: '会话中最后记录的计划',

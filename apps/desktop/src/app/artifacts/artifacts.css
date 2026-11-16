@@ -6,13 +6,13 @@
 .artifacts-view [data-aino-page-header],
 .artifacts-results-content {
   width: 100%;
-  max-width: 1088px;
+  max-width: var(--aino-page-width, 65rem);
   margin-inline: auto;
-  padding-inline: 32px;
+  padding-inline: var(--aino-page-gutter, 3.375rem);
 }
 
 .artifacts-heading {
-  padding-block: calc(var(--titlebar-height) + 40px) 24px;
+  padding-block: calc(var(--titlebar-height) + var(--aino-page-top, 2.625rem)) 2.0625rem;
 }
 
 .artifacts-heading h1 {
@@ -21,6 +21,35 @@
   font-size: var(--aino-text-page-title);
   font-weight: 600;
   letter-spacing: -0.025em;
+}
+
+.artifacts-heading p {
+  margin-top: 8px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-label);
+  line-height: 1.7;
+}
+
+.artifacts-file-table [data-slot='aino-data-table'] {
+  font-size: var(--aino-text-label);
+}
+
+.artifacts-file-table thead {
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+
+.artifacts-file-table th {
+  padding-block: 11px;
+}
+
+.artifacts-file-table tbody tr {
+  height: 72px;
+}
+
+.artifacts-file-table tbody td {
+  padding-block: 8px;
 }
 
 .artifacts-view [data-aino-page-header] {
@@ -37,10 +66,10 @@
   .artifacts-heading,
   .artifacts-view [data-aino-page-header],
   .artifacts-results-content {
-    padding-inline: 20px;
+    padding-inline: var(--aino-page-gutter, 1.25rem);
   }
 
   .artifacts-heading {
-    padding-top: calc(var(--titlebar-height) + 24px);
+    padding-top: calc(var(--titlebar-height) + var(--aino-page-top, 1.5rem));
   }
 }

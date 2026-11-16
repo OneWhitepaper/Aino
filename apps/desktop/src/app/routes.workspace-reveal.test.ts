@@ -30,7 +30,8 @@ import {
   routeSessionId,
   sessionRoute,
   SETTINGS_ROUTE,
-  syncWorkspaceRoute
+  syncWorkspaceRoute,
+  WEBHOOKS_ROUTE
 } from './routes'
 
 vi.mock('@/components/pane-shell/tree/store', async importOriginal => ({
@@ -138,9 +139,7 @@ describe('syncWorkspaceRoute', () => {
 
   it.each([
     ['a session route', sessionRoute('sess-a')],
-    ['the new-chat route', NEW_CHAT_ROUTE],
-    ['another overlay', CRON_ROUTE],
-    ['yet another overlay', AGENTS_ROUTE]
+    ['the new-chat route', NEW_CHAT_ROUTE]
   ])('leaves the tab alone on %s', (_label, to) => {
     syncWorkspaceRoute(to)
 
@@ -148,7 +147,7 @@ describe('syncWorkspaceRoute', () => {
     expect(revealTreePane).not.toHaveBeenCalled()
   })
 
-  it.each([SETTINGS_ROUTE, `${SETTINGS_ROUTE}?tab=keys`, PROFILES_ROUTE])(
+  it.each([SETTINGS_ROUTE, `${SETTINGS_ROUTE}?tab=keys`, PROFILES_ROUTE, CRON_ROUTE, AGENTS_ROUTE, WEBHOOKS_ROUTE])(
     'fronts the management workspace on %s',
     to => {
       syncWorkspaceRoute(to)
@@ -160,14 +159,17 @@ describe('syncWorkspaceRoute', () => {
 })
 
 describe('navigateToWorkspacePage', () => {
-  it.each([CAPABILITIES_ROUTE, PROFILES_ROUTE])('navigates and fronts %s even on a re-click', to => {
-    const navigate = vi.fn()
+  it.each([CAPABILITIES_ROUTE, PROFILES_ROUTE, CRON_ROUTE, WEBHOOKS_ROUTE])(
+    'navigates and fronts %s even on a re-click',
+    to => {
+      const navigate = vi.fn()
 
-    navigateToWorkspacePage(navigate, to)
+      navigateToWorkspacePage(navigate, to)
 
-    expect(navigate).toHaveBeenCalledWith(to, undefined)
-    expect(fronted()).toBe(true)
-  })
+      expect(navigate).toHaveBeenCalledWith(to, undefined)
+      expect(fronted()).toBe(true)
+    }
+  )
 
   it.each([
     `${CAPABILITIES_ROUTE}?tab=skills`,
@@ -187,11 +189,11 @@ describe('navigateToWorkspacePage', () => {
     expect(navigate).toHaveBeenCalledWith(ARTIFACTS_ROUTE, { replace: true })
   })
 
-  it('navigates without fronting for chat and modal overlay targets', () => {
+  it('navigates without fronting for existing and new conversation routes', () => {
     const navigate = vi.fn()
 
     navigateToWorkspacePage(navigate, sessionRoute('sess-a'))
-    navigateToWorkspacePage(navigate, CRON_ROUTE)
+    navigateToWorkspacePage(navigate, NEW_CHAT_ROUTE)
 
     expect(navigate).toHaveBeenCalledTimes(2)
     expect(revealTreePane).not.toHaveBeenCalled()

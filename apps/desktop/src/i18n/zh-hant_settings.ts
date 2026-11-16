@@ -399,12 +399,12 @@ export const zhHantSettings = {
       missing: '這個外掛程式沒有設定頁面，可能已停用或解除安裝。'
     },
     poolLimits: {
-      warmBotBackendsAria: '保留的設定檔連線數',
-      warmBotBackendsTitle: '保留的設定檔連線數',
+      warmBotBackendsAria: '保留的機器人連線數',
+      warmBotBackendsTitle: '保留的機器人連線數',
       warmBotBackendsDesc:
         '限制為快速切換而保留的次要設定檔連線。達到上限後會停止滑鼠懸停預熱並關閉多餘的閒置連線；手動開啟或使用中的設定檔仍可使用。',
-      backendIdleTimeoutAria: '設定檔連線閒置逾時（毫秒）',
-      backendIdleTimeoutTitle: '設定檔連線閒置逾時（毫秒）',
+      backendIdleTimeoutAria: '機器人連線閒置逾時（毫秒）',
+      backendIdleTimeoutTitle: '機器人連線閒置逾時（毫秒）',
       backendIdleTimeoutDesc:
         '未使用的設定檔連線在關閉前保留的時間。只會中斷閒置 socket，不會停止共用 Hermes 閘道或其背景工作。'
     },
@@ -581,7 +581,7 @@ export const zhHantSettings = {
       model: '模型',
       chat: '聊天',
       appearance: '外觀',
-      workspace: '工作區',
+      workspace: '專案與檔案',
       safety: '安全性',
       memory: '記憶與上下文',
       voice: '語音',
@@ -597,7 +597,7 @@ export const zhHantSettings = {
     },
     modeOptions: {
       light: { label: '明亮', description: '明亮的桌面介面' },
-      dark: { label: '深色', description: '降低眩光的工作區' },
+      dark: { label: '深色', description: '低眩光介面' },
       system: { label: '跟隨系統', description: '跟隨作業系統外觀' }
     },
     appearance: {
@@ -681,7 +681,7 @@ export const zhHantSettings = {
       composerPopoutTitle: '懸浮輸入框',
       composerPopoutDesc: '允許將輸入框拖出底部停靠區。關閉時，輸入框停靠在底部。',
       fileBrowserTitle: '檔案瀏覽器',
-      fileBrowserDesc: '開啟工作區時，在聊天旁顯示檔案瀏覽器。標題列的切換按鈕也會變更此設定。',
+      fileBrowserDesc: '在聊天旁顯示檔案瀏覽器。標題列的切換按鈕也會變更此設定。',
       vibeHeartsTitle: '心情愛心',
       vibeHeartsDesc: '當你說謝謝、愛你、good bot 或送出愛心時飄出的愛心。與上方的訊息回應是兩回事。',
       embedsTitle: '內嵌預覽',
@@ -700,7 +700,7 @@ export const zhHantSettings = {
       themeTitle: '主題',
       themeDesc: '僅限桌面端的調色盤。所選模式會套用在其上。',
       themeSearchPlaceholder: '搜尋本機主題或 VS Code Marketplace…',
-      themeProfileNote: profile => `已為「${profile}」設定檔儲存——每個設定檔保留各自的主題。`,
+      themeProfileNote: profile => `已為「${profile}」機器人儲存——每個機器人保留各自的主題。`,
       installTitle: '從 VS Code 安裝',
       installDesc: '貼上 Marketplace 擴充功能 ID（例如 dracula-theme.theme-dracula），將其配色主題轉換為桌面調色盤。',
       installPlaceholder: 'publisher.extension',
@@ -1166,7 +1166,7 @@ export const zhHantSettings = {
     },
     profileScope: {
       appliesTo: '套用至',
-      editsProfile: profile => `此頁面的變更將套用至「${profile}」設定檔。`
+      editsProfile: profile => `此頁面的變更將套用至「${profile}」機器人。`
     },
     mcp: {
       loading: '正在載入 MCP 伺服器...',
@@ -1222,6 +1222,9 @@ export const zhHantSettings = {
     model: {
       pages: {
         description: '管理預設模型，以及不同任務使用的模型。',
+        preferences: '模型偏好',
+        moreSettings: '更多模型設定',
+        fallbackDescription: '主要模型暫時無法使用時，可選擇備用模型。',
         auxiliaryTask: '任務',
         auxiliaryPurpose: '用途',
         auxiliaryModel: '使用模型',

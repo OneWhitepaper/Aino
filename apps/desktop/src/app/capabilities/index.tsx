@@ -2,6 +2,7 @@ import './ui/page.css'
 
 import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
@@ -56,6 +57,31 @@ interface CapabilitiesViewProps extends React.ComponentProps<'section'> {
   fixedConnection?: string
 }
 
+interface CapabilitiesLoadGateProps {
+  error: unknown
+  failed: boolean
+  onRefresh: () => Promise<void>
+}
+
+function CapabilitiesLoadGate({ error, failed, onRefresh }: CapabilitiesLoadGateProps) {
+  const { t } = useI18n()
+
+  return failed ? (
+    <PanelEmpty
+      action={
+        <Button onClick={() => void onRefresh()} size="sm">
+          {t.skills.refresh}
+        </Button>
+      }
+      description={error instanceof Error ? error.message : undefined}
+      icon="error"
+      title={t.skills.skillsLoadFailed}
+    />
+  ) : (
+    <PageLoader label={t.skills.loading} />
+  )
+}
+
 /** The Capabilities page SHELL: tab selection, the search header, the profile /
  *  connection scope, the refresh hotkey, and the dispatch to one tab component
  *  per tab. Each tab owns its list, detail pane and writes; the two installed
@@ -69,6 +95,11 @@ export function CapabilitiesView({
   ...props
 }: CapabilitiesViewProps) {
   const { t } = useI18n()
+  const [searchParams] = useSearchParams()
+  const routeFixedProfile = searchParams.get('profile')?.trim() || undefined
+  const routeFixedConnection = searchParams.get('connection')?.trim() || undefined
+  const scopedProfile = fixedProfile ?? (embedded ? undefined : routeFixedProfile)
+  const scopedConnection = fixedConnection ?? (embedded ? undefined : routeFixedConnection)
   // Both hooks run unconditionally (rules of hooks); embedded picks the local
   // one so tab clicks inside a dialog don't rewrite the page URL.
   const routeTab = useRouteEnumParam('tab', CAPABILITY_MODES, 'skills')
@@ -79,7 +110,7 @@ export function CapabilitiesView({
   const [query, setQuery] = useState('')
   const [guideOpen, setGuideOpen] = useState(false)
 
-  const scope = useCapabilityScope({ fixedConnection, fixedProfile })
+  const scope = useCapabilityScope({ fixedConnection: scopedConnection, fixedProfile: scopedProfile })
 
   // The two installed lists the tab pills count. They are fetched here, as a
   // pair, because the counts stay live for the tab the user is NOT on.
@@ -118,20 +149,9 @@ export function CapabilitiesView({
   const gated = mode === 'toolsets'
   const pending = gated && !(skills && toolsets)
 
-  const loadGate = !pending ? null : skillsFailed || toolsetsFailed ? (
-    <PanelEmpty
-      action={
-        <Button onClick={() => void refreshCapabilities()} size="sm">
-          {t.skills.refresh}
-        </Button>
-      }
-      description={skillsError instanceof Error ? skillsError.message : undefined}
-      icon="error"
-      title={t.skills.skillsLoadFailed}
-    />
-  ) : (
-    <PageLoader label={t.skills.loading} />
-  )
+  const loadGate = pending ? (
+    <CapabilitiesLoadGate error={skillsError} failed={skillsFailed || toolsetsFailed} onRefresh={refreshCapabilities} />
+  ) : null
 
   const tabContent = {
     // The gateway instance backs ONLY the live `reload.mcp` RPC, and it is the

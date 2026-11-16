@@ -201,6 +201,18 @@ class TestFallbackEvictionHonorsChannelOverrides:
     def test_fallback_off_the_channel_model_still_evicts(self, monkeypatch):
         assert self._evicted_after_turn(monkeypatch, _make_source(), "fallback/model") is True
 
+    @pytest.mark.parametrize('model,provider_fallback,evicted', [
+        ('upstream-model', False, False), ('fallback-model', False, True), ('upstream-model', True, True),
+    ])
+    def test_managed_catalog_id_uses_the_bound_primary_model_for_fallback_detection(
+        self, monkeypatch, model, provider_fallback, evicted,
+    ):
+        assert self._evicted_after_turn(
+            monkeypatch, _make_source(), model, channel_model='catalog-a', provider='aino',
+            _primary_runtime={'model': 'upstream-model', 'provider': 'aino'},
+            _provider_fallback_active=provider_fallback,
+        ) is evicted
+
     _WELCOME = "https://welcome-api.nousresearch.com/v1"
 
     @pytest.mark.parametrize("global_model", ["nous/welcome", "default/model"])

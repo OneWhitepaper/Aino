@@ -7,7 +7,6 @@ import { $botChatScopes } from './bot-chat-scope'
 import {
   $collaborationGroups,
   collaborationGroupsFor,
-  CollaborationTaskActionError,
   interruptCollaborationTask,
   steerCollaborationTask
 } from './collaboration-capsule'
@@ -22,7 +21,8 @@ import {
 } from './session'
 import * as router from './session-request-router'
 import { $sessionStates, $sessionTiles } from './session-states'
-import { $subagentsBySession, upsertSubagent } from './subagents'
+import { SubagentControlError } from './subagent-control'
+import { $subagentsBySession, reconcileSubagentSnapshot, upsertSubagent } from './subagents'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -163,7 +163,7 @@ describe('collaboration capsule facts and commands', () => {
     const task = $collaborationGroups.get()[0]!.tasks[0]!
     const request = vi.spyOn(router, 'requestForSessionProfile').mockResolvedValue({ found: false })
 
-    await expect(interruptCollaborationTask(task)).rejects.toBeInstanceOf(CollaborationTaskActionError)
+    await expect(interruptCollaborationTask(task)).rejects.toBeInstanceOf(SubagentControlError)
     request.mockRejectedValue(new Error('connection closed'))
     await expect(interruptCollaborationTask(task)).rejects.toMatchObject({ code: 'request-failed' })
     expect($subagentsBySession.get()['bot-runtime']?.[0]?.status).toBe('running')
@@ -453,6 +453,35 @@ describe('collaboration capsule facts and commands', () => {
     setLiveWorkRosterSource('bot-route', snapshot, at + 10, ['bot-chat'], owner)
     expect($collaborationGroups.get()[0]!.tasks).toHaveLength(1)
     expect($collaborationGroups.get()[0]!.tasks[0]!.status).toBe('interrupted')
+  })
+
+  it.each([
+    { canControl: false, acceptingSteer: true },
+    { canControl: true, acceptingSteer: false }
+  ])('keeps exact-owner control state when a newer roster updates activity: %o', authority => {
+    const owner = installBackgroundBot()
+    reconcileSubagentSnapshot('bot-runtime', [
+      {
+        subagent_id: 'worker',
+        status: 'running',
+        can_control: authority.canControl,
+        accepting_steer: authority.acceptingSteer
+      }
+    ])
+    const at = $subagentsBySession.get()['bot-runtime']![0]!.updatedAt
+
+    setLiveWorkRosterSource(
+      'bot-route',
+      [{ session_id: 'bot-chat', subagents: 1, workers: [{ subagent_id: 'worker', status: 'running' }] }],
+      at + 20,
+      ['bot-chat'],
+      owner
+    )
+
+    expect($collaborationGroups.get()[0]!.tasks[0]).toMatchObject({
+      ...authority,
+      updatedAt: at + 20
+    })
   })
 
   it('clears an old live indicator only when a newer read of its own source proves it idle', () => {

@@ -3,7 +3,6 @@ import { useStore } from '@nanostores/react'
 import { type ComponentProps, type MouseEvent, type ReactNode, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
-import { hudTargetSessionId } from '@/app/hud/handoff'
 import { NotificationStack } from '@/components/notifications'
 import { $paneVisible, togglePaneVisible } from '@/components/pane-shell/tree/store'
 import { Badge } from '@/components/ui/badge'
@@ -16,18 +15,19 @@ import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { cn } from '@/lib/utils'
 import { recordAction } from '@/store/desktop-metrics'
-import { canUseHud, toggleHud } from '@/store/hud'
 import { $interfaceMode, shownInMode, type Tiered } from '@/store/interface-mode'
 import { $panesFlipped } from '@/store/layout'
+import { setSessionPickerOpen } from '@/store/session'
 import { $unreadSessionCount } from '@/store/session-dot-state'
 import { TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
 
-import { appViewForPath, hidesFixedTitlebarClusters, isRouteBlockingSurface } from '../routes'
+import { appViewForPath, hidesFixedTitlebarClusters } from '../routes'
 
 import { SummaryToggle } from './summary-toggle'
 import { TITLEBAR_CHROME_CHANGED_EVENT, titlebarButtonClass, titlebarToolClusterClass } from './titlebar'
 import { TitlebarHistoryControls } from './titlebar-history-controls'
 import { TitlebarIcon } from './titlebar-icon'
+import { TitlebarPageIdentity } from './titlebar-page-identity'
 import { type TitlebarHistoryState, useTitlebarHistory } from './use-titlebar-history'
 import { useTitlebarPanelEdges } from './use-titlebar-panel-edges'
 
@@ -138,20 +138,10 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // App actions stay together on the right; history and navigation stay left.
   const systemTools: TitlebarTool[] = [
     {
-      ...TITLEBAR_FIXED_TOOLS.hud,
-      // No `title`: TitlebarToolButton passes `title` to TipKeybindLabel as a
-      // text OVERRIDE, so a long sentence there replaces the short label and
-      // crowds the ⌘⇧H hint off the tooltip. Label only — the hint is appended
-      // from the action registry, same as every other tool here.
-      actionId: 'view.toggleHud',
-      hidden: !canUseHud(),
-      icon: <TitlebarIcon name="hud" />,
-      id: 'hud',
-      label: t.titlebar.enterHud,
-      onSelect: () => {
-        triggerHaptic('open')
-        toggleHud(hudTargetSessionId())
-      }
+      icon: <TitlebarIcon name="search" />,
+      id: 'search',
+      label: t.titlebar.searchTitle,
+      onSelect: () => setSessionPickerOpen(true)
     }
   ]
 
@@ -159,7 +149,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     ...TITLEBAR_FIXED_TOOLS.terminal,
     actionId: 'view.showTerminal',
     active: terminalVisible,
-    icon: <TitlebarIcon name={terminalVisible ? 'layout-panel' : 'layout-panel-off'} />,
+    icon: <TitlebarIcon name="terminal" />,
     id: 'terminal',
     label: terminalVisible ? t.rightSidebar.terminalHide : t.keybinds.actions['view.showTerminal'],
     onSelect: () => {
@@ -223,17 +213,13 @@ function TitlebarClusters({
   // Overlays own the window. These clusters are `fixed` at a higher z-index
   // than the overlay card, so they'd otherwise bleed over it — hide them (and
   // the nested titleBar slots) and let the overlay's own chrome take over.
-  if (isRouteBlockingSurface(view) && view !== 'settings') {
-    return null
-  }
-
-  const routeOwnsWindow = isRouteBlockingSurface(view)
+  const routeOwnsWindow = view !== 'chat' && view !== 'extension'
   const pageOwnsChrome = !routeOwnsWindow && hidesFixedTitlebarClusters(view) && pageOwnsTitlebar
   const showFixedTools = !routeOwnsWindow && !pageOwnsChrome
 
   const leftClusterClass = cn(
     titlebarToolClusterClass,
-    'left-(--titlebar-controls-left) top-(--titlebar-controls-top) gap-1'
+    'left-(--titlebar-controls-left) top-(--titlebar-controls-top) gap-1.5'
   )
 
   // A contributed full page (`extension`) yields the fixed clusters only while
@@ -252,6 +238,7 @@ function TitlebarClusters({
       {routeOwnsWindow && (
         <div className={leftClusterClass} data-titlebar-cluster="left">
           <TitlebarHistoryControls history={history} />
+          <TitlebarPageIdentity view={view} />
         </div>
       )}
       {!routeOwnsWindow && (
@@ -274,7 +261,7 @@ function TitlebarClusters({
           aria-label={t.shell.paneControls}
           className={cn(
             titlebarToolClusterClass,
-            'right-[calc(var(--titlebar-tools-right)+var(--shell-preview-toolbar-gap,0))] top-[calc(var(--titlebar-controls-top)+var(--right-rail-top-inset,0px))] gap-1'
+            'right-[calc(var(--titlebar-tools-right)+var(--shell-preview-toolbar-gap,0))] top-[calc(var(--titlebar-controls-top)+var(--right-rail-top-inset,0px))] gap-1.5'
           )}
           data-slot="titlebar-pane-controls"
         >
@@ -317,16 +304,21 @@ function TitlebarAppControls({
   return (
     <div
       aria-label={showFixedTools ? t.shell.appControls : undefined}
-      className={cn(titlebarToolClusterClass, 'right-(--titlebar-tools-right) top-(--titlebar-controls-top) gap-1')}
+      className={cn(titlebarToolClusterClass, 'right-(--titlebar-tools-right) top-(--titlebar-controls-top) gap-1.5')}
       data-slot={showFixedTools ? 'titlebar-app-controls' : undefined}
       data-titlebar-cluster="right"
     >
-      <NotificationStack placement="toolbar" triggerClassName={titlebarButtonClass} />
       {showFixedTools && (
         <>
           {systemTools.map(tool => (
             <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
           ))}
+        </>
+      )}
+      <NotificationStack placement="toolbar" triggerClassName={titlebarButtonClass} />
+      {showFixedTools && (
+        <>
+          <span aria-hidden className="mx-1 h-[17px] w-px bg-(--aino-workbench-divider)" />
           {showSummary && <SummaryToggle />}
           {endTools.map(tool => (
             <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />

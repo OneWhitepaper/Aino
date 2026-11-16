@@ -1,5 +1,7 @@
 import { NO_PROJECT_ID } from '@/app/chat/sidebar/projects/workspace-groups'
+import { translateNow } from '@/i18n'
 import { $defaultProfileRoute } from '@/store/default-profile'
+import { activeGatewayConnectionId } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
 import {
   $newChatProfile,
@@ -18,39 +20,33 @@ import {
   windowProfileOverride
 } from '@/store/windows'
 
-/** Only generic New Session actions consult this preference. Explicit profile,
- * agent, project and existing-session actions keep their captured owner. */
-export function defaultNewSessionTarget(): { profile: string; route: AgentProfileRoute | null } | null {
+/** Ordinary chats use Aino on the selected service. Bot routes stay explicit. */
+export function defaultNewSessionTarget(): { profile: string; route: AgentProfileRoute | null } {
   const project = $projectScope.get()
 
-  if (project !== ALL_PROJECTS && project !== NO_PROJECT_ID) {
-    return null
-  }
-
-  // An ordinary New Window inherits its opener only for boot. Reusing that
-  // seed here would undo a later device/profile selection. Only an explicit
-  // "Open profile in new window" makes the peer's launch route a default.
+  // Ordinary windows follow later service selections. A dedicated Bot window
+  // retains its source, while an ordinary chat there still belongs to Aino.
   const profile = !isPeerInstanceWindow() || isProfilePinnedWindow() ? windowProfileOverride() : null
   const saved = profile ? { connectionId: windowConnectionOverride(), profile } : $defaultProfileRoute.get()
 
-  if (!saved) {
-    return null
-  }
+  // A project belongs to the service whose tree is on screen. Its cwd is
+  // preserved by the caller, separately from the assistant's Profile.
+  const connectionId =
+    project !== ALL_PROJECTS && project !== NO_PROJECT_ID
+      ? activeGatewayConnectionId()
+      : saved
+        ? saved.connectionId
+        : activeGatewayConnectionId()
 
-  // A captured target can explicitly choose the legacy profile door (null
-  // route), distinct from no default and from the override-bypassing `local`.
+  // A saved null connection explicitly chooses the legacy primary door.
   return {
-    profile: saved.profile,
-    route: saved.connectionId === null ? null : { connectionId: saved.connectionId, profile: saved.profile }
+    profile: 'default',
+    route: connectionId === null ? null : { connectionId, profile: 'default' }
   }
 }
 
 export function prepareDefaultNewSession(): void {
   const target = defaultNewSessionTarget()
-
-  if (!target) {
-    return
-  }
 
   if (target.route) {
     $newChatProfile.set(target.profile)
@@ -65,6 +61,6 @@ export function prepareDefaultNewSession(): void {
     : ensureGatewayProfile(target.profile, { forceLegacyRoute: true })
 
   void activation.catch(error => {
-    notifyError(error, `Failed to open profile "${target.profile}"`)
+    notifyError(error, translateNow('profiles.failedLoad'))
   })
 }

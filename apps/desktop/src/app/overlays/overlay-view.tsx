@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect } from 'react'
+import { createContext, type CSSProperties, type ReactNode, useContext, useEffect } from 'react'
 
 import { TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
 import { TitlebarIcon } from '@/app/shell/titlebar-icon'
@@ -7,6 +7,7 @@ import { translateNow } from '@/i18n'
 import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from '@/lib/escape-layers'
 import { triggerHaptic } from '@/lib/haptics'
 import { cn } from '@/lib/utils'
+import { isAuxiliaryWindow } from '@/store/windows'
 
 // Shared top clearance for overlay content that sits *beside* the floating
 // close button (which is absolute at `0.1875rem + titlebar/2`, -translate-y-1/2,
@@ -15,6 +16,9 @@ import { cn } from '@/lib/utils'
 // overlay (system, agents, cron, …) — change it here, not per-surface.
 // Main content sits *under* the X (top-right) and keeps its own taller pad.
 export const OVERLAY_TOP_CLEARANCE = 'pt-[calc(var(--titlebar-height)/2-0.4375rem)]'
+
+/** Route-owned management screens share the app frame; nested dialogs remain dialogs. */
+export const RoutePageSurface = createContext(false)
 
 interface OverlayViewProps {
   children: ReactNode
@@ -42,6 +46,8 @@ export function OverlayView({
   rootClassName,
   titlebarActions
 }: OverlayViewProps) {
+  const fullPage = useContext(RoutePageSurface)
+
   const closeOverlay = () => {
     triggerHaptic('close')
     onClose()
@@ -75,13 +81,14 @@ export function OverlayView({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-(--z-modal-backdrop) bg-(--aino-scrim) backdrop-blur-[1px]',
+        fullPage
+          ? 'fixed bottom-0 right-0 z-40 bg-(--ui-editor-surface-background)'
+          : 'fixed inset-0 z-(--z-modal-backdrop) bg-(--aino-scrim) backdrop-blur-[1px]',
         // Equidistant inset on every side. The top value is driven by the
         // titlebar height so the card clears the OS traffic-lights vertically;
         // since the card top already sits below them, the left needs no extra
         // inset — keeping all sides equal so the card is ~full-width at any size.
-        'p-[calc(var(--titlebar-height)+0.625rem)]',
-        'sm:p-[calc(var(--titlebar-height)+0.875rem)]'
+        !fullPage && 'p-[calc(var(--titlebar-height)+0.625rem)] sm:p-[calc(var(--titlebar-height)+0.875rem)]'
       )}
       // Every OverlayView-based overlay (command-center, agents, cron, profiles,
       // star map, …) covers the chat while the composer stays mounted
@@ -90,6 +97,8 @@ export function OverlayView({
       // leak into the hidden composer (and the overlay's own bare-key shortcuts,
       // e.g. star map's Space, keep working).
       data-aino-overlay=""
+      data-aino-route-page={fullPage || undefined}
+      data-aino-workspace-frame={fullPage && !isAuxiliaryWindow() ? '' : undefined}
       data-overlay-surface=""
       onClick={event => {
         if (event.target === event.currentTarget) {
@@ -102,13 +111,19 @@ export function OverlayView({
       // below its in-flow title bar), and CSS vars inherit through the DOM —
       // so a fixed overlay mounted inside a zone would read 0 and bleed to
       // the edges. Re-pin the real height at the overlay root.
-      style={{ '--titlebar-height': `${TITLEBAR_HEIGHT}px` } as CSSProperties}
+      style={
+        {
+          '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
+          ...(fullPage ? { top: TITLEBAR_HEIGHT, left: isAuxiliaryWindow() ? 0 : 'var(--aino-activity-width)' } : {})
+        } as CSSProperties
+      }
     >
       <div className="relative h-full min-h-0">
         <div
           className={cn(
             'relative flex h-full min-h-0 flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-editor-surface-background) text-[length:var(--aino-text-label)] text-foreground shadow-nous',
-            rootClassName
+            rootClassName,
+            fullPage && 'rounded-none border-0 shadow-none'
           )}
           // Marks the card as a RAISED surface for window glass: while the field
           // behind it thins to show the desktop, this card stays near-opaque

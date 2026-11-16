@@ -6,6 +6,8 @@ import secrets
 import threading
 import time
 
+from .managed_model_execution import ManagedExecutionBindings
+
 
 class ManagedBindingError(ValueError):
     pass
@@ -48,6 +50,8 @@ class _Authority:
     controller: object = field(default=None, repr=False)
     binding: ManagedModelBinding | None = field(default=None, repr=False)
     timer: threading.Timer | None = field(default=None, repr=False)
+    generation: int | None = None
+    detached: bool = False
 
 
 def transport_principal(transport):
@@ -68,11 +72,18 @@ def transport_principal(transport):
     return None
 
 
-def _interrupt(binding, session):
+def _interrupt(binding, session, generation=None):
     if not binding or binding.purpose == 'image':
         return
+    with get_registry()._lock:
+        current = get_registry()._active.get((binding.session_id, binding.purpose))
+        if current and current.revision != binding.binding_revision:
+            return
     if interrupt := session.get("_interrupt_managed"):
-        interrupt()
+        if generation is None:
+            interrupt()
+        else:
+            interrupt(generation, binding.binding_revision)
         return
     if not session.get("running"):
         return
@@ -125,11 +136,12 @@ def persisted_managed_model_metadata(binding: ManagedModelBinding) -> dict:
     }
 
 
-class ManagedModelRegistry:
+class ManagedModelRegistry(ManagedExecutionBindings):
     def __init__(self):
         self._lock = threading.RLock()
         self._pending: dict[tuple[str, str], _Authority] = {}
         self._active: dict[tuple[str, str], _Authority] = {}
+        self._executions: dict[tuple[str, str], _Authority] = {}
         self._revision = 0
 
     @staticmethod
@@ -155,7 +167,7 @@ class ManagedModelRegistry:
                     'platform_origin': owner.platform_origin, 'user_id': owner.user_id})):
             raise ManagedBindingError('managed_model_identity_mismatch')
 
-    def issue(self, sid, session, peer, owner, model_id, *, purpose='chat'):
+    def issue(self, sid, session, peer, owner, model_id, *, purpose='chat', handoff=False):
         key = self._key(sid, purpose)
         with self._lock:
             selected = session.get('managed_image_params') or {}
@@ -168,6 +180,8 @@ class ManagedModelRegistry:
                 # after the previous lease and turn ended; its revision retires every old ticket.
                 session['managed_image_params'] = {'model_id': model_id, 'platform_owner': requested_owner}
             self._validate_selection(session, owner, model_id, purpose)
+            if handoff:
+                self._handoff_transport(key, session, peer)
             self._revision += 1
             self._cancel(self._pending.pop(key, None))
             # Renewing a lease must not interrupt the current turn or mutate
@@ -229,6 +243,7 @@ class ManagedModelRegistry:
             a.binding = binding
             a.timer = None
             self._active[key] = a
+            self._replace_execution(key, previous, a)
             if seconds is not None:
                 a.timer = threading.Timer(seconds, self._expire, args=(key, a))
                 a.timer.daemon = True
@@ -250,7 +265,7 @@ class ManagedModelRegistry:
         with self._lock:
             a = self._active.get(key)
             now = datetime.now(UTC)
-            if (not a or a.session is not session or a.peer is not session.get("transport")
+            if (not a or a.detached or a.session is not session or a.peer is not session.get("transport")
                     or session.get("_closing") or a.controller is not peer
                     or a.revision != binding.binding_revision
                     or binding.credential_type != 'lease' or a.binding.credential_type != 'lease'
@@ -268,6 +283,7 @@ class ManagedModelRegistry:
             replacement = _Authority(session, a.peer, a.owner, a.model_id, a.revision, "", a.deadline,
                                      controller=peer, binding=binding)
             self._active[key] = replacement
+            self._replace_execution(key, a, replacement)
             replacement.timer = threading.Timer((binding.expires_at - now).total_seconds(), self._expire,
                                                 args=(key, replacement))
             replacement.timer.daemon = True
@@ -278,8 +294,9 @@ class ManagedModelRegistry:
             if self._active.get(sid) is not a:
                 return
             self._active.pop(sid)
+            self._forget_execution(sid, a)
         # Never call session/agent code holding the registry lock.
-        _interrupt(a.binding, a.session)
+        _interrupt(a.binding, a.session, a.generation)
 
     def get(self, session_id, session=None, *, purpose='chat'):
         key = self._key(session_id, purpose)
@@ -288,14 +305,17 @@ class ManagedModelRegistry:
             a = self._active.get(key)
             if not a:
                 return None
+            if a.detached:
+                return None
             if (a.session.get("_closing") or a.peer is not a.session.get("transport")
                     or (session is not None and session is not a.session)
                     or (a.binding.expires_at is not None and a.binding.expires_at <= datetime.now(UTC))):
                 expired = self._active.pop(key)
+                self._forget_execution(key, expired)
                 self._cancel(expired)
             else:
                 return a.binding
-        _interrupt(expired.binding, expired.session)
+        _interrupt(expired.binding, expired.session, expired.generation)
         return None
 
     def reusable(self, sid, session, peer, owner, model_id, revision, credential_version, *, purpose='chat'):
@@ -307,7 +327,7 @@ class ManagedModelRegistry:
         with self._lock:
             selection = session.get('managed_image_params' if purpose == 'image' else 'managed_model_params')
             a = self._active.get(key)
-            if (not selection or key in self._pending or not a or a.session is not session
+            if (not selection or key in self._pending or not a or a.detached or a.session is not session
                     or a.peer is not session.get('transport')
                     or session.get('_closing') or a.controller is not peer
                     or a.owner != owner or a.model_id != model_id or a.revision != revision
@@ -336,9 +356,10 @@ class ManagedModelRegistry:
                 if peer is not a.controller and peer is not a.peer:
                     raise ManagedBindingError("managed_binding_forbidden")
                 removed.append(pool.pop(key))
+                self._forget_execution(key, a)
                 self._cancel(a)
         for a in removed:
-            _interrupt(a.binding, a.session)
+            _interrupt(a.binding, a.session, a.generation)
         return bool(removed)
 
     def clear_session(self, session_id, *, purpose=None):
@@ -346,22 +367,14 @@ class ManagedModelRegistry:
             for pool in (self._pending, self._active):
                 for key in list(pool):
                     if key[0] == session_id and (purpose is None or key[1] == purpose):
-                        self._cancel(pool.pop(key))
-
-    def detach_transport(self, peer):
-        removed = []
-        with self._lock:
-            for pool in (self._pending, self._active):
-                for sid, a in list(pool.items()):
-                    if peer is a.peer or peer is a.controller:
-                        removed.append(pool.pop(sid))
+                        a = pool.pop(key)
+                        self._forget_execution(key, a)
                         self._cancel(a)
-        return removed
 
     @staticmethod
     def interrupt_detached(removed):
         for a in removed:
-            _interrupt(a.binding, a.session)
+            _interrupt(a.binding, a.session, a.generation)
 
     def disconnect(self, peer):
         self.interrupt_detached(self.detach_transport(peer))

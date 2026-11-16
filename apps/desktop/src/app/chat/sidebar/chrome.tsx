@@ -323,7 +323,7 @@ export function SidebarGroupRow({
               aria-expanded={toggle.open}
               aria-label={toggle.ariaLabel}
               className={cn(
-                'flex flex-1 items-center self-stretch rounded-sm bg-transparent p-0',
+                'aino-project-disclosure flex flex-1 items-center self-stretch rounded-sm bg-transparent p-0',
                 SIDEBAR_FOCUS_VISIBLE
               )}
               data-row-actions

@@ -41,6 +41,39 @@ function Transcript({ messages }: { messages: ThreadMessage[] }) {
   )
 }
 
+it('keeps focused process details available when the final answer arrives', async () => {
+  const running = {
+    ...assistantMessage(),
+    content: [{ type: 'text', text: progress, displayPhase: 'commentary' }, tool],
+    status: { type: 'running' }
+  } as ThreadMessage
+
+  const { container, rerender } = render(<Transcript messages={[userMessage(), running]} />)
+  const toolSummary = container.querySelector('[data-tool-summary]') as HTMLElement
+  fireEvent.click(within(toolSummary).getByRole('button'))
+  const detail = within(container).getByRole('button', { name: 'Read canvas.ts' })
+  detail.focus()
+
+  rerender(
+    <Transcript
+      messages={[
+        userMessage(),
+        {
+          ...running,
+          content: [...running.content, { type: 'text', text: answer, displayPhase: 'final' }],
+          status: { type: 'complete', reason: 'stop' }
+        } as ThreadMessage
+      ]}
+    />
+  )
+
+  const header = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+  await waitFor(() => expect(within(header).getByRole('button').getAttribute('aria-expanded')).toBe('true'))
+  expect(detail.closest('[hidden]')).toBeNull()
+  expect(window.document.activeElement).toBe(detail)
+  expect(within(container).getByText(answer).closest('[hidden]')).toBeNull()
+})
+
 it.each(['live', 'history', 'mixed-final'])(
   'folds the entire process while keeping the explicit final answer outside (%s)',
   shape => {
@@ -140,7 +173,7 @@ it.each([false, true])(
       />
     )
 
-    await waitFor(() => expect(container.querySelector('[data-slot="aui_response-process-header"]')).toBeNull())
+    await waitFor(() => expect(within(header).queryByRole('button')).toBeNull())
     expect(within(container).getByText(progress).closest('[hidden]')).toBeNull()
     expect(within(container).getByText(answer).closest('[hidden]')).toBeNull()
 
@@ -155,11 +188,15 @@ it.each([false, true])(
     const interrupted = {
       ...assistantMessage(),
       id: 'interrupted',
-      content: [tool, { type: 'text', text: 'Partial output' }]
-    } as ThreadMessage
+      content: [tool, { type: 'text', text: 'Partial output', displayPhase: 'final' }],
+      metadata: { custom: { interrupted: true } }
+    } as unknown as ThreadMessage
 
     rerender(<Transcript messages={[userMessage(), interrupted]} />)
-    await waitFor(() => expect(container.querySelector('[data-slot="aui_response-process-header"]')).toBeNull())
+    await waitFor(() => {
+      const partialHeader = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+      expect(within(partialHeader).queryByRole('button')).toBeNull()
+    })
     expect(within(container).getByText('Partial output').closest('[hidden]')).toBeNull()
   }
 )

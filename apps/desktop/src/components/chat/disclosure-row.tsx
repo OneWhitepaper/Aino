@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils'
 // uses to escape the message padding) and its own expanded body.
 //
 // Affordance:
-//   - The caret follows the label and appears on the toggle's hover or
-//     keyboard focus. Opacity reserves its width; touch keeps it visible.
+//   - The caret follows the label. Conversation styling keeps it visible at
+//     rest and strengthens it on hover/focus without changing its footprint.
 //   - The hit target fits the title, rather than stretching to the message
 //     edge. Opening the detail does not change the header's layout.
 //   - `trailing` stays in flow (e.g. a duration timer), so the title always

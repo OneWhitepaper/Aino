@@ -18,6 +18,7 @@ interface ToolPanelControlsProps {
   activate: (id: string) => void
   onHide?: () => void
   canMaximize?: boolean
+  showTabList?: boolean
 }
 
 export function ToolPanelControls({
@@ -26,7 +27,8 @@ export function ToolPanelControls({
   title,
   activate,
   onHide,
-  canMaximize = true
+  canMaximize = true,
+  showTabList = true
 }: ToolPanelControlsProps) {
   const { t } = useI18n()
   const maximized = useStore($maximizedToolGroup) === groupId
@@ -37,20 +39,22 @@ export function ToolPanelControls({
       className="flex shrink-0 items-center gap-0.5 px-1 [-webkit-app-region:no-drag]"
       onPointerDown={event => event.stopPropagation()}
     >
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button aria-label={t.toolPanel.listTabs} size="icon-xs" variant="ghost">
-            <Codicon name="chevron-down" size="0.8125rem" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {panes.map(id => (
-            <DropdownMenuItem key={id} onSelect={() => activate(id)}>
-              {title(id)}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {showTabList && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label={t.toolPanel.listTabs} size="icon-xs" variant="ghost">
+              <Codicon name="chevron-down" size="0.8125rem" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {panes.map(id => (
+              <DropdownMenuItem key={id} onSelect={() => activate(id)}>
+                {title(id)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {canMaximize && (
         <Tip label={maxLabel}>
           <Button

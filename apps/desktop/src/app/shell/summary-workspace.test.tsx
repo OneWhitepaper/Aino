@@ -7,6 +7,7 @@ import { $workspaceIsPage } from '@/app/routes'
 import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { group, split } from '@/components/pane-shell/tree/model'
 import { $activeTreeGroup, $layoutTree } from '@/components/pane-shell/tree/store'
+import { $workspaceMode } from '@/components/pane-shell/workspace-scope'
 import { Button } from '@/components/ui/button'
 import { I18nProvider } from '@/i18n'
 import { $summaryOpen } from '@/store/summary'
@@ -43,12 +44,75 @@ afterEach(() => {
   cleanup()
   $summaryOpen.set(false)
   $workspaceIsPage.set(false)
+  $workspaceMode.set('sessions')
   $activeTreeGroup.set(null)
   $layoutTree.set(null)
   vi.restoreAllMocks()
 })
 
 describe('summary workspace', () => {
+  it('uses the approved Bot summary width while retaining the ordinary draft and its layout', () => {
+    $workspaceMode.set('bots')
+    const view = render(<Workspace />)
+    const draft = screen.getByRole('textbox', { name: 'Draft' })
+    act(() => $summaryOpen.set(true))
+    expect(view.container.querySelector<HTMLElement>('[data-slot="summary-rail"]')!.style.width).toBe('320px')
+    act(() => $workspaceMode.set('sessions'))
+    expect(view.container.querySelector<HTMLElement>('[data-slot="summary-rail"]')!.style.width).toBe('344px')
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
+    expect((draft as HTMLTextAreaElement).value).toBe('Unsent message')
+  })
+
+  it('settles the reading width immediately and retains only outgoing paint during a tool handoff', () => {
+    let left = 1100
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.slot === 'summary-rail' ? new DOMRect(left, 44, 344, 600) : new DOMRect(300, 44, 1144, 600)
+    })
+    const view = render(<Workspace />)
+    const draft = screen.getByRole('textbox', { name: 'Draft' })
+    draft.focus()
+
+    act(() => $summaryOpen.set(true))
+    const rail = view.container.querySelector<HTMLElement>('[data-slot="summary-rail"]')!
+    expect(rail.style.width).toBe('344px')
+    expect(rail.style.position).toBe('')
+
+    // Moving to an equal-size split does not deliver a ResizeObserver event.
+    left = 900
+    act(() => $summaryOpen.set(false))
+    expect(rail.style.position).toBe('fixed')
+    expect(rail.style.left).toBe('900px')
+    expect(rail.style.width).toBe('344px')
+    expect(rail.hasAttribute('inert')).toBe(true)
+    expect(draft.ownerDocument.activeElement).toBe(draft)
+
+    act(() => $summaryOpen.set(true))
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).toBe(rail)
+    expect(rail.style.position).toBe('')
+    expect(rail.style.left).toBe('')
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
+  })
+
+  it.each(['resize', 'sash'])('yields outgoing paint immediately to a %s gesture', action => {
+    const view = render(<Workspace />)
+    act(() => $summaryOpen.set(true))
+    act(() => $summaryOpen.set(false))
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).not.toBeNull()
+
+    if (action === 'resize') {
+      act(() => window.dispatchEvent(new Event('resize')))
+    } else {
+      const sash = window.document.createElement('div')
+      sash.setAttribute('role', 'separator')
+      window.document.body.append(sash)
+      fireEvent.pointerDown(sash)
+      sash.remove()
+    }
+
+    expect(view.container.querySelector('[data-slot="summary-rail"]')).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBeTruthy()
+  })
+
   it.each([632, 880, 1200])(
     'keeps resources on the right at chat width %s without replacing the draft',
     async width => {
@@ -152,7 +216,7 @@ describe('summary workspace', () => {
 
   it('keeps the draft mounted and editable beside a non-modal summary until toggled closed', async () => {
     render(<Workspace />)
-    const toggle = screen.getByRole('button', { name: 'Session resources' })
+    const toggle = screen.getByRole('button', { name: 'Session summary' })
     const ownerDocument = toggle.ownerDocument
     const draft = screen.getByRole('textbox', { name: 'Draft' }) as HTMLTextAreaElement
     const panelId = toggle.getAttribute('aria-controls')!
@@ -189,7 +253,7 @@ describe('summary workspace', () => {
 
   it('refreshes the wired session contents without closing or replacing the summary surface', async () => {
     const view = render(<Workspace />)
-    const toggle = screen.getByRole('button', { name: 'Session resources' })
+    const toggle = screen.getByRole('button', { name: 'Session summary' })
     const ownerDocument = toggle.ownerDocument
     await act(async () => fireEvent.click(toggle))
     const panel = ownerDocument.getElementById(toggle.getAttribute('aria-controls')!)

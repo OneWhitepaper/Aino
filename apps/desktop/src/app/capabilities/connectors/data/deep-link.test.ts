@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryClient } from '@/lib/query-client'
-import { setPrimaryGateway } from '@/store/gateway'
+import { setPrimaryGateway, setPrimaryGatewayConnectionId } from '@/store/gateway'
 
 import { renameLinkTarget } from '../hosted-dialog'
 import type { AccountRow } from '../types'
@@ -26,6 +26,7 @@ const row = (connectionId: string, alias: string): AccountRow => ({
 afterEach(() => {
   resetRouteLinksForTests()
   setPrimaryGateway(null)
+  setPrimaryGatewayConnectionId(null)
   vi.restoreAllMocks()
 })
 
@@ -50,6 +51,26 @@ describe('the chat Rename link goes by account id', () => {
 })
 
 describe('a link is acted on once, by the page on its scope', () => {
+  it.each(['local', 'studio'])(
+    'keeps an explicit %s connection pin even when it is the active connection',
+    connectionId => {
+      setPrimaryGatewayConnectionId(connectionId)
+      const params = new URLSearchParams({ connector: 'gmail', profile: 'writer', connection: connectionId })
+
+      expect(claimRouteLink('pinned', params, 'writer')).toBe(false)
+      expect(claimRouteLink('pinned', params, { connectionId: 'another', profile: 'writer' })).toBe(false)
+      expect(claimRouteLink('pinned', params, { connectionId, profile: 'writer' })).toBe(true)
+    }
+  )
+
+  it('keeps a cross-connection link pinned to its owner', () => {
+    setPrimaryGatewayConnectionId('local')
+    const params = new URLSearchParams({ connector: 'gmail', profile: 'writer', connection: 'studio' })
+
+    expect(claimRouteLink('remote', params, { connectionId: 'local', profile: 'writer' })).toBe(false)
+    expect(claimRouteLink('remote', params, { connectionId: 'studio', profile: 'writer' })).toBe(true)
+  })
+
   it('leaves a link for another profile alone and lets only the first mounted page take it', () => {
     const params = new URLSearchParams({ connector: 'gmail', profile: 'b', rename: 'ca_b' })
 

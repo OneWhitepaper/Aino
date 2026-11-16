@@ -4,16 +4,20 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { onComposerFocusRequest, onComposerInsertRequest, onComposerSubmitRequest } from '@/app/chat/composer/focus'
+import { $workspaceMode, $workspaceOwnerLabels } from '@/components/pane-shell/workspace-scope'
 import { I18nProvider } from '@/i18n'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { Activity } from '@/lib/icons'
+import { $botChatScopes } from '@/store/bot-chat-scope'
 import { $previewTabs } from '@/store/preview'
 import { $previewStatusBySession } from '@/store/preview-status'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $projectTree } from '@/store/projects'
 import { $activeSessionId, $connection, $selectedStoredSessionId, $sessions, $workspaceCwdOwner } from '@/store/session'
 import { $sessionStates } from '@/store/session-states'
+import { $summaryOpen } from '@/store/summary'
 import { $toolSession } from '@/store/tool-session'
+import { stubMenuDomApis } from '@/test/jsdom'
 import { makeSessionInfo } from '@/test/session-info'
 import type { SessionMessagesResponse } from '@/types/hermes'
 
@@ -23,6 +27,7 @@ import { SummarySection } from './summary-section'
 import { SummaryPane } from './index'
 
 beforeEach(() => {
+  $workspaceMode.set('sessions')
   $projectTree.set([])
   $selectedStoredSessionId.set(null)
   $workspaceCwdOwner.set(null)
@@ -32,6 +37,9 @@ beforeEach(() => {
   $previewStatusBySession.set({})
   $sessionStates.set({})
   $sessions.set([])
+  $summaryOpen.set(false)
+  $botChatScopes.set({})
+  $workspaceOwnerLabels.set({})
 })
 
 afterEach(() => {
@@ -54,6 +62,62 @@ function renderSummary(content = <SummaryPane />) {
 }
 
 describe('SummaryPane', () => {
+  it('keeps the reviewed Bot output and source sections visible with honest empty state and scoped creation', async () => {
+    $workspaceMode.set('bots')
+    const insert = vi.fn()
+    const focus = vi.fn()
+    const stopInsert = onComposerInsertRequest(insert)
+    const stopFocus = onComposerFocusRequest(focus)
+
+    try {
+      renderSummary()
+      expect(screen.getByText('本次会话的产物、任务和执行记录集中在这里。')).toBeTruthy()
+      expect(screen.getByRole('heading', { name: '输出内容' })).toBeTruthy()
+      expect(screen.getByText('本次会话还没有生成文件。')).toBeTruthy()
+      expect(screen.getByRole('heading', { name: '来源' })).toBeTruthy()
+      expect(screen.getByText('添加文件或网页后显示在这里。')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: '创建文件或网页' }))
+      await waitFor(() =>
+        expect(insert).toHaveBeenCalledWith({ mode: 'block', target: 'main', text: '帮我创建文件或网页：' })
+      )
+      fireEvent.click(screen.getByRole('button', { name: '添加来源' }))
+      expect(focus).toHaveBeenLastCalledWith({ target: 'main', typeChar: '@' })
+    } finally {
+      stopInsert()
+      stopFocus()
+    }
+  })
+
+  it('shows the owning conversation title and closes without changing the selected conversation', () => {
+    $sessions.set([makeSessionInfo({ id: 'summary-title', title: 'Browser review', connection_id: 'local' })])
+    $selectedStoredSessionId.set('summary-title')
+    $summaryOpen.set(true)
+    renderSummary()
+
+    expect(screen.getByText('Browser review')).toBeTruthy()
+    stubMenuDomApis()
+    fireEvent.pointerDown(screen.getByRole('button', { name: '操作' }), { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('menuitem', { name: '收起会话摘要' }))
+    expect($summaryOpen.get()).toBe(false)
+    expect($selectedStoredSessionId.get()).toBe('summary-title')
+  })
+
+  it('uses the current Bot name for its canonical relationship chat without changing its stored title', () => {
+    $sessions.set([makeSessionInfo({ id: 'bot-summary', title: 'Bot Chat', connection_id: 'local' })])
+    $selectedStoredSessionId.set('bot-summary')
+    $botChatScopes.set({
+      'bot-summary': { workspaceMode: 'bots', workspaceOwnerKey: 'bot-owner', workspaceTabTitle: 'Bot Chat' }
+    })
+    $workspaceOwnerLabels.set({ 'bot-owner': 'Research assistant' })
+    renderSummary()
+
+    expect(screen.getByText('Research assistant')).toBeTruthy()
+    expect(screen.queryByText('Bot Chat')).toBeNull()
+    act(() => $workspaceOwnerLabels.set({ 'bot-owner': 'Documentation assistant' }))
+    expect(screen.getByText('Documentation assistant')).toBeTruthy()
+    expect($sessions.get()[0]?.title).toBe('Bot Chat')
+  })
+
   it('keeps creation available beside existing outputs and addresses an editable draft to its owning composer', async () => {
     const insert = vi.fn()
     const focus = vi.fn()
@@ -118,8 +182,8 @@ describe('SummaryPane', () => {
 
       const section = (await screen.findByRole('heading', { name: '来源' })).closest('section')!
       const list = within(section)
-      const output = within(screen.getByRole('heading', { name: '输出内容' }).closest('section')!)
-      const expand = list.getByRole('button', { name: '查看全部（6）' })
+      const output = within(screen.getByRole('heading', { name: /^输出内容/ }).closest('section')!)
+      const expand = await list.findByRole('button', { name: '查看全部（6）' })
       expect(expand.getAttribute('aria-expanded')).toBe('false')
       expect(list.queryByRole('button', { name: `打开来源: ${sources[5]}` })).toBeNull()
       fireEvent.click(expand)
@@ -150,7 +214,10 @@ describe('SummaryPane', () => {
   it('shows output resources without generating a prose overview', async () => {
     const api = vi.fn(async (_request: { path: string }) => ({
       session_id: 'summary-cited',
-      messages: [{ role: 'assistant', content: '[Report](/work/report.pdf)' }]
+      messages: [
+        { role: 'tool', tool_name: 'document_export', content: JSON.stringify({ output_path: '/work/report.pdf' }) },
+        { role: 'assistant', content: '[Report](/work/report.pdf)' }
+      ]
     }))
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
@@ -159,7 +226,7 @@ describe('SummaryPane', () => {
     renderSummary()
 
     expect(await screen.findByRole('button', { name: '打开来源: report.pdf' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '输出内容' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^输出内容/ })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '会话概览' })).toBeNull()
     expect(api.mock.calls.some(([request]) => request.path.includes('/summary?'))).toBe(false)
   })
@@ -200,9 +267,10 @@ describe('SummaryPane', () => {
     $activeSessionId.set('refresh-runtime')
     renderSummary()
 
-    const outputSection = screen.getByRole('heading', { name: '输出内容' }).closest('section')!
-    await waitFor(() => expect(outputSection.getAttribute('data-state')).toBe('ready'))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /^输出内容/ })).toBeNull())
+    expect(screen.getByRole('button', { name: '创建文件或网页' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '来源' })).toBeNull()
+    expect(screen.queryByText('添加文件或网页后显示在这里。')).toBeNull()
 
     messages = [{ role: 'user', content: source }]
     act(() => $sessionStates.set({ 'refresh-runtime': { ...state, busy: true } }))
@@ -219,11 +287,13 @@ describe('SummaryPane', () => {
   it('keeps ordinary chat compact and only reveals resources belonging to its runtime and durable history', async () => {
     renderSummary()
 
-    expect(screen.getByRole('complementary', { name: '会话资源' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '会话资源' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: '会话摘要' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '会话摘要' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '创建文件或网页' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '环境信息' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '来源' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /^输出内容/ })).toBeNull()
+    expect(screen.queryByText('添加文件或网页后显示在这里。')).toBeNull()
 
     const api = vi.fn(async (_request: { path: string }) => ({
       session_id: 'summary-a',
@@ -361,6 +431,22 @@ describe('SummaryPane', () => {
     expect(await screen.findByText('暂时无法读取此会话的历史记录')).toBeTruthy()
     expect(screen.queryByText('new.pdf')).toBeNull()
     expect(api).toHaveBeenCalledTimes(calls)
+  })
+
+  it('keeps source creation discoverable in the summary menu when its empty section is omitted', () => {
+    const focus = vi.fn()
+    const unsubscribe = onComposerFocusRequest(focus)
+
+    try {
+      renderSummary()
+      expect(screen.queryByRole('heading', { name: '来源' })).toBeNull()
+      stubMenuDomApis()
+      fireEvent.pointerDown(screen.getByRole('button', { name: '操作' }), { button: 0, ctrlKey: false })
+      fireEvent.click(screen.getByRole('menuitem', { name: '添加来源' }))
+      expect(focus).toHaveBeenCalledWith({ target: 'main', typeChar: '@' })
+    } finally {
+      unsubscribe()
+    }
   })
 })
 

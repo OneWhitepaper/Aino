@@ -3,7 +3,7 @@ import { atom } from 'nanostores'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
 import { PRIMARY_SESSION_VIEW, SessionViewProvider } from '@/app/chat/session-view'
-import { WORKSPACE_AVATAR_AREA } from '@/components/pane-shell/workspace-scope'
+import { $workspaceOwnerLabels, WORKSPACE_AVATAR_AREA } from '@/components/pane-shell/workspace-scope'
 import { registry } from '@/contrib/registry'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
@@ -28,6 +28,7 @@ beforeEach(() => {
   const tiles = $sessionTiles.get()
   const states = $sessionStates.get()
   const rotation = $activeSessionStoredIdRotation.get()
+  const labels = $workspaceOwnerLabels.get()
 
   restore = () => {
     $activeSessionId.set(active)
@@ -37,6 +38,7 @@ beforeEach(() => {
     $sessionTiles.set(tiles)
     $sessionStates.set(states)
     $activeSessionStoredIdRotation.set(rotation)
+    $workspaceOwnerLabels.set(labels)
   }
 
   unregister = registry.register({
@@ -80,6 +82,7 @@ it('keeps split portraits bound to exact durable owners across a runtime rebind 
     'stored-a': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:source-a::default' },
     'stored-b': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:source-b::default' }
   })
+  $workspaceOwnerLabels.set({ 'bot:source-a::default': 'Research', 'bot:source-b::default': 'Documentation' })
   $sessionTiles.set([
     { runtimeId: 'runtime-a', storedSessionId: 'stored-a' },
     { runtimeId: 'runtime-b', storedSessionId: 'stored-b' }
@@ -96,6 +99,8 @@ it('keeps split portraits bound to exact durable owners across a runtime rebind 
   const owners = () => [...container.querySelectorAll('[data-testid="portrait"]')].map(el => el.textContent)
   expect(owners()).toEqual(['bot:source-a::default', 'bot:source-b::default'])
   expect(container.querySelectorAll('[data-slot="aui_assistant-brand"]')).toHaveLength(1)
+  const names = () => [...container.querySelectorAll('[data-slot="aui_assistant-name"]')].map(el => el.textContent)
+  expect(names()).toEqual(['Research', 'Documentation', 'Aino'])
 
   act(() => {
     $activeSessionId.set('runtime-b')
@@ -112,6 +117,9 @@ it('keeps split portraits bound to exact durable owners across a runtime rebind 
   })
   expect(owners()).toEqual(['bot:source-a::default', 'bot:source-b::default'])
   expect(container.querySelectorAll('[data-slot="aui_assistant-brand"]')).toHaveLength(1)
+  expect(names()).toEqual(['Research', 'Documentation', 'Aino'])
+  act(() => $workspaceOwnerLabels.set({ ...$workspaceOwnerLabels.get(), 'bot:source-a::default': 'Research renamed' }))
+  expect(names()).toEqual(['Research renamed', 'Documentation', 'Aino'])
 })
 
 it('uses a neutral bot identity while the portrait plugin is absent, never a foreground portrait or Aino mark', () => {

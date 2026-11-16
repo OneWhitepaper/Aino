@@ -46,6 +46,7 @@ it('retains exact child outcomes across parent continuations but releases them w
   expect($subagentsBySession.get().owner).toEqual([])
   const groups = summaryDelegations(history, $subagentsBySession.get().owner)
   expect(groups[0].rows.map(row => row.status)).toEqual(['completed', 'failed'])
+  expect(groups[0].rows).toMatchObject([{ summary: 'Verified.' }, { summary: 'Unavailable.' }])
   expect(summaryAgentCounts(groups)).toEqual({ completed: 1, failed: 1, running: 0, dispatched: 0 })
   expect(summaryDelegations(history, $subagentsBySession.get().other ?? [])[0].rows.map(row => row.status)).toEqual([
     'dispatched',
@@ -59,6 +60,30 @@ it('retains exact child outcomes across parent continuations but releases them w
 })
 
 describe('summary activity history', () => {
+  it('retains an unmatched native result explicitly without guessing from its raw activity', () => {
+    upsertSubagent(
+      'owner',
+      { subagent_id: 'native', goal: 'Review', status: 'completed', summary: 'Verified final result' },
+      true,
+      'subagent.complete'
+    )
+    const [native] = $subagentsBySession.get().owner!
+
+    const [group] = summaryDelegations(
+      [],
+      [{ ...native!, stream: [{ at: 1, kind: 'tool', text: 'Raw terminal activity' }] }]
+    )
+
+    expect(group!.rows[0]).toMatchObject({
+      subagentId: 'native',
+      summary: 'Verified final result',
+      activity: ['Raw terminal activity'],
+      status: 'completed'
+    })
+    const [withoutSummary] = summaryDelegations([], [{ ...native!, summary: undefined }])
+    expect(withoutSummary!.rows[0]).toMatchObject({ summary: undefined })
+  })
+
   it('retains the last recorded plan and completed delegation after ephemeral runtime stores are cleared', () => {
     const raw: SessionMessage[] = [
       {

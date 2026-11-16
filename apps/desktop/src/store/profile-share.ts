@@ -12,6 +12,7 @@
  * dialogs and the backend share the filesystem for local and pooled backends.
  */
 
+import type { ProfileScope } from '@/api/client'
 import { isLayoutNode, normalize } from '@/components/pane-shell/tree/model'
 import { $layoutTree, markActivePreset, persistTree } from '@/components/pane-shell/tree/store'
 import { exportProfileArchive, importProfileArchive } from '@/hermes'
@@ -26,6 +27,7 @@ import {
   $profileColors,
   normalizeProfileKey,
   refreshActiveProfile,
+  refreshProfiles,
   selectProfile,
   setProfileColor
 } from './profile'
@@ -56,13 +58,14 @@ export function buildDesktopOverlay(profile: string): ProfileDesktopOverlay {
 
 /** Export `profile` (backend archive + desktop overlay) to `output` (or the
  *  backend's staging dir when omitted). Returns the archive path. */
-export async function exportProfileBundle(profile: string, output?: string): Promise<string> {
+export async function exportProfileBundle(profile: string, output?: string, scope?: ProfileScope): Promise<string> {
   const overlay = buildDesktopOverlay(profile)
 
-  const { archive } = await exportProfileArchive(profile, {
-    extraFiles: { [DESKTOP_OVERLAY_FILENAME]: JSON.stringify(overlay, null, 2) },
-    output
-  })
+  const opts = { extraFiles: { [DESKTOP_OVERLAY_FILENAME]: JSON.stringify(overlay, null, 2) }, output }
+
+  const { archive } = await (scope === undefined
+    ? exportProfileArchive(profile, opts)
+    : exportProfileArchive(profile, opts, scope))
 
   return archive
 }
@@ -75,7 +78,11 @@ const isThemeMode = (value: unknown): value is ThemeMode => value === 'light' ||
  * Every step is independent and best-effort — a malformed half never blocks
  * the rest, and a missing overlay is a plain CLI-exported archive (no-op).
  */
-export function applyDesktopOverlay(profile: string, overlay: null | ProfileDesktopOverlay | undefined): void {
+export function applyDesktopOverlay(
+  profile: string,
+  overlay: null | ProfileDesktopOverlay | undefined,
+  applyLayout = true
+): void {
   if (!overlay || typeof overlay !== 'object') {
     return
   }
@@ -96,7 +103,7 @@ export function applyDesktopOverlay(profile: string, overlay: null | ProfileDesk
   // Layout tree — global by design (one window layout). Normalize through
   //    the same canonicalizer the boot load uses; a null result means the
   //    tree was junk, so the current layout stays.
-  if (overlay.layoutTree != null && isLayoutNode(overlay.layoutTree)) {
+  if (applyLayout && overlay.layoutTree != null && isLayoutNode(overlay.layoutTree)) {
     const tree = normalize(overlay.layoutTree)
 
     if (tree) {
@@ -107,13 +114,26 @@ export function applyDesktopOverlay(profile: string, overlay: null | ProfileDesk
   }
 }
 
+export interface ProfileImportOptions {
+  /** Bot management imports keep the current chat and window layout. */
+  management?: boolean
+  scope?: ProfileScope
+}
+
 /** Import an archive, apply its desktop overlay, return the new profile name. */
-export async function importProfileBundle(archive: string, name?: string): Promise<string> {
-  const result = await importProfileArchive(archive, name)
+export async function importProfileBundle(
+  archive: string,
+  name?: string,
+  options: ProfileImportOptions = {}
+): Promise<string> {
+  const result = await (options.scope === undefined
+    ? importProfileArchive(archive, name)
+    : importProfileArchive(archive, name, options.scope))
+
   // An import never lands on a live profile's name, so a folder or startup profile stored under
   // it was left by a profile deleted before delete dropped them.
   dropBrowserProfilePrefs(result.name)
-  applyDesktopOverlay(result.name, result.desktop)
+  applyDesktopOverlay(result.name, result.desktop, !options.management)
 
   return result.name
 }
@@ -132,7 +152,7 @@ const archiveFilters = () => [{ extensions: ['tar.gz', 'tgz'], name: translateNo
 
 /** Pick a save location and export `profile` (default: the active one).
  *  Returns the archive path, or null when the user cancelled. */
-export async function runExportProfileFlow(profile?: string): Promise<null | string> {
+export async function runExportProfileFlow(profile?: string, scope?: ProfileScope): Promise<null | string> {
   const target = normalizeProfileKey(profile ?? activeProfileKey())
   const pick = window.hermesDesktop?.selectSavePath
 
@@ -155,7 +175,7 @@ export async function runExportProfileFlow(profile?: string): Promise<null | str
   }
 
   try {
-    const archive = await exportProfileBundle(target, output)
+    const archive = await exportProfileBundle(target, output, scope)
     notify({ kind: 'success', title: translateNow('profiles.exported'), message: archive })
 
     return archive
@@ -168,7 +188,7 @@ export async function runExportProfileFlow(profile?: string): Promise<null | str
 
 /** Pick an archive and import it as a new profile; lands the user in it on a
  *  fresh chat. Returns the new profile name, or null when cancelled/failed. */
-export async function runImportProfileFlow(): Promise<null | string> {
+export async function runImportProfileFlow(options: ProfileImportOptions = {}): Promise<null | string> {
   const paths = await window.hermesDesktop?.selectPaths?.({
     title: translateNow('profiles.importProfile'),
     multiple: false,
@@ -182,12 +202,17 @@ export async function runImportProfileFlow(): Promise<null | string> {
   }
 
   try {
-    const name = await importProfileBundle(archive)
+    const name = await importProfileBundle(archive, undefined, options)
     notify({ kind: 'success', title: translateNow('profiles.imported'), message: name })
+
     // Same landing as CreateProfileDialog's onCreated: refresh the list, then
     // switch into the new profile on a fresh chat.
-    await refreshActiveProfile()
-    selectProfile(name)
+    if (options.management) {
+      await refreshProfiles()
+    } else {
+      await refreshActiveProfile()
+      selectProfile(name)
+    }
 
     return name
   } catch (error) {

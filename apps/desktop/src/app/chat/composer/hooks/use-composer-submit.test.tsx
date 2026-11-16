@@ -507,6 +507,14 @@ describe('useComposerSubmit busy-turn routing', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('preserves indented source when explicitly steering the current turn', async () => {
+    const source = '\n    code\tvalue  \n\n'
+    const h = renderSubmitHook({ busy: true, text: source })
+
+    act(() => h.hook.result.current.steerDraft('steer'))
+    await waitFor(() => expect(h.onSteer).toHaveBeenCalledWith(source, 'steer'))
+  })
+
   it('puts a refused steer back in the composer when there is no queue to hold it', async () => {
     // A brand-new chat is busy while its first session.create is in flight but
     // has no queue key yet. The steer clears the draft first, so a refusal must

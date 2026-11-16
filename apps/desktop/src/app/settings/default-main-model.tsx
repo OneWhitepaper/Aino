@@ -1,14 +1,12 @@
 import './default-main-model.css'
 
+import { Check, WandSparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
 import { modelSourceCopy } from '@/i18n/model-source'
-import { Box, Check, CheckCircle2, Cpu, Plug, SlidersHorizontal } from '@/lib/icons'
-
-import { SectionHeading } from './primitives'
 
 export type DefaultMainModelSource = 'aino' | 'provider' | 'custom'
 
@@ -56,6 +54,9 @@ export function DefaultMainModel({
   return (
     <div className="default-main-model">
       <div aria-live="polite" className="default-main-model-current">
+        <div aria-hidden className="default-main-model-current-icon">
+          <WandSparkles strokeWidth={1.65} />
+        </div>
         <div className="default-main-model-current-copy">
           <p className="default-main-model-current-label">{copy.appliedLabel}</p>
           <div className="default-main-model-current-value">
@@ -65,19 +66,17 @@ export function DefaultMainModel({
         </div>
         {appliedModelLabel && (
           <span className="default-main-model-current-state">
-            <CheckCircle2 />
+            <Check strokeWidth={1.65} />
             {copy.applied}
           </span>
         )}
       </div>
       <section className="default-main-model-form">
         <div className="default-main-model-heading">
-          <SectionHeading icon={Box} title={copy.title} />
-          <p>{copy.description}</p>
+          <h2>{copy.title}</h2>
         </div>
         <div className="default-main-model-fields">
           <div className="default-main-model-source-row">
-            <span className="default-main-model-source-label">{copy.sourceLabel}</span>
             <div className="default-main-model-source-choice">
               <div aria-label={copy.sourceLabel} role="group">
                 <SegmentedControl
@@ -85,15 +84,17 @@ export function DefaultMainModel({
                   disabled={applying}
                   onChange={onSourceChange}
                   options={[
-                    { icon: Cpu, id: 'aino', label: copy.builtIn },
-                    { icon: Plug, id: 'provider', label: sources.providerSource },
-                    { icon: SlidersHorizontal, id: 'custom', label: sources.customSource }
+                    { id: 'aino', label: copy.builtIn },
+                    { id: 'provider', label: sources.providerSource },
+                    { id: 'custom', label: sources.customSource }
                   ]}
                   sizing="content"
                   value={source}
                 />
               </div>
-              <p className="default-main-model-source-description">{descriptions[source]}</p>
+              <p className="default-main-model-source-description" hidden={source === 'aino'}>
+                {descriptions[source]}
+              </p>
             </div>
           </div>
           <div className="default-main-model-controls" hidden={source !== 'custom'}>
@@ -108,7 +109,12 @@ export function DefaultMainModel({
         </div>
         {notice}
         <div className="default-main-model-actions">
-          <span aria-live="polite" className="default-main-model-save-state" data-pending={dirty || undefined}>
+          <p className="default-main-model-scope-hint">{copy.scopeHint}</p>
+          <span
+            aria-live="polite"
+            className={dirty ? 'default-main-model-save-state' : 'sr-only'}
+            data-pending={dirty || undefined}
+          >
             {dirty ? copy.pending : copy.unchanged}
           </span>
           <Button
@@ -119,13 +125,16 @@ export function DefaultMainModel({
             size="sm"
             type="button"
           >
-            <Check />
             {applying ? t.settings.model.applying : copy.apply}
           </Button>
         </div>
-        <p className="default-main-model-scope-hint">{copy.scopeHint}</p>
       </section>
-      {defaults && <section className="default-main-model-defaults">{defaults}</section>}
+      {defaults && (
+        <details className="default-main-model-defaults">
+          <summary>{copy.defaultsTitle}</summary>
+          <div>{defaults}</div>
+        </details>
+      )}
     </div>
   )
 }

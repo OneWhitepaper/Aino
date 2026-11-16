@@ -72,7 +72,7 @@
   margin-top: 1.625rem;
 }
 .appearance-group .settings-section-heading {
-  font-size: var(--aino-text-title);
+  font-size: var(--aino-text-body);
   margin-bottom: 0.8125rem;
 }
 .appearance-page .settings-group {
@@ -85,7 +85,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  padding-block: 1.0625rem;
+  padding-block: 0.9375rem;
 }
 .appearance-page [data-settings-row-body] > div:only-child {
   grid-column: 1 / -1;
@@ -95,12 +95,12 @@
   justify-content: flex-end;
 }
 .appearance-page .settings-row-label {
-  font-size: var(--aino-text-body);
-  font-weight: 500;
+  font-size: var(--aino-text-ui);
+  font-weight: 400;
 }
 .appearance-page .settings-row-description {
-  font-size: var(--aino-text-caption);
-  line-height: 1.55;
+  font-size: 0.6875rem;
+  line-height: 1.7;
 }
 .appearance-page .appearance-select {
   width: auto;

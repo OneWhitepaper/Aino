@@ -1,5 +1,6 @@
 import { modelSearchText } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
+import { WandSparkles } from 'lucide-react'
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
@@ -50,7 +51,8 @@ export interface PlatformModelListProps {
   managedCapability: ManagedModelRouteCapability
   purpose?: PlatformModelPurpose
   fitContent?: boolean
-  presentation?: 'picker' | 'menu'
+  presentation?: 'picker' | 'menu' | 'settings'
+  detailsActions?: ReactNode
   /** A composer menu shares one search field with the custom catalog. */
   searchValue?: string
   onPreview?: (model: PlatformModel) => void
@@ -228,6 +230,7 @@ export function PlatformModelList({
   purpose = 'chat',
   fitContent = false,
   presentation = 'picker',
+  detailsActions,
   searchValue,
   onPreview,
   onInspect,
@@ -291,7 +294,15 @@ export function PlatformModelList({
   const status = platformModelStatus(catalog.phase, models.length > 0, managedCapability, copy)
 
   return (
-    <div className={presentation === 'menu' ? 'aino-platform-menu-models min-w-0' : 'min-w-0'}>
+    <div
+      className={
+        presentation === 'menu'
+          ? 'aino-platform-menu-models min-w-0'
+          : presentation === 'settings'
+            ? 'platform-model-settings-catalog min-w-0'
+            : 'min-w-0'
+      }
+    >
       {presentation === 'menu' ? (
         <PlatformModelMenuRows
           activeId={activeId}
@@ -311,7 +322,9 @@ export function PlatformModelList({
           shouldFilter={false}
           value={highlighted}
         >
-          <CommandInput aria-label={copy.search} onValueChange={setSearch} placeholder={copy.search} value={search} />
+          {(presentation !== 'settings' || catalog.models.length > 6 || search !== '') && (
+            <CommandInput aria-label={copy.search} onValueChange={setSearch} placeholder={copy.search} value={search} />
+          )}
           <CommandList aria-label={copy.builtIn} className="max-h-64">
             {status ?? (
               <>
@@ -319,11 +332,13 @@ export function PlatformModelList({
                 <CommandGroup>
                   {models.map(model => (
                     <CommandItem
+                      data-model-selected={selectedId === model.id || undefined}
                       disabled={disabled || pending || managedCapability !== 'supported' || model.state !== 'available'}
                       key={model.id}
                       onSelect={() => void select(model)}
                       value={model.id}
                     >
+                      {presentation === 'settings' && <WandSparkles aria-hidden size={18} strokeWidth={1.65} />}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{model.display_name}</span>
                         <span className="block text-xs text-muted-foreground">
@@ -352,10 +367,11 @@ export function PlatformModelList({
         managedCapability={managedCapability}
         models={models}
       />
-      {presentation !== 'menu' && detail && (
+      {presentation !== 'menu' && (detail || detailsActions) && (
         <details className="border-t border-(--ui-stroke-tertiary) px-3 py-2 text-xs">
           <summary className="cursor-pointer text-muted-foreground">{copy.details}</summary>
-          <PlatformModelDetails model={detail} />
+          {detail && <PlatformModelDetails model={detail} />}
+          {detailsActions && <div className="mt-3">{detailsActions}</div>}
         </details>
       )}
     </div>

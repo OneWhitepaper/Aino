@@ -1,14 +1,19 @@
 /* Shared by every renderer, including body portals and transparent windows.
    Palette seeds still belong to ThemeProvider; these are the Aino UI roles. */
 :root {
+  --aino-activity-width: 3.25rem;
+  --aino-navigation-width: 15.75rem;
   --aino-radius-control: 0.375rem;
+  --aino-radius-toolbar: 0.4375rem;
   --aino-radius-row: 0.375rem;
   --aino-radius-panel: 1rem;
   --aino-radius-menu: 0.75rem;
   --aino-radius-card: 0.875rem;
   --aino-radius-composer: 1.25rem;
-  --aino-tool-strip-height: var(--aino-band-row2);
+  --aino-tool-strip-height: 2.5625rem;
   --aino-workbench-divider: var(--ui-stroke-secondary);
+  --aino-text-micro: 0.625rem;
+  --aino-text-section: 0.6875rem;
   --aino-text-caption: 0.75rem;
   --aino-text-label: 0.8125rem;
   --aino-text-ui: 0.8125rem;
@@ -19,7 +24,7 @@
   --aino-line-height: 1.6;
   --aino-conversation-width: 52rem;
   --aino-composer-width: var(--aino-conversation-width);
-  --aino-conversation-inset: clamp(1rem, 3%, 2rem);
+  --aino-conversation-inset: clamp(1rem, 3%, 2.25rem);
   /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
   --conversation-text-base-size: var(--aino-text-body);
   --conversation-tool-base-size: var(--aino-text-ui);
@@ -48,7 +53,7 @@
   --dt-accent: var(--ui-row-active-background);
   --aino-surface-bg: var(--ui-chat-surface-background);
   --aino-surface-rail: var(--ui-sidebar-surface-background);
-  --aino-navigation-rail: var(--ui-sidebar-surface-background);
+  --aino-navigation-rail: var(--theme-sidebar-seed);
   --aino-navigation-edge: var(--ui-stroke-secondary);
   --aino-surface-stroke: var(--ui-stroke-tertiary);
   --aino-surface-hover: var(--ui-row-hover-background);
@@ -106,7 +111,7 @@
   --aino-landing-accent: var(--ui-text-primary);
   --aino-landing-control: var(--ui-bg-quaternary);
   --aino-landing-composer-stroke: var(--ui-stroke-secondary);
-  --aino-composer-fill: color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-elevated));
+  --aino-composer-fill: var(--ui-bg-elevated);
   --aino-composer-focus-stroke: color-mix(in srgb, var(--ui-text-primary) 35%, var(--ui-bg-elevated));
   --aino-landing-icon: var(--ui-text-secondary);
   --aino-landing-muted: var(--ui-text-tertiary);
@@ -146,15 +151,7 @@
   --ui-sidebar-surface-background: var(--ui-bg-sidebar);
 }
 
-/* One rail-tone layer over the native material, not another field tint on
-   each nested sidebar surface. Zero tint still leaves bare Glass. */
-:root[data-hermes-glass] {
-  --aino-navigation-rail: color-mix(
-    in srgb,
-    var(--ui-base) calc(var(--translucency-glass-keep, 100%) * 0.06),
-    transparent
-  );
-}
+/* App navigation retains the approved solid paper tone over native material. */
 
 /* Only app-owned data tables opt in. Artifact documents and embedded sites
    retain their own presentation and existing scroll/column behaviour. */

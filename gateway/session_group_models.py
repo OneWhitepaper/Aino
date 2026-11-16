@@ -230,13 +230,11 @@ async def _prepare(connection, grant, model_id):
             live.group_model_grant = grant
             state = managed_state(authority, sid)
             peer, key = connection.transport, binding_key(authority, sid)
-            if state.get('transport') not in (None, peer):
-                get_registry().clear_session(key, purpose='chat')
-            state['transport'] = peer
             state['managed_model_params']['platform_owner'] = asdict(grant.model_owner)
             state['running'] = authority._handle(rpc.ref).execution_state == 'running'
-            state['_interrupt_managed'] = lambda: _interrupt_active(authority, rpc.ref)
-            ticket = get_registry().issue(key, state, peer, grant.model_owner, model_id)
+            state['_interrupt_managed'] = lambda generation=None, revision=None: _interrupt_active(
+                authority, rpc.ref, generation, revision)
+            ticket = get_registry().issue(key, state, peer, grant.model_owner, model_id, handoff=True)
         return {'profile': grant.profile, 'session_id': sid, 'model_id': model_id,
                 'session_ticket': ticket, 'managed_model_binding': 1,
                 'managed_model_context_window': True, 'managed_image_binding': 1, 'managed_device_key': 1}

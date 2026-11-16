@@ -34,7 +34,7 @@ export const ruProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
   copyPath: 'Копировать путь',
   removeFromSidebar: 'Скрыть из боковой панели',
   createdInPreviousContext:
-    'Проект создан в прежнем подключении или профиле. Вернитесь к нему; файл IDEA.md не был записан.',
+    'Проект создан для предыдущего подключения или бота. Вернитесь к нему, чтобы найти проект; файл IDEA.md не записан.',
   hiddenFromSidebar: 'Скрыто из боковой панели',
   undoHide: 'Отменить',
   createFailed: 'Не удалось создать проект',
@@ -95,7 +95,7 @@ export const ruProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
 
   keepOneFolder: 'Оставьте хотя бы одну папку',
 
-  contextChanged: 'Разговор или рабочая область изменились. Откройте это окно заново.',
+  contextChanged: 'Беседа или проект изменились. Откройте этот диалог заново.',
 
   menuClose: 'Закрыть проект'
 }

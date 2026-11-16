@@ -4,6 +4,7 @@ export const zhHantChat = {
   composer: {
     message: '訊息',
     wakingProfile: profile => `正在喚醒 ${profile}…`,
+    placeholderTo: name => `傳送訊息給 ${name}，或輸入 / 使用技能`,
     placeholderStarting: '正在啟動 Hermes...',
     placeholderReconnecting: '正在重新連線至 Hermes…',
     placeholderFollowUp: '傳送後續訊息',
@@ -78,8 +79,8 @@ export const zhHantChat = {
       '/worktree': '顯示、列出、建立或清理隔離的 Git worktree',
       '/compress': '壓縮此對話的上下文',
       '/rollback': '列出或還原檔案系統檢查點（還原會保留你的手動編輯；--all 可覆寫此行為）',
-      '/export': '將設定檔（設定、技能、主題）匯出為可分享的封存檔',
-      '/import': '將共用的設定檔封存檔匯入為新的設定檔',
+      '/export': '將機器人（設定、技能、主題）匯出為可分享的封存檔',
+      '/import': '將共用的機器人封存檔匯入為新的機器人',
       '/stop': '停止目前回合與背景程序',
       '/pause': '暫停全域新工作（緊急停止）；/pause off 恢復',
       '/bg': '在獨立的背景工作階段中執行提示詞',
@@ -100,7 +101,7 @@ export const zhHantChat = {
       '/egress': '顯示 Docker 對外連線代理狀態',
       '/context': '顯示詳細的上下文視窗，包括用量、分類明細、壓縮統計與吞吐量',
       '/whoami': '顯示你的斜線指令存取權限（admin / user）',
-      '/profile': '切換作用中的 Hermes 設定檔',
+      '/profile': '切換作用中的 Aino 機器人',
       '/codex-runtime': '切換 OpenAI/Codex 模型使用的 Codex app-server runtime',
       '/personality': '設定預先定義的人格',
       '/battery': '切換狀態列中的彩色電池指示器',
@@ -323,7 +324,7 @@ export const zhHantChat = {
       add: '新增'
     },
     coding: {
-      title: '工作區',
+      title: '專案',
       noBranch: '無分支',
       detached: '分離 HEAD',
       clean: '乾淨',
@@ -453,11 +454,11 @@ export const zhHantChat = {
     yoloSystem: active => `此工作階段 YOLO ${active ? '已開啟' : '已關閉'}`,
     yoloTitle: 'YOLO',
     yoloToggleFailed: '無法切換 YOLO',
-    profileStatus: current => `設定檔：${current}。使用 /profile <name> 或「新工作階段」選擇器在其他設定檔中開始聊天。`,
-    unknownProfile: '未知設定檔',
-    noProfileNamed: (target, available) => `沒有名為「${target}」的設定檔。可用的：${available}`,
-    newChatsProfile: name => `新聊天將使用設定檔 ${name}。`,
-    setProfileFailed: '設定設定檔失敗',
+    profileStatus: current => `機器人：${current}。使用 /profile <name> 或「新工作階段」選擇器在其他機器人中開始聊天。`,
+    unknownProfile: '未知機器人',
+    noProfileNamed: (target, available) => `沒有名為「${target}」的機器人。可用的：${available}`,
+    newChatsProfile: name => `新聊天將使用機器人 ${name}。`,
+    setProfileFailed: '設定機器人失敗',
     sttDisabled: '設定中已停用語音轉文字。',
     stopFailed: '停止失敗',
     regenerateFailed: '重新生成失敗',
@@ -595,8 +596,8 @@ export const zhHantChat = {
         text: '工作階段、設定、技能與指令都能從命令選單找到。'
       },
       profiles: {
-        title: '設定檔彼此獨立',
-        text: '每個都是獨立的 Hermes — 自己的金鑰、記憶與工作階段。'
+        title: '機器人彼此獨立',
+        text: '每個機器人擁有獨立的身分、設定、模型、技能、記憶與對話。'
       },
       'composer-mentions': {
         title: '附件與指令',
@@ -608,7 +609,7 @@ export const zhHantChat = {
         action: '立即更新'
       },
       'right-pane': {
-        title: '工作面板',
+        title: '對話旁的工具面板',
         text: '檔案、終端機、審閱與內建瀏覽器都在側邊面板裡。'
       }
     }

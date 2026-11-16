@@ -4,7 +4,7 @@
 @import 'katex/dist/katex.min.css';
 @import '@vscode/codicons/dist/codicon.css';
 
-/* Titlebar clusters: 24×24 hit targets, 18px glyphs. codicon.css is
+/* Titlebar clusters: 28×28 hit targets, 18px glyphs. codicon.css is
    unlayered (`font: 16px/1`); Tailwind utilities in @layer lose that fight. */
 .titlebar-icon-button .codicon[class*='codicon-'] {
   font-size: var(--titlebar-icon-size);
@@ -568,8 +568,8 @@
 
     --sidebar-width: 14.8125rem;
     --chat-min-width: 28rem;
-    --titlebar-control-size: 24px;
-    --titlebar-control-height: 24px;
+    --titlebar-control-size: 28px;
+    --titlebar-control-height: 28px;
     --titlebar-icon-size: 18px;
     --sidebar-content-inline-padding: 1rem;
 
@@ -2180,14 +2180,9 @@ body.guest-pointer-lock :is(webview, iframe) {
   text-transform: none;
 }
 
-/* The approved frame splits the native titlebar at the sidebar edge and keeps
-   the main canvas on the same paper as chat. Apply that contract to both the
-   landing draft and an open conversation; settings keeps its own rail header. */
-[data-contrib-shell]:not(:has([data-settings-workspace])):has([data-chat-surface][data-home-layout])
-  > [data-slot='app-titlebar'],
-[data-contrib-shell]:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversation-layout])
-  > [data-slot='app-titlebar'] {
-  background: var(--aino-landing-surface);
+/* One pale native band spans navigation, conversation and functional pages. */
+[data-contrib-shell] > [data-slot='app-titlebar'] {
+  background: var(--aino-navigation-rail);
 }
 
 /* Extend only an edge-docked navigation rail into the window bar. The tree's
@@ -2293,6 +2288,14 @@ body.guest-pointer-lock :is(webview, iframe) {
   height: 100%;
   border-bottom: 0;
   background: transparent;
+  --pane-tab-active-bg: transparent;
+  --pane-tab-strip-bg: transparent;
+}
+
+[data-contrib-shell] [data-window-session-title] [data-current-session-title],
+[data-contrib-shell] [data-window-session-title] [data-current-session-title] > span {
+  font-size: 13px;
+  font-weight: 550;
 }
 
 [data-window-session-title] [data-tree-tab] {

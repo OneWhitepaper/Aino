@@ -590,6 +590,7 @@ describe('createBackendSessionForSend profile routing', () => {
       })
 
       vi.mocked(retainGatewayForAgent).mockResolvedValueOnce(release)
+      vi.mocked(requestGatewayForAgent).mockClear()
       $activeGatewayProfile.set('work')
       $newChatProfile.set('work')
       recordGatewayReadyCapability(
@@ -644,7 +645,7 @@ describe('createBackendSessionForSend profile routing', () => {
       const pending =
         reason === 'navigation'
           ? handle!.createBackendSessionForSend()
-          : handle!.openNewSessionTile('center', { listed: false })
+          : handle!.openNewSessionTile('center', { listed: false, profile: 'work' })
 
       await waitFor(() =>
         expect(requestGatewayForAgent).toHaveBeenCalledWith(

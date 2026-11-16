@@ -1,4 +1,5 @@
 import { useStore } from '@nanostores/react'
+import { Check, FileDiff } from 'lucide-react'
 
 import { FileDiffPanel } from '@/components/chat/diff-lines'
 import { DiffSkeleton, TreeSkeleton } from '@/components/chat/skeletons'
@@ -27,8 +28,6 @@ import {
   toggleReviewTreeMode,
   unstageReviewFile
 } from '@/store/review'
-
-import { PaneEmptyState } from '../index'
 
 import { ReviewFileTree } from './file-tree'
 import { ReviewScopeRow } from './scope-row'
@@ -61,7 +60,7 @@ export function ReviewPane() {
   return (
     <aside
       aria-label={c.review}
-      className="relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-(--ui-sidebar-surface-background) text-(--ui-text-secondary)"
+      className="relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-(--ui-editor-surface-background) text-(--ui-text-secondary)"
     >
       {showChrome && (
         <div className="shrink-0 border-b border-(--ui-stroke-tertiary)" data-suppress-pane-reveal-side="">
@@ -128,10 +127,16 @@ export function ReviewPane() {
         ) : loading ? (
           <div className="min-h-0 flex-1" />
         ) : (
-          <PaneEmptyState label={t.rightSidebar.noDiffs} />
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 pb-16 text-center">
+            <Check aria-hidden className="text-(--ui-green)" size={28} strokeWidth={1.65} />
+            <p className="text-[length:var(--aino-text-label)] text-(--ui-text-primary)">{t.rightSidebar.noDiffs}</p>
+          </div>
         )
       ) : (
-        <PaneEmptyState label={c.notRepo} />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 pb-16 text-center">
+          <FileDiff aria-hidden className="text-(--ui-text-tertiary)" size={28} strokeWidth={1.65} />
+          <p className="text-[length:var(--aino-text-caption)] leading-relaxed">{c.notRepo}</p>
+        </div>
       )}
 
       {/* Selected file's diff — reuses the shiki-highlighted FileDiffPanel. */}

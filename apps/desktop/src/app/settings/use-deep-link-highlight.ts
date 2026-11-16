@@ -9,6 +9,14 @@ interface DeepLinkHighlightOptions {
   block?: ScrollLogicalPosition
 }
 
+export function openSettingDisclosures(element: HTMLElement) {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement) {
+      parent.open = true
+    }
+  }
+}
+
 // react-router's useSearchParams throws with no router context. Inside Settings
 // (every original caller) there always is one, so behavior is unchanged; when a
 // consumer is embedded OUTSIDE the router (a plugin dialog) there
@@ -60,6 +68,7 @@ export function useDeepLinkHighlight({
       const element = document.getElementById(elementId(target))
 
       if (element) {
+        openSettingDisclosures(element)
         element.scrollIntoView({ behavior: 'smooth', block })
 
         if (!element.hasAttribute('tabindex')) {

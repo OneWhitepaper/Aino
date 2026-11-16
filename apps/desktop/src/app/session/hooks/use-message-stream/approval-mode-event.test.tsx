@@ -1,7 +1,8 @@
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { $approvalModes, approvalModeForProfile } from '@/store/approval-mode'
+import { $approvalModes, approvalModeForProfile, reconcileApprovalModeForProfile } from '@/store/approval-mode'
+import * as gateway from '@/store/gateway'
 import { $activeGatewayProfile } from '@/store/profile'
 
 import { type MessageStreamHarness, renderMessageStream } from './test-harness'
@@ -38,6 +39,38 @@ describe('live session.info approval mode reconciliation', () => {
 
     expect(approvalModeForProfile('work')).toBe('off')
     expect(approvalModeForProfile('default')).toBe('smart')
+  })
+
+  it('reconciles the captured event connection without overwriting a same-named profile on another source', () => {
+    const connection = vi.spyOn(gateway, 'activeGatewayConnectionId').mockReturnValue('local')
+    reconcileApprovalModeForProfile('work', 'smart', 'studio')
+    mountStream()
+
+    act(() =>
+      stream.handleEvent({
+        connectionId: 'local',
+        payload: { approval_mode: 'manual' },
+        profile: 'work',
+        session_id: ACTIVE_SID,
+        type: 'session.info'
+      })
+    )
+
+    expect(approvalModeForProfile('work', 'local')).toBe('manual')
+    expect(approvalModeForProfile('work', 'studio')).toBe('smart')
+
+    connection.mockReturnValue('studio')
+    act(() =>
+      stream.handleEvent({
+        connectionId: 'local',
+        payload: { approval_mode: 'off' },
+        profile: 'work',
+        session_id: ACTIVE_SID,
+        type: 'session.info'
+      })
+    )
+    expect(approvalModeForProfile('work', 'local')).toBe('manual')
+    expect(approvalModeForProfile('work', 'studio')).toBe('smart')
   })
 
   it('ignores stale session.info from a non-active session on the active gateway', () => {

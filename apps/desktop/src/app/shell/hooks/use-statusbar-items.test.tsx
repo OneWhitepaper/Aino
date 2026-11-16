@@ -1,7 +1,7 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import type { WritableAtom } from 'nanostores'
 import { isValidElement, type ReactNode } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { group } from '@/components/pane-shell/tree/model'
@@ -14,6 +14,8 @@ import { usageContextLabel } from '@/lib/statusbar'
 import { $freeTierStatus } from '@/store/free-tier'
 import { INTERFACE_MODES, setInterfaceMode } from '@/store/interface-mode'
 import { markOnboardingDecided, setOnboardingSurfaceActive } from '@/store/onboarding-presence'
+import { $activeGatewayProfile } from '@/store/profile'
+import { $profileRailVisible } from '@/store/profile-rail-prefs'
 import {
   $connection,
   $currentCwd,
@@ -29,6 +31,8 @@ import { $sessionStates, $sessionTiles } from '@/store/session-states'
 import { $statusbarVisible, setStatusbarItemVisible } from '@/store/statusbar-prefs'
 import { $desktopVersion, $updateStatus } from '@/store/updates'
 import type { ContextBreakdown, FreeTierStatus, UsageStats } from '@/types/hermes'
+
+import { StatusbarControls } from '../statusbar-controls'
 
 import { useStatusbarItems } from './use-statusbar-items'
 
@@ -132,6 +136,32 @@ afterEach(() => {
   $tileSessionFocusStartedAt.set(null)
   $desktopVersion.set(null)
   $updateStatus.set(null)
+})
+
+it('opens Bot management from the statusbar without switching the conversation owner or rail preference', () => {
+  const previousProfile = $activeGatewayProfile.get()
+  const railVisible = $profileRailVisible.get()
+  $activeGatewayProfile.set('research')
+  const item = renderStatusbarItems().leftStatusbarItems.find(item => item.id === 'profile-switcher')!
+
+  function Route() {
+    return <output aria-label="Current route">{useLocation().pathname}</output>
+  }
+
+  try {
+    render(
+      <MemoryRouter>
+        <StatusbarControls leftItems={[{ ...item, hidden: false }]} />
+        <Route />
+      </MemoryRouter>
+    )
+    fireEvent.click(screen.getByRole('button', { name: en.sidebar.nav.profiles }))
+    expect(screen.getByLabelText('Current route').textContent).toBe('/profiles')
+    expect($activeGatewayProfile.get()).toBe('research')
+    expect($profileRailVisible.get()).toBe(railVisible)
+  } finally {
+    $activeGatewayProfile.set(previousProfile)
+  }
 })
 
 describe('statusbar update channel vocabulary', () => {

@@ -50,6 +50,9 @@ export interface ModelSettingsTranslations {
   }
   pages: {
     description: string
+    preferences: string
+    moreSettings: string
+    fallbackDescription: string
     auxiliaryTask: string
     auxiliaryPurpose: string
     auxiliaryModel: string

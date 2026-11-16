@@ -49,25 +49,60 @@ async function installCatalog() {
   )
 }
 
-it('stages a model only on confirmation and never saves a second default', async () => {
+async function openReauthorization() {
+  fireEvent.click(screen.getByRole('combobox', { name: /Aino models/ }))
+  const summary = await screen.findByText(translateNow('platformModels.details'), { selector: 'summary' })
+  fireEvent.click(summary)
+  fireEvent.click(await screen.findByRole('button', { name: 'Reauthorize this device' }))
+}
+
+it('opens a searchable model dropdown and stages choices without saving a second default', async () => {
   await installCatalog()
   const onSelect = vi.fn()
-  render(
+
+  const view = render(
     <I18nProvider configClient={null} initialLocale="en">
       <PlatformModelSettings onSelect={onSelect} scopeProfile="work" selectedId="chosen" />
     </I18nProvider>
   )
+
+  const trigger = await screen.findByRole('combobox', { name: /Aino models: Fixture Model/ })
+
+  expect(trigger.textContent).toContain('1×')
   expect(screen.queryByRole('option')).toBeNull()
-  fireEvent.click(await screen.findByRole('button', { name: 'Choose an Aino built-in model' }))
+  fireEvent.click(trigger)
+  fireEvent.change(await screen.findByPlaceholderText('Search models'), { target: { value: 'Other' } })
+  expect(screen.queryByRole('option', { name: /Fixture Model/ })).toBeNull()
   fireEvent.click(await screen.findByRole('option', { name: /Other model/ }))
-  expect(onSelect).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-  expect(onSelect).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Choose an Aino built-in model' }))
-  fireEvent.click(await screen.findByRole('option', { name: /Other model/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm choice' }))
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'other' })))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  view.rerender(
+    <I18nProvider configClient={null} initialLocale="en">
+      <PlatformModelSettings onSelect={onSelect} scopeProfile="work" selectedId="other" />
+    </I18nProvider>
+  )
+  expect(screen.getByRole('combobox', { name: 'Aino models: Other model' }).getAttribute('aria-expanded')).toBe('false')
   expect(readPlatformDefault('user-a', { connectionId: 'remote-a', profile: 'work' }, 'development')).toBeNull()
+})
+
+it('returns focus on Escape and closes the model dropdown when the account changes', async () => {
+  await installCatalog()
+  render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <PlatformModelSettings onSelect={() => {}} scopeProfile="work" selectedId="chosen" />
+    </I18nProvider>
+  )
+
+  const trigger = await screen.findByRole('combobox', { name: /Aino models: Fixture Model/ })
+
+  fireEvent.click(trigger)
+  fireEvent.keyDown(await screen.findByPlaceholderText('Search models'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() => expect(window.document.activeElement).toBe(trigger))
+  fireEvent.click(trigger)
+  expect(await screen.findByRole('dialog')).toBeTruthy()
+  act(() => platformAccountActions(window.hermesDesktop.platformAccount).snapshot.set(platformSnapshot('user-b', 2)))
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
 
 it('recognizes retained device access without offering management reauthorization while offline', async () => {
@@ -87,10 +122,11 @@ it('recognizes retained device access without offering management reauthorizatio
 
   expect(await screen.findByText(translateNow('settings.model.defaultMain.ainoConnected'))).toBeTruthy()
   expect(screen.queryByText('Sign in to Aino before using this model')).toBeNull()
+  fireEvent.click(screen.getByRole('combobox', { name: /Aino models/ }))
   expect(screen.queryByRole('button', { name: 'Reauthorize this device' })).toBeNull()
 })
 
-it('gates the picker using the inspected profile rather than another supported profile', async () => {
+it('gates the dropdown using the inspected profile rather than another supported profile', async () => {
   await installCatalog()
   const onSelect = vi.fn()
   render(
@@ -98,9 +134,9 @@ it('gates the picker using the inspected profile rather than another supported p
       <PlatformModelSettings onSelect={onSelect} scopeProfile="unsupported" selectedId="chosen" />
     </I18nProvider>
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Choose an Aino built-in model' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /Aino models/ }))
   expect((await screen.findByRole('status')).textContent).toMatch(/does not support/i)
-  expect((screen.getByRole('button', { name: 'Confirm choice' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.queryByRole('option')).toBeNull()
   expect(onSelect).not.toHaveBeenCalled()
 })
 
@@ -113,7 +149,7 @@ it('reauthorizes the native device only after an explicit confirmation with its 
       <PlatformModelSettings onSelect={() => {}} scopeProfile="work" selectedId="chosen" />
     </I18nProvider>
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Reauthorize this device' }))
+  await openReauthorization()
   expect(reauthorize).not.toHaveBeenCalled()
   const dialog = screen.getByRole('dialog')
   fireEvent.click(
@@ -133,7 +169,7 @@ it('keeps reauthorization failures visible across account updates and retries wi
       <PlatformModelSettings onSelect={() => {}} scopeProfile="work" selectedId="chosen" />
     </I18nProvider>
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Reauthorize this device' }))
+  await openReauthorization()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reauthorize this device' }))
   expect(reauthorize).toHaveBeenCalledWith(1)
 
@@ -176,7 +212,7 @@ it.each([
     )
 
     const view = render(settings('work'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Reauthorize this device' }))
+    await openReauthorization()
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reauthorize this device' }))
 
     if (change === 'account') {
@@ -188,7 +224,7 @@ it.each([
     }
 
     expect(screen.queryByRole('dialog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Reauthorize this device' }))
+    await openReauthorization()
 
     if (outcome === 'failure') {
       await act(async () =>

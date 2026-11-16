@@ -268,6 +268,11 @@ class GatewayAgentCacheMixin:
         from gateway.run import _resolve_gateway_model
         primary = getattr(agent, "_primary_runtime", None) or {}
         provider = primary.get("provider", getattr(agent, "provider", "")) or ""
+        # Aino's policy names a catalog selection (e.g. g9-glm-5.3-flash); the bound
+        # primary runtime names the inference model (glm-5.3-flash). Comparing the
+        # two evicted every successful managed turn and orphaned its child controls.
+        if primary.get("provider") == "aino" and primary.get("model"):
+            return primary["model"]
         # An override whose provider was unavailable this turn ran on the default route instead.
         override = self._session_model_override(session_key) or {}
         if override.get("model") and override.get("provider") in (None, "", provider):

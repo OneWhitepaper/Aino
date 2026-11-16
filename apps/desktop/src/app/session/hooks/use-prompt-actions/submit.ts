@@ -255,7 +255,7 @@ function prepareSubmitInput(
     }
   }
 
-  const visibleText = sanitizeComposerInput(transportRaw).trim()
+  const visibleText = sanitizeComposerInput(transportRaw)
   const hasImage = attachments.some(a => a.kind === 'image')
 
   // Refs are recomputed after sync (file.attach rewrites @file: refs to
@@ -445,7 +445,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       // not the foreground flag: an explicit target (tile, queue drain) is
       // frequently not the session on screen, so the foreground flag would gate
       // one session's send on another session's turn.
-      const hasSendable = Boolean(visibleText || attachments.length || hasImage)
+      const hasSendable = Boolean(visibleText.trim() || attachments.length || hasImage)
 
       const guardSessionId = options?.sessionId ?? activeSessionIdRef.current
       const serverQueue = serverOwnsComposerQueue(options?.storedSessionId ?? guardSessionId)

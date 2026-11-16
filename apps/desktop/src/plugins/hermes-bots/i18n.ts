@@ -32,6 +32,8 @@
 import { type PluginLocaleBundles, type PluginTranslate, usePluginI18n } from '@hermes/plugin-sdk'
 import { useMemo } from 'react'
 
+import { BOT_NAVIGATION_LOCALES, type BotNavigationMessages } from './bot-navigation-locales'
+import { BOT_WELCOME_LOCALES, type BotWelcomeMessages } from './bot-welcome-locales'
 import { CANONICAL_GROUP_LOCALES } from './canonical-group-locales'
 import { CROSS_GATEWAY_GROUP_LOCALES } from './cross-gateway-locales'
 import { GROUP_CHAT_LOCALES } from './group-chat-locales'
@@ -52,12 +54,16 @@ import { getPluginCtx } from './shared'
 
 type BotsMessages = LegacyBotsMessages &
   Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'> & {
+    navigation: BotNavigationMessages
+    welcome: BotWelcomeMessages
     group: UpstreamBotsMessages['group']
     roster: UpstreamBotsMessages['roster']
   }
 
 const en: BotsMessages = {
   ...legacyEn,
+  navigation: BOT_NAVIGATION_LOCALES['en'] ?? BOT_NAVIGATION_LOCALES.en,
+  welcome: BOT_WELCOME_LOCALES['en'],
   group: { ...legacyEn.group, ...GROUP_CHAT_LOCALES['en'] },
   roster: { ...ROSTER_CHROME['en'], ...legacyEn.roster },
   canonical: CANONICAL_GROUP_LOCALES.en,
@@ -66,6 +72,8 @@ const en: BotsMessages = {
 
 const ja: BotsMessages = {
   ...legacyJa,
+  navigation: BOT_NAVIGATION_LOCALES['ja'] ?? BOT_NAVIGATION_LOCALES.en,
+  welcome: BOT_WELCOME_LOCALES['ja'],
   group: { ...legacyJa.group, ...GROUP_CHAT_LOCALES['ja'] },
   roster: { ...ROSTER_CHROME['ja'], ...legacyJa.roster },
   canonical: CANONICAL_GROUP_LOCALES.ja,
@@ -74,6 +82,8 @@ const ja: BotsMessages = {
 
 const zh: BotsMessages = {
   ...legacyZh,
+  navigation: BOT_NAVIGATION_LOCALES['zh'] ?? BOT_NAVIGATION_LOCALES.en,
+  welcome: BOT_WELCOME_LOCALES['zh'],
   group: { ...legacyZh.group, ...GROUP_CHAT_LOCALES['zh'] },
   roster: { ...ROSTER_CHROME['zh'], ...legacyZh.roster },
   canonical: CANONICAL_GROUP_LOCALES.zh,
@@ -82,6 +92,8 @@ const zh: BotsMessages = {
 
 const zhHant: BotsMessages = {
   ...legacyZhHant,
+  navigation: BOT_NAVIGATION_LOCALES['zh-hant'] ?? BOT_NAVIGATION_LOCALES.en,
+  welcome: BOT_WELCOME_LOCALES['zh-hant'],
   group: { ...legacyZhHant.group, ...GROUP_CHAT_LOCALES['zh-hant'] },
   roster: { ...ROSTER_CHROME['zh-hant'], ...legacyZhHant.roster },
   canonical: CANONICAL_GROUP_LOCALES['zh-hant'],
@@ -96,6 +108,8 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   'zh-hant': zhHant,
   ar: {
     ...GROUP_SURFACE_AR,
+    navigation: BOT_NAVIGATION_LOCALES['ar'] ?? BOT_NAVIGATION_LOCALES.en,
+    welcome: BOT_WELCOME_LOCALES['ar'],
     canonical: CANONICAL_GROUP_LOCALES.ar,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ar,
     bot: {
@@ -107,6 +121,8 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   ru: {
     ...GROUP_SURFACE_RU,
+    navigation: BOT_NAVIGATION_LOCALES['ru'] ?? BOT_NAVIGATION_LOCALES.en,
+    welcome: BOT_WELCOME_LOCALES['ru'],
     canonical: CANONICAL_GROUP_LOCALES.ru,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ru,
     bot: {
@@ -119,6 +135,8 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   fr: {
     ...GROUP_SURFACE_FR,
+    navigation: BOT_NAVIGATION_LOCALES['fr'] ?? BOT_NAVIGATION_LOCALES.en,
+    welcome: BOT_WELCOME_LOCALES['fr'],
     canonical: CANONICAL_GROUP_LOCALES.fr,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.fr,
     bot: {
@@ -131,6 +149,8 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   de: {
     ...GROUP_SURFACE_DE,
+    navigation: BOT_NAVIGATION_LOCALES['de'] ?? BOT_NAVIGATION_LOCALES.en,
+    welcome: BOT_WELCOME_LOCALES['de'],
     canonical: CANONICAL_GROUP_LOCALES.de,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.de,
     bot: {
@@ -143,6 +163,8 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   es: {
     ...GROUP_SURFACE_ES,
+    navigation: BOT_NAVIGATION_LOCALES['es'] ?? BOT_NAVIGATION_LOCALES.en,
+    welcome: BOT_WELCOME_LOCALES['es'],
     canonical: CANONICAL_GROUP_LOCALES.es,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.es,
     bot: {

@@ -1,0 +1,63 @@
+.aino-create-bot-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: 520px;
+}
+.aino-create-model-summary {
+  display: grid;
+  gap: 7px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+.aino-create-model-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 11px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  color: var(--ui-text-secondary);
+}
+.aino-create-model-value strong {
+  color: var(--ui-text-primary);
+  font-weight: 500;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.aino-create-model-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.6;
+}
+.aino-create-bot-appearance {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+  padding-top: 12px;
+}
+.aino-create-bot-appearance > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  list-style: none;
+}
+.aino-create-bot-appearance > summary::-webkit-details-marker {
+  display: none;
+}
+.aino-create-bot-appearance > summary svg {
+  transition: transform 120ms;
+}
+.aino-create-bot-appearance[open] > summary svg {
+  transform: rotate(90deg);
+}
+.aino-create-bot-appearance-fields {
+  display: grid;
+  gap: 14px;
+  padding-block: 16px 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aino-create-bot-appearance > summary svg {
+    transition: none;
+  }
+}

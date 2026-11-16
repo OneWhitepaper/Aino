@@ -607,3 +607,24 @@ it.each(['unknown-pane', 'workspace', 'plugin-pane', 'protected-tool'])(
     expect(tree.$dismissedPanes.get().has('files')).toBe(false)
   }
 )
+
+it('opens the standing collaboration pane as an honest empty state for a fresh Bot draft', async () => {
+  const { tree, model, registry, actions } = await setup()
+  const panel = await import('@/app/agents/subagent-panel')
+  const { $toolSession } = await import('@/store/tool-session')
+  registry.register({
+    id: panel.SUBAGENT_PANEL_ID,
+    area: 'panes',
+    data: { toolPanel: true, placement: 'right', dock: { pane: 'files', pos: 'center' } },
+    render: () => null
+  })
+  tree.watchContributedPanes()
+  tree.$layoutTree.set(
+    model.split('row', [model.group(['workspace']), model.group(['files'], { id: 'tools', toolPanel: true })])
+  )
+  expect($toolSession.get().runtimeId).toBeNull()
+  expect($toolSession.get().storedId).toBeNull()
+  actions.openToolPanelResource('collaboration')
+  expect(model.findGroupOfPane(tree.$layoutTree.get()!, panel.SUBAGENT_PANEL_ID)?.active).toBe(panel.SUBAGENT_PANEL_ID)
+  expect(panel.$subagentPanelSelection.get()).toBeNull()
+})

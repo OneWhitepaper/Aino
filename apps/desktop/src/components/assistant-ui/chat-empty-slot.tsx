@@ -1,6 +1,9 @@
+import { useStore } from '@nanostores/react'
 import type { FC } from 'react'
 import { useMemo } from 'react'
 
+import { useSessionView } from '@/app/chat/session-view'
+import { useBotChatPresentation } from '@/app/chat/use-bot-chat-presentation'
 import { useContributions } from '@/contrib'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 import { CHAT_EMPTY_AREA, type ChatEmptyContribution } from '@/lib/chat-empty'
@@ -22,14 +25,19 @@ import { CHAT_EMPTY_AREA, type ChatEmptyContribution } from '@/lib/chat-empty'
  * Mounting all of them means disjoint owners each work; two claiming the same
  * session render both, which is a visible conflict rather than a silent drop.
  */
-const ChatEmptyEntry: FC<{ id: string; render: ChatEmptyContribution['render']; sessionId: string }> = ({
-  id,
-  render,
-  sessionId
-}) => {
+const ChatEmptyEntry: FC<{
+  id: string
+  render: ChatEmptyContribution['render']
+  sessionId: string
+  storedSessionId?: string
+  ownerKey?: string
+}> = ({ id, render, sessionId, storedSessionId, ownerKey }) => {
   // Stable component identity: ContribRender mounts this AS a component, so a
   // fresh closure per render would remount the empty state on every tick.
-  const renderEmpty = useMemo(() => () => render({ sessionId }), [render, sessionId])
+  const renderEmpty = useMemo(
+    () => () => render({ sessionId, storedSessionId, ownerKey }),
+    [render, sessionId, storedSessionId, ownerKey]
+  )
 
   return (
     <ContribBoundary id={id}>
@@ -38,16 +46,30 @@ const ChatEmptyEntry: FC<{ id: string; render: ChatEmptyContribution['render']; 
   )
 }
 
-export const ChatEmptySlot: FC<{ sessionId: string }> = ({ sessionId }) => {
+export const ChatEmptySlot: FC<{ sessionId: string; placement?: 'transcript' | 'composer-footer' }> = ({
+  sessionId,
+  placement = 'transcript'
+}) => {
   const contributions = useContributions(CHAT_EMPTY_AREA)
+  const view = useSessionView()
+  const storedSessionId = useStore(view.$storedId) || undefined
+  const { ownerKey } = useBotChatPresentation(storedSessionId)
 
   return (
     <>
       {contributions.map(contribution => {
-        const render = (contribution.data as ChatEmptyContribution | undefined)?.render
+        const data = contribution.data as ChatEmptyContribution | undefined
+        const render = placement === 'composer-footer' ? data?.renderComposerFooter : data?.render
 
         return render ? (
-          <ChatEmptyEntry id={contribution.id} key={contribution.id} render={render} sessionId={sessionId} />
+          <ChatEmptyEntry
+            id={contribution.id}
+            key={contribution.id}
+            ownerKey={ownerKey}
+            render={render}
+            sessionId={sessionId}
+            storedSessionId={storedSessionId}
+          />
         ) : null
       })}
     </>

@@ -3,8 +3,9 @@ import { useEffect } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useI18n } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
-import { $activeGatewayProfile, $profiles, normalizeProfileKey, profileLabel, refreshProfiles } from '@/store/profile'
+import { $activeGatewayProfile, $profiles, normalizeProfileKey, refreshProfiles } from '@/store/profile'
 import {
   $settingsScopeEditsNonDefault,
   $settingsScopeOverride,
@@ -13,10 +14,13 @@ import {
 } from '@/store/settings-scope'
 import type { ProfileInfo } from '@/types/hermes'
 
-// Settings chips share the Agent Hub name-first presentation. Canonical names
-// remain the fallback for profiles that have no friendly label.
+// Custom Bot names remain authoritative; Aino names the ordinary default scope.
 export function settingsScopeLabel(profile: Pick<ProfileInfo, 'bot_title' | 'display_name' | 'name'>): string {
-  return (profile.bot_title ?? '').trim() || profileLabel(profile)
+  return (
+    (profile.bot_title ?? '').trim() ||
+    (profile.display_name ?? '').trim() ||
+    (normalizeProfileKey(profile.name) === 'default' ? PRODUCT_NAME : profile.name)
+  )
 }
 
 // The same chip affordance the Gateway page uses for its per-profile
@@ -57,7 +61,7 @@ export function SettingsProfileScope({ className, compact = false }: { className
   // chip (Bot title → display_name → slug); the slug alone can name a bot the
   // user has never seen called that.
   const selectedLabel = profiles.find(profile => normalizeProfileKey(profile.name) === selected)
-  const selectedName = selectedLabel ? settingsScopeLabel(selectedLabel) : selected
+  const selectedName = settingsScopeLabel(selectedLabel ?? { name: selected })
 
   // Refresh lazily so a profile created elsewhere shows up; the cached list
   // paints immediately. Best-effort — a failure keeps the cached roster.
@@ -144,7 +148,7 @@ export function ActiveProfileNote({ className }: { className?: string }) {
       )}
       role="status"
     >
-      {t.settings.profileScope.editsProfile(profile ? settingsScopeLabel(profile) : key)}
+      {t.settings.profileScope.editsProfile(settingsScopeLabel(profile ?? { name: key }))}
     </p>
   )
 }

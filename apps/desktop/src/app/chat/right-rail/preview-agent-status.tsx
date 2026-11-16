@@ -1,9 +1,9 @@
 import { useStore } from '@nanostores/react'
+import { Eye, ShieldCheck, UserRound } from 'lucide-react'
 import { computed } from 'nanostores'
 import { useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 
 import { $previewAgentActivity, resumePreview, takeOverPreview } from './preview-agent-control'
@@ -20,13 +20,13 @@ export function PreviewAgentStatus({ tabId }: PreviewAgentStatusProps) {
   const activity = useMemo(() => computed($previewAgentActivity, state => state[tabId] ?? 'idle'), [tabId])
   const phase = useStore(activity)
   const label = phase === 'idle' ? copy.ready : copy[phase]
-  const icon = phase === 'human' ? 'account' : phase === 'confirmation' ? 'shield' : 'eye'
+  const Icon = phase === 'human' ? UserRound : phase === 'confirmation' ? ShieldCheck : Eye
 
   return (
-    <div className="flex h-6 w-40 shrink-0 items-center gap-1 text-[length:var(--aino-text-caption)] text-muted-foreground">
+    <div data-preview-agent-status="">
       <PreviewWebsiteDialog tabId={tabId} />
       <span aria-live="polite" className="flex min-w-0 flex-1 items-center gap-1" role="status" title={label}>
-        <Codicon className="shrink-0" name={icon} size="0.75rem" />
+        <Icon aria-hidden className="shrink-0" size={14} strokeWidth={1.65} />
         <span className="truncate">{label}</span>
       </span>
       {phase !== 'human' ? (

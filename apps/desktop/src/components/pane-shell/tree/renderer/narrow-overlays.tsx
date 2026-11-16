@@ -10,6 +10,7 @@ import { type Dispatch, type RefObject, type SetStateAction, useRef } from 'reac
 import { type MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { openToolPanelChooser, TOOL_CHOOSER_PANE } from '@/app/right-sidebar/tool-panel-actions'
+import { ToolPanelStrip } from '@/app/right-sidebar/tool-panel-strip'
 import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
 import { useTitlebarHeight } from '@/app/shell/use-touch-titlebar'
 import { Codicon } from '@/components/ui/codicon'
@@ -144,6 +145,12 @@ export function NarrowOverlays() {
   const workspaceMode = useStore($workspaceMode)
   const workspaceOwnerKey = useStore($workspaceOwnerKey)
   const [reveal, setReveal] = useState<RevealState | null>(null)
+
+  useEffect(() => {
+    if (workspacePage) {
+      setReveal(null)
+    }
+  }, [workspacePage])
 
   // The revealed overlay spans the full viewport height (inset-y-0 below), so
   // its tab strip starts at the top edge — under the native window controls
@@ -385,6 +392,7 @@ function NarrowOverlayTabs({
   setReveal
 }: NarrowOverlayTabsProps) {
   const { locale, t } = useI18n()
+  const workspaceMode = useStore($workspaceMode)
 
   const tabKeyboardProps = usePaneTabKeyboard(
     zonePanes.map(pane => pane.id),
@@ -427,7 +435,31 @@ function NarrowOverlayTabs({
           }}
         />
       ) : (
-        (toolPanel || zonePanes.length > 1) && (
+        (toolPanel || zonePanes.length > 1) &&
+        (toolPanel && revealedGroup && workspaceMode === 'bots' ? (
+          <ToolPanelStrip
+            activate={id => {
+              activateTreePane(revealedGroup.id, id)
+              setReveal({ id, pinned: true })
+            }}
+            activeId={revealed.id}
+            canMaximize={false}
+            groupId={revealedGroup.id}
+            listRef={tabsRef}
+            onClose={
+              !paneChrome(revealed).hideOnly && !paneChrome(revealed).uncloseable
+                ? () => closeTabPane(revealed.id)
+                : undefined
+            }
+            onHide={() => setReveal(null)}
+            panes={zonePanes.map(pane => pane.id)}
+            title={id => {
+              const pane = panes.find(item => item.id === id)
+
+              return localizedPaneTitle(t, id, String(pane?.title ?? id), pane?.source, locale)
+            }}
+          />
+        ) : (
           <PaneTabStrip
             listRef={tabsRef}
             trailing={
@@ -505,7 +537,7 @@ function NarrowOverlayTabs({
               />
             )}
           </PaneTabStrip>
-        )
+        ))
       )}
     </>
   )

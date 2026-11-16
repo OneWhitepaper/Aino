@@ -15,15 +15,12 @@ import { useLocation, useNavigate } from 'react-router'
 
 import { useAccountActions } from '@/app/account/account-context'
 import { AccountGate } from '@/app/account/account-gate'
+import { useWorkspaceRoute } from '@/app/contrib/hooks/use-workspace-route'
+import { RoutePageSurface } from '@/app/overlays/overlay-view'
 import { SummaryPane } from '@/app/right-sidebar/summary'
 import { formatRefValue } from '@/components/assistant-ui/directive-text'
-import { StartupOverlay } from '@/components/boot-failure-overlay'
-import { ConfirmHost } from '@/components/confirm-host'
-import { DesktopInstallOverlay } from '@/components/desktop-install-overlay'
-import { ExternalOpenFailedDialog } from '@/components/external-open-failed-dialog'
 import { FindBar } from '@/components/find-bar'
 import { FreeTierSignInDialog } from '@/components/free-tier/sign-in-dialog'
-import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
 import { DesktopOnboardingOverlay } from '@/components/onboarding'
 import { firstRunIntro } from '@/components/onboarding/first-run/kickoff'
 import { OnboardingEnd } from '@/components/onboarding/onboarding-end'
@@ -31,7 +28,6 @@ import { $newSessionTabAction, registerPaneCloser } from '@/components/pane-shel
 import { setWorkspaceScope } from '@/components/pane-shell/workspace-scope'
 import { FloatingPet } from '@/components/pet/floating-pet'
 import { RemoteDisplayBanner } from '@/components/remote-display-banner'
-import { SendDiagnosticsHost } from '@/components/send-diagnostics-dialog'
 import { SharedMetricsConsentDialog } from '@/components/shared-metrics/consent-dialog'
 import { TipHost } from '@/components/tips'
 import { emitGatewayEvent } from '@/contrib/events'
@@ -120,14 +116,7 @@ import { resetProjectTreeState } from '../right-sidebar/files/use-project-tree'
 import { ReviewRevertDialog } from '../right-sidebar/review/revert-dialog'
 import { PersistentTerminal } from '../right-sidebar/terminal/persistent'
 import { closeAllTerminals } from '../right-sidebar/terminal/terminals'
-import {
-  CRON_ROUTE,
-  navigateToWorkspacePage,
-  routeSessionId,
-  sessionRoute,
-  SETTINGS_ROUTE,
-  syncWorkspaceRoute
-} from '../routes'
+import { CRON_ROUTE, navigateToWorkspacePage, routeSessionId, sessionRoute, SETTINGS_ROUTE } from '../routes'
 import { SessionImportView } from '../session-import'
 import { SessionPickerOverlay } from '../session-picker-overlay'
 import { SessionSwitcher } from '../session-switcher'
@@ -165,6 +154,7 @@ import { PreviewSigninsBoot } from './hooks/use-preview-signins-boot'
 import { useQuickEntryBridge } from './hooks/use-quick-entry-bridge'
 import { useSessionTileDelegate } from './hooks/use-session-tile-delegate'
 import { McpInstallDeepLinkDialog } from './mcp-install-deeplink-dialog'
+import { WiringRecoverySurfaces } from './recovery-surfaces'
 import { type AmbientGatewayRequest, createSessionRpcDispatcher } from './session-rpc-dispatcher'
 import { ChatRoutesSurface, SidebarSurface, TerminalSurface } from './surfaces'
 import type { WiringActions, WiringApi } from './types'
@@ -351,9 +341,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   // headerVeto from $workspaceIsPage (so the main zone's tab bar stands down
   // on pages), and a page route fronts the pane so it can't stay stuck behind
   // a focused session tile.
-  useEffect(() => {
-    syncWorkspaceRoute(location.pathname)
-  }, [location.pathname])
+  useWorkspaceRoute(location.pathname)
 
   const {
     chatOpen,
@@ -1263,63 +1251,54 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         <RemoteFolderPicker />
         <FindBar />
 
-        {currentView === 'session-import' && (
-          <SessionImportView
-            key={`${activeConnectionId}:${activeGatewayProfile}`}
-            onClose={closeOverlayToPreviousRoute}
-            onOpenSession={sessionId => {
-              closeOverlayToPreviousRoute()
-              openSession(sessionId, navigate, 'stack')
-            }}
-            owner={{ connectionId: activeConnectionId || 'local', profile: activeGatewayProfile }}
-          />
-        )}
-
-        {commandCenterOpen && (
-          <Suspense fallback={null}>
-            <CommandCenterView
-              initialSection={commandCenterInitialSection}
+        <RoutePageSurface value={true}>
+          {currentView === 'session-import' && (
+            <SessionImportView
+              key={`${activeConnectionId}:${activeGatewayProfile}`}
               onClose={closeOverlayToPreviousRoute}
-              onDeleteSession={sessionId => removeSession(sessionId, { throwOnError: true })}
-              onNavigateRoute={path => navigateToWorkspacePage(navigate, path)}
-              onOpenSession={sessionId => openSession(sessionId, navigate)}
+              onOpenSession={sessionId => {
+                closeOverlayToPreviousRoute()
+                openSession(sessionId, navigate, 'stack')
+              }}
+              owner={{ connectionId: activeConnectionId || 'local', profile: activeGatewayProfile }}
             />
-          </Suspense>
-        )}
+          )}
 
-        {cronOpen && (
-          <Suspense fallback={null}>
-            <CronView
-              onClose={closeOverlayToPreviousRoute}
-              onOpenSession={sessionId => openSession(sessionId, navigate)}
-            />
-          </Suspense>
-        )}
+          {commandCenterOpen && (
+            <Suspense fallback={null}>
+              <CommandCenterView
+                initialSection={commandCenterInitialSection}
+                onClose={closeOverlayToPreviousRoute}
+                onDeleteSession={sessionId => removeSession(sessionId, { throwOnError: true })}
+                onNavigateRoute={path => navigateToWorkspacePage(navigate, path)}
+                onOpenSession={sessionId => openSession(sessionId, navigate)}
+              />
+            </Suspense>
+          )}
 
-        {webhooksOpen && (
-          <Suspense fallback={null}>
-            <WebhooksView onClose={closeOverlayToPreviousRoute} />
-          </Suspense>
-        )}
+          {cronOpen && (
+            <Suspense fallback={null}>
+              <CronView
+                onClose={closeOverlayToPreviousRoute}
+                onOpenSession={sessionId => openSession(sessionId, navigate)}
+              />
+            </Suspense>
+          )}
 
-        {starmapOpen && (
-          <Suspense fallback={null}>
-            <StarmapView onClose={closeOverlayToPreviousRoute} />
-          </Suspense>
-        )}
+          {webhooksOpen && (
+            <Suspense fallback={null}>
+              <WebhooksView onClose={closeOverlayToPreviousRoute} />
+            </Suspense>
+          )}
 
-        {/* Backs confirm() from @/store/confirm — renders only while one is open. */}
-        <ConfirmHost />
+          {starmapOpen && (
+            <Suspense fallback={null}>
+              <StarmapView onClose={closeOverlayToPreviousRoute} />
+            </Suspense>
+          )}
+        </RoutePageSurface>
 
         <PreviewSigninsBoot />
-
-        {/* Send Diagnostics consent/upload dialog — driven by $sendDiagnostics
-          (error card action); renders nothing until requested. */}
-        <SendDiagnosticsHost />
-
-        {/* Fallback modal when opening an external URL fails — carries the URL
-          so a dead system-browser click is never silent. */}
-        <ExternalOpenFailedDialog />
 
         {/* Petdex floating mascot — renders nothing unless installed + enabled.
           Never in the HUD: that window is the chat bar and nothing else. */}
@@ -1335,9 +1314,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         {!isHudWindow() && !isBrowserWindow() && (
           <PersistentTerminal onAddSelectionToChat={composer.addTerminalSelectionAttachment} />
         )}
-        {!isAuxiliaryWindow() && <DesktopInstallOverlay />}
-        <GatewayConnectingOverlay />
-        <StartupOverlay />
+        <WiringRecoverySurfaces />
       </AccountGate>
     </ContribWiringContext.Provider>
   )

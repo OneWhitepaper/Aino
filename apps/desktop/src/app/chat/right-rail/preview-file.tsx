@@ -303,15 +303,15 @@ async function readTextPreview(filePath: string, sessionId?: string) {
 // our components keep typography simple and route fenced code through Shiki
 // without the library's copy/download/fullscreen chrome.
 const MD_TAG_CLASSES = {
-  h1: 'mb-3 mt-6 text-[1.6875rem] font-semibold leading-[1.4] tracking-tight first:mt-0',
-  h2: 'mb-2.5 mt-7 text-lg font-semibold leading-normal tracking-tight first:mt-0',
+  h1: 'mb-3.5 mt-6 text-xl font-semibold leading-[1.45] tracking-tight first:mt-0',
+  h2: 'mb-2 mt-7 text-sm font-medium leading-normal first:mt-0',
   h3: 'mb-2.5 mt-5 text-sm font-semibold leading-normal first:mt-0',
   h4: 'mb-2 mt-4 text-[length:var(--aino-text-label)] font-semibold leading-normal first:mt-0',
   p: 'mb-3 leading-[1.9] text-(--ui-text-secondary) last:mb-0',
   ul: 'mb-4 list-disc pl-6 marker:text-muted-foreground/70 last:mb-0',
   ol: 'mb-4 list-decimal pl-6 marker:text-muted-foreground/70 last:mb-0',
   li: 'mt-1 leading-[1.9]',
-  blockquote: 'mb-4 border-l-2 border-border pl-3 text-muted-foreground italic last:mb-0',
+  blockquote: 'my-5 border-l border-border pl-3.5 text-muted-foreground last:mb-0',
   pre: 'mb-4 overflow-hidden rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-editor) font-mono text-xs leading-relaxed last:mb-0 [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:font-mono',
   hr: 'my-6 border-border',
   th: 'px-3 py-2 text-left text-[length:var(--aino-text-label)] font-medium text-foreground',
@@ -474,7 +474,7 @@ export function MarkdownPreview({ filePath, text }: { filePath?: string; text: s
   return (
     <PreviewNoteContext.Provider value={filePath}>
       <div
-        className="preview-markdown mx-auto w-full max-w-3xl px-4 py-3 text-[length:var(--aino-text-label)] text-(--ui-text-secondary)"
+        className="preview-markdown mx-auto w-full max-w-3xl px-[21px] py-6 text-[length:var(--aino-text-caption)] leading-[1.9] text-(--ui-text-secondary)"
         data-preview-markdown=""
         data-selectable-text="true"
       >
@@ -524,7 +524,7 @@ export function PreviewModeSwitcher({
     // Fixed height so the header is byte-identical between read and edit modes —
     // swapping the trailing controls must never move the body below it.
     <div
-      className="flex h-8 shrink-0 items-center gap-1 border-b border-(--ui-stroke-tertiary) px-2"
+      className="flex h-[43px] shrink-0 items-center gap-1 border-b border-(--ui-stroke-tertiary) px-3.5"
       data-preview-toolbar=""
     >
       {showModes &&

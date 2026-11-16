@@ -28,6 +28,7 @@ export function BackgroundSection({ session }: { session: SummarySession }) {
             <Tip label={item.title}>
               <Button
                 className="min-w-0 flex-1 justify-start"
+                data-slot="summary-resource-row"
                 disabled={!summarySessionIsCurrent(session)}
                 onClick={() => {
                   if (!summarySessionIsCurrent(session)) {
@@ -42,9 +43,10 @@ export function BackgroundSection({ session }: { session: SummarySession }) {
               >
                 <Codicon name="terminal" />
                 <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
-                <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                <span className="shrink-0 text-(--ui-text-tertiary)" data-slot="summary-row-status">
                   {t.summary.background.status[item.state]}
                 </span>
+                <Codicon aria-hidden name="chevron-right" size="0.75rem" />
               </Button>
             </Tip>
             <Tip label={item.state === 'running' ? t.statusStack.stop : t.statusStack.dismiss}>

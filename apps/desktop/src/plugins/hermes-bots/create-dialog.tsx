@@ -1,6 +1,9 @@
+import './create-agent-dialog.css'
+
 import {
   Button,
   Checkbox,
+  Codicon,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -43,6 +46,8 @@ import { refreshGatewayGroupRooms, registerCanonicalGroup } from './canonical-gr
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
 import { canonicalGroupCreateError, canonicalGroupCreateNotice, createCanonicalGroup } from './canonical-groups'
 import type { GroupCreationIntent } from './canonical-groups'
+import { CreateAgentModelSummary } from './create-agent-model-summary'
+import { CreateAgentCatalogStatus, creationModelSummaryProps } from './create-dialog-presentation'
 import {
   type CapabilityCatalog,
   type DraftResetSnapshot,
@@ -87,6 +92,10 @@ const ADVANCED_DIALOG_STYLE = {
 
 function activeCreationSource(): string {
   return `${host.state?.connectionId?.get?.() || ''}\0${host.state?.profile?.get?.() || 'default'}`
+}
+
+function invalidateCreatedRoster(): void {
+  void queryClient.invalidateQueries({ queryKey: ROSTER_KEY })
 }
 
 /** Share one in-flight async operation across concurrent callers. Failures
@@ -186,13 +195,12 @@ interface CreateAgentNameFieldProps {
 }
 
 function CreateAgentNameField({ name, onName, taken, slug, remoteTarget, targetLabel }: CreateAgentNameFieldProps) {
-  const { t } = useI18n()
   const b = useBots()
 
   return (
     <>
       {labeled(
-        t.profiles.nameLabel,
+        b.navigation.name,
         <Input
           autoFocus
           onChange={event => onName(event.target.value)}
@@ -211,12 +219,55 @@ function CreateAgentNameField({ name, onName, taken, slug, remoteTarget, targetL
 
 interface CreateAgentDialogProps {
   onClose: () => void
+  /** Management creates the profile without changing the current conversation. */
+  openAfterCreate?: boolean
   /** Refresh the mounted roster before selecting a just-created owner. */
   onRefreshRoster?: () => Promise<RosterRow[]>
   /** Opens the editor for a just-created local bot whose model is not ready. */
   onConfigureModel?: (bot: RosterRow) => void
   open: boolean
   roster: RosterRow[]
+}
+
+interface CreateAgentConnectionSelectProps {
+  activeConnectionId: string
+  connections: ConnectionRow[] | null
+  onChange: (value: string) => void
+  targetConnection: string
+}
+
+function CreateAgentConnectionSelect({
+  activeConnectionId,
+  connections,
+  onChange,
+  targetConnection
+}: CreateAgentConnectionSelectProps) {
+  const b = useBots()
+
+  // A single gateway is already the implicit home; only a fleet needs a picker.
+  if (!Array.isArray(connections) || connections.length <= 1) {
+    return null
+  }
+
+  const current = activeConnectionId || 'local'
+
+  return labeled(
+    b.bot.createOn,
+    <Select onValueChange={onChange} value={targetConnection || current}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {connections.map(connection => (
+          <SelectItem key={connection.id} value={connection.id}>
+            {connection.id === current
+              ? `${connection.label || connection.id} (${b.bot.currentSuffix})`
+              : connection.label || connection.id}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }
 
 /** An explicit connection selection only routes remotely when it differs
@@ -533,6 +584,7 @@ export function CreateAgentDialog({
   onClose,
   onConfigureModel,
   onRefreshRoster,
+  openAfterCreate = true,
   roster
 }: CreateAgentDialogProps) {
   const { t } = useI18n()
@@ -630,7 +682,7 @@ export function CreateAgentDialog({
     },
     afterReset: () => {
       resetCapabilities()
-      queryClient.invalidateQueries({ queryKey: ROSTER_KEY })
+      invalidateCreatedRoster()
     }
   })
 
@@ -909,9 +961,7 @@ export function CreateAgentDialog({
         )
       }
 
-      queryClient.invalidateQueries({
-        queryKey: ROSTER_KEY
-      })
+      invalidateCreatedRoster()
 
       return slug
     })
@@ -1005,13 +1055,10 @@ export function CreateAgentDialog({
       reset()
       onClose()
 
-      if (wasRemote) {
-        // The bot lives on another machine: it appears in the roster via the
-        // union enumeration; chat routes through its own source. No local
-        // canonical chat to birth here.
-        queryClient.invalidateQueries({
-          queryKey: ROSTER_KEY
-        })
+      if (wasRemote || !openAfterCreate) {
+        // Management and remote creation only refresh the roster. A canonical
+        // chat is opened later by the existing explicit row-click transaction.
+        invalidateCreatedRoster()
 
         return
       }
@@ -1061,7 +1108,7 @@ export function CreateAgentDialog({
       open={open}
     >
       <DialogContent
-        className={advanced ? 'max-w-3xl' : 'max-w-md'}
+        className={advanced ? 'max-w-3xl' : 'aino-create-bot-dialog'}
         style={advanced ? ADVANCED_DIALOG_STYLE : undefined}
       >
         <DialogHeader>
@@ -1069,17 +1116,6 @@ export function CreateAgentDialog({
           <DialogDescription>{b.editor.newDescription}</DialogDescription>
         </DialogHeader>
         <fieldset className="grid min-w-0 gap-3.5 border-0 p-0" disabled={busy}>
-          <CreateAgentAppearance
-            color={color}
-            description={description}
-            image={image}
-            onColor={setColor}
-            onImage={setImage}
-            onShape={setShape}
-            shape={shape}
-            slug={slug}
-            title={title}
-          />
           <CreateAgentNameField
             name={name}
             onName={setName}
@@ -1088,54 +1124,55 @@ export function CreateAgentDialog({
             taken={taken}
             targetLabel={targetLabel}
           />
-          {/* Multi-connection desktops choose WHERE the agent lives. Hidden */
-          /* on single-connection setups — the active gateway is the only */
-          /* possible home, exactly the old behavior. */}
-          {Array.isArray(connections) && connections.length > 1
-            ? labeled(
-                b.bot.createOn,
-                <Select
-                  onValueChange={value => {
-                    // A draft minted on the old home is not this bot anymore.
-                    discardDraft()
-                    setCreatedForCaps(null)
-                    setTargetConnection(value === (activeConnectionId || 'local') ? '' : value)
-                    // The capability catalog and clone list belong to the
-                    // target backend — refetch for the new home. The live
-                    // Capabilities tab re-pins to it via fixedConnection on
-                    // builds that route it (staged checklists otherwise).
-                    setCaps(null)
-                    setCapsFailed(false)
-                    setAdvTab('general')
-                  }}
-                  value={targetConnection || activeConnectionId || 'local'}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {connections.map(connection => (
-                      <SelectItem key={connection.id} value={connection.id}>
-                        {connection.id === (activeConnectionId || 'local')
-                          ? `${connection.label || connection.id} (${b.bot.currentSuffix})`
-                          : connection.label || connection.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
-            : null}
-          {remoteTarget ? (
-            <div className="text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)">
-              {b.bot.remoteCreateHint(targetLabel)}
-            </div>
-          ) : null}
-          <CreateAgentDescriptionFields
-            description={description}
-            onDescription={setDescription}
-            onTitle={setTitle}
-            title={title}
+          <CreateAgentModelSummary
+            {...creationModelSummaryProps(activeConnectionId, cloneFrom, createTarget, remoteTarget)}
+            model={model}
+            open={open}
+            provider={provider}
           />
+          <details className="aino-create-bot-appearance">
+            <summary>
+              <Codicon name="chevron-right" size={12} />
+              {b.navigation.appearance}
+            </summary>
+            <div className="aino-create-bot-appearance-fields">
+              <CreateAgentAppearance
+                color={color}
+                description={description}
+                image={image}
+                onColor={setColor}
+                onImage={setImage}
+                onShape={setShape}
+                shape={shape}
+                slug={slug}
+                title={title}
+              />
+              <CreateAgentConnectionSelect
+                activeConnectionId={activeConnectionId}
+                connections={connections}
+                onChange={value => {
+                  discardDraft()
+                  setCreatedForCaps(null)
+                  setTargetConnection(value === (activeConnectionId || 'local') ? '' : value)
+                  setCaps(null)
+                  setCapsFailed(false)
+                  setAdvTab('general')
+                }}
+                targetConnection={targetConnection}
+              />
+              {remoteTarget ? (
+                <div className="text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)">
+                  {b.bot.remoteCreateHint(targetLabel)}
+                </div>
+              ) : null}
+              <CreateAgentDescriptionFields
+                description={description}
+                onDescription={setDescription}
+                onTitle={setTitle}
+                title={title}
+              />
+            </div>
+          </details>
           <Button
             className="flex items-center gap-1 text-xs font-medium text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)"
             onClick={() => {
@@ -1255,14 +1292,8 @@ export function CreateAgentDialog({
                   draft={createdForCaps === slug ? createdForCaps : null}
                   hint={!valid ? b.editor.nameFirstHint : taken ? b.editor.nameTakenHint : null}
                 />
-              ) : capsFailed ? (
-                <div className="px-2 py-3 text-center text-xs text-(--ui-text-tertiary)">
-                  {b.bot.catalogUnsupported}
-                </div>
-              ) : !caps ? (
-                <div className="flex justify-center py-4">
-                  <GlyphSpinner className="text-(--ui-text-tertiary)" spinner="breathe" />
-                </div>
+              ) : capsFailed || !caps ? (
+                <CreateAgentCatalogStatus failed={capsFailed} />
               ) : advTab === 'skills' ? (
                 noSkills ? (
                   <div className="px-2 py-3 text-center text-xs text-(--ui-text-tertiary)">{b.bot.emptySkills}</div>

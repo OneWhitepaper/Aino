@@ -6,11 +6,17 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
   Tabs,
   TabsContent,
   TabsList,
-  TabsTrigger
+  TabsTrigger,
+  Tip,
+  useI18n
 } from '@hermes/plugin-sdk'
 import { type ReactNode, useState } from 'react'
 
@@ -69,6 +75,7 @@ export function CanonicalGroupHeader({
   room
 }: CanonicalGroupHeaderProps) {
   const labels = useCanonicalGroupLabels()
+  const { t } = useI18n()
   const { nameFor } = useCanonicalMembers(binding)
   const members = room?.members ?? []
 
@@ -91,65 +98,86 @@ export function CanonicalGroupHeader({
         : labels.ready
 
   return (
-    <header className="aino-group-header" data-main-tab={mainTab || undefined}>
-      {onBack && (
-        <Button aria-label={labels.back} onClick={onBack} size="icon-sm" variant="ghost">
-          <Codicon name="arrow-left" />
-        </Button>
-      )}
-      <div className="aino-group-heading">
-        {!mainTab && <h2 title={room?.name}>{room?.name || labels.loadingGroup}</h2>}
-        <div className="aino-group-participants">
-          {members.slice(0, 3).map(member => (
+    <header className="aino-group-header-stack">
+      <div className="aino-group-header" data-main-tab={mainTab || undefined}>
+        {onBack && (
+          <Button aria-label={labels.back} onClick={onBack} size="icon-sm" variant="ghost">
+            <Codicon name="arrow-left" />
+          </Button>
+        )}
+        <div className="aino-group-room-icon">
+          <Codicon name="organization" size={20} />
+        </div>
+        <div className="aino-group-heading">
+          {!mainTab && <h2 title={room?.name}>{room?.name || labels.loadingGroup}</h2>}
+        </div>
+        <CanonicalGroupAttention driver={driver} labels={labels} />
+        <div className="aino-group-header-actions">
+          {onInfoOpenChange && (
             <Button
-              aria-label={`${labels.reply} ${nameFor(member)}`}
-              className="aino-group-participant"
-              disabled={!onMention || !!room?.disbanded_at}
-              key={member.member_id}
-              onClick={() => onMention?.(member)}
-              size="sm"
+              aria-controls={infoPanelId}
+              aria-expanded={infoOpen}
+              aria-label={labels.groupInfo}
+              className="aino-group-info-toggle"
+              disabled={busy && !room}
+              onClick={() => onInfoOpenChange(!infoOpen)}
+              size="icon-sm"
               variant="ghost"
             >
-              <CanonicalMemberAvatar binding={binding} member={member} size={24} />
-              <span>
-                {nameFor(member)}
-                {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
-                {peerBadges.get(member.member_id) && <small className="ml-2">{peerBadges.get(member.member_id)}</small>}
-              </span>
-            </Button>
-          ))}
-          {members.length > 3 && (
-            <Button aria-label={labels.members} onClick={() => onInfoOpenChange?.(true)} size="sm" variant="ghost">
-              +{members.length - 3}
+              <Codicon name="organization" />
             </Button>
           )}
-          <p aria-live="polite" className="aino-group-presence">
-            <span className="sr-only">
-              {members.length} {labels.members}
-              <span aria-hidden="true"> · </span>
-            </span>
-            {state}
-          </p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label={t.common.actions} size="icon-sm" variant="ghost">
+                <Codicon name="ellipsis" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={!onInfoOpenChange} onSelect={() => onInfoOpenChange?.(true)}>
+                <Codicon name="settings-gear" />
+                {labels.groupInfo}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!onSearch} onSelect={onSearch}>
+                <Codicon name="search" />
+                {labels.searchMessages}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-      <CanonicalGroupAttention driver={driver} labels={labels} />
-      <div className="aino-group-header-actions">
+      <div className="aino-group-members-bar">
+        <div className="aino-group-participants">
+          {members.slice(0, 6).map(member => (
+            <Tip
+              key={member.member_id}
+              label={`${nameFor(member)}${(member as { lead?: boolean }).lead ? ` · ${labels.leadBadge}` : ''}`}
+            >
+              <Button
+                aria-description={(member as { lead?: boolean }).lead ? labels.leadBadge : undefined}
+                aria-label={`${labels.reply} ${nameFor(member)}`}
+                className="aino-group-participant"
+                data-attention={peerBadges.has(member.member_id) || undefined}
+                disabled={!onMention || !!room?.disbanded_at}
+                onClick={() => onMention?.(member)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <CanonicalMemberAvatar binding={binding} member={member} size={20} />
+                {peerBadges.has(member.member_id) && <small>{peerBadges.get(member.member_id)}</small>}
+              </Button>
+            </Tip>
+          ))}
+        </div>
+        <Button className="aino-group-member-count" onClick={() => onInfoOpenChange?.(true)} size="sm" variant="ghost">
+          {members.length} {labels.members}
+        </Button>
+        <p aria-live="polite" className="aino-group-presence">
+          {state}
+        </p>
         {onSearch && (
           <Button aria-label={labels.searchMessages} onClick={onSearch} size="icon-sm" variant="ghost">
             <Codicon name="search" />
-          </Button>
-        )}
-        {onInfoOpenChange && (
-          <Button
-            aria-controls={infoPanelId}
-            aria-expanded={infoOpen}
-            className="aino-group-info-toggle"
-            disabled={busy && !room}
-            onClick={() => onInfoOpenChange(!infoOpen)}
-            variant="ghost"
-          >
-            <Codicon name="organization" />
-            <span>{labels.groupInfo}</span>
           </Button>
         )}
       </div>

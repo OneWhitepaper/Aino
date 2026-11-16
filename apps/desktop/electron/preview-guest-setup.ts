@@ -1,8 +1,10 @@
 import type { App, BrowserWindow, Session, WebContents } from 'electron'
 
+import { isPreviewPartition } from '../shared/preview-partition'
+
 import { previewGuestInputAction } from './preview-guest-escape'
 import { nativePreviewOwner } from './preview-guest-owner'
-import { applyPreviewGuestAttachPrefs, isPreviewPartition } from './preview-guest-throttle'
+import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
 
 interface EscapeDeps {
   app: App

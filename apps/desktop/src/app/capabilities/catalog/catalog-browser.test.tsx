@@ -22,7 +22,7 @@ afterEach(() => {
   $catalogCardView.set(true)
 })
 
-function setup(kind: CatalogKind, onToggle?: () => void) {
+function setup(kind: CatalogKind, onToggle?: () => void, initialInstalledOnly = false) {
   const entries = parseCatalog(
     kind,
     ['alpha', 'beta'].map(name => ({
@@ -49,6 +49,7 @@ function setup(kind: CatalogKind, onToggle?: () => void) {
       <QueryClientProvider client={queryClient}>
         <PageSearchShell onSearchChange={setQuery} searchPlaceholder="Search catalog" searchValue={query}>
           <CatalogBrowser
+            initialInstalledOnly={initialInstalledOnly}
             isInstalled={entry => entry.name === 'beta'}
             kind={kind}
             onInstall={onInstall}
@@ -70,6 +71,24 @@ function setup(kind: CatalogKind, onToggle?: () => void) {
 
 const card = (name: string) =>
   screen.getAllByRole('article').find(article => within(article).queryByRole('button', { name }))!
+
+it('starts a management catalog on installed skills while keeping discovery and install available', () => {
+  $catalogCardView.set(false)
+  const onToggle = vi.fn()
+  const { entries, onInstall } = setup('skills', onToggle, true)
+
+  expect(screen.getByRole('button', { name: 'Installed 1', pressed: true })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'alpha' })).toBeNull()
+  fireEvent.click(screen.getByRole('switch', { name: 'Enable beta' }))
+  expect(onToggle).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('dialog')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Discover Skills' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add alpha' }))
+
+  expect(onInstall).toHaveBeenCalledExactlyOnceWith(entries[0])
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
 
 describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
   it('replaces the previous category and clears the current category when clicked again', () => {

@@ -2,9 +2,9 @@ import '../catalog/catalog-discovery.css'
 
 import type { ReactNode } from 'react'
 
-import { CatalogCard, type CatalogCardVariant } from '../catalog/catalog-card'
 import type { CatalogEntry, CatalogKind } from '../catalog/catalog-data'
 import { CatalogDeveloper } from '../catalog/catalog-developer'
+import { CatalogListRow } from '../catalog/catalog-list-row'
 
 export interface CatalogSurfaceItem {
   id: string
@@ -22,12 +22,10 @@ export interface CatalogSurfaceSection {
   id: string
   label: string
   blurb?: string
-  /** `feature` is the tall-card row; `list` is the two-up small-banner list. */
+  /** Featured items retain their own section ahead of the themed lists. */
   layout: 'feature' | 'list'
   items: CatalogSurfaceItem[]
 }
-
-const VARIANT: Record<CatalogSurfaceSection['layout'], CatalogCardVariant> = { feature: 'compact', list: 'horizontal' }
 
 const entryFor = (item: CatalogSurfaceItem, category: string): CatalogEntry => ({
   id: item.id,
@@ -56,9 +54,8 @@ const entryFor = (item: CatalogSurfaceItem, category: string): CatalogEntry => (
   search: ''
 })
 
-/** The catalog page for a capability that isn't a registry feed: the same
- *  headings, cards and developer banner, laid out as the board's feature row
- *  and small-banner lists. State and actions stay with the caller. */
+/** Non-registry capabilities use the same directory rows as installed skills.
+ *  Featured ordering, metadata and all writes stay with the caller. */
 export function CatalogSurface({
   sections,
   kind,
@@ -81,14 +78,15 @@ export function CatalogSurface({
                   {section.blurb && <p>{section.blurb}</p>}
                 </div>
               </header>
-              <div className={section.layout === 'feature' ? 'catalog-feature-row' : 'catalog-banner-list'}>
+              <div className="catalog-list catalog-surface-list">
                 {section.items.map(item => (
-                  <CatalogCard
+                  <CatalogListRow
                     action={item.action}
                     entry={entryFor(item, section.id)}
                     key={item.id}
+                    meta={[...new Set([item.eyebrow, item.badge].filter(Boolean))].join(' · ')}
                     onOpen={item.onOpen}
-                    variant={VARIANT[section.layout]}
+                    selected={false}
                   />
                 ))}
               </div>

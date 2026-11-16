@@ -455,30 +455,6 @@ class ProfileUnavailableError(FileNotFoundError):
     so a client holding a deleted profile gets a typed error instead of a ws dispatch crash (#107829)."""
 
 
-def _profile_home(profile: str | None) -> Path | None:
-    """Resolve a named profile's home on THIS host, or None for the launch profile."""
-    if not (name := _canonical_profile_request((profile or "").strip())):
-        return None
-    from hermes_cli import profiles as profiles_mod
-    try:
-        home = Path(profiles_mod.get_profile_dir(name))
-    except ValueError:
-        home = None
-    if home is None or not home.is_dir():
-        raise ProfileUnavailableError(f"Profile '{name}' does not exist.")
-    if home.resolve() == Path(_hermes_home).resolve():
-        return None  # already the launch profile (no override needed)
-    if home not in _served_profile_homes:
-        # This process now hosts a second profile home: freeze the launch env as the launch
-        # profile's own and flip get_secret() to fail closed, so an unscoped read for a
-        # secondary raises instead of returning the launch profile's os.environ value
-        # (tui_gateway/launch_profile_policy.py). Must run before any secondary code.
-        from tui_gateway.launch_profile_policy import activate_multi_profile_hosting
-        activate_multi_profile_hosting()
-    _served_profile_homes.add(home)  # the change watcher must stat every served sibling store too
-    return home
-
-
 # Profile homes served besides the launch home — the only extra stores the sessions watcher
 # probes. Empty on single-profile installs, so their watcher stays byte-identical.
 _served_profile_homes: set[Path] = set()

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -42,6 +42,7 @@ function connectionLabel(state: string, copy: Translations['shell']['statusbar']
 export function EnvironmentSection({ session }: { session: SummarySession }) {
   const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
+  const detailsId = useId()
   const connection = useStore($connection)
   const { cwd, storedId: selectedSession } = session
   const model = useStore($toolSessionModel).trim()
@@ -60,52 +61,43 @@ export function EnvironmentSection({ session }: { session: SummarySession }) {
   }
 
   return (
-    <SummarySection title={copy.title}>
+    <SummarySection headingHidden title={copy.title}>
       <div className="grid gap-1.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <Codicon
-            className="shrink-0 text-(--ui-text-tertiary)"
-            name={current ? (connection?.mode === 'remote' ? 'remote' : 'device-desktop') : 'folder'}
-          />
-          <span className="min-w-0 flex-1 truncate">{state.projectName}</span>
-          {current && (
-            <span className="text-(--ui-text-tertiary)">
-              {connection?.mode === 'remote' ? copy.remote : copy.local}
-            </span>
-          )}
-        </div>
-        <p className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)" title={state.cwd}>
-          {formatSummaryPath(state.cwd)}
-        </p>
         <Button
+          aria-controls={detailsId}
           aria-expanded={expanded}
-          className="mt-2 justify-start"
+          aria-label={`${copy.title} · ${state.projectName}`}
+          className="min-w-0 justify-start text-left"
+          data-slot="summary-resource-row"
           onClick={() => setExpanded(value => !value)}
-          size="inline"
+          size="sm"
           type="button"
-          variant="text"
+          variant="ghost"
         >
-          {t.summary.state.details}
-          <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
+          <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="folder" />
+          <span className="min-w-0 flex-1 truncate">
+            {copy.title} · <span>{state.projectName}</span>
+          </span>
+          <Codicon aria-hidden name={expanded ? 'chevron-down' : 'chevron-right'} size="0.75rem" />
         </Button>
         {expanded && (
-          <div className="mt-1">
+          <div id={detailsId}>
+            <SummaryValue label={copy.workingDirectory} value={formatSummaryPath(state.cwd)} />
             <SummaryValue label={copy.profile} value={session.scope.profile} />
             {current && (
               <>
                 <SummaryValue label={copy.model} value={model || t.shell.statusbar.noModel} />
                 <SummaryValue label={copy.provider} value={provider || t.shell.statusbar.modelNone} />
                 {branch && <SummaryValue label={copy.branch} value={branch} />}
-                <SummaryValue label={copy.connection} value={connectionLabel(gatewayState, t.shell.statusbar)} />
+                <SummaryValue
+                  label={copy.connection}
+                  value={`${connection?.mode === 'remote' ? copy.remote : copy.local} · ${connectionLabel(gatewayState, t.shell.statusbar)}`}
+                />
               </>
             )}
-          </div>
-        )}
-        {expanded && (
-          <>
             <GitSection embedded session={session} />
             <ChangesSection embedded session={session} />
-          </>
+          </div>
         )}
       </div>
     </SummarySection>

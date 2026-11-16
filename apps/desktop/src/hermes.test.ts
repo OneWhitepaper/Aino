@@ -565,7 +565,7 @@ describe('Hermes REST helpers', () => {
 
     await deleteProfile('backend-worker', { connectionId: 'source-a', profile: 'backend-worker' })
     await expect(deleteProfile('worker', { connectionId: 'source-a', profile: 'default' })).rejects.toThrow(
-      /default profile cannot be deleted/i
+      'The built-in Aino assistant cannot be deleted.'
     )
 
     expect(api).toHaveBeenCalledOnce()
@@ -581,13 +581,13 @@ describe('Hermes REST helpers', () => {
   it('localizes profile validation failures for the active locale', async () => {
     setRuntimeI18nLocale('zh')
 
-    await expect(deleteProfile('')).rejects.toThrow('需要工作区名称')
-    await expect(deleteProfile('default')).rejects.toThrow('无法删除默认工作区。')
+    await expect(deleteProfile('')).rejects.toThrow('需要机器人名称')
+    await expect(deleteProfile('default')).rejects.toThrow('无法删除内置 Aino 主助手。')
 
     setRuntimeI18nLocale('en')
 
-    await expect(deleteProfile('')).rejects.toThrow('Profile name required')
-    await expect(deleteProfile('default')).rejects.toThrow('The default profile cannot be deleted.')
+    await expect(deleteProfile('')).rejects.toThrow('Bot name required')
+    await expect(deleteProfile('default')).rejects.toThrow('The built-in Aino assistant cannot be deleted.')
   })
 
   it('hydrates the latest transcript with a small tail page (120, latest, compacted rows included)', async () => {

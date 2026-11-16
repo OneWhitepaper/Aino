@@ -1,12 +1,22 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
-import { $approvalModes, type ApprovalMode } from '@/store/approval-mode'
+import {
+  $approvalModes,
+  type ApprovalMode,
+  approvalModeForProfile,
+  reconcileApprovalModeForProfile
+} from '@/store/approval-mode'
+import * as gateway from '@/store/gateway'
 import { $notifications, clearNotifications } from '@/store/notifications'
+import { $activeGatewayProfile } from '@/store/profile'
+import { $gatewayState } from '@/store/session'
+import { deferred } from '@/test/deferred'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
-import { ApprovalModeMenu } from './approval-mode-menu'
+import { ApprovalModeMenu, ComposerApprovalMode } from './approval-mode-menu'
+import { ComposerScopeProvider, MAIN_COMPOSER_SCOPE } from './scope'
 
 beforeAll(() => {
   stubResizeObserver()
@@ -30,6 +40,102 @@ function Harness({
 }
 
 describe('composer approval mode', () => {
+  it('routes a Bot tile approval change to its owning profile and connection without changing the active profile', async () => {
+    const activeProfile = $activeGatewayProfile.get()
+    const gatewayState = $gatewayState.get()
+
+    const requestOwner = vi
+      .spyOn(gateway, 'requestGatewayForAgent')
+      .mockResolvedValueOnce({ value: 'smart' })
+      .mockResolvedValue({ value: 'manual' })
+
+    const requestActive = vi.spyOn(gateway, 'requestGatewayForProfile').mockResolvedValue({ value: 'off' })
+
+    try {
+      $activeGatewayProfile.set('main-user')
+      $gatewayState.set('open')
+      $approvalModes.set({ 'main-user': 'off' })
+      render(
+        <ComposerScopeProvider
+          value={{ ...MAIN_COMPOSER_SCOPE, connectionId: 'remote-bots', profile: 'research', target: 'tile:research' }}
+        >
+          <ComposerApprovalMode />
+        </ComposerScopeProvider>
+      )
+
+      await waitFor(() => {
+        expect(requestOwner).toHaveBeenCalledWith('remote-bots', 'research', 'config.get', {
+          key: 'approvals.mode',
+          profile: 'research'
+        })
+      })
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Approval mode: Approve for me' }), { button: 0 })
+      fireEvent.click(await screen.findByRole('menuitemradio', { name: /^Ask for approval/ }))
+
+      await waitFor(() => {
+        expect(requestOwner).toHaveBeenCalledWith('remote-bots', 'research', 'config.set', {
+          key: 'approvals.mode',
+          value: 'manual',
+          profile: 'research'
+        })
+        expect(approvalModeForProfile('research', 'remote-bots')).toBe('manual')
+      })
+      expect(requestActive).not.toHaveBeenCalled()
+      expect($approvalModes.get()['main-user']).toBe('off')
+      expect($activeGatewayProfile.get()).toBe('main-user')
+    } finally {
+      cleanup()
+      $activeGatewayProfile.set(activeProfile)
+      $gatewayState.set(gatewayState)
+      requestOwner.mockRestore()
+      requestActive.mockRestore()
+    }
+  })
+
+  it('keeps same-named Bot menus on different connections independent as concurrent reads and writes finish', async () => {
+    const localRead = deferred<{ value: string }>()
+    const studioRead = deferred<{ value: string }>()
+    const localRequest = vi.fn().mockReturnValueOnce(localRead.promise).mockResolvedValue({ value: 'smart' })
+    const studioRequest = vi.fn(() => studioRead.promise)
+    reconcileApprovalModeForProfile('default', 'manual')
+
+    render(
+      <>
+        <section aria-label="Local Bot">
+          <ApprovalModeMenu connectionId="local" profile="default" requestGateway={localRequest} />
+        </section>
+        <section aria-label="Studio Bot">
+          <ApprovalModeMenu connectionId="studio" profile="default" requestGateway={studioRequest} />
+        </section>
+      </>
+    )
+
+    const localMenu = within(screen.getByRole('region', { name: 'Local Bot' }))
+    const studioMenu = within(screen.getByRole('region', { name: 'Studio Bot' }))
+    await act(async () => studioRead.resolve({ value: 'off' }))
+    expect(studioMenu.getByRole('button', { name: 'Approval mode: Do not ask' })).toBeTruthy()
+    await act(async () => localRead.resolve({ value: 'manual' }))
+    const trigger = localMenu.getByRole('button', { name: 'Approval mode: Ask for approval' })
+    expect(studioMenu.getByRole('button', { name: 'Approval mode: Do not ask' })).toBeTruthy()
+
+    fireEvent.pointerDown(trigger, { button: 0 })
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Approve for me/ }))
+    await waitFor(() => {
+      expect(localMenu.getByRole('button', { name: 'Approval mode: Approve for me' })).toBeTruthy()
+    })
+
+    expect(studioMenu.getByRole('button', { name: 'Approval mode: Do not ask' })).toBeTruthy()
+    expect(approvalModeForProfile('default')).toBe('manual')
+    expect(localRequest).toHaveBeenCalledWith('config.get', { key: 'approvals.mode', profile: 'default' })
+    expect(studioRequest).toHaveBeenCalledWith('config.get', { key: 'approvals.mode', profile: 'default' })
+    expect(localRequest).toHaveBeenCalledWith('config.set', {
+      key: 'approvals.mode',
+      value: 'smart',
+      profile: 'default'
+    })
+    expect(studioRequest).toHaveBeenCalledOnce()
+  })
+
   it('offers all existing approval modes from the composer menu', async () => {
     const response = new Promise<never>(() => undefined)
     render(<Harness requestGateway={vi.fn(() => response)} />)

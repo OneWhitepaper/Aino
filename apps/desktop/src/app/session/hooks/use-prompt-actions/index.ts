@@ -342,9 +342,9 @@ export function usePromptActions({
       // color codes (e.g. "Unknown command" in red). The ESC byte is invisible
       // in the chat panel, so without this the `[1;31m…[0m` payload leaks as
       // literal text.
-      const body = stripAnsi(text).trim()
+      const body = role === 'user' ? stripAnsi(text) : stripAnsi(text).trim()
 
-      if (!body) {
+      if (!body.trim()) {
         return
       }
 
@@ -855,7 +855,7 @@ export function usePromptActions({
   // Returns false when the turn raced to completion so the composer can queue.
   const redirectPrompt = useCallback(
     async (rawText: string, mode: 'interrupt' | 'steer' = 'interrupt'): Promise<boolean> => {
-      const text = sanitizeComposerInput(rawText).trim()
+      const text = sanitizeComposerInput(rawText)
 
       // Ref, not the closure-captured prop — see cancelRun above. A redirect
       // reaches the live model mid-turn, so a stale target delivers the user's
@@ -869,7 +869,7 @@ export function usePromptActions({
         updateSessionState
       })
 
-      if (!text || !target) {
+      if (!text.trim() || !target) {
         return false
       }
 

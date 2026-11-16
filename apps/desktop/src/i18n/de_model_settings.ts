@@ -15,6 +15,9 @@ export const deModelSettings: TranslationOverride<ModelSettingsTranslations> = {
   },
   pages: {
     description: 'Standardmodell und Modelle für verschiedene Aufgaben verwalten.',
+    preferences: 'Modellpräferenzen',
+    moreSettings: 'Weitere Modelleinstellungen',
+    fallbackDescription: 'Wählen Sie ein Ersatzmodell, wenn das Hauptmodell vorübergehend nicht verfügbar ist.',
     auxiliaryTask: 'Aufgabe',
     auxiliaryPurpose: 'Zweck',
     auxiliaryModel: 'Modell',

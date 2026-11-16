@@ -7,7 +7,7 @@
 // `.scrollbar-dt` for portaled overlays (Radix renders under document.body,
 // outside #root's scope). See styles.css.
 export const menuSurfaceClass =
-  'dt-portal-scrollbar max-w-[calc(100vw-1rem)] wrap-anywhere rounded-(--aino-radius-menu) bg-(--ui-bg-elevated) p-1.5 text-[length:var(--aino-text-ui)] text-popover-foreground shadow-nous'
+  'dt-portal-scrollbar max-w-[calc(100vw-1rem)] wrap-anywhere rounded-(--aino-radius-menu) bg-(--ui-bg-elevated) p-1.5 text-[length:var(--aino-text-caption)] text-popover-foreground shadow-nous'
 
 export const menuMotionClass =
   'data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95'
@@ -16,8 +16,9 @@ export const menuMotionClass =
 // Radix rows take real focus (`focus:`), cmdk rows stay behind the input and
 // mark `data-selected="true"`.
 export const menuItemClass =
-  "relative flex min-h-8 items-center gap-2 rounded-(--aino-radius-control) px-2 py-1.5 text-[length:var(--aino-text-ui)] leading-[1.125rem] focus-visible:outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+  "relative flex min-h-8 items-center gap-2.25 rounded-(--aino-radius-control) px-2.25 py-1.75 text-[length:var(--aino-text-caption)] leading-[1.125rem] focus-visible:outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.75"
 
 export const menuItemFocusClass = 'focus:bg-(--ui-control-active-background) focus:text-foreground'
 
-export const menuLabelClass = 'px-2 py-1 text-[length:var(--aino-text-label)] font-medium text-(--ui-text-secondary)'
+export const menuLabelClass =
+  'px-2.25 py-1 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-secondary)'

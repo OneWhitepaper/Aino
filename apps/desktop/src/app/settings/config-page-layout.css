@@ -51,7 +51,7 @@
 }
 .config-page-section .settings-section-heading {
   margin-bottom: 0.75rem;
-  font-size: var(--aino-text-title);
+  font-size: var(--aino-text-body);
 }
 .config-page-layout .settings-group {
   padding-inline: 1.1875rem;
@@ -60,16 +60,16 @@
 }
 .config-page-layout [data-settings-row-body] {
   gap: 1.25rem;
-  padding-block: 1.125rem;
+  padding-block: 0.9375rem;
 }
 .config-page-layout .settings-row-label {
-  font-size: var(--aino-text-body);
-  font-weight: 500;
+  font-size: var(--aino-text-ui);
+  font-weight: 400;
 }
 .config-page-layout .settings-row-description {
   max-width: 37rem;
-  font-size: var(--aino-text-caption);
-  line-height: 1.65;
+  font-size: 0.6875rem;
+  line-height: 1.7;
 }
 .config-page-layout [data-slot='input'],
 .config-page-layout [data-slot='select-trigger'],

@@ -297,6 +297,19 @@ describe('CapabilitiesView toolset management', { timeout: 60_000 }, () => {
     expect(screen.queryByText(/version: 1\.2\.0/)).toBeNull()
   })
 
+  it('opens skills from a Bot composer on that exact connection and profile', async () => {
+    getSkills.mockResolvedValue([])
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/capabilities?tab=skills&profile=remote-writer&connection=studio']}>
+          <CapabilitiesView />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    await waitFor(() => expect(getSkills).toHaveBeenCalledWith({ connectionId: 'studio', profile: 'remote-writer' }))
+    expect(getProfiles).not.toHaveBeenCalled()
+  })
+
   it('keeps installed skills on their toggle and installs new cards into the pinned remote profile', async () => {
     const { installHubSkill } = await import('@/store/hub-actions')
     getSkills.mockResolvedValue([

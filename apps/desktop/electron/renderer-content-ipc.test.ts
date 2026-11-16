@@ -20,8 +20,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: native.fromId }
 }))
 
+import { PREVIEW_GUEST_PARTITION } from '../shared/preview-partition'
+
 import { createAccountWorkspaceIpc } from './account-workspace'
-import { applyPreviewGuestAttachPrefs, PREVIEW_GUEST_PARTITION } from './preview-guest-throttle'
+import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
 import { registerRendererContentIpc } from './renderer-content-ipc'
 
 class NativeIpc extends EventEmitter {

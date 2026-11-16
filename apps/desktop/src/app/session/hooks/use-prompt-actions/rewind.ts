@@ -593,9 +593,9 @@ export function planReload(messages: ChatMessage[], parentId: null | string): nu
 
   const userIndex = parentIndex - userBack
   const userMessage = messages[userIndex]
-  const text = userMessage ? chatMessageText(userMessage).trim() : ''
+  const text = userMessage ? chatMessageText(userMessage) : ''
 
-  if (!userMessage || !text) {
+  if (!userMessage || !text.trim()) {
     return null
   }
 
@@ -611,7 +611,7 @@ export function planReload(messages: ChatMessage[], parentId: null | string): nu
   return {
     branchGroupId: targetAssistant?.branchGroupId ?? branchGroupForUser(userMessage),
     confirmDeepTruncate: false,
-    sourceText: text,
+    sourceText: text.trim(),
     text,
     truncateOrdinal: isFailedTurn ? undefined : visibleUserOrdinal(messages, userIndex),
     truncateMessageId: isFailedTurn ? undefined : userMessage.id,
@@ -728,10 +728,11 @@ export function planRestore(messages: ChatMessage[], messageId: string, target?:
     throw new Error(translateNow('desktop.restoreTargetMissing'))
   }
 
-  const sourceText = chatMessageText(source).trim()
-  const text = (sourceText || target?.text?.trim() || '').trim()
+  const originalText = chatMessageText(source)
+  const sourceText = originalText.trim()
+  const text = sourceText ? originalText : (target?.text ?? '')
 
-  if (!text) {
+  if (!text.trim()) {
     throw new Error(translateNow('desktop.restoreEmptyMessage'))
   }
 
@@ -746,7 +747,7 @@ export function planRestore(messages: ChatMessage[], messageId: string, target?:
 
   return {
     sourceIndex,
-    sourceText: sourceText || text,
+    sourceText: sourceText || text.trim(),
     text,
     truncateOrdinal: isFailedTurn ? undefined : truncateOrdinal,
     truncateMessageId: isFailedTurn ? undefined : source.id,
@@ -775,14 +776,14 @@ export function planEdit(messages: ChatMessage[], edited: AppendMessage): EditPl
   const sourceId = edited.sourceId || edited.parentId
   const text = appendText(edited)
 
-  if (!sourceId || !text || edited.role !== 'user') {
+  if (!sourceId || !text.trim() || edited.role !== 'user') {
     return null
   }
 
   const sourceIndex = messages.findIndex(m => m.id === sourceId)
   const source = messages[sourceIndex]
 
-  if (!source || source.role !== 'user' || chatMessageText(source).trim() === text) {
+  if (!source || source.role !== 'user' || chatMessageText(source) === text) {
     return null
   }
 

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 
+import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { composerPanelCard } from '@/components/chat/composer-dock'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -10,14 +11,27 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { Clipboard, FileText, FolderOpen, type IconComponent, ImageIcon, Link, MessageSquareText } from '@/lib/icons'
+import {
+  Clipboard,
+  FileText,
+  FolderClosed,
+  FolderOpen,
+  type IconComponent,
+  ImageIcon,
+  Link,
+  MessageSquareText
+} from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
+import { botComposerCopy } from './bot-composer-copy'
 import { useComposerAttachmentProviders } from './contrib'
 import { GHOST_ICON_BTN } from './controls'
 import type { ChatBarState } from './types'
@@ -31,22 +45,45 @@ export function ContextMenu({
   onPasteClipboardImage,
   onPickFiles,
   onPickFolders,
-  onPickImages
+  onPickImages,
+  bot,
+  settings
 }: ContextMenuProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const c = t.composer
+  const copy = botComposerCopy(locale)
   // Prompt snippets used to be a Radix submenu. That submenu didn't open
   // reliably when the parent menu was positioned at the bottom of the
   // window (composer "+" anchor), so we promoted it to a real Dialog —
   // easier to grow with search / descriptions, and no positioning math.
   const [snippetsOpen, setSnippetsOpen] = useState(false)
+  const [open, setOpen] = useState(false)
+  const pendingInput = useRef<(() => void) | null>(null)
   // `composer.attachments` contributions — plugin/core-registered rows that
   // extend this menu through the same registry as every other surface.
   const attachmentProviders = useComposerAttachmentProviders()
 
+  const secondaryAttachments = (
+    <>
+      <ContextMenuItem disabled={!onPickFolders} icon={FolderOpen} onSelect={onPickFolders}>
+        {c.folder}
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!onPickImages} icon={ImageIcon} onSelect={onPickImages}>
+        {c.images}
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={!onPasteClipboardImage}
+        icon={Clipboard}
+        onSelect={onPasteClipboardImage ? () => void onPasteClipboardImage() : undefined}
+      >
+        {c.pasteImage}
+      </ContextMenuItem>
+    </>
+  )
+
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={setOpen} open={open}>
         <Tip label={state.tools.label} placement="control">
           <DropdownMenuTrigger asChild>
             <Button
@@ -65,31 +102,62 @@ export function ContextMenu({
             </Button>
           </DropdownMenuTrigger>
         </Tip>
-        <DropdownMenuContent align="start" className={cn('w-60', composerPanelCard)} side="top" sideOffset={6}>
-          <DropdownMenuLabel className="px-2 pb-0.5 pt-0.5 text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-wider text-(--ui-text-tertiary)">
-            {c.attachLabel}
-          </DropdownMenuLabel>
+        <DropdownMenuContent
+          align="start"
+          className={cn('w-60', composerPanelCard)}
+          onCloseAutoFocus={event => {
+            if (pendingInput.current) {
+              event.preventDefault()
+              const action = pendingInput.current
+              pendingInput.current = null
+              action()
+            }
+          }}
+          side="top"
+          sideOffset={6}
+        >
+          {!bot && (
+            <DropdownMenuLabel className="px-2 pb-0.5 pt-0.5 text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-wider text-(--ui-text-tertiary)">
+              {c.attachLabel}
+            </DropdownMenuLabel>
+          )}
           <ContextMenuItem disabled={!onPickFiles} icon={FileText} onSelect={onPickFiles}>
             {c.files}
           </ContextMenuItem>
-          <ContextMenuItem disabled={!onPickFolders} icon={FolderOpen} onSelect={onPickFolders}>
-            {c.folder}
-          </ContextMenuItem>
-          <ContextMenuItem disabled={!onPickImages} icon={ImageIcon} onSelect={onPickImages}>
-            {c.images}
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={!onPasteClipboardImage}
-            icon={Clipboard}
-            onSelect={onPasteClipboardImage ? () => void onPasteClipboardImage() : undefined}
-          >
-            {c.pasteImage}
-          </ContextMenuItem>
+          {!bot && secondaryAttachments}
           <ContextMenuItem icon={Link} onSelect={onOpenUrlDialog}>
             {c.url}
           </ContextMenuItem>
 
+          {bot && (
+            <ContextMenuItem
+              icon={FolderClosed}
+              onSelect={() => {
+                pendingInput.current = bot.onReferenceFiles
+              }}
+            >
+              {copy.referenceFiles}
+            </ContextMenuItem>
+          )}
+
           <DropdownMenuSeparator />
+
+          {bot && (
+            <>
+              {bot.actions}
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          {bot ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Codicon name="attach" size="0.875rem" />
+                <span>{copy.moreAttachments}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>{secondaryAttachments}</DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : null}
 
           <ContextMenuItem icon={MessageSquareText} onSelect={() => setSnippetsOpen(true)}>
             {c.promptSnippets}
@@ -106,6 +174,13 @@ export function ContextMenu({
               <span>{provider.label}</span>
             </DropdownMenuItem>
           ))}
+
+          {settings && (
+            <>
+              <DropdownMenuSeparator />
+              <ModelMenuCloseContext.Provider value={() => setOpen(false)}>{settings}</ModelMenuCloseContext.Provider>
+            </>
+          )}
 
           <DropdownMenuSeparator />
 
@@ -186,12 +261,17 @@ interface ContextMenuItemProps {
 }
 
 interface ContextMenuProps {
+  bot?: {
+    actions: ReactNode
+    onReferenceFiles: () => void
+  }
   onInsertText: (text: string) => void
   onOpenUrlDialog: () => void
   onPasteClipboardImage?: (opts?: { silent?: boolean }) => Promise<boolean> | void
   onPickFiles?: () => void
   onPickFolders?: () => void
   onPickImages?: () => void
+  settings?: ReactNode
   state: ChatBarState
 }
 

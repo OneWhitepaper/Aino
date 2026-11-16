@@ -18,7 +18,7 @@ import { FileEntryContextMenu, InlineRenameInput, isRenameShortcut } from '../fi
 import { getFileTreeDndManager } from './dnd-manager'
 import type { TreeNode } from './use-project-tree'
 
-const ROW_HEIGHT = 28
+const ROW_HEIGHT = 32
 const INDENT = 14
 /** Row inset plus the tree gutter aligns root icons with the section label. */
 const TREE_ROW_INSET = '8px'

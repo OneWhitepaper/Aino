@@ -1,8 +1,14 @@
-import { useMemo } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 import { openSubagentPanel } from '@/app/agents/subagent-panel'
-import { panelRowRunning, panelRowStatus, subagentPanelRows } from '@/app/agents/subagent-panel-rows'
+import {
+  panelRowRunning,
+  panelRowStatus,
+  type SubagentPanelRow,
+  subagentPanelRows
+} from '@/app/agents/subagent-panel-rows'
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { SubagentAvatar } from '@/components/ui/subagent-avatar'
 import { useI18n } from '@/i18n'
 import { subagentDisplayName } from '@/lib/subagent-identity'
@@ -15,12 +21,25 @@ import type { SummarySession } from './use-summary-session'
 
 export function AgentsSection({ history, session }: { history: SummaryDelegation[]; session: SummarySession }) {
   const { t } = useI18n()
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const historyId = useId()
   const live = useSessionSlice($subagentsBySession, session.runtimeId)
   const groups = useMemo(() => summaryDelegations(history, live), [history, live])
   const counts = summaryAgentCounts(groups)
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
   const rows = subagentPanelRows(groups)
-  const runningRows = rows.filter(panelRowRunning)
+
+  const needsAttention = (item: SubagentPanelRow) =>
+    panelRowRunning(item) || item.row.status === 'failed' || item.row.status === 'interrupted'
+
+  const currentRows = rows.filter(needsAttention)
+  const historyRows = rows.filter(item => !needsAttention(item))
+
+  const visibleRows = [
+    ...currentRows.filter(panelRowRunning),
+    ...currentRows.filter(item => !panelRowRunning(item))
+  ].slice(0, 5)
+
   const source = { parentRuntimeId: session.runtimeId, storedSessionId: session.storedId, owner: session.owner }
 
   if (!total) {
@@ -34,55 +53,65 @@ export function AgentsSection({ history, session }: { history: SummaryDelegation
     counts.dispatched && t.summary.agents.dispatched(counts.dispatched)
   ].filter(Boolean)
 
+  const renderRow = (item: SubagentPanelRow) => (
+    <Button
+      className="w-full min-w-0 justify-start"
+      data-slot="summary-resource-row"
+      key={item.key}
+      onClick={() => openSubagentPanel({ ...source, toolCallId: item.callId, row: item.row })}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      <SubagentAvatar
+        className="size-[21px] shrink-0"
+        parentSessionId={session.storedId || session.runtimeId}
+        task={item.row}
+      />
+      <span className="min-w-0 flex-1 truncate text-left">
+        {subagentDisplayName(item.row, t.assistant.tool.delegatedTask)}
+      </span>
+      <span className="shrink-0 text-(--ui-text-tertiary)" data-slot="summary-row-status">
+        {panelRowStatus(item, t.summary.agents)}
+      </span>
+      <Codicon aria-hidden name="chevron-right" size="0.75rem" />
+    </Button>
+  )
+
   return (
-    <SummarySection title={t.summary.agents.title}>
-      <Button
-        aria-label={`${t.summary.agents.viewAll} · ${labels.join(' · ')}`}
-        className="w-full min-w-0 justify-start px-0"
-        data-slot="summary-agents-overview"
-        onClick={() => openSubagentPanel(source)}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
-          {rows.slice(-4).map(item => (
-            <SubagentAvatar
-              className="size-4 shrink-0"
-              key={item.key}
-              parentSessionId={session.storedId || session.runtimeId}
-              task={item.row}
-            />
-          ))}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-left">{labels.join(' · ')}</span>
-      </Button>
-      {runningRows.slice(0, 5).map(item => (
+    <SummarySection
+      action={
         <Button
-          className="w-full min-w-0 justify-start px-0"
-          key={item.key}
-          onClick={() => openSubagentPanel({ ...source, toolCallId: item.callId, row: item.row })}
-          size="sm"
+          aria-label={`${t.summary.agents.viewAll} · ${labels.join(' · ')}`}
+          data-slot="summary-section-action"
+          onClick={() => openSubagentPanel(source)}
+          size="inline"
           type="button"
-          variant="ghost"
+          variant="text"
         >
-          <SubagentAvatar
-            className="size-4 shrink-0"
-            parentSessionId={session.storedId || session.runtimeId}
-            task={item.row}
-          />
-          <span className="min-w-0 flex-1 truncate text-left">
-            {subagentDisplayName(item.row, t.assistant.tool.delegatedTask)}
-          </span>
-          <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-secondary)">
-            {panelRowStatus(item, t.summary.agents)}
-          </span>
-        </Button>
-      ))}
-      {runningRows.length > 0 && (
-        <Button className="mt-2" onClick={() => openSubagentPanel(source)} size="inline" type="button" variant="text">
           {t.summary.agents.viewAll}
         </Button>
+      }
+      title={t.summary.agents.title}
+    >
+      {visibleRows.map(renderRow)}
+      {historyRows.length > 0 && (
+        <div data-slot="summary-history">
+          <Button
+            aria-controls={historyId}
+            aria-expanded={historyExpanded}
+            className="w-full justify-start"
+            data-slot="summary-disclosure"
+            onClick={() => setHistoryExpanded(value => !value)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <Codicon aria-hidden name={historyExpanded ? 'chevron-down' : 'chevron-right'} />
+            {t.summary.agents.history(historyRows.length)}
+          </Button>
+          {historyExpanded && <div id={historyId}>{historyRows.map(renderRow)}</div>}
+        </div>
       )}
     </SummarySection>
   )

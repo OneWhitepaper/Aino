@@ -16,37 +16,21 @@
   align-items: center;
   flex: 0 0 auto;
   gap: 12px;
-  min-height: 72px;
-  padding: 12px 28px;
-  border-bottom: 1px solid var(--ui-stroke-secondary);
-  background: var(--ui-bg-elevated);
+  min-height: 68px;
+  padding: 13px 24px;
+  background: var(--ui-chat-surface-background);
 }
 .aino-group-heading {
   flex: 1;
   min-width: 0;
 }
-.aino-group-header[data-main-tab='true'] {
-  height: var(--aino-band-row2);
-  min-height: var(--aino-band-row2);
-  padding-block: 6px;
-}
-.aino-group-header[data-main-tab='true'] .aino-group-heading p {
-  margin-top: 0;
-}
-.aino-group-header[data-main-tab='true'] .aino-group-attention {
-  min-width: 0;
-  max-width: 35%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .aino-group-heading h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--aino-text-body);
-  line-height: 1.5;
-  font-weight: 600;
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 500;
 }
 .aino-group-count {
   margin-inline-start: 6px;
@@ -62,7 +46,7 @@
 .aino-group-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
 }
 .aino-group-info-toggle {
   gap: 10px;
@@ -102,7 +86,8 @@
   min-width: 0;
 }
 .aino-group-chat {
-  --aino-conversation-inset: clamp(1rem, 3cqw, 2rem);
+  --aino-conversation-width: 760px;
+  --aino-conversation-inset: clamp(1rem, 3cqw, 2.25rem);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -127,14 +112,14 @@
   width: min(1120px, calc(100cqw - var(--aino-conversation-inset) * 2));
   margin-inline: auto;
   padding-inline: 0;
-  padding-block: 36px 20px;
+  padding-block: 24px 20px;
 }
 .aino-group-message {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 11px;
   min-width: 0;
-  margin-block-end: 28px;
+  margin-block-end: 22px;
 }
 .aino-group-message[data-own='true'] {
   flex-direction: row-reverse;
@@ -155,7 +140,7 @@
 .aino-group-message-main {
   position: relative;
   min-width: 0;
-  max-width: min(calc(100% - 44px), 78%, 74ch);
+  max-width: min(calc(100% - 44px), 78%);
 }
 .aino-group-message-meta {
   display: flex;
@@ -164,7 +149,7 @@
   min-height: 18px;
   margin-block-end: 5px;
   color: var(--ui-text-secondary);
-  font-size: var(--aino-text-caption);
+  font-size: var(--aino-text-section);
 }
 .aino-group-message-meta strong {
   font-weight: 500;
@@ -185,18 +170,18 @@
   justify-content: flex-end;
 }
 .aino-group-message-bubble {
-  padding: 12px 16px;
-  border-radius: var(--aino-radius-card);
+  padding: 11px 14px;
+  border-radius: 3px 12px 12px;
   background: var(--ui-bg-secondary);
   overflow-wrap: anywhere;
-  font-size: var(--aino-text-body);
-  line-height: 1.75;
-  --conversation-text-base-size: var(--aino-text-body);
-  --conversation-base-line-height: calc(var(--aino-text-body) * 1.75);
+  font-size: var(--aino-text-label);
+  line-height: 1.85;
+  --conversation-text-base-size: var(--aino-text-label);
+  --conversation-base-line-height: calc(var(--aino-text-label) * 1.85);
 }
 .aino-group-message[data-own='true'] .aino-group-message-bubble {
   background: var(--ui-chat-bubble-background);
-  border-radius: var(--aino-radius-card);
+  border-radius: 12px 3px 12px 12px;
 }
 .aino-group-message-text {
   min-width: 0;
@@ -323,10 +308,11 @@
   padding-block: 12px 20px;
 }
 .aino-group-composer {
-  padding: 16px 18px 12px;
+  padding: 0;
   border: 1px solid var(--ui-stroke-secondary);
-  border-radius: var(--aino-radius-composer, 1.25rem);
+  border-radius: 28px;
   background: var(--aino-composer-fill);
+  box-shadow: none;
 }
 .aino-group-composer:focus-within {
   border-color: var(--aino-composer-focus-stroke);
@@ -335,8 +321,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 5px;
+  min-height: 48px;
+  padding: 3px 12px 11px;
 }
 .aino-group-composer-tools {
   display: flex;
@@ -347,7 +334,7 @@
 .aino-group-composer-tools > span {
   margin-inline-start: 10px;
   color: var(--ui-text-secondary);
-  font-size: var(--aino-text-caption);
+  font-size: var(--aino-text-section);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -356,9 +343,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 9px 4px 0;
+  padding: 7px 3px 0;
   color: var(--ui-text-secondary);
-  font-size: var(--aino-text-caption);
+  font-size: var(--aino-text-micro);
 }
 .aino-group-composer-caption > :last-child {
   white-space: nowrap;
@@ -644,7 +631,6 @@
 @container aino-group-workspace (max-width: 680px) {
   .aino-group-header {
     padding-inline: 18px;
-    min-height: 54px;
   }
   .aino-group-header-actions {
     gap: 4px;
@@ -913,9 +899,7 @@
   .aino-group-participant {
     max-width: 140px;
   }
-  .aino-group-participant:nth-child(n + 3) {
-    display: none;
-  }
+
   .aino-group-presence {
     margin-inline-start: 6px;
   }
@@ -924,9 +908,7 @@
   .aino-group-participant {
     max-width: 160px;
   }
-  .aino-group-participant:nth-child(n + 2) {
-    display: none;
-  }
+
   .aino-group-header-actions {
     gap: 2px;
   }
@@ -974,4 +956,29 @@
 }
 .aino-group-workspace textarea::placeholder {
   color: var(--ui-text-secondary);
+}
+
+/* The room identity and member context occupy the same two bands as the preview. */
+.aino-group-header-stack { flex: 0 0 auto; min-width: 0; }
+.aino-group-room-icon { display: grid; place-items: center; width: 28px; height: 28px; }
+.aino-group-members-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.aino-group-members-bar .aino-group-participants { gap: 1px; overflow: hidden; }
+.aino-group-members-bar .aino-group-participant { width: 28px; height: 28px; padding: 4px; flex: 0 0 auto; }
+.aino-group-members-bar .aino-group-participant[data-attention] { width: auto; gap: 5px; }
+.aino-group-members-bar .aino-group-participant small { color: var(--ui-text-secondary); font-size: 10px; }
+.aino-group-member-count { padding-inline: 2px; font-size: 11px; font-weight: 400; color: var(--ui-text-secondary); white-space: nowrap; }
+.aino-group-members-bar .aino-group-presence { flex: 1; margin: 0; text-align: end; font-size: 11px; }
+.aino-group-members-bar > button:last-child { flex: 0 0 auto; }
+.aino-group-composer .aino-group-mention-input { min-height: 54px; padding: 17px 21px 7px; }
+.aino-group-composer .aino-group-mention-input textarea { min-height: 30px; padding: 0; font-size: 14px; line-height: 27px; }
+@container aino-group-workspace (max-width: 520px) {
+  .aino-group-members-bar { gap: 5px; padding-inline: 18px; }
+  .aino-group-members-bar .aino-group-participant:nth-child(n + 4) { display: none; }
 }

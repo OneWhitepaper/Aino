@@ -22,7 +22,7 @@ afterEach(() => {
 })
 
 describe('tool strip shared tab presentation', () => {
-  it.each(['docked', 'overlay'])('keeps a compact rounded tab and glyph in the %s host', host => {
+  it.each(['docked', 'overlay'])('keeps the flat tool tab and glyph in the %s host', host => {
     const onClose = vi.fn()
     const marker = host === 'docked' ? { 'data-tree-tab': 'files' } : { 'data-narrow-overlay-tab': 'files' }
     render(
@@ -38,10 +38,11 @@ describe('tool strip shared tab presentation', () => {
 
     const tab = screen.getByRole('tab')
     const style = globalThis.getComputedStyle(tab)
-    expect(style.height).toBe('32px')
-    expect(style.borderRadius).toBe('var(--aino-radius-control)')
-    expect(style.minWidth).toBe('100px')
-    expect(style.fontSize).toBe('var(--aino-text-label)')
+    expect(style.height).toBe('40px')
+    expect(style.borderRadius).toBe('0px')
+    expect(style.minWidth).toBe('0px')
+    expect(style.fontSize).toBe('var(--aino-text-section)')
+    expect(style.borderBottomWidth).toBe('2px')
     const iconStyle = globalThis.getComputedStyle(screen.getByLabelText('Files icon'))
     expect(iconStyle.width).toBe('14px')
     expect(iconStyle.height).toBe('14px')

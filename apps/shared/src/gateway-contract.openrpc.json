@@ -47444,6 +47444,11 @@
             "default": null,
             "title": "Accepting Steer"
           },
+          "can_control": {
+            "default": false,
+            "title": "Can Control",
+            "type": "boolean"
+          },
           "child_session_id": {
             "anyOf": [
               {

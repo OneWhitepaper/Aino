@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { registry } from '@/contrib/registry'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import {
+  $dismissedAutoProjectIds,
   $pinnedSessionIds,
   $sidebarMessagingOpenIds,
   $sidebarPinsOpen,
@@ -18,9 +19,13 @@ import {
   $sidebarShowArchived,
   $sidebarStatusFilter,
   $sidebarWorkspaceNodeOpen,
+  dismissAutoProject,
+  restoreAutoProject,
+  SESSION_SEARCH_FOCUS_EVENT,
   setSidebarAgentsGrouped,
   setSidebarGrouping
 } from '@/store/layout'
+import { $notifications, resetNotifications } from '@/store/notifications'
 import { $openProjectsByProfile } from '@/store/open-projects'
 import { $activeGatewayProfile, $profiles, setShowAllProfiles } from '@/store/profile'
 import { $projectScope, ALL_PROJECTS, exitProjectScope } from '@/store/project-scope'
@@ -113,6 +118,8 @@ describe('ChatSidebar navigation activity', () => {
   let disposeContributions: () => void
 
   beforeEach(() => {
+    $dismissedAutoProjectIds.set([])
+    resetNotifications()
     $pinnedSessionIds.set([])
     $sidebarPinsOpen.set(true)
     $sidebarRecentsOpen.set(true)
@@ -154,11 +161,13 @@ describe('ChatSidebar navigation activity', () => {
     $projectTree.set([])
     $projectScope.set(ALL_PROJECTS)
     $projectDialog.set(null)
+    $dismissedAutoProjectIds.set([])
+    resetNotifications()
   })
 
   it('keeps navigation and session activity coherent with the focused pane', () => {
     renderSidebar('/kanban', 'extension')
-    expectOnlyCurrent('Kanban')
+    expectOnlyCurrent(null)
     expectOnlySelectedSession(null)
 
     focus('tile-one-group')
@@ -170,7 +179,7 @@ describe('ChatSidebar navigation activity', () => {
     expectOnlySelectedSession('Tile two')
 
     focus(null)
-    expectOnlyCurrent('Kanban')
+    expectOnlyCurrent(null)
     expectOnlySelectedSession(null)
 
     focus('tile-two-group')
@@ -196,7 +205,8 @@ describe('ChatSidebar navigation activity', () => {
       cleanup()
       focus('workspace-group')
       renderSidebar(pathname, currentView)
-      expectOnlyCurrent(label)
+      expectOnlyCurrent(null)
+      expect(screen.queryByRole('button', { name: label })).toBeNull()
       expectOnlySelectedSession(null)
 
       focus('tile-one-group')
@@ -207,7 +217,7 @@ describe('ChatSidebar navigation activity', () => {
     cleanup()
     focus('workspace-group')
     renderSidebar('/reports', 'extension')
-    expectOnlyCurrent('Reports')
+    expectOnlyCurrent(null)
 
     cleanup()
     disposeContributions()
@@ -234,7 +244,7 @@ describe('ChatSidebar navigation activity', () => {
     expect(registry.getArea('titleBar.center').some(item => item.id === 'sessions:search')).toBe(false)
   })
 
-  it('drops and restores chat search through page history navigation', () => {
+  it('opens real search on request and keeps it out of standalone pages', () => {
     function Navigation() {
       const location = useLocation()
       const navigate = useNavigate()
@@ -266,12 +276,20 @@ describe('ChatSidebar navigation activity', () => {
         <Navigation />
       </MemoryRouter>
     )
-    const hasSearch = () => registry.getArea('titleBar.center').some(item => item.id === 'sessions:search')
+    const hasSearch = () => screen.queryByRole('dialog', { name: 'Search sessions' }) !== null
+    expect(hasSearch()).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'View all conversations' }))
     expect(hasSearch()).toBe(true)
+    expect(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Search sessions' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     fireEvent.click(screen.getByRole('button', { name: 'Tools page' }))
     expect(hasSearch()).toBe(false)
+    act(() => window.dispatchEvent(new Event(SESSION_SEARCH_FOCUS_EVENT)))
+    expect(hasSearch()).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    act(() => window.dispatchEvent(new Event(SESSION_SEARCH_FOCUS_EVENT)))
     expect(hasSearch()).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     fireEvent.click(screen.getByRole('button', { name: 'Forward' }))
     expect(hasSearch()).toBe(false)
   })
@@ -382,6 +400,95 @@ describe('ChatSidebar navigation activity', () => {
     expect(within(recents).getByText('Build the app')).toBeTruthy()
   })
 
+  it('removes an opened auto project immediately, keeps it hidden after refresh, and supports Undo', () => {
+    const history = makeSessionInfo({ id: 'discovered-chat', cwd: '/work/discovered', title: 'Discovered history' })
+
+    const project = {
+      id: '/work/discovered',
+      label: 'Discovered repo',
+      path: '/work/discovered',
+      isAuto: true,
+      repos: [],
+      sessionCount: 1,
+      previewSessions: [history]
+    }
+
+    $projectTree.set([project])
+    $sessions.set([...sessionRows, history])
+    enterProject(project.id)
+    exitProjectScope()
+    renderSidebar('/', 'chat')
+
+    const recents = screen.getByRole('button', { name: 'Recent' }).closest('[data-sidebar-section]') as HTMLElement
+    expect(within(recents).queryByText(history.title!)).toBeNull()
+    const row = screen.getByRole('button', { name: /^Open Discovered repo/ }).closest('.aino-project-overview-row')!
+    const actions = within(row as HTMLElement).getByRole('button', { name: 'Actions' })
+    fireEvent.pointerDown(actions, { button: 0, pointerType: 'mouse' })
+    fireEvent.pointerUp(actions, { button: 0, pointerType: 'mouse' })
+    fireEvent.click(actions)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide from sidebar' }))
+
+    expect(screen.queryByRole('button', { name: /^Open Discovered repo/ })).toBeNull()
+    expect(within(recents).getByText(history.title!)).toBeTruthy()
+    act(() => $projectTree.set([{ ...project }]))
+    expect(screen.queryByRole('button', { name: /^Open Discovered repo/ })).toBeNull()
+    expect(within(recents).getByText(history.title!)).toBeTruthy()
+
+    // A registered project at this folder remains visible: dismissing the
+    // discovery result must not remove a later explicit registration.
+    act(() => $projectTree.set([{ ...project, id: 'p_discovered', isAuto: false }]))
+    expect(screen.getByRole('button', { name: 'Open Discovered repo' })).toBeTruthy()
+    act(() => $projectTree.set([{ ...project }]))
+    expect(screen.queryByRole('button', { name: /^Open Discovered repo/ })).toBeNull()
+
+    const undo = $notifications.get().find(notification => notification.action?.label === 'Undo')?.action
+    expect(undo).toBeDefined()
+    act(() => undo!.onClick())
+    expect(screen.getByRole('button', { name: /^Open Discovered repo/ })).toBeTruthy()
+    expect(within(recents).queryByText(history.title!)).toBeNull()
+    expect(screen.getByText(history.title!)).toBeTruthy()
+  })
+
+  it('applies auto-project dismissal after adding projects from another gateway', () => {
+    const previousRegistry = $connectionsRegistry.get()
+
+    const remoteSession = makeSessionInfo({
+      id: 'remote-chat',
+      connection_id: 'studio',
+      profile: 'default',
+      cwd: '/work/remote',
+      git_repo_root: '/work/remote',
+      title: 'Remote work'
+    })
+
+    const id = JSON.stringify(['gateway-project', 'studio', '/work/remote'])
+
+    $connectionsRegistry.set({
+      version: 2,
+      primary: 'local',
+      secureTokenStorage: true,
+      connections: [
+        { id: 'local', label: 'This computer', kind: 'local', tokenSet: false, tokenPreview: null },
+        { id: 'studio', label: 'Studio', kind: 'remote', tokenSet: true, tokenPreview: null }
+      ]
+    } as NonNullable<typeof $connectionsRegistry.value>)
+    $sessions.set([remoteSession])
+
+    try {
+      renderSidebar('/', 'chat')
+      expect(screen.getByRole('button', { name: /^Open remote/ })).toBeTruthy()
+      act(() => dismissAutoProject(id))
+      expect(screen.queryByRole('button', { name: /^Open remote/ })).toBeNull()
+      act(() => $sessions.set([{ ...remoteSession }]))
+      expect(screen.queryByRole('button', { name: /^Open remote/ })).toBeNull()
+      act(() => restoreAutoProject(id))
+      expect(screen.getByRole('button', { name: /^Open remote/ })).toBeTruthy()
+    } finally {
+      cleanup()
+      $connectionsRegistry.set(previousRegistry)
+    }
+  })
+
   it('starts ordinary chat without the previously selected project folder', () => {
     $projectScope.set('p_previous')
     const start = vi.fn()
@@ -404,21 +511,23 @@ describe('ChatSidebar navigation activity', () => {
 
   // Teardown proof: the loader disposes a plugin's contributions on disable,
   // and that disposer alone must bring the row back — no store to clear.
-  it('hides a nav row while a sidebarNav.prefs contribution is registered and restores it on dispose', () => {
-    renderSidebar('/kanban', 'extension')
-    expect(screen.getByRole('button', { name: 'Kanban' })).toBeTruthy()
+  it('keeps new-session navigation preferences reversible after feature routes move to the activity rail', () => {
+    const { container } = renderSidebar('/', 'chat')
+    const hasNewSession = () => container.querySelector('[data-tour="sidebar-nav-new-session"]') !== null
+    expect(hasNewSession()).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Kanban' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reports' })).toBeNull()
 
     let dispose = () => {}
 
     act(() => {
-      dispose = registry.register({ area: SIDEBAR_NAV_PREFS_AREA, id: 'prefs', data: { hide: ['kanban-nav'] } })
+      dispose = registry.register({ area: SIDEBAR_NAV_PREFS_AREA, id: 'prefs', data: { hide: ['new-session'] } })
     })
-    expect(screen.queryByRole('button', { name: 'Kanban' })).toBeNull()
-    // A hidden row is a preference, not a removal: the sibling nav row stays.
-    expect(screen.getByRole('button', { name: 'Reports' })).toBeTruthy()
+    expect(hasNewSession()).toBe(false)
+    expect(screen.getByRole('button', { name: 'Recent' })).toBeTruthy()
 
     act(() => dispose())
-    expect(screen.getByRole('button', { name: 'Kanban' })).toBeTruthy()
+    expect(hasNewSession()).toBe(true)
   })
 })
 
@@ -798,7 +907,7 @@ describe('ChatSidebar messaging owners', () => {
     const row = (title: string) => screen.getByText(title).closest('.group.row-hover') as HTMLElement
 
     expect(telegramGroups()).toHaveLength(0)
-    expect(within(row('work-1')).getByRole('img', { name: 'Profile: work' })).toBeTruthy()
+    expect(within(row('work-1')).getByRole('img', { name: 'Bot: work' })).toBeTruthy()
 
     cleanup()
     setSidebarGrouping('profile')
@@ -807,6 +916,6 @@ describe('ChatSidebar messaging owners', () => {
 
     expect(telegramGroups()).toHaveLength(0)
     expect(screen.queryByText('work-1')).toBeNull()
-    expect(within(row('default-1')).queryByRole('img', { name: /^Profile:/ })).toBeNull()
+    expect(within(row('default-1')).queryByRole('img', { name: /^Bot:/ })).toBeNull()
   })
 })

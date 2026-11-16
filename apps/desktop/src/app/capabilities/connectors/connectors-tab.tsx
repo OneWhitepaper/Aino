@@ -347,8 +347,7 @@ function useOpenFromRoute(
     params.delete('connector')
     params.delete('tool')
     params.delete('rename')
-    params.delete('profile')
-    params.delete('connection')
+    // Profile and connection keep the page on its owner after this one-shot action.
 
     const query = params.toString()
     navigate({ hash, pathname, search: query ? `?${query}` : '' }, { replace: true })

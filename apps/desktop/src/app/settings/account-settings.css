@@ -14,7 +14,7 @@
   line-height: 1.6;
 }
 .account-profile-card {
-  padding: 1.3125rem 1.375rem 0;
+  padding: 0.9375rem 0 0;
 }
 .account-profile-header {
   display: flex;
@@ -23,12 +23,12 @@
   min-width: 0;
 }
 .account-profile-avatar {
-  width: 2.625rem;
-  height: 2.625rem;
-  border-radius: var(--aino-radius-row);
-  background: var(--ui-row-active-background);
-  color: var(--ui-accent-secondary);
-  font-size: 1.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--aino-action-bg);
+  color: var(--aino-action-fg);
+  font-size: 0.9375rem;
 }
 .account-profile-identity {
   flex: 1;
@@ -37,8 +37,8 @@
 .account-profile-identity > h2 {
   margin: 0 0 0.125rem;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-title);
-  font-weight: 500;
+  font-size: var(--aino-text-body);
+  font-weight: 550;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -69,7 +69,7 @@
 .account-profile-details dd {
   margin: 0;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
   overflow-wrap: anywhere;
 }
 .account-profile-saved {
@@ -132,7 +132,7 @@
 }
 @container account-page (max-width: 34rem) {
   .account-profile-card {
-    padding: 1.0625rem 1rem 0.1875rem;
+    padding: 0.9375rem 0 0.1875rem;
   }
   .account-profile-header {
     flex-wrap: wrap;

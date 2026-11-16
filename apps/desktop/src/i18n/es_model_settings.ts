@@ -15,6 +15,9 @@ export const esModelSettings: TranslationOverride<ModelSettingsTranslations> = {
   },
   pages: {
     description: 'Administra el modelo predeterminado y los modelos para cada tarea.',
+    preferences: 'Preferencias del modelo',
+    moreSettings: 'Más ajustes de modelos',
+    fallbackDescription: 'Elige un modelo de respaldo cuando el principal no esté disponible temporalmente.',
     auxiliaryTask: 'Tarea',
     auxiliaryPurpose: 'Propósito',
     auxiliaryModel: 'Modelo',

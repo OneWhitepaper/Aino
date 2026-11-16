@@ -5,10 +5,12 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { $workspaceIsPage, navigateToWorkspacePage, syncWorkspaceRoute } from '@/app/routes'
+import { ActivityRail } from '@/app/shell/activity-rail'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { SidebarBrandContext } from '@/components/pane-shell/pane-visibility'
 import { registry } from '@/contrib/registry'
 import { $selectedStoredSessionId } from '@/store/session'
+import * as windowMode from '@/store/windows'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
 import { group, split } from '../model'
@@ -16,6 +18,8 @@ import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane } from
 
 import { NarrowOverlays } from './narrow-overlays'
 import { TreeGroup } from './tree-group'
+
+vi.mock('@/app/shell/sidebar-identity-footer', () => ({ SidebarIdentityFooter: () => null }))
 
 const disposers: (() => void)[] = []
 const hubId = 'example-agent-plugin:roster'
@@ -84,6 +88,7 @@ afterEach(() => {
   $narrowViewport.set(false)
   disposers.splice(0).forEach(dispose => dispose())
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   $selectedStoredSessionId.set(null)
   window.location.hash = '#/'
 })
@@ -117,40 +122,55 @@ function usePageNavigationPanes() {
   $layoutTree.set(group(['sessions', 'hermes-bots:pane'], { id: 'navigation', active: 'sessions' }))
 }
 
-describe('shared navigation brand menu', () => {
-  it('leaves a tools page on an explicit mode switch while retaining the current conversation and draft', () => {
+describe('conversation navigation surfaces', () => {
+  it('restores the main-window draft after a tools page and switches mode through the activity rail', () => {
     usePageNavigationPanes()
     $selectedStoredSessionId.set('ordinary-chat')
-    window.location.hash = '#/capabilities?tab=tools'
-    syncWorkspaceRoute('/capabilities?tab=tools')
-    render(
+    window.location.hash = '#/ordinary-chat'
+    syncWorkspaceRoute('/ordinary-chat')
+
+    const { container } = render(
       <MemoryRouter>
+        <ActivityRail />
         <LiveGroup />
       </MemoryRouter>
     )
-    fireEvent.change(screen.getByRole('textbox', { name: 'Session draft' }), { target: { value: 'Unsaved text' } })
-    chooseHub()
 
-    expect($workspaceIsPage.get()).toBe(false)
-    expect(window.location.hash).toBe('#/ordinary-chat')
-    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    const draft = screen.getByRole('textbox', { name: 'Session draft' }) as HTMLInputElement
+    fireEvent.change(draft, { target: { value: 'Unsaved text' } })
+    const navigation = $layoutTree.get()
 
-    act(() =>
+    act(() => {
       navigateToWorkspacePage(to => {
         window.location.hash = `#${to}`
       }, '/capabilities?tab=tools')
-    )
-    act(() => syncWorkspaceRoute('/capabilities?tab=tools'))
-    expect($workspaceIsPage.get()).toBe(true)
-    fireEvent.pointerDown(screen.getByRole('button', { name: /Switch conversation mode: Agent Hub/ }), {
-      button: 0,
-      ctrlKey: false
+      syncWorkspaceRoute('/capabilities?tab=tools')
     })
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /Aino/ }))
 
+    expect($workspaceIsPage.get()).toBe(true)
+    expect(window.location.hash).toBe('#/capabilities?tab=tools')
+    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    // jsdom does not apply inert to accessibility queries; the native host blocks this retained input.
+    expect(draft.closest('[data-pane-hidden]')?.hasAttribute('inert')).toBe(true)
+    expect(container.querySelector('input[aria-label="Session draft"]')).toBe(draft)
+    expect(draft.value).toBe('Unsaved text')
+    expect($layoutTree.get()).toEqual(navigation)
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+
+    act(() => {
+      navigateToWorkspacePage(to => {
+        window.location.hash = `#${to}`
+      }, '/ordinary-chat')
+      syncWorkspaceRoute('/ordinary-chat')
+    })
     expect($workspaceIsPage.get()).toBe(false)
-    expect(window.location.hash).toBe('#/ordinary-chat')
-    expect((screen.getByRole('textbox', { name: 'Session draft' }) as HTMLInputElement).value).toBe('Unsaved text')
+    expect(screen.getByRole('textbox', { name: 'Session draft' })).toBe(draft)
+    expect(draft.value).toBe('Unsaved text')
+    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Hub' }))
+    expect($layoutTree.get()).toMatchObject({ active: 'hermes-bots:pane' })
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
   })
 
   it('does not leave a tools page when pane visibility changes without a mode selection', () => {
@@ -168,7 +188,7 @@ describe('shared navigation brand menu', () => {
     expect(window.location.hash).toBe('#/capabilities?tab=tools')
   })
 
-  it('leaves the tools page through the narrow mode menu without replacing its retained conversation', () => {
+  it('keeps narrow conversation reveal unavailable on functional pages without changing its selected conversation', () => {
     usePageNavigationPanes()
     $layoutTree.set(split('row', [group(['sessions', 'hermes-bots:pane'], { id: 'navigation', active: 'sessions' })]))
     $narrowViewport.set(true)
@@ -176,18 +196,34 @@ describe('shared navigation brand menu', () => {
     window.location.hash = '#/capabilities?tab=tools'
     syncWorkspaceRoute('/capabilities?tab=tools')
     render(<NarrowOverlays />)
+    const navigation = $layoutTree.get()
     act(() =>
       window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: 'sessions', mode: 'open' } }))
     )
-    chooseHub()
 
-    expect($workspaceIsPage.get()).toBe(false)
-    expect(window.location.hash).toBe('#/ordinary-chat')
+    expect($workspaceIsPage.get()).toBe(true)
+    expect(window.location.hash).toBe('#/capabilities?tab=tools')
+    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(globalThis.document.querySelector('[data-narrow-overlay]')).toBeNull()
+    expect($layoutTree.get()).toEqual(navigation)
     expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+
+    act(() => {
+      window.location.hash = '#/ordinary-chat'
+      syncWorkspaceRoute('/ordinary-chat')
+    })
+    act(() =>
+      window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: 'sessions', mode: 'open' } }))
+    )
+    expect(screen.getByRole('textbox', { name: 'Session draft' })).toBeTruthy()
+    chooseHub()
     expect(screen.getByText('Bot roster')).toBeTruthy()
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
   })
 
-  it('activates the existing pane, preserves the session draft and falls back when the plugin unloads', () => {
+  it('uses the auxiliary-window brand menu without losing its draft and falls back when the plugin unloads', () => {
+    vi.spyOn(windowMode, 'isAuxiliaryWindow').mockReturnValue(true)
+
     const { container } = render(
       <MemoryRouter>
         <LiveGroup />

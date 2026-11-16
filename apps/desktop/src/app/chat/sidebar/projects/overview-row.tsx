@@ -1,8 +1,9 @@
 import { useStore } from '@nanostores/react'
 import type * as React from 'react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { type NewSessionSplitHandler, startNewSessionDrag } from '@/app/chat/new-session-drag'
+import navFolderIcon from '@/assets/aino-home/nav-folder.svg'
 import navNewSessionIcon from '@/assets/aino-home/nav-new-session.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { Codicon } from '@/components/ui/codicon'
@@ -57,7 +58,11 @@ export function projectIcon({ color, icon, isAuto, isNoProject }: SidebarProject
 
   return (
     <SidebarRowLeadGlyph style={color ? { color } : undefined}>
-      <Codicon name={icon || (isNoProject ? 'home' : isAuto ? 'repo' : 'folder')} size={SIDEBAR_LEAD_ICON_SIZE} />
+      {icon || isNoProject || isAuto ? (
+        <Codicon name={icon || (isNoProject ? 'home' : 'repo')} size={SIDEBAR_LEAD_ICON_SIZE} />
+      ) : (
+        <AinoDesignIcon className="size-[17px]" src={navFolderIcon} />
+      )}
     </SidebarRowLeadGlyph>
   )
 }
@@ -126,9 +131,6 @@ export function ProjectOverviewRow({
   const isActive = project.id === activeProjectId
   const { onNewSession, onNewSessionSplit } = ownedNewSessionHandlers(project, onNewSessionIn, onNewSessionSplitIn)
   const [open, toggleOpen] = useWorkspaceNodeOpen(project.id)
-  // The appearance popover anchors here (the full row) so it opens flush with
-  // the sidebar's content edge regardless of which side the sidebar is on.
-  const rowRef = useRef<HTMLDivElement>(null)
   const showAllSessions = useStore($sidebarShowAllSessions)
   // The tree payload previews only the most-recent few sessions per project
   // (kept light on purpose); "Show all" hydrates THIS project's lanes on demand
@@ -213,7 +215,7 @@ export function ProjectOverviewRow({
               delete — but it still starts sessions: a null path is the "no
               folder" chat. New session sits outermost: it's the one you reach
               for. */}
-          {!project.isNoProject && <ProjectMenu anchorRef={rowRef} isActive={isActive} project={project} />}
+          {!project.isNoProject && <ProjectMenu isActive={isActive} project={project} />}
           {onNewSession && (
             <WorkspaceAddButton
               icon={<AinoDesignIcon className="size-3.5" src={navNewSessionIcon} />}
@@ -244,7 +246,7 @@ export function ProjectOverviewRow({
           )}
         </>
       }
-      className={cn(dragging && 'cursor-grabbing bg-(--ui-sidebar-surface-background)')}
+      className={cn('aino-project-overview-row', dragging && 'cursor-grabbing bg-(--ui-sidebar-surface-background)')}
       data-glass-opaque={dragging ? '' : undefined}
       label={project.isAuto ? <Tip label={s.projects.autoDiscovered}>{labelLink}</Tip> : labelLink}
       lead={lead}
@@ -267,7 +269,6 @@ export function ProjectOverviewRow({
 
         dragHandleProps?.onPointerDown?.(event)
       }}
-      ref={rowRef}
       toggle={
         preview.length > 0
           ? { ariaLabel: s.projects.toggle(project.label, !open), onToggle: toggleOpen, open }
@@ -303,7 +304,7 @@ export function ProjectOverviewRow({
         </ProjectContextMenu>
       )}
       {open && preview.length > 0 && (
-        <SidebarRowNest>
+        <SidebarRowNest className="aino-project-preview-rows">
           {renderRows?.(rows)}
           {offerShowAll && (
             <WorkspaceShowMoreRow disabled={expanding} label={s.projects.showAllCount(total)} onClick={showAll} />

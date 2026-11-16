@@ -1,17 +1,19 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
+import { prepareDefaultNewSession } from '@/app/session/new-session-route'
 import { toggleTargetZoneTabStrip } from '@/components/pane-shell/tree/store'
+import { setWorkspaceScope } from '@/components/pane-shell/workspace-scope'
 import { type MenuKit, renderActionItem } from '@/components/ui/actions-menu'
 import { type Translations, useI18n } from '@/i18n'
 import { cloudOwnsUpdates } from '@/store/cloud-updates'
 import { openCommandPalette } from '@/store/command-palette'
-import { toggleProfileRailVisible } from '@/store/profile-rail-prefs'
+import { setSettingsScope } from '@/store/settings-scope'
 import { toggleStatusbarVisible } from '@/store/statusbar-prefs'
 import { requestActiveUpdate } from '@/store/updates'
 import { canOpenNewWindow, openNewWindow } from '@/store/windows'
 
-import { navigateToWorkspacePage, NEW_CHAT_ROUTE, SETTINGS_ROUTE } from '../routes'
+import { navigateToWorkspacePage, NEW_CHAT_ROUTE, PROFILES_ROUTE, SETTINGS_ROUTE } from '../routes'
 
 /** Bare right-click on app chrome: the window verbs (the old shell fallback). */
 function shellSections(
@@ -24,14 +26,21 @@ function shellSections(
     icon: 'add',
     key: 'shell-new-chat',
     label: t.commandCenter.nav.newChat.title,
-    onSelect: () => navigateToWorkspacePage(navigate, NEW_CHAT_ROUTE)
+    onSelect: () => {
+      prepareDefaultNewSession()
+      setWorkspaceScope('sessions')
+      navigateToWorkspacePage(navigate, NEW_CHAT_ROUTE)
+    }
   })
 
   const settings = renderActionItem(kit, {
     icon: 'settings-gear',
     key: 'shell-settings',
     label: t.commandCenter.settings,
-    onSelect: () => navigateToWorkspacePage(navigate, SETTINGS_ROUTE)
+    onSelect: () => {
+      setSettingsScope('default')
+      navigateToWorkspacePage(navigate, SETTINGS_ROUTE)
+    }
   })
 
   // A Webapp served by Hermes Cloud has nothing to update. Desktop connected to Cloud keeps
@@ -80,7 +89,7 @@ function shellSections(
         icon: 'organization',
         key: 'shell-profile-rail',
         label: t.keybinds.actions['view.toggleProfileRail'],
-        onSelect: toggleProfileRailVisible
+        onSelect: () => navigateToWorkspacePage(navigate, PROFILES_ROUTE)
       }),
       // The pointer-only way back to a hidden tab strip: right-clicking the
       // shell reaches this menu from anywhere, including a zone that has no

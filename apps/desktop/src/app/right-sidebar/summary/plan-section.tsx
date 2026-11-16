@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useStore } from '@nanostores/react'
+import { useId, useState } from 'react'
 
+import { $workspaceMode } from '@/components/pane-shell/workspace-scope'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
@@ -20,78 +22,100 @@ const TODO_ICONS: Record<TodoItem['status'], string> = {
 
 export function PlanSection({ history, session }: { history: TodoItem[]; session: SummarySession }) {
   const { t } = useI18n()
+  const botWorkspace = useStore($workspaceMode) === 'bots'
   const [expanded, setExpanded] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const currentId = useId()
+  const historyId = useId()
   const live = useSessionSlice($todosBySession, session.runtimeId)
   const goal = useStoreSelector($goalsBySession, goals => (session.runtimeId ? goals[session.runtimeId] : undefined))
   const todos = live.length ? live : history
   const tree = todoTree(todos)
+  const currentTree = tree.filter(([todo]) => todo.status === 'pending' || todo.status === 'in_progress')
+  const historyTree = tree.filter(([todo]) => todo.status === 'completed' || todo.status === 'cancelled')
+  const visibleTree = botWorkspace ? tree : currentTree
   const completed = todos.filter(todo => todo.status === 'completed').length
   const total = todos.filter(todo => todo.status !== 'cancelled').length
-  const currentStep = todos.find(todo => todo.status === 'in_progress')
 
   if (!todos.length && !goal) {
     return null
   }
 
+  const renderRows = (items: typeof tree) =>
+    items.map(([todo, depth]) => (
+      <div
+        className="flex min-w-0 items-start gap-2"
+        data-slot="summary-plan-row"
+        data-status={todo.status}
+        key={todo.id}
+        style={{ paddingInlineStart: `${Math.min(depth, 3) * 0.75}rem` }}
+      >
+        <Codicon
+          aria-hidden={false}
+          aria-label={t.summary.plan.status[todo.status]}
+          className="mt-0.5 shrink-0 text-(--ui-text-tertiary)"
+          name={TODO_ICONS[todo.status]}
+          role="img"
+        />
+        <span className="min-w-0 break-words">{todo.content}</span>
+      </div>
+    ))
+
   return (
-    <SummarySection title={t.summary.plan.title}>
+    <SummarySection
+      action={
+        todos.length > 0 && (
+          <span aria-label={t.summary.plan.progress(completed, total)} data-slot="summary-plan-progress">
+            {completed} / {total}
+          </span>
+        )
+      }
+      title={t.summary.plan.title}
+    >
       {goal && <p className="mb-2 break-words">{goal.title}</p>}
       {todos.length > 0 && (
         <>
-          <Button
-            aria-expanded={expanded}
-            className="w-full justify-start"
-            onClick={() => setExpanded(value => !value)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <Codicon name="checklist" />
-            <span className="flex-1 text-left">{t.summary.plan.progress(completed, total)}</span>
-            <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
-          </Button>
-          {currentStep && (
-            <div className="mt-1 grid gap-0.5">
-              {!live.length && (
-                <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                  {t.summary.plan.recorded}
-                </span>
-              )}
-              <div className="flex min-w-0 items-start gap-2 text-[length:var(--aino-text-caption)]">
-                <Codicon
-                  aria-hidden={false}
-                  aria-label={t.summary.plan.status.in_progress}
-                  className="mt-0.5 shrink-0 text-(--ui-text-tertiary)"
-                  name={TODO_ICONS.in_progress}
-                  role="img"
-                />
-                <span className="min-w-0 break-words">{currentStep.content}</span>
-              </div>
-            </div>
+          {!botWorkspace && !live.length && currentTree.length > 0 && (
+            <p className="mb-2 text-(--ui-text-tertiary)" data-slot="summary-row-status">
+              {t.summary.plan.recorded}
+            </p>
           )}
-          {expanded && (
-            <div className="mt-2 grid gap-2">
-              {!live.length && (
-                <p className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
-                  {t.summary.plan.recorded}
-                </p>
-              )}
-              {tree.map(([todo, depth]) => (
-                <div
-                  className="flex min-w-0 items-start gap-2"
-                  key={todo.id}
-                  style={{ paddingInlineStart: `${Math.min(depth, 3) * 0.75}rem` }}
-                >
-                  <Codicon
-                    aria-hidden={false}
-                    aria-label={t.summary.plan.status[todo.status]}
-                    className="mt-0.5 shrink-0 text-(--ui-text-tertiary)"
-                    name={TODO_ICONS[todo.status]}
-                    role="img"
-                  />
-                  <span className="min-w-0 break-words">{todo.content}</span>
+          <div className="grid gap-2" id={currentId}>
+            {renderRows(expanded ? visibleTree : visibleTree.slice(0, 4))}
+          </div>
+          {visibleTree.length > 4 && (
+            <Button
+              aria-controls={currentId}
+              aria-expanded={expanded}
+              className="mt-2"
+              onClick={() => setExpanded(value => !value)}
+              size="inline"
+              type="button"
+              variant="text"
+            >
+              {expanded ? t.summary.state.showLess : t.summary.state.showAll(visibleTree.length)}
+            </Button>
+          )}
+          {!botWorkspace && historyTree.length > 0 && (
+            <div data-slot="summary-history">
+              <Button
+                aria-controls={historyId}
+                aria-expanded={historyExpanded}
+                className="w-full justify-start"
+                data-slot="summary-disclosure"
+                onClick={() => setHistoryExpanded(value => !value)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Codicon aria-hidden name={historyExpanded ? 'chevron-down' : 'chevron-right'} />
+                {t.summary.plan.history(historyTree.length)}
+              </Button>
+              {historyExpanded && (
+                <div className="grid gap-2" id={historyId}>
+                  {renderRows(historyTree)}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </>

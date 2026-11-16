@@ -10,6 +10,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
@@ -39,9 +42,10 @@ import { useComposerScope } from '../scope'
 interface ComposerProjectSelectorProps {
   cwd?: string
   label?: string | null
+  presentation?: 'pill' | 'submenu'
 }
 
-export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorProps) {
+export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: ComposerProjectSelectorProps) {
   const { t } = useI18n()
   const fileMenu = t.fileMenu
   const view = useSessionView()
@@ -105,6 +109,128 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
     }
   }
 
+  const items = (
+    <>
+      {cwd && (
+        <>
+          <DropdownMenuLabel className="whitespace-normal break-all font-mono font-normal">
+            {displayPath(cwd)}
+          </DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => void copyFilePath(cwd)}>
+            <Codicon name="copy" size="0.875rem" />
+            {fileMenu.copyPath}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canUseSource}
+            onSelect={() => {
+              if (sourceIsCurrent()) {
+                void revealFile(cwd)
+              }
+            }}
+          >
+            <Codicon name="folder-opened" size="0.875rem" />
+            {fileMenu.revealFileManager}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canUseSource}
+            onSelect={() => {
+              if (sourceIsCurrent()) {
+                revealFileInTree(cwd)
+              }
+            }}
+          >
+            <Codicon name="files" size="0.875rem" />
+            {fileMenu.revealInSidebar}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
+      {!showProjectPicker && cwd && (
+        <DropdownMenuItem
+          disabled={!canUseSource}
+          onSelect={() => {
+            if (sourceIsCurrent()) {
+              selectProject(cwd)
+            }
+          }}
+        >
+          <Codicon name="new-file" size="0.875rem" />
+          {t.commandCenter.newSessionInProject(label || displayPath(cwd))}
+        </DropdownMenuItem>
+      )}
+      {showProjectPicker && (
+        <>
+          <DropdownMenuLabel>
+            {draft ? t.statusStack.coding.selectProject : t.statusStack.coding.startProjectChat}
+          </DropdownMenuLabel>
+          {draft && !runtimeId && cwd && (
+            <DropdownMenuItem onSelect={() => selectProject(null)}>
+              <Codicon name="close" size="0.875rem" />
+              {t.statusStack.coding.noProject}
+            </DropdownMenuItem>
+          )}
+          <div className="max-h-48 overflow-y-auto">
+            {projects.map(project => (
+              <DropdownMenuItem
+                aria-label={project.label}
+                key={project.id}
+                onSelect={() => {
+                  const path = projectRootCwd(project)
+
+                  // The unified tree merges profiles by path, so its project IDs
+                  // are not writable IDs in the current profile.
+                  if ($profileScope.get() === ALL_PROFILES) {
+                    void openFolder(path)
+                  } else {
+                    selectProject(path, project.id)
+                  }
+                }}
+              >
+                <Codicon name="folder" size="0.875rem" />
+                <span className="truncate">{project.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </div>
+          {projects.length > 0 && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            onSelect={() => {
+              const selection = captureProjectSelection(view, scope.attachments)
+              openProjectCreate({
+                isCurrent: selection.isCurrent,
+                onCreated: created => {
+                  if (selection.isCurrent()) {
+                    void selection
+                      .select(created.primary_path ?? created.folders[0]?.path ?? null, created.id)
+                      .catch(error => notifyError(error, t.desktop.cwdChangeFailed))
+                  }
+                }
+              })
+            }}
+          >
+            <Codicon name="add" size="0.875rem" />
+            {t.sidebar.projects.newButton}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={opening} onSelect={() => void openFolder()}>
+            <Codicon name="folder-opened" size="0.875rem" />
+            {t.commandCenter.openFolder}
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  )
+
+  if (presentation === 'submenu') {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger disabled={opening || bindingProject}>
+          <Codicon name="folder" size="0.875rem" />
+          <span className="truncate">{label || t.statusStack.coding.selectProject}</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="max-w-72">{items}</DropdownMenuSubContent>
+      </DropdownMenuSub>
+    )
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -122,111 +248,7 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-72" side="top">
-        {cwd && (
-          <>
-            <DropdownMenuLabel className="whitespace-normal break-all font-mono font-normal">
-              {displayPath(cwd)}
-            </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => void copyFilePath(cwd)}>
-              <Codicon name="copy" size="0.875rem" />
-              {fileMenu.copyPath}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!canUseSource}
-              onSelect={() => {
-                if (sourceIsCurrent()) {
-                  void revealFile(cwd)
-                }
-              }}
-            >
-              <Codicon name="folder-opened" size="0.875rem" />
-              {fileMenu.revealFileManager}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!canUseSource}
-              onSelect={() => {
-                if (sourceIsCurrent()) {
-                  revealFileInTree(cwd)
-                }
-              }}
-            >
-              <Codicon name="files" size="0.875rem" />
-              {fileMenu.revealInSidebar}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
-        {!showProjectPicker && cwd && (
-          <DropdownMenuItem
-            disabled={!canUseSource}
-            onSelect={() => {
-              if (sourceIsCurrent()) {
-                selectProject(cwd)
-              }
-            }}
-          >
-            <Codicon name="new-file" size="0.875rem" />
-            {t.commandCenter.newSessionInProject(label || displayPath(cwd))}
-          </DropdownMenuItem>
-        )}
-        {showProjectPicker && (
-          <>
-            <DropdownMenuLabel>
-              {draft ? t.statusStack.coding.selectProject : t.statusStack.coding.startProjectChat}
-            </DropdownMenuLabel>
-            {draft && !runtimeId && cwd && (
-              <DropdownMenuItem onSelect={() => selectProject(null)}>
-                <Codicon name="close" size="0.875rem" />
-                {t.statusStack.coding.noProject}
-              </DropdownMenuItem>
-            )}
-            <div className="max-h-48 overflow-y-auto">
-              {projects.map(project => (
-                <DropdownMenuItem
-                  aria-label={project.label}
-                  key={project.id}
-                  onSelect={() => {
-                    const path = projectRootCwd(project)
-
-                    // The unified tree merges profiles by path, so its project IDs
-                    // are not writable IDs in the current profile.
-                    if ($profileScope.get() === ALL_PROFILES) {
-                      void openFolder(path)
-                    } else {
-                      selectProject(path, project.id)
-                    }
-                  }}
-                >
-                  <Codicon name="folder" size="0.875rem" />
-                  <span className="truncate">{project.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </div>
-            {projects.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem
-              onSelect={() => {
-                const selection = captureProjectSelection(view, scope.attachments)
-                openProjectCreate({
-                  isCurrent: selection.isCurrent,
-                  onCreated: created => {
-                    if (selection.isCurrent()) {
-                      void selection
-                        .select(created.primary_path ?? created.folders[0]?.path ?? null, created.id)
-                        .catch(error => notifyError(error, t.desktop.cwdChangeFailed))
-                    }
-                  }
-                })
-              }}
-            >
-              <Codicon name="add" size="0.875rem" />
-              {t.sidebar.projects.newButton}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={opening} onSelect={() => void openFolder()}>
-              <Codicon name="folder-opened" size="0.875rem" />
-              {t.commandCenter.openFolder}
-            </DropdownMenuItem>
-          </>
-        )}
+        {items}
       </DropdownMenuContent>
     </DropdownMenu>
   )

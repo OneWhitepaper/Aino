@@ -1,4 +1,4 @@
-const titlebarHeight = 43
+const titlebarHeight = 44
 const trafficLightHeight = 14
 
 /** Native coordinates and renderer chrome share one desktop band. */

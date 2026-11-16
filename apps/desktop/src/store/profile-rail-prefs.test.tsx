@@ -13,9 +13,10 @@ import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-// Aino keeps workspace switching in the brand menu / Agent Hub, without an
-// upstream profile strip in ChatSidebar. The optional diagnostics bar retains
-// its preference-controlled profile picker. Each host gets its own module graph.
+import { PROFILES_ROUTE } from '@/app/routes'
+
+// Bot management stays reachable from the diagnostics bar on both hosts.
+// The legacy profile-rail preference must not hide this full-page navigation.
 
 type SurfaceWindow = Window & { __HERMES_UI_SURFACE__?: string }
 
@@ -103,7 +104,9 @@ function renderDoors({ $layoutTree, ChatSidebar, group, SidebarProvider, useStat
 
   const doors = () => ({
     dropdown: sidebar.container.querySelector('[data-slot="profile-dropdown"]') !== null,
-    picker: statusbar.result.current.leftStatusbarItems.some(item => item.id === 'profile-switcher' && !item.hidden),
+    managementRoute: statusbar.result.current.leftStatusbarItems.find(
+      item => item.id === 'profile-switcher' && !item.hidden
+    )?.to,
     rail: sidebar.container.querySelector('[data-slot="profile-rail"]') !== null
   })
 
@@ -126,15 +129,15 @@ describe.each([
     vi.resetModules()
   })
 
-  it('keeps the Aino sidebar and preference-controlled diagnostics picker on both hosts', () => {
+  it('keeps Bot management reachable regardless of the legacy rail preference', () => {
     const doors = renderDoors(host)
 
-    expect(doors()).toEqual({ dropdown: false, picker: false, rail: false })
+    expect(doors()).toEqual({ dropdown: false, managementRoute: PROFILES_ROUTE, rail: false })
 
-    // Opting into the fallback exposes the existing picker, without adding a rail.
+    // An older saved preference cannot remove the management page's entry point.
     act(() => host.prefs.toggleProfileRailVisible())
-    expect(doors()).toEqual({ dropdown: false, picker: true, rail: false })
+    expect(doors()).toEqual({ dropdown: false, managementRoute: PROFILES_ROUTE, rail: false })
     act(() => host.prefs.toggleProfileRailVisible())
-    expect(doors()).toEqual({ dropdown: false, picker: false, rail: false })
+    expect(doors()).toEqual({ dropdown: false, managementRoute: PROFILES_ROUTE, rail: false })
   })
 })

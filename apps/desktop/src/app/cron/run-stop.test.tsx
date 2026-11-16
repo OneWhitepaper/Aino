@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as HermesApi from '@/hermes'
@@ -81,6 +81,7 @@ describe('cron job header while a run is live', () => {
       )
     })
 
+    fireEvent.click(await screen.findByRole('button', { name: /Nightly digest/ }))
     // The click resumes the schedule (handlePauseResume reads the saved state), so the label must say so.
     expect(await screen.findByRole('button', { name: 'Resume' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull()

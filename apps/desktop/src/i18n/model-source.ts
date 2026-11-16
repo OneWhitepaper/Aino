@@ -20,8 +20,8 @@ interface ModelSourceCopy {
 
 const COPY: Record<BundledLocale, ModelSourceCopy> = {
   zh: {
-    providerSource: '第三方服务',
-    customSource: '自定义模型',
+    providerSource: '服务商',
+    customSource: '自定义',
     customApiTitle: '自定义 API 模型',
     providerDescription: '选择服务商，填写 API Key 获取可用模型。',
     customDescription: '连接中转或私有服务，自行填写 API 地址和密钥。',

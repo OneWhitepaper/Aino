@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { botRosterKey } from './data'
 import type { useBots } from './i18n'
 import type { RosterGroupRow } from './roster-pane-derivation'
+import { CreateGroupChatButton } from './roster-pane-toolbar'
 import { GatewayKindGlyph, GatewaySectionHeading } from './roster-sections'
 import type { ResolvedRosterGatewaySection } from './roster-sections'
 import type { BotMeta, GroupChat, RosterRow } from './types'
@@ -33,6 +34,7 @@ interface RosterSectionRenderersProps {
   renderBotRow: (bot: RosterRow, keyPrefix?: string) => ReactNode
   renderGroupRow: (row: RosterGroupRow) => ReactNode
   sortedGroupRows: RosterGroupRow[]
+  onCreateGroup?: () => void
 }
 
 export function rosterSectionRenderers({
@@ -47,7 +49,8 @@ export function rosterSectionRenderers({
   setSectionDialog,
   renderBotRow,
   renderGroupRow,
-  sortedGroupRows
+  sortedGroupRows,
+  onCreateGroup
 }: RosterSectionRenderersProps) {
   const removeSection = (id: string) => {
     const name = userSections.find(section => section.id === id)?.name || ''
@@ -175,9 +178,10 @@ export function rosterSectionRenderers({
     <section aria-label={b.roster.groupChats} className="aino-roster-groups">
       <div className="aino-roster-section-heading">
         <h2>{b.roster.groupChats}</h2>
-        <span aria-hidden className="font-normal tabular-nums">
+        <span aria-hidden className="aino-roster-group-count">
           {sortedGroupRows.length}
         </span>
+        {onCreateGroup ? <CreateGroupChatButton b={b} onCreate={onCreateGroup} roster={roster} /> : null}
       </div>
       <div className="aino-roster-rows">{renderUserSections(sortedGroupRows, 'groups:')}</div>
     </section>

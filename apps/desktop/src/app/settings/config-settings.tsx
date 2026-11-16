@@ -82,6 +82,7 @@ import { QuickEntrySettings } from './quick-entry-settings'
 import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { SharedMetricsSettings } from './shared-metrics-settings'
 import { resolveSettingsSubpage, settingsSubpageForLegacyLink, settingsSubpageIcon } from './subpages'
+import { openSettingDisclosures } from './use-deep-link-highlight'
 import { useSettingDeepLink } from './use-setting-deep-link'
 import { WORKSPACE_FIELD_KEYS, WorkspaceSettings } from './workspace-settings'
 
@@ -420,6 +421,7 @@ function useConfigFieldDeepLink({ activeSectionId, config, schema, subpage }: Co
       return
     }
 
+    openSettingDisclosures(element)
     element.scrollIntoView({ behavior: 'smooth', block: 'center' })
 
     if (!element.hasAttribute('tabindex')) {

@@ -1,3 +1,30 @@
+/* Page-owned directories share the approved reading column and page gutters. */
+[data-aino-page-shell] {
+  --aino-page-width: 65rem;
+  --aino-page-gutter: 3.375rem;
+  --aino-page-top: 2.625rem;
+  --aino-page-bottom: 3.125rem;
+  container-type: inline-size;
+}
+@media (max-width: 73.75rem) {
+  [data-aino-page-shell] {
+    --aino-page-gutter: 2.125rem;
+    --aino-page-top: 2rem;
+    --aino-page-bottom: 2.5rem;
+  }
+}
+@media (max-width: 57.5rem) {
+  [data-aino-page-shell] {
+    --aino-page-gutter: 1.5625rem;
+    --aino-page-top: 1.75rem;
+  }
+}
+@media (max-width: 40rem) {
+  [data-aino-page-shell] {
+    --aino-page-gutter: 1.25rem;
+    --aino-page-top: 1.5rem;
+  }
+}
 /* Shared page header, owned here rather than by a theme-wide route override. */
 [data-aino-page-header] {
   background: var(--ui-editor-surface-background);

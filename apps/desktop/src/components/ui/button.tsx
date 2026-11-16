@@ -64,14 +64,14 @@ const buttonVariants = cva(
         'icon-lg': 'size-10 rounded-(--aino-radius-control)',
         grip: 'h-4 w-12 rounded-full p-0',
         'icon-titlebar':
-          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-control) hover:transition-none [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
+          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-toolbar) hover:transition-none [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
       }
     },
     compoundVariants: [
       {
         variant: 'titlebar-popover',
         size: 'icon-titlebar',
-        class: 'rounded-(--aino-radius-control)'
+        class: 'rounded-(--aino-radius-toolbar)'
       },
       // textStrong is a boxless link — size variants still inject px-*; strip
       // inline padding so the underline sits flush with the label.

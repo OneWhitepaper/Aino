@@ -24,6 +24,8 @@ export interface DelegateRow {
   model?: string
   /** The child's own stored session id, when reported by the runtime. */
   sessionId?: string
+  /** Final answer or failure supplied by the receipt/runtime, separate from raw activity. */
+  summary?: string
   status: DelegateRowStatus
 }
 
@@ -68,6 +70,12 @@ function settledRowStatus(status: string): DelegateRowStatus {
   return status === '' || status === 'ok' || status === 'completed' ? 'completed' : 'failed'
 }
 
+function settledRowSummary(entry?: Record<string, unknown>): string | undefined {
+  const summary = entry ? field(entry, 'summary') || field(entry, 'error') : ''
+
+  return summary || undefined
+}
+
 function dispatchedGoals(result: unknown): string[] {
   const record = parseMaybeObject(result)
 
@@ -107,7 +115,7 @@ export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId 
 
   return titles.map((goal, index) => {
     const entry = finished[index]
-    const summary = entry ? field(entry, 'summary') || field(entry, 'error') : ''
+    const summary = settledRowSummary(entry)
 
     return {
       activity: summary ? [summary] : [],
@@ -121,6 +129,7 @@ export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId 
       id: `${toolCallId}:${index}`,
       model: entry ? field(entry, 'model') || undefined : undefined,
       sessionId: entry ? field(entry, 'child_session_id') || field(entry, 'session_id') || undefined : undefined,
+      summary,
       status: entry ? settledRowStatus(field(entry, 'status')) : idle
     }
   })
@@ -139,7 +148,18 @@ export function delegateRowFromSubagent(live: SubagentProgress, fallbackId: stri
     id: live.id || fallbackId,
     model: live.model,
     sessionId: live.sessionId,
+    summary: live.summary,
     status: live.status
+  }
+}
+
+function preserveSettledOutcome(row: DelegateRow, merged: DelegateRow): DelegateRow {
+  return {
+    ...merged,
+    activity: row.activity.length ? row.activity : merged.activity,
+    durationSeconds: row.durationSeconds ?? merged.durationSeconds,
+    summary: row.summary ?? merged.summary,
+    status: row.status
   }
 }
 
@@ -212,12 +232,7 @@ export function mergeDelegateRows(
     }
 
     if (!isDelegateRowLive(row.status) && (row.status !== 'dispatched' || !sameBatch)) {
-      return {
-        ...merged,
-        activity: row.activity.length ? row.activity : merged.activity,
-        durationSeconds: row.durationSeconds ?? merged.durationSeconds,
-        status: row.status
-      }
+      return preserveSettledOutcome(row, merged)
     }
 
     return merged

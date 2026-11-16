@@ -61,7 +61,12 @@ describe('delegateRowsFromCall', () => {
     )
 
     expect(rows.map(r => r.status)).toEqual(['completed', 'failed'])
-    expect(rows[0]).toMatchObject({ activity: ['found it'], durationSeconds: 12, model: 'anthropic/claude-opus-5' })
+    expect(rows[0]).toMatchObject({
+      activity: ['found it'],
+      summary: 'found it',
+      durationSeconds: 12,
+      model: 'anthropic/claude-opus-5'
+    })
   })
 
   it('retains a friendly name and child session receipt without replacing the original task', () => {
@@ -142,6 +147,21 @@ describe('delegateRowsFromCall', () => {
 })
 
 describe('mergeDelegateRows', () => {
+  it.each([
+    { result: { status: 'completed', summary: 'Persisted answer' }, expected: 'Persisted answer', status: 'completed' },
+    { result: { status: 'error', error: 'Provider unavailable' }, expected: 'Provider unavailable', status: 'failed' }
+  ])('keeps the persisted $status result separate from older worker activity', ({ result, expected, status }) => {
+    const rows = delegateRowsFromCall({ goal: 'Review' }, { results: [{ ...result, subagent_id: 'sub-1' }] }, 'call')
+
+    const merged = mergeDelegateRows(
+      rows,
+      [subagent({ summary: 'Provisional result', stream: [{ at: 1, kind: 'tool', text: 'Still reading files' }] })],
+      'call'
+    )
+
+    expect(merged[0]).toMatchObject({ status, summary: expected, activity: [expected] })
+  })
+
   it('joins fallback rows by the tool call id they were keyed with', () => {
     const rows = delegateRowsFromCall({ tasks: [{ goal: 'A' }, { goal: 'B' }] }, undefined, 'call-7')
 

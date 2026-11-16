@@ -1,0 +1,98 @@
+.aino-bot-chat-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: min(100%, 330px);
+  min-height: 38px;
+  margin: -4px -7px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background-color 100ms;
+}
+.aino-bot-chat-identity:hover,
+.aino-bot-chat-identity[aria-expanded='true'] {
+  background: var(--chrome-action-hover);
+}
+.aino-bot-chat-identity:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.aino-bot-chat-identity-avatar {
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+}
+.aino-bot-chat-identity-option-avatar {
+  display: inline-flex;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+}
+.aino-bot-chat-identity-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--aino-text-body);
+  font-weight: 550;
+  line-height: 1.5;
+}
+.aino-bot-chat-identity-caret {
+  flex-shrink: 0;
+  color: var(--ui-text-secondary);
+}
+.aino-bot-chat-identity-menu {
+  width: min(250px, calc(100vw - 2rem));
+}
+.aino-bot-chat-identity-options {
+  max-height: min(18rem, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.aino-bot-chat-identity-option {
+  gap: 8px;
+  min-height: 38px;
+}
+.aino-bot-chat-identity-option-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+.aino-bot-chat-identity-option-copy > span,
+.aino-bot-chat-identity-option-copy > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aino-bot-chat-menu-heading {
+  padding: 7px 9px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  font-weight: 500;
+}
+.aino-bot-chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.aino-bot-chat-options-menu {
+  min-width: 235px;
+}
+.aino-bot-chat-identity-option-copy > small {
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+@media (prefers-reduced-motion: reduce) {
+  .aino-bot-chat-identity {
+    transition: none;
+  }
+}

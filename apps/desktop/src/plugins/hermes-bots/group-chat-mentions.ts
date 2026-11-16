@@ -17,6 +17,12 @@ export interface GroupMentionProjection {
   spans: GroupMentionSpan[]
 }
 
+/** Prose punctuation can directly precede a mention; address, URL and code
+ * delimiters must not turn their literal suffix into a bound recipient. */
+function mentionStartsAt(text: string, start: number): boolean {
+  return start === 0 || /[\s\p{Ps}\p{Pe}\p{Pi}\p{Pf}"',;!?，。！？、；：]/u.test(text[start - 1])
+}
+
 /** Exact addresses only. Never resolve a display name back to a member. */
 export function projectGroupMentions(raw: string, identities: GroupMentionIdentity[]): GroupMentionProjection {
   const addresses = new Map(identities.map(identity => [identity.handle.toLowerCase(), identity]))
@@ -24,15 +30,15 @@ export function projectGroupMentions(raw: string, identities: GroupMentionIdenti
   let text = ''
   let cursor = 0
 
-  for (const match of raw.matchAll(/(^|\s)@([a-z0-9._-]+)(?=$|[^\p{L}\p{N}._-])/giu)) {
-    const identity = addresses.get(match[2].toLowerCase())
+  for (const match of raw.matchAll(/@([a-z0-9._-]+)(?=$|[^\p{L}\p{N}._-])/giu)) {
+    const identity = addresses.get(match[1].toLowerCase())
 
-    if (!identity) {
+    if (!identity || !mentionStartsAt(raw, match.index)) {
       continue
     }
 
-    const rawStart = match.index + match[1].length
-    const rawEnd = rawStart + match[2].length + 1
+    const rawStart = match.index
+    const rawEnd = rawStart + match[1].length + 1
     text += raw.slice(cursor, rawStart)
     const start = text.length
     text += `@${identity.label}`
@@ -107,7 +113,7 @@ export function editGroupMentions(
     }))
     .filter(
       span =>
-        (span.start === 0 || /\s/u.test(nextText[span.start - 1])) &&
+        mentionStartsAt(nextText, span.start) &&
         (span.end === nextText.length || /[^\p{L}\p{N}._-]/u.test(nextText[span.end]))
     )
 

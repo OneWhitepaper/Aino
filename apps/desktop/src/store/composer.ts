@@ -4,6 +4,7 @@ import { atom } from 'nanostores'
 import type { HermesStagedUpload } from '@/global'
 import { deriveDraftTitle } from '@/lib/draft-title'
 import { triggerHaptic } from '@/lib/haptics'
+import { containsIndex, markdownLiteralRanges, type TextRange } from '@/lib/markdown-literals'
 import { persistString, storedString } from '@/lib/storage'
 
 import {
@@ -802,11 +803,12 @@ function unquoteRefValue(raw: string) {
 function terminalLabelsFromDraft(draft: string) {
   const labels: string[] = []
   const seen = new Set<string>()
+  const literals = markdownLiteralRanges(draft)
 
   for (const match of draft.matchAll(TERMINAL_REF_RE)) {
     const label = unquoteRefValue(match[1] || '')
 
-    if (!label || seen.has(label)) {
+    if (!label || seen.has(label) || containsIndex(literals, match.index ?? 0)) {
       continue
     }
 
@@ -868,12 +870,59 @@ function terminalFence(text: string) {
 }
 
 function stripTerminalRefTokens(draft: string) {
-  return draft
-    .replace(new RegExp(TERMINAL_REF_RE.source, 'g'), '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n[ \t]+/g, '\n')
-    .trim()
+  const literals = markdownLiteralRanges(draft)
+  const removed: TextRange[] = []
+
+  const stripped = draft.replace(TERMINAL_REF_RE, (token, _label, start: number) => {
+    if (containsIndex(literals, start)) {
+      return token
+    }
+
+    removed.push({ end: start + token.length, start })
+
+    return ''
+  })
+
+  const offsetAfterRemoval = (offset: number) =>
+    offset - removed.reduce((count, range) => count + Math.max(0, Math.min(offset, range.end) - range.start), 0)
+
+  // A real terminal token's quoted value has backticks too; removing the whole
+  // token must move protected source ranges without treating that value as code.
+  const preserved = literals
+    .map(range => ({ end: offsetAfterRemoval(range.end), start: offsetAfterRemoval(range.start) }))
+    .filter(range => range.end > range.start)
+    .sort((a, b) => a.start - b.start || b.end - a.end)
+
+  const cleanOutsideRange = (start: number, end: number) => {
+    let text = stripped
+      .slice(start, end)
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n[ \t]+/g, '\n')
+
+    if (start === 0) {
+      text = text.trimStart()
+    }
+
+    return end === stripped.length ? text.trimEnd() : text
+  }
+
+  const parts: string[] = []
+  let cursor = 0
+
+  for (const range of preserved) {
+    if (range.end <= cursor) {
+      continue
+    }
+
+    const start = Math.max(cursor, range.start)
+    parts.push(cleanOutsideRange(cursor, start), stripped.slice(start, range.end))
+    cursor = range.end
+  }
+
+  parts.push(cleanOutsideRange(cursor, stripped.length))
+
+  return parts.join('')
 }
 
 export interface ComposerTransportPayload {

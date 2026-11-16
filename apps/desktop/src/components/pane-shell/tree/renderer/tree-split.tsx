@@ -50,6 +50,7 @@ import {
   resolveCssPx,
   rootChildSide,
   shownPaneIds,
+  sizingPaneIds,
   subtreeGone,
   type TrackContext
 } from './track-model'
@@ -189,7 +190,7 @@ export function TreeSplit({
       return null
     }
 
-    const shownIds = shownPaneIds(child, trackCtx)
+    const shownIds = sizingPaneIds(child, axis, trackCtx)
 
     if (shownIds.length <= 1) {
       return (paneFor(shownIds[0])?.data as PaneSizing | undefined) ?? null
@@ -269,7 +270,7 @@ export function TreeSplit({
           // panes' sizes, so the sash writes the same px to all of them —
           // writing only the active pane would leave the zone pinned at a
           // larger sibling's width.
-          paneIds: zone ? shownPaneIds(zone, trackCtx) : [],
+          paneIds: zone ? sizingPaneIds(zone, axis, trackCtx) : [],
           fixed: Boolean(zone),
           size: sizeOf(zoneEl ?? wrapper),
           min: toolZone ? floor : Math.max(floor, computedPx(horizontal ? cs.minWidth : cs.minHeight, 0)),
@@ -594,7 +595,7 @@ export function TreeSplit({
       ] as const) {
         const zone = edgeFixedZone(child, edge, axis, trackCtx)
 
-        for (const paneId of zone ? shownPaneIds(zone, trackCtx) : []) {
+        for (const paneId of zone ? sizingPaneIds(zone, axis, trackCtx) : []) {
           setOverride(paneId, undefined)
         }
       }

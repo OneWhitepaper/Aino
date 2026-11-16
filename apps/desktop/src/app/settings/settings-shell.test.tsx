@@ -99,6 +99,8 @@ it('keeps settings destinations visible in open sections and filters without cha
   expect(view.getByRole('heading', { name: 'Security & system' })).toBeTruthy()
   const nav = within(view.container.querySelector('[data-aino-overlay-nav]') as HTMLElement)
   expect(nav.getAllByRole('button')).toHaveLength(groups.length)
+  expect(view.queryByRole('searchbox', { name: 'Search settings' })).toBeNull()
+  fireEvent.click(view.getByRole('button', { name: 'Search settings' }))
   const search = view.getByRole('searchbox', { name: 'Search settings' })
   fireEvent.change(search, { target: { value: 'api' } })
   expect(nav.getByRole('button', { name: 'Model services' })).toBeTruthy()
@@ -113,6 +115,9 @@ it('keeps settings destinations visible in open sections and filters without cha
   fireEvent.keyDown(search, { key: 'Escape' })
   expect((search as HTMLInputElement).value).toBe('')
   expect(nav.getAllByRole('button')).toHaveLength(groups.length)
+  fireEvent.keyDown(search, { key: 'Escape' })
+  expect(view.queryByRole('searchbox', { name: 'Search settings' })).toBeNull()
+  expect(globalThis.document.activeElement).toBe(view.getByRole('button', { name: 'Search settings' }))
 })
 
 it('reveals a matching plugin grandchild without changing page selection and keeps full search available', () => {
@@ -147,6 +152,7 @@ it('reveals a matching plugin grandchild without changing page selection and kee
     </SettingsShell>
   )
 
+  fireEvent.click(view.getByRole('button', { name: 'Search settings' }))
   const search = view.getByRole('searchbox', { name: 'Search settings' })
   fireEvent.change(search, { target: { value: 'Needle' } })
   expect(view.getByRole('heading', { level: 1, name: 'My account' })).toBeTruthy()

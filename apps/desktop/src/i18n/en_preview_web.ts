@@ -39,7 +39,7 @@ export const enPreviewWeb: Translations['preview']['web'] = {
   restartFailedMessage: 'Hermes could not restart the server.',
   stillWorking:
     'Hermes is still working, but no restart result has arrived yet. The server command may be running in the foreground.',
-  workspaceReloading: 'Workspace changed, reloading preview',
+  workspaceReloading: 'Project changed, reloading preview',
   fileChanged: url => `File changed, reloading preview: ${url}`,
   filesChanged: (count, url) => `${count} file changes, reloading preview: ${url}`,
   watchFailed: message => `Could not watch preview file: ${message}`,

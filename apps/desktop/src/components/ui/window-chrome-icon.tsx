@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
   createLucideIcon,
   LoaderCircle,
   type LucideIcon,
@@ -11,22 +12,14 @@ import {
   PanelRightClose,
   PanelRightOpen,
   RotateCw,
+  Search,
+  SquareTerminal,
   X
 } from 'lucide-react'
 import type { SVGProps } from 'react'
 
 import { Codicon } from '@/components/ui/codicon'
 import { cn } from '@/lib/utils'
-
-// Match the panel glyphs' 3–21 drawing bounds, rather than letting the
-// speech tail and bell crown make adjacent 18px icons read at different sizes.
-const WindowNotification = createLucideIcon('WindowNotification', [
-  [
-    'path',
-    { d: 'M18 9a6 6 0 0 0-12 0c0 4-1.2 5.5-2.5 7a.6.6 0 0 0 .5 1h16a.6.6 0 0 0 .5-1C19.2 14.5 18 13 18 9', key: 'bell' }
-  ],
-  ['path', { d: 'M10 20a2.25 2.25 0 0 0 4 0', key: 'clapper' }]
-])
 
 const WindowChat = createLucideIcon('WindowChat', [
   ['path', { d: 'M21 16a2 2 0 0 1-2 2H7l-4 3V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', key: 'bubble' }],
@@ -43,7 +36,7 @@ const SessionResources = createLucideIcon('SessionResources', [
 const WINDOW_ICONS: Readonly<Record<string, LucideIcon | undefined>> = {
   'arrow-left': ArrowLeft,
   'arrow-right': ArrowRight,
-  bell: WindowNotification,
+  bell: Bell,
   close: X,
   hud: WindowChat,
   'layout-panel': PanelBottom,
@@ -54,7 +47,9 @@ const WINDOW_ICONS: Readonly<Record<string, LucideIcon | undefined>> = {
   'layout-sidebar-right-collapse': PanelRightClose,
   list: SessionResources,
   loading: LoaderCircle,
-  refresh: RotateCw
+  refresh: RotateCw,
+  search: Search,
+  terminal: SquareTerminal
 }
 
 interface WindowChromeIconProps extends SVGProps<SVGSVGElement> {

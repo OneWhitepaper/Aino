@@ -53,6 +53,60 @@ const identities = (container: HTMLElement) =>
     ...container.querySelectorAll<HTMLElement>('[data-slot="aui_assistant-brand"], [data-slot="aui_assistant-avatar"]')
   ].filter(element => !element.closest('[hidden]'))
 
+it('keeps the identity and process control in place when a response finishes and resumes', async () => {
+  const prompt = userMessage('request', 'Inspect the implementation.')
+
+  const progress = {
+    ...assistantMessage(),
+    id: 'progress',
+    content: [{ type: 'text', text: 'Inspecting the implementation.', displayPhase: 'commentary' }],
+    status: { type: 'running' },
+    metadata: { custom: { interim: true } }
+  } as unknown as ThreadMessage
+
+  const completed = {
+    ...assistantMessage(),
+    id: 'answer',
+    content: [{ type: 'text', text: 'The implementation is verified.', displayPhase: 'final' }],
+    metadata: { custom: { durationS: 3 } }
+  } as unknown as ThreadMessage
+
+  const { container, rerender } = render(<Transcript messages={[prompt, progress]} />)
+  const identity = identities(container)[0]
+  const header = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+  expect(header).not.toBeNull()
+
+  rerender(
+    <Transcript
+      messages={[prompt, { ...progress, status: { type: 'complete', reason: 'stop' } } as ThreadMessage, completed]}
+    />
+  )
+
+  await waitFor(() => expect(within(header).getByRole('button').getAttribute('aria-expanded')).toBe('false'))
+  const toggle = within(header).getByRole('button')
+  toggle.focus()
+  expect(identities(container)[0]).toBe(identity)
+  expect(within(container).getByText('The implementation is verified.').closest('[hidden]')).toBeNull()
+
+  rerender(
+    <Transcript
+      messages={[
+        prompt,
+        { ...progress, status: { type: 'complete', reason: 'stop' } } as ThreadMessage,
+        { ...completed, status: { type: 'running' } } as ThreadMessage
+      ]}
+    />
+  )
+
+  await waitFor(() =>
+    expect(within(container).getByText('Inspecting the implementation.').closest('[hidden]')).toBeNull()
+  )
+  expect(container.querySelector('[data-slot="aui_response-process-header"]')).toBe(header)
+  expect(within(header).getByRole('button')).toBe(toggle)
+  expect(identities(container)[0]).toBe(identity)
+  expect(window.document.activeElement).toBe(toggle)
+})
+
 it.each(['ordinary', 'bot'])(
   'keeps one %s portrait through partial pause, resumed thinking, text and process disclosure',
   async kind => {
@@ -111,19 +165,21 @@ it.each(['ordinary', 'bot'])(
       rerender(<Transcript messages={[prompt, partial, completed]} />)
       await waitFor(() => expect(container.querySelector('[data-slot="aui_response-process-header"]')).not.toBeNull())
       expect(identities(container)).toHaveLength(1)
-      expect(identities(container)[0]?.closest('[data-role="assistant"]')?.getAttribute('data-message-id')).toBe(
-        'continued'
-      )
+      const responseHeader = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+      expect(responseHeader.contains(identities(container)[0])).toBe(true)
 
-      const toggle = within(
-        container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
-      ).getByRole('button')
+      const toggle = within(responseHeader).getByRole('button')
+      toggle.focus()
 
       fireEvent.click(toggle)
       expect(identities(container)).toHaveLength(1)
+      expect(within(responseHeader).getByRole('button')).toBe(toggle)
+      expect(window.document.activeElement).toBe(toggle)
       expect(within(container).getByText('First recommendation.').closest('[hidden]')).toBeNull()
       fireEvent.click(toggle)
       expect(identities(container)).toHaveLength(1)
+      expect(within(responseHeader).getByRole('button')).toBe(toggle)
+      expect(window.document.activeElement).toBe(toggle)
       expect(JSON.stringify([prompt, partial, completed])).toBe(unmodified)
     } finally {
       unregister()

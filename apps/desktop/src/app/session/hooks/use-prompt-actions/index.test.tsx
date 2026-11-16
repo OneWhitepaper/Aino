@@ -2621,7 +2621,7 @@ describe('usePromptActions redirectPrompt', () => {
     vi.restoreAllMocks()
   })
 
-  it('redirects the live turn with trimmed correction text', async () => {
+  it('redirects the live turn without trimming correction text', async () => {
     const requestGateway = vi.fn(async () => ({ status: 'redirected' }) as never)
 
     let handle: HarnessHandle | null = null
@@ -2640,12 +2640,12 @@ describe('usePromptActions redirectPrompt', () => {
     expect(accepted).toBe(true)
     expect(requestGateway).toHaveBeenCalledWith('session.redirect', {
       session_id: RUNTIME_SESSION_ID,
-      text: 'nudge the run'
+      text: '  nudge the run  '
     })
     expect(requestGateway).not.toHaveBeenCalledWith('prompt.submit', expect.anything())
     expect((capturedStates.at(-1)?.messages as unknown[]).at(-1)).toMatchObject({
       role: 'user',
-      parts: [{ type: 'text', text: 'nudge the run' }]
+      parts: [{ type: 'text', text: '  nudge the run  ' }]
     })
   })
 

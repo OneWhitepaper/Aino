@@ -31,7 +31,7 @@ describe('localizedBootFailureError', () => {
         TRANSLATIONS.zh,
         'Aino backend for profile "Hermes work" exited before it became ready (SIGTERM).\nHermes traceback (most recent call last)'
       )
-    ).toBe('Aino 工作区“Hermes work”的后端在准备就绪前退出（SIGTERM）。\nHermes traceback (most recent call last)')
+    ).toBe('Aino 机器人“Hermes work”的后端在准备就绪前退出（SIGTERM）。\nHermes traceback (most recent call last)')
   })
 
   it('leaves unknown and already-localized diagnostics unchanged', () => {

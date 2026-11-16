@@ -43,7 +43,7 @@ export const dePreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedMessage: 'Hermes konnte den Server nicht neu starten.',
   stillWorking:
     'Hermes arbeitet noch, aber es ist noch kein Ergebnis des Neustarts eingetroffen. Der Server-Befehl läuft möglicherweise im Vordergrund.',
-  workspaceReloading: 'Arbeitsbereich geändert, Vorschau wird neu geladen',
+  workspaceReloading: 'Projekt geändert, Vorschau wird neu geladen',
   fileChanged: url => `Datei geändert, Vorschau wird neu geladen: ${url}`,
   filesChanged: (count, url) => `${count} Dateiänderungen, Vorschau wird neu geladen: ${url}`,
   watchFailed: message => `Vorschau-Datei konnte nicht überwacht werden: ${message}`,

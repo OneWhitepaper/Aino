@@ -1,7 +1,8 @@
 import './sidebar-mode-header.css'
 
+import { ChevronDown, Search } from 'lucide-react'
+
 import { BrandMark } from '@/components/brand-mark'
-import { Codicon } from '@/components/ui/codicon'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +10,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Slot } from '@/contrib/react/slot'
+import { useI18n } from '@/i18n'
+import { SESSION_SEARCH_FOCUS_EVENT } from '@/store/layout'
 
 export interface SidebarModeItem {
   id: string
@@ -21,27 +25,42 @@ interface SidebarModeHeaderProps {
   items: SidebarModeItem[]
   onSelect: (id: string) => void
   menuLabel: string
+  navigation?: 'menu' | 'rail'
   onOpenChange?: (open: boolean) => void
 }
 
 /** The pane group owns selection; the brand menu only presents its current panes. */
-export function SidebarModeHeader({ activeId, items, onSelect, menuLabel, onOpenChange }: SidebarModeHeaderProps) {
+export function SidebarModeHeader({
+  activeId,
+  items,
+  onSelect,
+  menuLabel,
+  navigation = 'menu',
+  onOpenChange
+}: SidebarModeHeaderProps) {
+  const { t } = useI18n()
   const active = items.find(item => item.id === activeId) ?? items[0]
 
   if (!active) {
     return null
   }
 
+  const botNavigation = active.id === 'hermes-bots:pane'
+
   const brand = (
     <>
-      <BrandMark className="aino-sidebar-mode-logo" />
+      {!botNavigation ? <BrandMark className="aino-sidebar-mode-logo" /> : null}
       <span className="aino-sidebar-mode-title">{active.title}</span>
     </>
   )
 
   return (
-    <header className="aino-sidebar-mode-header" data-sidebar-mode-header="">
-      {items.length < 2 ? (
+    <header
+      className="aino-sidebar-mode-header"
+      data-bot-navigation={botNavigation || undefined}
+      data-sidebar-mode-header=""
+    >
+      {navigation === 'rail' || items.length < 2 ? (
         <div className="aino-sidebar-mode-static">{brand}</div>
       ) : (
         <DropdownMenu onOpenChange={onOpenChange}>
@@ -53,7 +72,7 @@ export function SidebarModeHeader({ activeId, items, onSelect, menuLabel, onOpen
               type="button"
             >
               {brand}
-              <Codicon className="aino-sidebar-mode-chevron" name="chevron-down" size="0.875rem" />
+              <ChevronDown className="aino-sidebar-mode-chevron" size={13} strokeWidth={1.65} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -77,6 +96,21 @@ export function SidebarModeHeader({ activeId, items, onSelect, menuLabel, onOpen
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+      {active.id === 'sessions' && (
+        <button
+          aria-label={t.sidebar.searchAria}
+          className="aino-sidebar-search-button"
+          onClick={() => window.dispatchEvent(new CustomEvent(SESSION_SEARCH_FOCUS_EVENT))}
+          type="button"
+        >
+          <Search size={18} strokeWidth={1.65} />
+        </button>
+      )}
+      {active.id !== 'sessions' && (
+        <div className="aino-sidebar-header-actions">
+          <Slot area="navigation.header.actions" />
+        </div>
       )}
     </header>
   )

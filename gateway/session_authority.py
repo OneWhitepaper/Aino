@@ -1176,6 +1176,11 @@ class SessionAuthority:
                     'authority_epoch': self.epoch, 'execution_generation': row['generation'],
                     'admission_id': row['admission_id']}
                 self.executing[ref.session_id] = row['generation']
+                from gateway.session_platform_model import binding_key
+                from tui_gateway.managed_model_runtime import get_registry
+                state = getattr(live, 'managed_model_state', None)
+                if state is not None:
+                    get_registry().retain_execution(binding_key(self, ref.session_id), state, row['generation'])
                 from gateway.session_automation import admission_display
                 live.event_stream.publish(ref.session_id, admission_display(row.get('payload') or {}),
                                           event_type='message.start')
@@ -1293,9 +1298,15 @@ class SessionAuthority:
                     from agent.background_review import cancel_background_review_for_live_turn
                     await asyncio.to_thread(cancel_background_review_for_live_turn, live.review)
                 await settled(ref)  # plugins see a session's open before its first turn
-                return await execute_finite_admission(self, ref, row), 'completed'
+                from gateway.session_platform_model import binding_key
+                from tui_gateway.managed_model_execution import managed_execution_scope
+                with managed_execution_scope(binding_key(self, ref.session_id), row['generation']):
+                    return await execute_finite_admission(self, ref, row), 'completed'
             finally:
                 with live.event_stream.lock:
+                    from gateway.session_platform_model import binding_key
+                    from tui_gateway.managed_model_runtime import get_registry
+                    get_registry().release_execution(binding_key(self, ref.session_id), row['generation'])
                     self.executing.pop(ref.session_id, None)
         except ManagedExecutionUnknown:
             with live.event_stream.lock:

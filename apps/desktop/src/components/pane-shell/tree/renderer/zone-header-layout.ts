@@ -41,6 +41,21 @@ export interface ZoneHeaderLayout {
   titlebarHeight: number
 }
 
+/** Tool and conversation headers keep their shared desktop bands; touch pickers keep touch targets. */
+export function panelTabStripLayout(layout: ZoneHeaderLayout, toolPanel: boolean, conversationTabs: boolean) {
+  const compactTabs = layout.compactTabs && !toolPanel
+
+  const stripHeight = compactTabs
+    ? layout.tabStripHeight
+    : toolPanel
+      ? 'var(--aino-tool-strip-height)'
+      : conversationTabs
+        ? 'var(--aino-band-row2)'
+        : layout.tabStripHeight
+
+  return { compactTabs, stripHeight }
+}
+
 /** Where a zone's tabs sit relative to the window titlebar, and how tall the
  *  titlebar band and the tab row are. */
 export function useZoneHeaderLayout({

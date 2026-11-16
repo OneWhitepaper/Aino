@@ -93,6 +93,11 @@ _profile_scoped`. Probe with two on-disk homes and a `.env` name present only in
 call the method for that session and assert the secondary's value resolves and the launch
 profile's does not, and that `os.environ` is unchanged afterwards.
 
+Named-home resolution lives in `methods_profiles.py::_profile_home` (published on the server
+facade). First serving a secondary home syncs the bundled skill library under its full runtime
+scope. The served-home roster gates that work once per process; repeated RPCs do not rehash skills.
+The sync preserves user skill choices and never rebuilds an existing agent's cached prompt.
+
 ## Key surfaces
 
 | Surface | Ink component | Gateway method / event |
@@ -122,7 +127,9 @@ per-record transport sync at an attach site; foreign or retired generations rema
 indicator. Async completion units are not agents and lack exact generation authority;
 `delegations` remains an empty array for wire compatibility. No dispatch context,
 results, callbacks, or routing keys are sent. Clients hydrate from this snapshot
-on their existing poll and avoid updates when unchanged.
+on their existing poll and avoid updates when unchanged. `can_control` reports the caller's
+exact live-generation authority; `accepting_steer` separately reports whether the child's final
+steering drain has closed. A visible or running child is not necessarily controllable.
 
 `subagent.tail({session_id, subagent_id})` returns
 `{subagent_id, available, text, truncated}`: the last 16 KiB of the live child's

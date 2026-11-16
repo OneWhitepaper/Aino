@@ -34,7 +34,7 @@ export const zhProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
   reveal: '在文件夹中显示',
   copyPath: '复制路径',
   removeFromSidebar: '从侧边栏移除',
-  createdInPreviousContext: '项目已在之前的连接或配置文件中创建。请切换回去；IDEA.md 尚未写入。',
+  createdInPreviousContext: '项目已在此前的连接或机器人中创建。请切回查看；IDEA.md 尚未写入。',
   hiddenFromSidebar: '已从侧边栏隐藏',
   undoHide: '撤销',
   createFailed: '无法创建项目',
@@ -91,11 +91,11 @@ export const zhProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
 
   keepOneFolder: '至少保留一个文件夹',
 
-  contextChanged: '会话或工作区已切换，请重新打开此窗口后操作。',
+  contextChanged: '对话或项目已切换，请重新打开此窗口后操作。',
 
   menuClose: '关闭项目',
 
-  unavailableAllProfiles: '全部工作区仅供浏览。请在设置中选择项目所属工作区后管理项目。',
+  unavailableAllProfiles: '当前列表仅供浏览。请打开对应机器人后管理其项目。',
 
-  activeProfileChanged: '连接期间活动工作区发生变化'
+  activeProfileChanged: '连接期间当前机器人已切换。'
 }

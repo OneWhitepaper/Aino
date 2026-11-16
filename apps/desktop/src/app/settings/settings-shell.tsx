@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { type ReactNode, useRef, useState } from 'react'
+import { type ReactNode, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { KbdCombo } from '@/components/ui/kbd'
@@ -28,7 +28,10 @@ export function SettingsShell({ children, toolbar, groups, onClose }: SettingsSh
   const { locale, t } = useI18n()
   const copy = settingsNavigationCopy(locale)
   const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchId = useId()
   const searchInput = useRef<HTMLInputElement>(null)
+  const searchToggle = useRef<HTMLButtonElement>(null)
   const visibleGroups = settingsNavigationGroups(groups, copy, search)
   const paletteOpen = useStore($commandPaletteOpen)
   const searchCombo = bindingsFor('nav.commandPalette')[0]
@@ -63,55 +66,84 @@ export function SettingsShell({ children, toolbar, groups, onClose }: SettingsSh
               <ChevronLeft />
             </Button>
             <h2>{t.commandCenter.settings}</h2>
-          </header>
-          <div className="settings-search">
-            <Search aria-hidden />
-            <input
-              aria-label={copy.search}
-              onChange={event => setSearch(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Escape' && search) {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  setSearch('')
-                } else if (event.key === 'Enter') {
-                  event.preventDefault()
-                  openCommandPalettePage('settings', search)
-                }
-              }}
-              placeholder={copy.search}
-              ref={searchInput}
-              type="search"
-              value={search}
-            />
-            {search ? (
-              <button
-                aria-label={copy.clearSearch}
-                className="settings-search-clear"
+            <Tip label={copy.searchHint}>
+              <Button
+                aria-controls={searchId}
+                aria-expanded={searchOpen}
+                aria-label={copy.search}
+                className="settings-search-toggle"
                 onClick={() => {
-                  setSearch('')
-                  searchInput.current?.focus()
+                  setSearchOpen(!searchOpen)
+
+                  if (searchOpen) {
+                    setSearch('')
+                  }
                 }}
-                type="button"
+                ref={searchToggle}
+                size="icon-sm"
+                variant="ghost"
               >
-                <X />
-              </button>
-            ) : (
-              <Tip label={copy.searchHint}>
+                <Search />
+              </Button>
+            </Tip>
+          </header>
+          {searchOpen && (
+            <div className="settings-search" id={searchId}>
+              <Search aria-hidden />
+              <input
+                aria-label={copy.search}
+                autoFocus
+                onChange={event => setSearch(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    event.stopPropagation()
+
+                    if (search) {
+                      setSearch('')
+                    } else {
+                      setSearchOpen(false)
+                      searchToggle.current?.focus()
+                    }
+                  } else if (event.key === 'Enter') {
+                    event.preventDefault()
+                    openCommandPalettePage('settings', search)
+                  }
+                }}
+                placeholder={copy.search}
+                ref={searchInput}
+                type="search"
+                value={search}
+              />
+              {search ? (
                 <button
-                  aria-expanded={paletteOpen}
-                  aria-label={copy.searchAll}
-                  className="settings-search-shortcut"
-                  onClick={() => openCommandPalettePage('settings')}
+                  aria-label={copy.clearSearch}
+                  className="settings-search-clear"
+                  onClick={() => {
+                    setSearch('')
+                    searchInput.current?.focus()
+                  }}
                   type="button"
                 >
-                  {searchCombo ? <KbdCombo combo={searchCombo} size="sm" variant="ghost" /> : <Search />}
+                  <X />
                 </button>
-              </Tip>
-            )}
-          </div>
+              ) : (
+                <Tip label={copy.searchHint}>
+                  <button
+                    aria-expanded={paletteOpen}
+                    aria-label={copy.searchAll}
+                    className="settings-search-shortcut"
+                    onClick={() => openCommandPalettePage('settings')}
+                    type="button"
+                  >
+                    {searchCombo ? <KbdCombo combo={searchCombo} size="sm" variant="ghost" /> : <Search />}
+                  </button>
+                </Tip>
+              )}
+            </div>
+          )}
           <div className="settings-navigation-items">
-            <OverlayNav fullPage groups={visibleGroups} />
+            <OverlayNav fullPage groups={visibleGroups} responsive />
             {search && (
               <div className="settings-search-results">
                 {visibleGroups.length === 0 && <p role="status">{copy.noResults}</p>}

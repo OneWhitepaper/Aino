@@ -14,15 +14,15 @@ import {
 } from './titlebar'
 
 describe('titlebar sizing', () => {
-  it('uses the Aino 43px chrome row with 24×24 hit targets and 18px glyphs', () => {
-    expect(TITLEBAR_HEIGHT).toBe(43)
-    expect(TITLEBAR_CONTROL_SIZE).toBe(24)
+  it('uses the approved 44px chrome row with 28×28 hit targets and 18px glyphs', () => {
+    expect(TITLEBAR_HEIGHT).toBe(44)
+    expect(TITLEBAR_CONTROL_SIZE).toBe(28)
     expect(TITLEBAR_ICON_SIZE).toBe(18)
     expect(titlebarIconSizeCss()).toBe('18px')
   })
 
-  it('reserves the visible four-pixel rhythm between right-side tools', () => {
-    expect(titlebarToolsWidthCss(4)).toBe('calc(4 * var(--titlebar-control-size) + 3 * 4px)')
+  it('reserves the visible six-pixel rhythm between right-side tools', () => {
+    expect(titlebarToolsWidthCss(4)).toBe('calc(4 * var(--titlebar-control-size) + 3 * 6px)')
   })
 })
 
@@ -67,9 +67,9 @@ describe('titlebarControlsPosition', () => {
     )
   })
 
-  it.each(['Win32', 'Linux x86_64'])('preserves the previous startup spacing on %s', platform => {
+  it.each(['Win32', 'Linux x86_64'])('keeps the left tools anchored before native state arrives on %s', platform => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue(platform)
-    expect(titlebarControlsPosition(undefined).left).toBe(24 + TITLEBAR_CONTROL_OFFSET_X)
+    expect(titlebarControlsPosition(undefined)).toEqual(titlebarControlsPosition(null))
   })
 })
 
@@ -78,11 +78,19 @@ describe('titlebarToolsRightCss', () => {
     expect(titlebarToolsRightCss(144)).toBe('144px')
   })
 
+  it.each([0.9, 1.25, 1.5])('converts native caption width to renderer pixels at %s zoom', zoomFactor => {
+    expect(titlebarToolsRightCss(144, { zoomFactor })).toBe(`${144 / zoomFactor}px`)
+  })
+
+  it('releases the caption reservation when entering fullscreen on a right-controls host', () => {
+    expect(titlebarToolsRightCss(144, { isFullscreen: true })).toBe(`${TITLEBAR_EDGE_INSET}px`)
+  })
+
   it('matches the left edge inset on macOS fullscreen', () => {
     expect(titlebarToolsRightCss(0, { darwinMajor: 25, isFullscreen: true })).toBe(`${TITLEBAR_EDGE_INSET}px`)
   })
 
   it('keeps the design-aligned macOS chrome inset otherwise', () => {
-    expect(titlebarToolsRightCss(0)).toBe('17px')
+    expect(titlebarToolsRightCss(0)).toBe('12px')
   })
 })

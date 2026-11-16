@@ -1,4 +1,5 @@
 import { DATA_IMAGE_URL_RE, dataUrlToBlob } from '@/lib/embedded-images'
+import { containsIndex, markdownLiteralRanges } from '@/lib/markdown-literals'
 import { $reactionsEnabled } from '@/store/reactions-enabled'
 
 import { serializeTextBefore } from './rich-editor'
@@ -179,7 +180,13 @@ export function textBeforeCaret(editor: HTMLDivElement): string | null {
  *  with nothing typed after it), or 0. A paste lands INTO that scope: the scope
  *  text is consumed rather than left in front of the chip as leftover syntax. */
 export function openDirectiveScope(editor: HTMLDivElement): number {
-  const trigger = detectTrigger(textBeforeCaret(editor) ?? '')
+  const before = textBeforeCaret(editor) ?? ''
+
+  if (containsIndex(markdownLiteralRanges(before), before.length - 1)) {
+    return 0
+  }
+
+  const trigger = detectTrigger(before)
 
   return trigger?.kind === '@' && trigger.scope && !trigger.value ? trigger.tokenLength : 0
 }

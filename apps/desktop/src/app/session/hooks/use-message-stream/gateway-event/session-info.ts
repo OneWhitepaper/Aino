@@ -246,7 +246,7 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
     // source tag prevents an event queued before a profile swap from being
     // attributed to the newly active profile.
     if (isActiveEvent && typeof payload?.approval_mode === 'string' && event.profile && fromActiveSource()) {
-      reconcileApprovalModeForProfile(event.profile, payload.approval_mode)
+      reconcileApprovalModeForProfile(event.profile, payload.approval_mode, event.connectionId)
     }
 
     if (apply) {

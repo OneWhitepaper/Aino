@@ -45,7 +45,7 @@
 }
 .workspace-settings-section .settings-section-heading {
   margin-bottom: 0.75rem;
-  font-size: var(--aino-text-title);
+  font-size: var(--aino-text-body);
 }
 .workspace-settings-page .settings-group {
   padding-inline: 1.1875rem;
@@ -57,7 +57,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1.25rem;
-  padding-block: 1.125rem;
+  padding-block: 0.9375rem;
 }
 .workspace-settings-page [data-settings-row-body] > div:only-child {
   grid-column: 1 / -1;
@@ -67,13 +67,13 @@
   justify-content: flex-end;
 }
 .workspace-settings-page .settings-row-label {
-  font-size: var(--aino-text-body);
-  font-weight: 500;
+  font-size: var(--aino-text-ui);
+  font-weight: 400;
 }
 .workspace-settings-page .settings-row-description {
   max-width: 37rem;
-  font-size: var(--aino-text-caption);
-  line-height: 1.65;
+  font-size: 0.6875rem;
+  line-height: 1.7;
 }
 .workspace-settings-page [data-slot='input'],
 .workspace-settings-page [data-slot='input-group'] {

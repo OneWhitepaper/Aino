@@ -104,15 +104,13 @@ const frozenQueuedTransportById = new Map<string, string>()
 export const getFrozenQueuedTransport = (id: string): string | undefined => frozenQueuedTransportById.get(id)
 
 export const setFrozenQueuedTransport = (id: string, transportText: string): void => {
-  const trimmed = transportText.trim()
-
-  if (!trimmed) {
+  if (!transportText.trim()) {
     frozenQueuedTransportById.delete(id)
 
     return
   }
 
-  frozenQueuedTransportById.set(id, trimmed)
+  frozenQueuedTransportById.set(id, transportText)
 }
 
 export const clearFrozenQueuedTransport = (id: string): void => {
@@ -135,9 +133,9 @@ export const resolveQueuedPromptTransport = (entry: QueuedPromptEntry): Resolved
     }
   }
 
-  const frozen = frozenQueuedTransportById.get(entry.id)?.trim()
+  const frozen = frozenQueuedTransportById.get(entry.id)
 
-  if (!frozen) {
+  if (!frozen?.trim()) {
     return { ok: false, reason: 'missing-terminal-payload' }
   }
 
@@ -157,9 +155,9 @@ const dropFrozenTransportsRemovedFrom = (previous: QueuedPromptEntry[], next: Qu
 }
 
 const toPersistedEntry = (entry: QueuedPromptEntry): QueuedPromptEntry => {
-  const frozen = frozenQueuedTransportById.get(entry.id)?.trim()
+  const frozen = frozenQueuedTransportById.get(entry.id)
 
-  if (!frozen) {
+  if (!frozen?.trim()) {
     return entry
   }
 
@@ -357,7 +355,7 @@ const editedSubmission = (
   !entry.serverStatus &&
   (entry.text !== text ||
     attachmentKeys(entry.attachments) !== attachmentKeys(attachments) ||
-    (previousTransport?.trim() ?? '') !== (frozenQueuedTransportById.get(entry.id)?.trim() ?? ''))
+    (previousTransport ?? '') !== (frozenQueuedTransportById.get(entry.id) ?? ''))
     ? { submissionId: randomUuid() }
     : {}
 
@@ -578,9 +576,9 @@ export const updateQueuedPrompt = (
       const previousTransport = frozenQueuedTransportById.get(entry.id)
 
       if (update.frozenTransport !== undefined) {
-        const nextFrozen = update.frozenTransport?.trim() ?? ''
+        const nextFrozen = update.frozenTransport ?? ''
 
-        if (nextFrozen) {
+        if (nextFrozen.trim()) {
           setFrozenQueuedTransport(entry.id, nextFrozen)
         } else {
           clearFrozenQueuedTransport(entry.id)

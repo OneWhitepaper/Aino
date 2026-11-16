@@ -32,6 +32,10 @@ export const WORKSPACE_AVATAR_AREA = 'workspace.ownerAvatar'
 
 export interface WorkspaceAvatarContribution {
   avatarFor(ownerKey: string, size: number): ReactNode
+  /** Optional owner identity control for the owning conversation's header. */
+  headerFor?(ownerKey: string): ReactNode
+  /** Workspace-owned actions for this exact persistent conversation. */
+  actionsFor?(ownerKey: string, sessionId: string): ReactNode
 }
 
 /** Default workspace mode when the host has not switched surfaces. */

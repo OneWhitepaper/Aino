@@ -41,7 +41,7 @@ export const zhPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedTitle: '预览重启失败',
   restartFailedMessage: 'Hermes 无法重启服务器。',
   stillWorking: 'Hermes 仍在工作，但还没有收到重启结果。服务器命令可能正在前台运行。',
-  workspaceReloading: '工作区已变更，正在重新加载预览',
+  workspaceReloading: '项目已切换，正在重新加载预览',
   fileChanged: url => `文件已变更，正在重新加载预览：${url}`,
   filesChanged: (count, url) => `${count} 个文件变更，正在重新加载预览：${url}`,
   watchFailed: message => `无法监听预览文件：${message}`,

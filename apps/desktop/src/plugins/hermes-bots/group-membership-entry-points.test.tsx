@@ -9,6 +9,10 @@ import type * as HermesSdk from '@hermes/plugin-sdk'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+// Header placement is host-owned; exercise its real projection without changing the plugin's runtime imports.
+// eslint-disable-next-line no-restricted-imports
+import { Slot } from '@/contrib/react/slot'
+
 import { GroupDialog } from './create-dialog'
 import { $botMeta, $lastRoster } from './data'
 import { GroupMemberPicker } from './group-chat-view-members'
@@ -138,29 +142,37 @@ function renderToolbar(roster: RosterRow[]) {
   const setGroupCreateOpen = vi.fn()
 
   render(
-    renderRosterToolbar({
-      activeFilterCount: 0,
-      activeSourceRoster: roster,
-      activityFilter: 'all',
-      activityToasts: false,
-      b: botsText(),
-      gatewayFilter: 'all',
-      gatewayOptions: [],
-      query: '',
-      roster,
-      rowKindFilter: 'all',
-      setActivityFilter: vi.fn(),
-      setCreateOpen: vi.fn(),
-      setGatewayFilter: vi.fn(),
-      setGroupCreateOpen,
-      setQuery: vi.fn(),
-      setRowKindFilter: vi.fn(),
-      setSectionDialog: vi.fn(),
-      showRosterFilters: false,
-      showRosterSearch: false,
-      showRosterTools: false
-    })
+    <>
+      <div data-testid="bot-header-actions">
+        <Slot area="navigation.header.actions" />
+      </div>
+      {renderRosterToolbar({
+        projectHeaderActions: true,
+        activeFilterCount: 0,
+        activeSourceRoster: roster,
+        activityFilter: 'all',
+        activityToasts: false,
+        b: botsText(),
+        gatewayFilter: 'all',
+        gatewayOptions: [],
+        query: '',
+        roster,
+        rowKindFilter: 'all',
+        setActivityFilter: vi.fn(),
+        setCreateOpen: vi.fn(),
+        setGatewayFilter: vi.fn(),
+        setGroupCreateOpen,
+        setQuery: vi.fn(),
+        setRowKindFilter: vi.fn(),
+        setSectionDialog: vi.fn(),
+        showRosterFilters: false,
+        showRosterSearch: false,
+        showRosterTools: false
+      })}
+    </>
   )
+  const createButton = screen.getByRole('button', { name: botsText().roster.newBotOrGroup })
+  expect(screen.getByTestId('bot-header-actions').contains(createButton)).toBe(true)
   fireEvent.keyDown(screen.getByRole('button', { name: botsText().roster.newBotOrGroup }), { key: 'Enter' })
 
   return setGroupCreateOpen

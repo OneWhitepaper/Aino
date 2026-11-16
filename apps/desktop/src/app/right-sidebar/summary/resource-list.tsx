@@ -117,6 +117,12 @@ export function SummaryResourceList({ items, session }: { items: SummaryResource
                 variant="ghost"
               >
                 {content}
+                <Codicon
+                  aria-hidden
+                  className="shrink-0 text-(--ui-text-tertiary)"
+                  name="chevron-right"
+                  size="0.75rem"
+                />
               </Button>
             )}
           </Tip>

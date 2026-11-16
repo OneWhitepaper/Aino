@@ -14,10 +14,11 @@ interface CatalogListRowProps {
   entry: CatalogEntry
   selected: boolean
   action: ReactNode
+  meta?: ReactNode
   onOpen: (entry: CatalogEntry) => void
 }
 
-export function CatalogListRow({ entry, selected, action, onOpen }: CatalogListRowProps) {
+export function CatalogListRow({ entry, selected, action, meta, onOpen }: CatalogListRowProps) {
   const { t } = useI18n()
 
   return (
@@ -34,7 +35,8 @@ export function CatalogListRow({ entry, selected, action, onOpen }: CatalogListR
       </span>
       <span className="catalog-list-copy">
         <span className="catalog-list-title inline-flex items-center gap-2">
-          {catalogDisplayName(entry)}
+          <span className="min-w-0 truncate">{catalogDisplayName(entry)}</span>
+          {meta && <span className="catalog-list-meta">{meta}</span>}
           {entry.locked && (
             <Tip label={t.skills.lockHint}>
               <span

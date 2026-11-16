@@ -1,5 +1,6 @@
 import {
   type DelegateRow,
+  delegateRowFromSubagent,
   delegateRowsFromCall,
   mergeDelegateRows
 } from '@/components/assistant-ui/tool/delegate-model'
@@ -119,18 +120,7 @@ export function summaryDelegations(
     merged.push({
       id: item.id,
       delegationId: item.delegationId,
-      rows: [
-        {
-          id: item.id,
-          subagentId: item.id,
-          displayName: item.displayName,
-          goal: item.goal,
-          status: item.status,
-          sessionId: item.sessionId,
-          activity: item.stream.map(entry => entry.text),
-          model: item.model
-        }
-      ]
+      rows: [delegateRowFromSubagent(item, item.id, item.goal)]
     })
   }
 

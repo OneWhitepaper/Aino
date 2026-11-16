@@ -58,7 +58,7 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
             {room.members.length ? (
               <span aria-hidden="true" className="aino-roster-group-avatar">
                 {room.members.slice(0, 4).map(member => (
-                  <CanonicalMemberAvatar binding={room.binding} key={member.member_id} member={member} size={12} />
+                  <CanonicalMemberAvatar binding={room.binding} key={member.member_id} member={member} size={13} />
                 ))}
               </span>
             ) : (

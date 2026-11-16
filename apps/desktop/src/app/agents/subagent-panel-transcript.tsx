@@ -24,11 +24,8 @@ export interface SubagentPanelTranscriptProps {
 
 /** Read a child's existing transcript without resuming it or taking over its parent. */
 export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: SubagentPanelTranscriptProps) {
-  const { t } = useI18n()
   const visible = usePaneVisible()
   const source = useSubagentTranscriptSource({ row, parentRuntimeId, owner, live, visible })
-  const liveSource = JSON.stringify([owner, parentRuntimeId, row.subagentId ?? row.id])
-  const [expandedSource, setExpandedSource] = useState<string | null>(null)
 
   const messages = useMemo(() => {
     const visible = toChatMessages(source.messages).filter(message => !message.hidden && message.role !== 'system')
@@ -43,35 +40,48 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
     return null
   }
 
+  return (
+    <>
+      <ReadableSubagentTranscript messages={messages} source={source} summary={row.summary} />
+      <SubagentExecutionLog
+        key={JSON.stringify([owner, parentRuntimeId, row.subagentId ?? row.id])}
+        liveTail={source.ownerKnown && !source.unavailable && source.useLiveTail}
+        owner={owner}
+        parentRuntimeId={parentRuntimeId}
+        row={row}
+      />
+    </>
+  )
+}
+
+interface ReadableSubagentTranscriptProps {
+  messages: ReturnType<typeof toChatMessages>
+  source: ReturnType<typeof useSubagentTranscriptSource>
+  summary?: string
+}
+
+function ReadableSubagentTranscript({ messages, source, summary }: ReadableSubagentTranscriptProps) {
+  const { t } = useI18n()
+  const result = summary ? <CompactMarkdown text={summary} /> : null
+
   if (!source.ownerKnown || source.unavailable) {
-    return <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    return result ?? <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
   }
 
   if (source.useLiveTail) {
-    return (
-      <details key={liveSource} onToggle={event => setExpandedSource(event.currentTarget.open ? liveSource : null)}>
-        <summary className="cursor-pointer text-(--ui-text-secondary)">{t.agents.extendedTranscript}</summary>
-        {expandedSource === liveSource && (
-          <SubagentTranscript owner={owner} sessionId={parentRuntimeId!} subagentId={row.subagentId ?? row.id} />
-        )}
-      </details>
-    )
+    return result
   }
 
   if (source.pending && !source.error) {
-    return <Loader label={t.common.loading} />
+    return result ?? <Loader label={t.common.loading} />
   }
 
   if (source.error) {
     return (
       <div className="grid justify-items-start gap-2" role="status">
+        {result}
         <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
-        <Button
-          disabled={!visible || source.fetching}
-          onClick={() => void source.retry()}
-          size="xs"
-          variant="secondary"
-        >
+        <Button disabled={source.fetching} onClick={() => void source.retry()} size="xs" variant="secondary">
           {t.common.retry}
         </Button>
       </div>
@@ -79,10 +89,13 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
   }
 
   if (!messages.length) {
-    return source.awaitingOutput ? (
-      <Loader label={t.agents.running} />
-    ) : (
-      <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+    return (
+      result ??
+      (source.awaitingOutput ? (
+        <Loader label={t.agents.running} />
+      ) : (
+        <p className="text-(--ui-text-secondary)">{t.agents.transcriptUnavailable}</p>
+      ))
     )
   }
 
@@ -117,5 +130,39 @@ export function SubagentPanelTranscript({ row, parentRuntimeId, owner, live }: S
         </div>
       ))}
     </div>
+  )
+}
+
+interface SubagentExecutionLogProps {
+  row: DelegateRow
+  parentRuntimeId: string | null
+  owner: SessionOwnerScope
+  liveTail: boolean
+}
+
+function SubagentExecutionLog({ row, parentRuntimeId, owner, liveTail }: SubagentExecutionLogProps) {
+  const { t } = useI18n()
+  const [expanded, setExpanded] = useState(false)
+
+  if (!liveTail && !row.activity.length) {
+    return null
+  }
+
+  return (
+    <details className="mt-6" onToggle={event => setExpanded(event.currentTarget.open)} open={expanded}>
+      <summary className="cursor-pointer text-(--ui-text-secondary)">{t.agents.extendedTranscript}</summary>
+      {expanded &&
+        (liveTail ? (
+          <SubagentTranscript owner={owner} sessionId={parentRuntimeId!} subagentId={row.subagentId ?? row.id} />
+        ) : (
+          <ol aria-label={t.agents.extendedTranscript} className="subagent-panel-activity mt-4">
+            {row.activity.map((entry, index) => (
+              <li key={`${row.id}:${index}`}>
+                <CompactMarkdown text={entry} />
+              </li>
+            ))}
+          </ol>
+        ))}
+    </details>
   )
 }

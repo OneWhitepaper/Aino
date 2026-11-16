@@ -57,8 +57,10 @@ def _(rid, params):
     if transport is None or owner is None:
         return _err(rid, 4001, "session not found or not owned by this transport")
     live = _visible_subagent_records(session_id, transport, owner)
+    controlled = {id(r.get("agent")) for r in _owned_subagent_records(session_id, transport, owner)}
     return _ok(rid, {
         "subagents": [{**{key: r.get(key) for key in _SUBAGENT_SNAPSHOT_FIELDS},
+                       "can_control": id(r.get("agent")) in controlled,
                        "child_session_id": _child_session_id(r)} for r in live],
         "delegations": _failed_delegations(session_id, owner),
     })

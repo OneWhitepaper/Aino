@@ -303,6 +303,7 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
       heading={
         <header className="artifacts-heading">
           <h1>{t.sidebar.nav.artifacts}</h1>
+          <p>{t.tips.items.artifacts.text}</p>
         </header>
       }
       onSearchChange={setQuery}
@@ -384,7 +385,7 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
                     total={visibleFileArtifacts.length}
                   />
                 </div>
-                <div className="overflow-x-auto rounded-(--aino-radius-card) border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background)">
+                <div className="artifacts-file-table overflow-x-auto">
                   <ArtifactTable artifacts={pagedFileArtifacts} ctx={cellCtx} filter={kindFilter} />
                 </div>
               </section>
@@ -587,8 +588,8 @@ const PrimaryCell = memo(function PrimaryCell({ artifact, ctx }: { artifact: Art
       onClick={isLink ? undefined : () => void ctx.onOpen(artifact)}
       title={label}
     >
-      <span className="mt-0.5 grid size-6 shrink-0 place-items-center self-start rounded-md bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)">
-        <Icon className="size-3.5" />
+      <span className="mt-0.5 grid size-6 shrink-0 place-items-center self-start text-(--ui-text-tertiary)">
+        <Icon className="size-4.5" />
       </span>
       <span className={cn('min-w-0 flex-1', isLink ? 'wrap-anywhere' : 'truncate')}>
         {label}

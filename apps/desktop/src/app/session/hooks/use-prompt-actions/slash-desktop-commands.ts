@@ -1,9 +1,11 @@
+import { syncWorkspaceRoute } from '@/app/routes'
 import { runtimeTranslations } from '@/i18n/runtime'
 import { chatMessageText, toChatMessages } from '@/lib/chat-messages'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
+import { profiles as profileArchives } from '@/sdk/bridge'
 import { openCommandPalette } from '@/store/command-palette'
 import { $displayTimestamps, setDisplayTimestampsWindowOverride } from '@/store/display-timestamps'
-import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
+import { runExportProfileFlow } from '@/store/profile-share'
 import { $connection } from '@/store/session'
 import type { SessionMessage } from '@/types/hermes'
 
@@ -473,7 +475,16 @@ export function desktopReadCommandHandlers<C extends { arg: string }>(env: Deskt
         return out?.render(copy().importRemote)
       }
 
-      await runImportProfileFlow()
+      try {
+        if (await profileArchives.import()) {
+          window.location.hash = '#/profiles'
+          syncWorkspaceRoute('/profiles')
+        }
+      } catch (error) {
+        const out = await env.withSlashOutput(ctx)
+
+        out?.render(errorText(error))
+      }
     },
     timestamps: async (ctx: C) => {
       const word = ctx.arg.trim().toLowerCase()

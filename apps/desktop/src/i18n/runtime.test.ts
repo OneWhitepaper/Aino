@@ -101,7 +101,7 @@ describe('desktop i18n runtime translator', () => {
     expect(translateNow('settings.connections.localLabel')).toBe('此设备')
     expect(translateNow('rightSidebar.terminalStartFailed', 'PTY 不可用')).toBe('终端启动失败：PTY 不可用')
     expect(translateNow('settings.managedUpdates.scopeNotRestored', '工作', '连接失败')).toBe(
-      '工作区“工作”未恢复：连接失败'
+      '机器人“工作”未恢复：连接失败'
     )
     expect(translateNow('settings.providers.removeKeyManaged', 'OpenAI')).toBe(
       'OpenAI 由 API 密钥配置。请从 API 密钥中移除。'
@@ -112,8 +112,8 @@ describe('desktop i18n runtime translator', () => {
   it('localizes gateway setup terminology while preserving technical values', () => {
     setRuntimeI18nLocale('zh')
 
-    expect(translateNow('settings.managedUpdates.scopesRestored', '工作、个人')).toBe('已恢复的工作区：工作、个人')
-    expect(translateNow('settings.managedUpdates.progress')).toBe('正在排空会话、更新远端安装并恢复工作区…')
+    expect(translateNow('settings.managedUpdates.scopesRestored', '工作、个人')).toBe('已恢复的机器人：工作、个人')
+    expect(translateNow('settings.managedUpdates.progress')).toBe('正在排空会话、更新远端安装并恢复机器人…')
     expect(translateNow('settings.gateway.remoteUrlDesc')).toBe('填写另一台电脑或服务器上 Aino 后台的地址。')
     expect(translateNow('settings.gateway.tokenTitle')).toBe('访问令牌')
     expect(translateNow('settings.gateway.tokenDesc')).toBe(
@@ -135,7 +135,7 @@ describe('desktop i18n runtime translator', () => {
     expect(translateNow('settings.gateway.sshErrUpdateRequired')).toBe(
       '请先更新远程设备上的 Aino 后台，再从桌面端连接。'
     )
-    expect(translateNow('settings.profileScope.editsProfile', '工作')).toBe('此页面的更改将应用于工作区“工作”。')
+    expect(translateNow('settings.profileScope.editsProfile', '工作')).toBe('此页面的更改将应用于机器人“工作”。')
   })
 
   it('localizes high-frequency English terminology in Simplified Chinese copy', () => {
@@ -146,10 +146,10 @@ describe('desktop i18n runtime translator', () => {
       '此 URL 使用了不安全的本地协议。生产环境请优先使用 https:// 或 git@。'
     )
     expect(translateNow('settings.appearance.themeProfileNote', '工作')).toBe(
-      '已为工作区「工作」保存主题——每个工作区保留各自的主题。'
+      '已为机器人「工作」保存主题——每个机器人保留各自的主题。'
     )
     expect(translateNow('settings.about.bundleOutOfSyncDesc')).toContain('机器人模式')
-    expect(translateNow('settings.managedUpdates.intro')).toContain('每个工作区')
+    expect(translateNow('settings.managedUpdates.intro')).toContain('每个机器人')
     expect(translateNow('settings.mcp.reloadedMessage')).toBe('新的工具结构定义将在后续回合生效。')
     expect(translateNow('settings.sessions.defaultDirDesc')).toBe(
       '新会话默认从此文件夹开始，除非你选择其他目录。留空则使用你的主目录。'
@@ -196,7 +196,7 @@ describe('desktop i18n runtime translator', () => {
     expect(translateNow('desktop.slashUnavailable.sessionPicker', '/resume')).toBe(
       '/resume 使用桌面会话选择器，而不是斜杠命令。'
     )
-    expect(translateNow('tips.items.profiles.title')).toBe('工作区彼此独立')
+    expect(translateNow('tips.items.profiles.title')).toBe('机器人彼此独立')
   })
 
   it('localizes the built-in indicator command description', () => {
@@ -261,22 +261,14 @@ describe('desktop i18n runtime translator', () => {
     expect(translateNow('ui.actions.labels.tokens')).toBe('词元数')
   })
 
-  it('uses the same 工作区 term for profile navigation and status copy', () => {
+  it('preserves Bot names and host details when interpolating ownership notices', () => {
     setRuntimeI18nLocale('zh')
 
-    expect(translateNow('keybinds.categories.profiles')).toBe('工作区')
-
-    const keybindActions = TRANSLATIONS.zh.keybinds.actions
-
-    expect(keybindActions['nav.profiles']).toBe('打开工作区')
-    expect(keybindActions['profile.default']).toBe('切换到默认工作区')
-    expect(keybindActions['profile.switch.3']).toBe('切换到工作区 3')
-    expect(keybindActions['profile.next']).toBe('下一个工作区')
-    expect(keybindActions['profile.toggleAll']).toBe('切换全部工作区视图')
-    expect(keybindActions['profile.create']).toBe('创建工作区')
-    expect(translateNow('commandCenter.contributedActions.exportProfile')).toBe('导出工作区…')
-    expect(translateNow('commandCenter.contributedActions.importProfile')).toBe('导入工作区…')
-    expect(translateNow('sidebar.row.ownedByProfile', '工作')).toBe('工作区：工作')
+    expect(translateNow('sidebar.row.ownedByProfile', '研究助手')).toContain('研究助手')
+    expect(translateNow('settings.profileScope.editsProfile', '研究助手')).toContain('研究助手')
+    expect(translateNow('profiles.remoteOverride.savedMessage', '研究助手', 'lab.example')).toContain('研究助手')
+    expect(translateNow('profiles.remoteOverride.savedMessage', '研究助手', 'lab.example')).toContain('lab.example')
+    expect(translateNow('profiles.exportNeedsHost', 'research')).toContain('hermes profile export research')
   })
 
   it('translates clear Chinese equivalents while keeping configuration identifiers', () => {

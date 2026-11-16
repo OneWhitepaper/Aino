@@ -1,3 +1,4 @@
+import { $subagentPanelSelection, openSubagentPanel, SUBAGENT_PANEL_ID } from '@/app/agents/subagent-panel'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '@/app/layout-constants'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { allPaneIds, findGroupOfPane, movePane } from '@/components/pane-shell/tree/model'
@@ -183,9 +184,21 @@ export function openToolPanelChooser(groupId?: string): void {
   restoreTreePane(TOOL_CHOOSER_PANE)
 }
 
-export function openToolPanelResource(paneId: 'files' | 'review' | 'terminal' | 'browser'): void {
+export function openToolPanelResource(paneId: 'files' | 'review' | 'terminal' | 'browser' | 'collaboration'): void {
   if (paneId === 'browser') {
     newBrowserTab()
+  } else if (paneId === 'collaboration') {
+    const session = $toolSession.get()
+
+    if (!session.runtimeId && !session.storedId) {
+      // A fresh draft has no child identity to inspect, but the destination
+      // remains a real empty pane rather than an inert category button.
+      $subagentPanelSelection.set(null)
+      setTreePaneParked(SUBAGENT_PANEL_ID, false)
+      restoreTreePane(SUBAGENT_PANEL_ID)
+    } else {
+      openSubagentPanel({ parentRuntimeId: session.runtimeId, storedSessionId: session.storedId, owner: session.owner })
+    }
   } else if (paneId === 'review') {
     const session = $toolSession.get()
     revealReview(session.cwd || null, session.target)

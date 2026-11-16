@@ -1,6 +1,8 @@
 import { useStore } from '@nanostores/react'
+import { useNavigate } from 'react-router'
 
 import { sessionDotClassName } from '@/app/chat/session-status-dot'
+import { navigateToWorkspacePage, PROFILES_ROUTE } from '@/app/routes'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import {
@@ -21,6 +23,7 @@ import {
 import { useI18n } from '@/i18n'
 import { desktopGit } from '@/lib/desktop-git'
 import { cn } from '@/lib/utils'
+import { profiles as profileArchives } from '@/sdk/bridge'
 import { $showsAdvancedChrome } from '@/store/interface-mode'
 import {
   $sidebarCardRows,
@@ -53,9 +56,8 @@ import {
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from '@/store/layout'
+import { notifyError } from '@/store/notifications'
 import { $profiles, $showAllProfiles, normalizeProfileKey, requestProfileCreate } from '@/store/profile'
-import { $profileRailVisible, toggleProfileRailVisible } from '@/store/profile-rail-prefs'
-import { runImportProfileFlow } from '@/store/profile-share'
 import { $projectTree } from '@/store/projects'
 import type { PullRequestBucket } from '@/store/pull-requests'
 import { $unreadFinishedSessionIds, markAllSessionsRead } from '@/store/session'
@@ -173,11 +175,11 @@ export function SidebarFilterMenu({
   onImportSession?: () => void
 }) {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const recentGrouping = useStore($sidebarRecentGrouping)
   const ordering = useStore($sidebarOrdering)
   const rowMeta = useStore($sidebarRowMeta)
   const cardRows = useStore($sidebarCardRows)
-  const profileRailVisible = useStore($profileRailVisible)
   const showAllSessions = useStore($sidebarShowAllSessions)
   const statusFilter = useStore($sidebarStatusFilter)
   const projectFilter = useStore($sidebarProjectFilter)
@@ -217,6 +219,18 @@ export function SidebarFilterMenu({
   }))
 
   const groupingLabel = groupings.find(option => option.id === recentGrouping)?.label
+
+  const openBotManager = () => navigateToWorkspacePage(navigate, PROFILES_ROUTE)
+
+  const importBot = async () => {
+    try {
+      if (await profileArchives.import()) {
+        openBotManager()
+      }
+    } catch (error) {
+      notifyError(error, t.profiles.failedImport)
+    }
+  }
 
   // Two options are conditional: dragging a row is what picks manual, so it
   // only appears as a way back out once there's a hand-picked order to leave;
@@ -338,15 +352,11 @@ export function SidebarFilterMenu({
             option={{ icon: 'inbox', id: 'card-rows', label: filterLabels.cardRows }}
           />
 
-          {/* The colored strip at the sidebar foot. Off, the statusbar grows a
-              profile dropdown beside the gateway switcher, so nobody loses the
-              door — this is for people whose profiles are bots, not workspaces. */}
           {showsAdvancedChrome && (
-            <OptionCheckbox
-              checked={profileRailVisible}
-              onCheck={toggleProfileRailVisible}
-              option={{ icon: 'organization', id: 'profile-rail', label: t.sidebar.profileRail }}
-            />
+            <DropdownMenuItem onSelect={openBotManager}>
+              <Codicon name="organization" size="0.8125rem" />
+              {t.keybinds.actions['view.toggleProfileRail']}
+            </DropdownMenuItem>
           )}
         </DropdownMenuGroup>
 
@@ -401,9 +411,7 @@ export function SidebarFilterMenu({
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={requestProfileCreate}>{t.profiles.newProfile}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runImportProfileFlow()}>
-                  {t.profiles.importProfile}
-                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void importBot()}>{t.profiles.importProfile}</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )}

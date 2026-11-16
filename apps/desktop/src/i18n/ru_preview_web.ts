@@ -44,7 +44,7 @@ export const ruPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedMessage: 'Hermes не смог перезапустить сервер.',
   stillWorking:
     'Hermes всё ещё работает, но результата перезапуска пока нет. Команда сервера может выполняться в foreground.',
-  workspaceReloading: 'Рабочее пространство изменилось, перезагружаем предпросмотр',
+  workspaceReloading: 'Проект изменён, предпросмотр загружается заново',
   fileChanged: url => `Файл изменился, перезагружаем предпросмотр: ${url}`,
   filesChanged: (count, url) =>
     `${count} ${RU_NOUN(count, 'изменение файла', 'изменения файла', 'изменений файла')}, перезагружаем предпросмотр: ${url}`,

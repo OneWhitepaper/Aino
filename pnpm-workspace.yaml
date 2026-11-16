@@ -34,6 +34,7 @@ minimumReleaseAge: 20160
 # file on users' machines.
 minimumReleaseAgeExclude:
   - pele@1.13.0  # the desktop diagram swap was parity-checked on it (math labels need 1.8.0+)
+  - open-bot-avatar@0.2.1  # user-selected Ghost animation; dependency-free DOM renderer reviewed before integration
 
 overrides:
   '@electron/osx-sign>isbinaryfile': 5.0.7

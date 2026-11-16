@@ -267,12 +267,12 @@ export const arSettings = {
       account: 'حسابي'
     },
     poolLimits: {
-      warmBotBackendsAria: 'عدد اتصالات الملفات الشخصية المحفوظة',
-      warmBotBackendsTitle: 'اتصالات الملفات الشخصية المحفوظة',
+      warmBotBackendsAria: 'عدد اتصالات الروبوتات المحفوظة',
+      warmBotBackendsTitle: 'اتصالات الروبوتات المحفوظة',
       warmBotBackendsDesc:
         'يحدّ من اتصالات الملفات الشخصية الثانوية المتاحة للتبديل السريع. عند بلوغ الحد يتوقف الإعداد المسبق عند تمرير المؤشر وتُغلق الاتصالات الخاملة الزائدة؛ وتظل الملفات المفتوحة يدويًا أو النشطة متاحة.',
-      backendIdleTimeoutAria: 'مهلة خمول اتصال الملف الشخصي بالمللي ثانية',
-      backendIdleTimeoutTitle: 'مهلة خمول اتصال الملف الشخصي (مللي ثانية)',
+      backendIdleTimeoutAria: 'مهلة خمول اتصال الروبوت بالمللي ثانية',
+      backendIdleTimeoutTitle: 'مهلة خمول اتصال الروبوت (مللي ثانية)',
       backendIdleTimeoutDesc:
         'مدة إبقاء اتصال الملف الشخصي غير المستخدم مفتوحًا. يُفصل المقبس الخامل فقط؛ ولا تتوقف بوابة Hermes المشتركة أو مهامها الخلفية.'
     },
@@ -461,7 +461,7 @@ export const arSettings = {
       model: 'النموذج',
       chat: 'المحادثة',
       appearance: 'المظهر',
-      workspace: 'مساحة العمل',
+      workspace: 'المشاريع والملفات',
       safety: 'الأمان',
       memory: 'الذاكرة والسياق',
       voice: 'الصوت',
@@ -482,7 +482,7 @@ export const arSettings = {
       },
       dark: {
         label: 'داكن',
-        description: 'مساحة عمل منخفضة الوهج'
+        description: 'واجهة منخفضة الوهج'
       },
       system: {
         label: 'النظام',
@@ -549,7 +549,7 @@ export const arSettings = {
       composerPopoutTitle: 'محرر عائم',
       composerPopoutDesc: 'السماح بسحب محرر الرسائل خارج موضعه. عند إيقاف الخيار، يبقى مثبتًا في الأسفل.',
       fileBrowserTitle: 'مستعرض الملفات',
-      fileBrowserDesc: 'عرض مستعرض الملفات بجانب المحادثة عند فتح مساحة عمل. يغيّر زر شريط العنوان هذا الخيار أيضًا.',
+      fileBrowserDesc: 'اعرض متصفح الملفات بجانب الدردشة. يمكن تغيير هذا الإعداد أيضاً من زر شريط العنوان.',
       vibeHeartsTitle: 'قلوب المزاج',
       vibeHeartsDesc: 'قلوب عائمة عند قول شكراً أو أحبك أو good bot أو إرسال قلب. منفصلة عن تفاعلات الرسائل أعلاه.',
       embedsTitle: 'التضمينات المضمّنة',
@@ -567,7 +567,7 @@ export const arSettings = {
       technicalDesc: 'يعرض تفاصيل أكثر عن الأدوات والتنفيذ.',
       themeTitle: 'الثيم',
       themeDesc: 'اختر ثيم سطح المكتب.',
-      themeProfileNote: profile => `سيطبق هذا الثيم على الملف الشخصي ${profile}.`,
+      themeProfileNote: profile => `سيطبق هذا الثيم على الروبوت ${profile}.`,
       installTitle: 'تثبيت ثيم',
       installDesc: 'ألصق رابط ثيم أو اسمه لتثبيته.',
       installPlaceholder: 'رابط أو اسم الثيم',
@@ -885,7 +885,7 @@ export const arSettings = {
     },
     profileScope: {
       appliesTo: 'ينطبق على',
-      editsProfile: profile => `تنطبق التغييرات في هذه الصفحة على الملف الشخصي «${profile}».`
+      editsProfile: profile => `تنطبق التغييرات في هذه الصفحة على الروبوت «${profile}».`
     },
     mcp: {
       loading: 'جار تحميل خوادم MCP...',
@@ -920,6 +920,9 @@ export const arSettings = {
     model: {
       pages: {
         description: 'إدارة النموذج الافتراضي والنماذج المستخدمة للمهام المختلفة.',
+        preferences: 'تفضيلات النموذج',
+        moreSettings: 'المزيد من إعدادات النماذج',
+        fallbackDescription: 'اختر نموذجا احتياطيا عندما يكون النموذج الرئيسي غير متاح مؤقتا.',
         auxiliaryTask: 'المهمة',
         auxiliaryPurpose: 'الغرض',
         auxiliaryModel: 'النموذج',

@@ -34,6 +34,7 @@ import type { PluginPreviewAccessTranslations } from './types_plugin_preview_acc
 import type { PluginUpdateAllTranslations, PluginUpdateTranslations } from './types_plugin_update'
 import type { PreviewWebCopy } from './types_preview_web'
 import type { SidebarProjectsTranslations } from './types_projects'
+import type { ReplyMetricsTranslations } from './types_reply_metrics'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
 import type { SummaryTranslations } from './types_summary_surface'
 import type { ThemePickerCopy } from './types_theme_picker'
@@ -2446,6 +2447,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
     steerQueued: string
     stopRequested: string
     requestRejected: string
+    controlUnavailable: string
+    requestFinished: string
+    requestFailed: string
     delegation: (index: number) => string
     workers: (count: number) => string
     workersActive: (count: number) => string
@@ -3282,6 +3286,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
   composer: {
     message: string
     wakingProfile: (profile: string) => string
+    placeholderTo: (name: string) => string
     placeholderStarting: string
     placeholderReconnecting: string
     placeholderFollowUp: string
@@ -4637,17 +4642,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
 
       processTitle: string
 
-      replyMetrics: {
-        duration: string
-        tokens: string
-        context: string
-        cache: string
-        nonAinoModelCalls: string
-        details: string
-        sessionElapsed: string
-        input: string
-        output: string
-      }
+      replyMetrics: ReplyMetricsTranslations
 
       emojiSearch: string
 
