@@ -70,13 +70,17 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   cleanup file passed on retry after one transient bare-PID assertion. The test
   now uses the existing native liveness check and a bounded three-second exit
   wait; five local process tests passed. The extended actual frame-cancellation
-  step passed in `43884580723`; the rest of that run remains in progress.
+  step and all other suites passed in `43884580723`. Final-source contracts
+  `43885299701` at `ee3525258c` passed all suites without a reported flaky retry.
 - Preserve all system-package/product/new-window/ambiguity/control checks.
   This is a proven driver gap, not yet proof that package replacement works.
   No product-wide gateway stop is justified by the surviving OLD Python alone.
 - Do not publish packages, feeds or website updates, merge main, or touch the
   other conversation's worktree. Run complete candidates only after focused
-  checks and the already-running full pair have finished.
+  native checks have passed. Fresh complete run `43885861128` is frozen at
+  `ee3525258c` on independent standard runners; the older ARM64 leg is retained
+  for its original evidence rather than cancelled or repurposed. Neither is
+  currently an accepted complete installation/update receipt.
 
 ## Current progress as of 2026-11-16
 

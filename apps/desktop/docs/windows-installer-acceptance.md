@@ -8,8 +8,10 @@ probe in run `43883021594` proved that the system UI is hosted: one verified
 installer-owned surface, one hosted frame, zero windows from the former
 PID-only discovery. The shared discovery now binds frames through their
 verified installer-owned subtree; focused run `43883727629` passed that native regression and all existing suites.
-The extended real cancellation regression passed its Windows step in
-`43884580723`; the remaining suites in that run are in progress.
+Both the hosted-frame cancellation run `43884580723` and the final worker-exit
+contracts run `43885299701` passed. Fresh complete x64/ARM64 run `43885861128`
+is frozen at `ee3525258c` and is building/running; it has no accepted native
+receipt yet. The older ARM64 leg remains running on its original frozen source.
 Distribution is held; this document does not authorize installer, release,
 feed or website publication, or a merge to `main`. Only temporary test signing
 is authorized; production signing and ordinary production trust are deferred.
@@ -410,7 +412,21 @@ failure on a surviving worker. Local process tests passed all five cases.
 The extended regression at `fe97651544` also requires the observed frame to be
 open before cancellation, cancels it through the shared native helper, and waits
 for the same verified frame to disappear. Its real hosting/cancellation step
-passed in `43884580723`, job `133359149290`; the remaining suites are running.
+passed in `43884580723`, job `133359149290`, together with all existing suites.
+Final source `ee3525258c` passed the complete Windows contracts again in
+`43885299701`, job `133361690811`: 159 Python (four skips), 74 JS (nine skips),
+eight extractor, eight SDK, 113 updater/state, nine observer and all native
+PowerShell/environment/descriptor groups. No failed-first-attempt/flaky file
+was reported in that final contracts run.
+
+Fresh full run [`43885861128`](https://github.com/OneWhitepaper/Aino/actions/runs/43885861128)
+freezes `ee3525258c762ac19dc25feb6e29511e6df59d24` on
+`validation/windows-installer-public/20261116-native-hosted-frame`.
+Its x64 job is `133363686803`, ARM64 job `133363686802`, and contracts job
+`133363686455`. These are fresh temporary candidates on standard hosted runners,
+with independent data/trust cleanup and no package publication. The older
+ARM64 job is retained for its remaining evidence; the corrected pair does not
+reuse its incomplete or incorrectly observed lifecycle as acceptance.
 This explains a confirmed gap in the driver; it does not yet prove full Aino
 package replacement or rule out further deployment blockers.
 
