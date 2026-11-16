@@ -319,7 +319,12 @@ Light uses `releases/win32/light/CHANNEL/`.
 
 Windows records the descriptor source at installation. The app checks that
 registered source through WinRT and distinguishes an unknown result from no
-update. Apply downloads the descriptor before teardown, then opens the local
+update. The bundled checker uses its full networked check for the UI. Apply
+passes `--source-only` to `hermes_cli.windows_appinstaller_update` to read a fresh
+registered URI without another availability request; source failures and a
+configured-feed mismatch stop the update before staging. Its disjoint
+`source_resolution` result never represents update availability. Apply downloads
+the descriptor before teardown, then opens the local
 `.appinstaller` file. It does not require the disabled `ms-appinstaller:` protocol.
 The app registers a detached relaunch waiter before handoff.
 

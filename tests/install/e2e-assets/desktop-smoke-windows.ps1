@@ -18,13 +18,30 @@ function Get-UpdateNavigationButton([object[]]$Buttons) {
     if ($checks.Count -gt 0 -or @($visible | Where-Object { $_.Name -match '^(Checking…|检查中…|檢查中…)$' }).Count -gt 0) {
         return $null
     }
-    # Settings keeps About mounted before its check button in the UIA tree.
-    foreach ($pattern in @('^(About|关于|關於)$', '^(Open settings|打开设置|设置|開啟設定|設定)$', 'choose a provider later')) {
+    # A short settings sidebar keeps About mounted below its viewport.
+    $about = @($Buttons | Where-Object { $_.IsEnabled -and $_.Name -match '^(About|关于|關於)$' })
+    if ($about.Count -gt 0) { return @($about | Sort-Object IsOffscreen)[0] }
+    foreach ($pattern in @('^(Open settings|打开设置|设置|開啟設定|設定)$', 'choose a provider later')) {
         foreach ($button in $visible) {
             if ($button.IsEnabled -and $button.Name -match $pattern) { return $button }
         }
     }
     return $null
+}
+
+function Invoke-UpdateNavigationButton($Button, [scriptblock]$Refresh, [scriptblock]$Scroll, [scriptblock]$Invoke) {
+    if ($null -eq $Button) { return $false }
+    $fresh = & $Refresh
+    if ($null -eq $fresh -or -not $fresh.IsEnabled -or $fresh.Name -cne $Button.Name -or
+        -not [object]::Equals($fresh.Element, $Button.Element)) { return $false }
+    if ($fresh.IsOffscreen) {
+        if ($fresh.Name -notmatch '^(About|关于|關於)$' -or -not (& $Scroll $fresh.Element)) { return $false }
+        # Re-select the whole window: a check can become busy/actionable while scrolling.
+        $fresh = & $Refresh
+    }
+    if ($null -eq $fresh -or $fresh.IsOffscreen -or -not $fresh.IsEnabled -or
+        $fresh.Name -cne $Button.Name -or -not [object]::Equals($fresh.Element, $Button.Element)) { return $false }
+    return [bool](& $Invoke $fresh.Element)
 }
 
 function Start-DesktopJourneyMock([string]$Node, [string]$Assets, [string]$Work, [string]$HermesHome, [string]$Out) {

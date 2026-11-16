@@ -29,9 +29,9 @@ for (const failureAt of ['prepare', 'register', 'teardown', 'open', 'none']) {
       python: 'unused-checker',
       module: 'unused.module',
       run: async () => ({
-        code: 2,
+        code: 0,
         stdout: JSON.stringify({
-          available: true,
+          source_resolution: 'registered',
           source_uri: 'https://example.invalid/win32/stable/stable.appinstaller'
         })
       }),
@@ -113,9 +113,9 @@ test('handoff errors retain cleanup failures while still restoring the backend',
     python: 'unused',
     module: 'unused.module',
     run: async () => ({
-      code: 2,
+      code: 0,
       stdout: JSON.stringify({
-        available: true,
+        source_resolution: 'registered',
         source_uri: 'https://example.invalid/win32/stable/stable.appinstaller'
       })
     }),

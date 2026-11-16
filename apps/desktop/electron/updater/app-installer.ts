@@ -20,12 +20,16 @@ import {
 // marker) are injected, so vitest covers the arm without a payload.
 import { PRODUCT_NAME } from '../product-identity'
 
+import { readAppInstallerSource } from './app-installer-source'
 import type { ChannelTarget } from './channel'
 import { channelPublicBase } from './channel-protocol'
 import { applyPackagedHandoff } from './packaged-handoff'
 import type { RelaunchRegistration } from './relaunch'
 
 import type { UpdaterApplyResultWire, UpdaterStatusWire } from './index'
+
+const SOURCE_MISMATCH =
+  'The registered App Installer source differs from the configured feed; remove updates.desktop_feed_base_url or reinstall using the target .appinstaller file to register it.'
 
 export interface AppInstallerStrategyDeps {
   /** Absolute path to the bundled payload python (tools/<entry>/python.exe). */
@@ -125,8 +129,7 @@ export class AppInstallerStrategy {
     ) {
       return {
         available: null,
-        error:
-          'The registered App Installer source differs from the configured feed; remove updates.desktop_feed_base_url or reinstall using the target .appinstaller file to register it.'
+        error: SOURCE_MISMATCH
       }
     }
 
@@ -152,13 +155,17 @@ export class AppInstallerStrategy {
     }
 
     if (!feed) {
-      const check = await this.checkRegisteredSource()
+      const source = await readAppInstallerSource(this.deps)
 
-      if (check.available === null) {
-        throw new Error(check.error)
+      if (source.kind === 'error') {
+        throw new Error(source.error)
       }
 
-      sourceUri = check.sourceUri
+      sourceUri = source.kind === 'registered' ? source.sourceUri : undefined
+
+      if (feedBaseUrl && sourceUri !== win32AppInstallerFeedUrl(feedBaseUrl, this.deps.channel, this.deps.light)) {
+        throw new Error(SOURCE_MISMATCH)
+      }
 
       if (sourceUri) {
         channelPublicBase(sourceUri)

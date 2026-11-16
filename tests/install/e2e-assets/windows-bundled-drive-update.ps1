@@ -113,8 +113,9 @@ function Find-InvokableButton {
         return Get-UpdateNavigationButton $observed
     }
     foreach ($b in $buttons) {
-        $name = ""
-        try { $name = $b.Current.Name } catch {}
+        try { $current = $b.Current } catch { continue }
+        if ($current.IsOffscreen -or -not $current.IsEnabled) { continue }
+        $name = $current.Name
         if (-not $name) { continue }
         foreach ($pat in $Patterns) {
             if ($name -match $pat) { return @{ Element = $b; Name = $name } }
@@ -124,6 +125,7 @@ function Find-InvokableButton {
 }
 
 function Invoke-Button($Element) {
+    if ($Element.Current.IsOffscreen -or -not $Element.Current.IsEnabled) { return $false }
     $invoke = $null
     if ($Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
         $invoke.Invoke()
@@ -135,6 +137,39 @@ function Invoke-Button($Element) {
         try { $legacy.DoDefaultAction(); return $true } catch {}
     }
     return $false
+}
+
+function Show-UpdateAbout($Element, $Window) {
+    if ((Get-AppPids).Count -ne 1 -or -not $Element.Current.IsEnabled -or
+        $Element.Current.Name -notmatch '^(About|关于|關於)$') { return $false }
+    # Only ancestors below this identified OLD window may receive a scroll.
+    $ancestors = [System.Collections.Generic.List[object]]::new()
+    $parent = $Element
+    $bound = $false
+    for ($depth = 0; $depth -lt 32; $depth++) {
+        if ([System.Windows.Automation.AutomationElement]::Compare($parent, $Window)) { $bound = $true; break }
+        $parent = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($parent)
+        if ($null -eq $parent) { return $false }
+        $ancestors.Add($parent)
+    }
+    if (-not $bound) { return $false }
+    $item = $null
+    if ($Element.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$item)) {
+        $item.ScrollIntoView()
+    }
+    foreach ($ancestor in $ancestors) {
+        if (-not $Element.Current.IsEnabled) { return $false }
+        if (-not $Element.Current.IsOffscreen) { return $true }
+        if ([System.Windows.Automation.AutomationElement]::Compare($ancestor, $Window)) { break }
+        $scroll = $null
+        if (-not $ancestor.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$scroll) -or
+            -not $scroll.Current.VerticallyScrollable) { continue }
+        for ($attempt = 0; $attempt -lt 4 -and $Element.Current.IsOffscreen; $attempt++) {
+            $scroll.Scroll([System.Windows.Automation.ScrollAmount]::NoAmount, [System.Windows.Automation.ScrollAmount]::LargeIncrement)
+        }
+        break
+    }
+    return $Element.Current.IsEnabled -and -not $Element.Current.IsOffscreen
 }
 
 function Get-VerifiedInstallerWindows {
@@ -233,7 +268,12 @@ while ((Get-Date) -lt $deadline -and -not $clicked) {
         } else {
             # Use the visible settings flow; never call the updater bridge.
             $navigation = Find-InvokableButton -Root $win -UpdateNavigation
-            if ($navigation) { [void](Invoke-Button $navigation.Element) }
+            [void](Invoke-UpdateNavigationButton $navigation -Refresh {
+                if ((Get-AppPids).Count -eq 1) { Find-InvokableButton -Root $win -UpdateNavigation }
+            } -Scroll { param($element) Show-UpdateAbout $element $win } -Invoke {
+                param($element)
+                Invoke-Button $element
+            })
         }
     }
     if (-not $clicked) { Start-Sleep -Seconds 3 }

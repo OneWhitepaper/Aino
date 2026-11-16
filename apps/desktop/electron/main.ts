@@ -3486,10 +3486,10 @@ function createNativePackagedStrategy(
 
     const deps: ConstructorParameters<typeof AppInstallerStrategy>[0] = {
       python: payload.storePython,
-      // The checker is bundled core code, run with the payload python.
       module: 'hermes_cli.windows_appinstaller_update',
-      run: (python, module) =>
+      run: (python, module, args) =>
         runAppInstallerChecker(python, module, {
+          args,
           env: { ...process.env, PYTHONPATH: payloadPythonPath(payload) },
           onStderr: stderr => console.error(`[app-installer] checker stderr: ${stderr.slice(0, 400)}`)
         }),

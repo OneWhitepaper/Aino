@@ -20,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ def resolved_projection(monkeypatch):
 
     availability = enum.IntEnum("Availability", "UNKNOWN NO_UPDATES AVAILABLE REQUIRED ERROR", start=0)
     calls = []
-    state = SimpleNamespace(lookup="resolved")
+    state = SimpleNamespace(lookup="resolved", source="registered")
     full_name = "HermesFixture_1.2.3.0_x64__fixture"
 
     class CurrentPackage:
@@ -53,7 +54,12 @@ def resolved_projection(monkeypatch):
 
     class ResolvedPackage:
         def get_app_installer_info(self):
-            return SimpleNamespace(uri=SimpleNamespace(absolute_uri="https://registered.example/updates.appinstaller"))
+            if state.source == "error":
+                raise PermissionError("registered source permission denied")
+            if state.source == "missing":
+                return None
+            return SimpleNamespace(uri=SimpleNamespace(absolute_uri=
+                "" if state.source == "blank" else "https://registered.example/updates.appinstaller"))
 
         def check_update_availability_async(self):
             calls.append("resolved-check")
@@ -81,6 +87,29 @@ def test_update_check_uses_the_user_resolved_package_instead_of_the_denied_curre
         "available": True, "availability": "AVAILABLE", "source_uri": "https://registered.example/updates.appinstaller",
     }
     assert calls == [("", full_name), "resolved-check"]
+
+
+def test_source_only_reads_fresh_resolved_source_without_network_availability(resolved_projection, capsys):
+    main, calls, _state, full_name = resolved_projection
+    assert main(source_only=True) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "source_resolution": "registered", "source_uri": "https://registered.example/updates.appinstaller",
+    }
+    assert calls == [("", full_name)]
+
+
+@pytest.mark.parametrize("lookup,source", [("error", "registered"), ("missing", "registered"),
+                                          ("resolved", "error"), ("resolved", "missing"), ("resolved", "blank")])
+def test_source_only_source_or_lookup_failure_is_error_without_availability(resolved_projection, capsys, lookup, source):
+    main, calls, state, full_name = resolved_projection
+    state.lookup, state.source = lookup, source
+    assert main(source_only=True) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["source_resolution"] == "error"
+    assert payload["error"]
+    assert "available" not in payload
+    assert "availability" not in payload
+    assert calls == [("", full_name)]
 
 
 @pytest.mark.parametrize("lookup", ["error", "missing"])
@@ -160,17 +189,91 @@ def test_projection_outcomes(monkeypatch, capsys, state, code, available):
             assert ".appinstaller" in payload["error"]
 
 
-def test_script_import_failure_json_and_exit(tmp_path):
+@pytest.mark.parametrize("source_only", [False, True])
+def test_script_import_failure_json_and_exit(tmp_path, source_only):
     # A real subprocess runs the entry the desktop spawns (python -P -m) and
     # imports the absent projection.
     (tmp_path / "winrt.py").write_text("raise ImportError('fixture unavailable')", encoding="utf-8")
-    child = subprocess.run([HERMES_PYTHON, "-P", "-m", MODULE], capture_output=True,
+    child = subprocess.run([HERMES_PYTHON, "-P", "-m", MODULE, *(["--source-only"] if source_only else [])], capture_output=True,
                            text=True, timeout=30,
                            env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])}, check=False)
     assert child.returncode == 1, child.stderr
     payload = json.loads(child.stdout)
-    assert payload["available"] is None
+    if source_only:
+        assert payload["source_resolution"] == "error"
+        assert "available" not in payload
+        assert "availability" not in payload
+    else:
+        assert payload["available"] is None
     assert "fixture unavailable" in payload["error"]
+
+
+@pytest.mark.parametrize("state", ["not-packaged", "denied", "unexpected", "missing-current", "missing-projection"])
+def test_source_only_identity_outcomes_are_disjoint_and_only_no_identity_is_manual(monkeypatch, capsys, state):
+    import importlib
+
+    main = importlib.import_module(MODULE).main
+
+    class PackageMeta(type):
+        @property
+        def current(cls):
+            if state == "unexpected":
+                raise RuntimeError("identity read failed")
+            error = OSError("identity failure")
+            error.winerror = -2147009196 if state == "not-packaged" else -2147024891
+            raise error
+
+    class Package(metaclass=PackageMeta):
+        pass
+
+    def load():
+        if state == "missing-projection":
+            raise ImportError("missing winrt")
+        return (object if state == "missing-current" else Package), object, object
+
+    monkeypatch.setitem(main.__globals__, "_load_projection", load)
+    assert main(source_only=True) == (0 if state == "not-packaged" else 1)
+    payload = json.loads(capsys.readouterr().out)
+    assert "available" not in payload
+    assert "availability" not in payload
+    if state == "not-packaged":
+        assert payload == {"source_resolution": "not-packaged"}
+    else:
+        assert payload["source_resolution"] == "error"
+        assert payload["error"]
+
+
+def test_source_only_cli_resolves_registered_source_without_calling_network_method(tmp_path):
+    package = tmp_path / "winrt" / "windows"
+    deployment = package / "management"
+    deployment.mkdir(parents=True)
+    for folder in [tmp_path / "winrt", package, deployment]:
+        (folder / "__init__.py").write_text("", encoding="utf-8")
+    (package / "applicationmodel.py").write_text(textwrap.dedent("""\
+        from types import SimpleNamespace
+        Package = SimpleNamespace(current=SimpleNamespace(id=SimpleNamespace(full_name='Fixture_1.0.0.0_x64__fixture')))
+        PackageUpdateAvailability = object
+        """), encoding="utf-8")
+    (deployment / "deployment.py").write_text(textwrap.dedent("""\
+        from types import SimpleNamespace
+        class ResolvedPackage:
+            def get_app_installer_info(self):
+                return SimpleNamespace(uri=SimpleNamespace(absolute_uri='https://registered.example/update.appinstaller'))
+            def check_update_availability_async(self):
+                raise AssertionError('source-only must not contact the update source')
+        class PackageManager:
+            def find_package_by_user_security_id_package_full_name(self, user, name):
+                assert (user, name) == ('', 'Fixture_1.0.0.0_x64__fixture')
+                return ResolvedPackage()
+        """), encoding="utf-8")
+    child = subprocess.run(
+        [HERMES_PYTHON, "-P", "-m", MODULE, "--source-only"], capture_output=True, text=True, timeout=30,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])}, check=False)
+    assert child.returncode == 0, child.stderr
+    assert json.loads(child.stdout) == {
+        "source_resolution": "registered", "source_uri": "https://registered.example/update.appinstaller",
+    }
+    assert child.stderr == ""
 
 
 @pytest.mark.platforms("windows")

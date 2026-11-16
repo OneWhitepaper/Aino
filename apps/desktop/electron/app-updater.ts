@@ -62,14 +62,14 @@ export interface PayloadPythonRunner {
   /** The checker's module name. */
   module: string
   /** Run the module; resolve with {code, stdout}. */
-  run: (python: string, module: string) => Promise<{ code: number; stdout: string }>
+  run: (python: string, module: string, args?: readonly string[]) => Promise<{ code: number; stdout: string }>
 }
 
 /**
  * win32 arm: ask the OS whether an App Installer update is available, via
  * the bundled payload python's winrt (Package.check_update_availability_async).
  * The OS compares the package's registered .appinstaller source against the
- * installed version; it does NOT download anything.
+ * installed version and may contact that source; it does not install an update.
  */
 export async function checkAppInstallerUpdate(runner: PayloadPythonRunner): Promise<AppInstallerCheck> {
   const { code, stdout } = await runner.run(runner.python, runner.module)

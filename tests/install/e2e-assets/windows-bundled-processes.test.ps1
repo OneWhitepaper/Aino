@@ -89,9 +89,74 @@ foreach ($names in @(
     }
     $check.IsOffscreen = $true
     Assert-NavigationButton @($check, $about) $about 'Offscreen checks must not be invoked'
+    $about.IsOffscreen = $true
+    Assert-NavigationButton @($settings, $about) $about 'About below a short sidebar viewport must be selected for scrolling'
+    $check.IsOffscreen = $false
+    Assert-NavigationButton @($about, $check) $check 'An actionable check must win over an offscreen About'
+    $check.IsEnabled = $false
+    Assert-NavigationButton @($about, $check) $null 'An offscreen About must not bypass a busy check'
 }
 $later = Navigation-Button 'Choose a provider later'
 $settings = Navigation-Button 'Open settings'
 Assert-NavigationButton @($later, $settings) $settings 'Settings must win over the onboarding fallback'
 Assert-NavigationButton @($later) $later 'The existing onboarding fallback must remain available'
 Write-Output 'PASS: actionable checks precede navigation; busy checks wait; English and both Chinese locales agree'
+
+# The native driver supplies UIA effects; the coordinator must refresh selection
+# after scrolling, rather than invoke an element from the old viewport snapshot.
+$about = Navigation-Button '关于' $true $true
+$script:buttonsAfterScroll = @($about)
+$script:navigationEffects = [System.Collections.Generic.List[string]]::new()
+$scrolled = Invoke-UpdateNavigationButton $about -Refresh {
+    Get-UpdateNavigationButton $script:buttonsAfterScroll
+} -Scroll {
+    param($element)
+    if (-not [object]::ReferenceEquals($element, $about.Element)) { throw 'Scroll lost the matched UIA element' }
+    $script:navigationEffects.Add('scroll')
+    $about.IsOffscreen = $false
+    return $true
+} -Invoke {
+    param($element)
+    if (-not [object]::ReferenceEquals($element, $about.Element)) { throw 'Invoke lost the matched UIA element' }
+    $script:navigationEffects.Add('invoke')
+    return $true
+}
+if (-not $scrolled -or ($script:navigationEffects -join ',') -cne 'scroll,invoke') {
+    throw 'An offscreen About must scroll, refresh, then invoke the same visible element'
+}
+
+foreach ($state in @('still-offscreen', 'disabled', 'replaced', 'busy-check', 'ready-check')) {
+    $about = Navigation-Button 'About' $true $true
+    $freshAbout = Navigation-Button 'About'
+    $busy = Navigation-Button 'Checking…' $false
+    $check = Navigation-Button 'Check now'
+    $script:buttonsAfterScroll = @($about)
+    $invoked = Invoke-UpdateNavigationButton $about -Refresh {
+        Get-UpdateNavigationButton $script:buttonsAfterScroll
+    } -Scroll {
+        $script:buttonsAfterScroll = switch ($state) {
+            'still-offscreen' { @($about) }
+            'disabled' { $about.IsEnabled = $false; @($about) }
+            'replaced' { @($freshAbout) }
+            'busy-check' { @($about, $busy) }
+            'ready-check' { @($about, $check) }
+        }
+        return $true
+    } -Invoke { throw 'A stale or blocked About must never be invoked' }
+    if ($invoked) { throw "Navigation did not stop after scrolling into $state" }
+}
+$check = Navigation-Button '立即检查'
+$invoked = Invoke-UpdateNavigationButton $check -Refresh { $check } -Scroll {
+    throw 'An enabled check must not scroll About'
+} -Invoke { return $true }
+if (-not $invoked) { throw 'An enabled check must remain actionable without scrolling' }
+$about = Navigation-Button 'About' $true $true
+$invoked = Invoke-UpdateNavigationButton $about -Refresh { $null } -Scroll {
+    throw 'A check that became busy before scrolling must stop stale About navigation'
+} -Invoke { throw 'A busy check must not invoke a stale About' }
+if ($invoked) { throw 'A newly busy check unexpectedly navigated' }
+$invoked = Invoke-UpdateNavigationButton $null -Refresh {
+    throw 'A busy check must wait before refreshing or scrolling About'
+} -Scroll { throw 'A busy check must not scroll About' } -Invoke { throw 'A busy check must not invoke About' }
+if ($invoked) { throw 'A busy check unexpectedly navigated' }
+Write-Output 'PASS: offscreen About scrolls before a fresh visible invoke; changed, disabled or busy selections wait'

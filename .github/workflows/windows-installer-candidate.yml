@@ -136,7 +136,7 @@ jobs:
         env:
           AZURE_SIGN_PUBLISHER: CN=Aino SDK Contract Fixture
         run: |
-          pnpm exec vitest run --project electron scripts/windows-bundle-tools.test.mjs scripts/msix-shared.test.mjs scripts/sign-msix.test.mjs scripts/commit-bundles.windows.test.mjs scripts/windows-install-contract.test.mjs electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/updater/relaunch-waiter.windows-live.test.ts electron/updater/relaunch-waiter-spawn.windows-live.test.ts electron/updater/relaunch-waiter-lifecycle.test.ts e2e/windows-user-state.unit.test.ts 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/contracts.log"
+          pnpm exec vitest run --project electron scripts/windows-bundle-tools.test.mjs scripts/msix-shared.test.mjs scripts/sign-msix.test.mjs scripts/commit-bundles.windows.test.mjs scripts/windows-install-contract.test.mjs electron/appinstaller-checker.test.ts electron/updater/app-installer-source.test.ts electron/updater/app-installer-source-flow.test.ts electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/updater/relaunch-waiter.windows-live.test.ts electron/updater/relaunch-waiter-spawn.windows-live.test.ts electron/updater/relaunch-waiter-lifecycle.test.ts e2e/windows-user-state.unit.test.ts 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/contracts.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify native driver contracts and GUI environment restoration

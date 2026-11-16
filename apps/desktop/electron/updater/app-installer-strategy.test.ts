@@ -12,19 +12,25 @@ interface StrategyFixture {
   calls: string[]
 }
 
+function checkerResult(sourceUri: string | undefined, args?: readonly string[]): { code: number; stdout: string } {
+  return args?.includes('--source-only')
+    ? {
+        code: 0,
+        stdout: JSON.stringify(
+          sourceUri ? { source_resolution: 'registered', source_uri: sourceUri } : { source_resolution: 'not-packaged' }
+        )
+      }
+    : { code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) }
+}
+
 function makeDeps(over: Partial<AppInstallerStrategyDeps> = {}): StrategyFixture {
   const calls: string[] = []
 
   const deps: AppInstallerStrategyDeps = {
     python: 'python.exe',
     module: 'check.module',
-    run: async () => ({
-      code: 2,
-      stdout: JSON.stringify({
-        available: true,
-        source_uri: 'https://updates.example/hermes-desktop/win32/stable/stable.appinstaller'
-      })
-    }),
+    run: async (_python, _module, args) =>
+      checkerResult('https://updates.example/hermes-desktop/win32/stable/stable.appinstaller', args),
     channel: 'stable',
     light: false,
     feedBaseUrl: 'https://updates.example/hermes-desktop',
@@ -67,7 +73,7 @@ describe('AppInstallerStrategy.apply', () => {
     'rejects a configured feed when the OS registered source differs or is missing: %s',
     async (sourceUri: string | undefined): Promise<void> => {
       const { deps, calls } = makeDeps({
-        run: async () => ({ code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) })
+        run: async (_python, _module, args) => checkerResult(sourceUri, args)
       })
 
       const strategy = new AppInstallerStrategy(deps)
@@ -86,7 +92,7 @@ describe('AppInstallerStrategy.apply', () => {
     const prepared: string[] = []
 
     const { deps, calls } = makeDeps({
-      run: async () => ({ code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) }),
+      run: async (_python, _module, args) => checkerResult(sourceUri, args),
       installer: {
         prepare: async url => {
           prepared.push(url)
@@ -126,10 +132,7 @@ describe('AppInstallerStrategy.apply', () => {
 
     const { deps, calls } = makeDeps({
       feedBaseUrl: '',
-      run: async () => ({
-        code: 2,
-        stdout: JSON.stringify({ available: true, source_uri: 'https://registered.example/channel.appinstaller' })
-      }),
+      run: async (_python, _module, args) => checkerResult('https://registered.example/channel.appinstaller', args),
       installer: {
         prepare: async url => {
           prepared.push(url)
@@ -152,7 +155,7 @@ describe('AppInstallerStrategy.apply', () => {
   ])('rejects an unsafe registered source URI before staging: %s', async (sourceUri: string): Promise<void> => {
     const { deps, calls } = makeDeps({
       feedBaseUrl: '',
-      run: async () => ({ code: 2, stdout: JSON.stringify({ available: true, source_uri: sourceUri }) })
+      run: async (_python, _module, args) => checkerResult(sourceUri, args)
     })
 
     await expect(new AppInstallerStrategy(deps).apply()).rejects.toThrow()
@@ -196,8 +199,12 @@ describe('AppInstallerStrategy.apply', () => {
     expect(calls).not.toContain('open')
   })
 
-  it('no feed URL → manual card, no teardown, no quit', async () => {
-    const { deps, calls } = makeDeps({ feedBaseUrl: '', run: async () => ({ code: 0, stdout: '{"available":true}' }) })
+  it('an explicitly unpackaged process without a feed uses the manual card without teardown or quit', async () => {
+    const { deps, calls } = makeDeps({
+      feedBaseUrl: '',
+      run: async (_python, _module, args) => checkerResult(undefined, args)
+    })
+
     const result = await new AppInstallerStrategy(deps).apply()
     expect(result).toEqual({ ok: true, manual: true, bundled: true, mechanism: 'app-installer' })
     expect(calls).toEqual([])
@@ -210,8 +217,15 @@ describe('AppInstallerStrategy.apply', () => {
 
       const { deps, calls } = makeDeps({
         feedBaseUrl: '',
-        run: async () => ({ code: 1, stdout: JSON.stringify({ available: null, error }) }),
-        emitUpdateProgress: event => { progress.push(event.stage) }
+        run: async (_python, _module, args) => ({
+          code: 1,
+          stdout: JSON.stringify(
+            args?.includes('--source-only') ? { source_resolution: 'error', error } : { available: null, error }
+          )
+        }),
+        emitUpdateProgress: event => {
+          progress.push(event.stage)
+        }
       })
 
       const strategy = new AppInstallerStrategy(deps)
@@ -263,10 +277,7 @@ it.each([
     const { deps, calls }: ReturnType<typeof makeDeps> = makeDeps({
       channel,
       light,
-      run: async () => ({
-        code: 2,
-        stdout: JSON.stringify({ available: true, source_uri: `https://updates.example/hermes-desktop/${suffix}` })
-      }),
+      run: async (_python, _module, args) => checkerResult(`https://updates.example/hermes-desktop/${suffix}`, args),
       installer: {
         prepare: async (url: string): Promise<string> => {
           expect(url).toBe(`https://updates.example/hermes-desktop/${suffix}`)
