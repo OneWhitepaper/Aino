@@ -37,6 +37,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
 | Diagnostic Windows contracts (`c0ff3179dc`, run `43846856927`, job `133229083523`) | SUCCESS: 149 Python (four skips), existing JS/SDK/updater/state/UIA contracts and all seven native-observation tests passed, including real PowerShell provenance/process queries and killed-child deadlines |
 | Focused Windows provider/timeout contracts (`6bd68031f5`, run `43873843738`, job `133321640396`) | SUCCESS: explicit framework UIA registration changes the same Win32 control from Pane to Button; all existing Python/JS/SDK/updater/native-observation suites passed |
+| Integrated provider/process-tree Windows contracts (`0e261a89a0`, run `43875036256`, job `133325740395`) | SUCCESS: 159 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state plus all existing driver/observer/environment/descriptor suites |
 | Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | Both failed at unchanged OLD registration; no automatic NEW; both owned-package and disposable-trust cleanups succeeded |
 | Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
@@ -245,8 +246,8 @@ migration, 25 state checks and preparation recovery passed. It completed 282
 samples by 11:41:49 UTC with package/process queries working, OLD version
 `2026.7666.791.0` unchanged, one OLD payload process, no OLD main process, one
 installer process and no NEW main process. The relaunch waiter progressed from
-`query-started` to `package-timeout`. The final bounded deployment query
-succeeded but found no matching deployment events or HRESULTs. The package
+`query-started` to `package-timeout`. The final bounded deployment probe
+reported `queryStatus=ok` with no matching deployment events or HRESULTs. The package
 cleanup succeeded and certificate/trust cleanup recorded `removed`. Curated
 receipt artifact `14222743163` is `unaccepted`.
 
@@ -256,8 +257,8 @@ broken. No gateway shutdown or forceful production update change is inferred.
 ARM64 also failed at package replacement. After first-MSIX migration and
 preparation recovery passed, it observed 250 complete samples with unchanged
 OLD `2026.7666.1523.0`, one OLD payload process, no OLD/NEW main process and
-two installer processes. Its waiter reached `package-timeout`; the event query
-succeeded without matching events or HRESULTs. Receipt artifact `14226887326`
+two installer processes. Its waiter reached `package-timeout`; the event probe
+reported `queryStatus=ok` without matching events or HRESULTs. Receipt artifact `14226887326`
 is `unaccepted`; owned-package cleanup and disposable certificate/trust cleanup
 succeeded. These observations still do not identify the replacement cause.
 
@@ -339,7 +340,8 @@ and disabled confirmation, HRESULT projection and owned-fixture cleanup. The
 successful run also passed 158 Python (four skips), 74 JS (nine skips), eight
 extractor cases, eight SDK cases, 113 updater/state tests and the existing
 PowerShell/observation/environment/descriptor suites. The shared-initializer
-integration still requires the latest-source focused Windows receipt. This
+integration passed in `43875036256` at `0e261a89a0`, job `133325740395`,
+with 159 Python tests (four skips) and all existing Windows suites green. This
 fix does not yet prove the cause of the earlier package-replacement stall.
 
 Launcher-only heartbeats also concealed real descendant activity. A real nested
@@ -347,7 +349,17 @@ worker regression failed before the process-tree metrics and then passed with
 all 125 related Python tests on Mac (two Windows skips). Root counters remain
 separate; tree CPU, RSS, optional I/O and sampled-versus-discovered process
 counts identify partial observations without publishing commands/environment.
-Latest-source Windows revalidation of this addition is pending.
+The nested-worker regression and shared initializer also passed on actual
+Windows in `43875036256`; the full native packages remain on older source.
+
+Deployment-event probes no longer suppress every `Get-WinEvent` error. Only
+its specific `NoMatchingEventsFound` result becomes an empty successful query;
+access, channel and provider errors remain failed bounded probes. A regression
+first reproduced the false-empty result, then passed with the correction. It
+also preserves matched HRESULT/count facts and will exercise the actual native
+empty-selection error on Windows. The new Windows PowerShell 5.1 receipt is
+pending. Earlier receipts that report `queryStatus=ok` without events do not by
+themselves distinguish a real empty selection from a suppressed native read error.
 
 A public opt-in ref ending in `/contracts-only` runs the standard Windows
 contracts without the two large candidate builds. Use that focused native

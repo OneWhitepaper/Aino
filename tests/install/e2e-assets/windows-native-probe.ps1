@@ -75,8 +75,15 @@ switch ($Operation) {
         Get-InstallerWindowSnapshot $request.displayName | ConvertTo-Json -Depth 10 -Compress
     }
     'events' {
-        $events = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-AppXDeploymentServer/Operational';
-            StartTime=([DateTime]$request.startedAt) } -MaxEvents 80 -ErrorAction SilentlyContinue)
+        $events = @()
+        try {
+            $events = @(Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-AppXDeploymentServer/Operational';
+                StartTime=([DateTime]$request.startedAt) } -MaxEvents 80 -ErrorAction Stop)
+        } catch {
+            # The native cmdlet reports an empty selection as an error too;
+            # permission/channel/provider errors must remain failed probes.
+            if ($_.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound,*') { throw }
+        }
         $matched = @($events | Where-Object { $_.ToXml().Contains($request.identity) })
         $codes = @($matched | ForEach-Object { [regex]::Matches($_.ToXml(), '0x[89A-Fa-f][0-9a-fA-F]{7}') | ForEach-Object { $_.Value.ToUpperInvariant().Replace('0X','0x') } } | Sort-Object -Unique | Select-Object -First 20)
         @{ queryStatus='ok'; matchedCount=$matched.Count; errorCount=@($matched | Where-Object { $_.Level -le 2 }).Count;

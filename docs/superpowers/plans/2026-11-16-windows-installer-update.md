@@ -59,13 +59,22 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   driver and timeout observer without relaxing Button/product/ownership checks.
   The successful run passed 158 Python (four skips), 74 JS (nine skips), eight
   extractor, eight SDK and 113 updater/state tests, plus native observation,
-  PowerShell driver/environment and descriptor suites. Latest-source shared
-  initialization and process-tree metrics still need a focused Windows receipt.
+  PowerShell driver/environment and descriptor suites. Integrated shared
+  initialization and the real nested-worker progress regression subsequently
+  passed in `43875036256` at `0e261a89a0` with 159 Python tests (four skips)
+  and all existing Windows suites green.
 - Heartbeats now include the actual owned descendant tree, since a waiting
   launcher's CPU/RSS hid active build/signing workers. The real nested-worker
   regression was first red, then green with 125 related local Python tests
   (two Windows skips). Counts distinguish partial sampling; arguments and
-  environment stay excluded. The current full run does not include this follow-up.
+  environment stay excluded. Native Windows verification passed in
+  `43875036256`; the current full run does not include this follow-up.
+- Deployment-event observation now preserves native query errors; only the
+  actual `NoMatchingEventsFound` case is a successful empty query. A regression
+  reproduced the former false-empty result and passed locally after the fix.
+  The Windows lane will also exercise the native empty-selection error. Earlier
+  `queryStatus=ok` receipts cannot rule out a suppressed read failure. The new
+  Windows PowerShell 5.1 verification is pending.
 - Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
   Its Windows Python contracts passed 158 tests (four skips), including the four
   actual worker/tree cleanup tests. Contracts then stopped at a preexisting
