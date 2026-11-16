@@ -10,8 +10,9 @@ function renderer(accountName?: string) {
 
   const page = {
     isClosed: (): boolean => state.closed,
-    getByRole: (role: string, options: { name: string; exact: boolean }) => ({
-      isVisible: async (): Promise<boolean> => role === 'button' && options.exact && options.name === state.accountName,
+    getByRole: (role: string, options: { name: string | RegExp; exact: boolean }) => ({
+      isVisible: async (): Promise<boolean> => role === 'button' && options.exact && !!state.accountName
+        && (typeof options.name === 'string' ? options.name === state.accountName : options.name.test(state.accountName)),
     }),
   } as unknown as Page
 
@@ -27,6 +28,17 @@ test('historical native login keeps the authenticated original renderer and remo
 
   expect(workspace).toBe(login.page)
   expect(submit).toHaveBeenCalledOnce()
+  expect(events.listenerCount('window')).toBe(0)
+})
+
+test('native login admits the preserved account language without changing its preferences', async (): Promise<void> => {
+  const events = new EventEmitter()
+  const login = renderer()
+
+  const workspace = await platformLoginWorkspace(events as unknown as ElectronApplication, login.page,
+    async () => { login.state.accountName = '我的账户 · Native member' }, 2000)
+
+  expect(workspace).toBe(login.page)
   expect(events.listenerCount('window')).toBe(0)
 })
 

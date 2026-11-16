@@ -12,6 +12,7 @@ const temporary: string[] = []
 afterEach(() => {
   for (const folder of temporary.splice(0)) { fs.rmSync(folder, { recursive: true, force: true }) }
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
 })
 
 function installation() {
@@ -30,12 +31,22 @@ function installation() {
     identity: { appVersion: '0.1.5', commit: 'new', hermesRoot: root, hermesHome: home, platform: 'darwin' } }
 }
 
-test('NEW health probe observes the authenticated account home and exact UI connection', () => {
+test('the observer checks the installed interpreter, authenticated account home and exact UI connection', () => {
   const fixture = installation()
+  const observer = path.join(fixture.folder, 'fixture-python')
+  vi.stubEnv('HERMES_PYTHON', observer)
   expect(bundledUpgradeHealth(fixture)).toEqual({ commit: 'new' })
-  expect(execFileSync).toHaveBeenCalledWith(path.join(fixture.root, 'tools/python'), [
-    '-B', expect.stringContaining('bundled-gateway-health.py'), fixture.home, 'new', 'http://127.0.0.1:12345'
-  ], expect.objectContaining({ cwd: fixture.root, timeout: 110_000 }))
+  expect(execFileSync).toHaveBeenCalledOnce()
+  const [command, args, options] = vi.mocked(execFileSync).mock.calls[0]
+  expect(args).toEqual([
+    '-B', expect.stringContaining('bundled-gateway-health.py'), fixture.home, 'new', 'http://127.0.0.1:12345',
+    path.join(fixture.root, 'tools/python')
+  ])
+  expect(command).toBe(process.platform === 'win32' ? observer : path.join(fixture.root, 'tools/python'))
+  expect(options?.cwd).toBe(fixture.root)
+  expect(options?.timeout).toBe(110_000)
+  expect(options?.env?.PYTHONPATH).toBe((process.platform === 'win32' ? ['repo'] : ['repo', 'site'])
+    .map(relative => path.join(fixture.root, relative)).join(path.delimiter))
 })
 
 test('OLD installation home and remote UI connection cannot satisfy NEW account health', () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest'
 
-import { newCompletedPair, type TranscriptMessage, transcriptMessages } from './desktop-chat-smoke.ts'
+import { idleComposerControlSelector, newCompletedPair, type TranscriptMessage, transcriptMessages } from './desktop-chat-smoke.ts'
 import { MOCK_REPLY } from './mock-server.ts'
 
 interface TranscriptFixture {
@@ -87,4 +87,35 @@ test('legacy extraction never invents an assistant identity or accepts incomplet
   expect(pair()).not.toBeNull()
   delete user.dataset.slot
   expect(pair()).toBeNull()
+})
+
+test('idle composer controls recognize English and Chinese primary actions including the historical disabled Send', (): void => {
+  for (const [name, type] of [['Send', 'submit'], ['发送', 'submit'],
+    ['Start voice conversation', 'button'], ['开始语音对话', 'button']]) {
+    const host = document.createElement('div')
+    host.innerHTML = `<button type="submit" aria-label="${name}"></button>
+      <form data-slot="composer-root"><button type="button" aria-label="语音"></button>
+      <button type="${type}" aria-label="${name}" ${type === 'submit' ? 'disabled' : ''}></button></form>`
+    const selected = host.querySelectorAll<HTMLButtonElement>(idleComposerControlSelector)
+    expect(selected).toHaveLength(1)
+    expect(selected[0].disabled).toBe(type === 'submit')
+    expect(selected[0].closest('[data-slot="composer-root"]')).not.toBeNull()
+  }
+})
+
+test('secondary voice controls and localized Stop or Pause cannot prove an idle completed turn', (): void => {
+  const { viewport, assistant } = transcript(true)
+  const pair = (): ReturnType<typeof newCompletedPair> => newCompletedPair(transcriptMessages([viewport]), [], 'new checkpoint nonce')
+
+  for (const name of ['Stop', '停止', 'Pause task', '暂停任务']) {
+    const host = document.createElement('div')
+    host.innerHTML = `<form data-slot="composer-root"><button type="button" aria-label="Voice"></button>
+      <button type="button" aria-label="语音"></button><button type="button" aria-label="${name}"></button></form>`
+    expect(host.querySelectorAll(idleComposerControlSelector)).toHaveLength(0)
+    assistant.dataset.streaming = 'true'
+    expect(pair()).toBeNull()
+    delete assistant.dataset.streaming
+    expect(pair()).not.toBeNull()
+    expect(host.querySelectorAll(idleComposerControlSelector)).toHaveLength(0)
+  }
 })

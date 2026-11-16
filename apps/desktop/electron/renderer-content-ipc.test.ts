@@ -6,6 +6,8 @@ import path from 'node:path'
 import type { BrowserWindow, Session } from 'electron'
 import { afterEach, expect, test, vi } from 'vitest'
 
+import { PREVIEW_GUEST_PARTITION } from '../shared/preview-partition'
+
 const native = vi.hoisted(() => ({
   clipboard: { read: vi.fn(), readText: vi.fn(), writeText: vi.fn() },
   showOpenDialog: vi.fn(),
@@ -19,8 +21,6 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: native.showOpenDialog, showSaveDialog: native.showSaveDialog },
   webContents: { fromId: native.fromId }
 }))
-
-import { PREVIEW_GUEST_PARTITION } from '../shared/preview-partition'
 
 import { createAccountWorkspaceIpc } from './account-workspace'
 import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'

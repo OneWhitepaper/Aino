@@ -66,21 +66,33 @@ test.runIf(process.platform !== 'win32')('a relocated payload manifest owns its 
   }
 })
 
-test.runIf(process.platform === 'win32')('Windows proves a real listening child and rejects an unrelated process', async (): Promise<void> => {
+test.runIf(process.platform === 'win32')('Windows observes the installed listener with fixture psutil and rejects an unrelated owner', async (): Promise<void> => {
+  const payload = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-process-snapshot-msix-'))
+  const site = path.join(payload, 'site')
+  fs.mkdirSync(site)
+  fs.writeFileSync(path.join(payload, 'python.exe'), 'The MSIX interpreter cannot be launched externally')
+  fs.writeFileSync(path.join(site, 'psutil.py'), 'raise AssertionError("The observer must use fixture psutil")')
+  fs.writeFileSync(path.join(payload, 'manifest.json'), JSON.stringify({ runtime: { storePython: 'python.exe', sitePackages: 'site' } }))
   const child = spawn(process.execPath, ['-e', 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>console.log(s.address().port))'], { stdio: ['ignore', 'pipe', 'pipe'] })
 
   try {
     const [chunk] = await once(child.stdout, 'data')
     const port = Number(chunk.toString().trim())
-    const snapshot = readProcessSnapshot(port)
+    const snapshot = readProcessSnapshot(port, payload)
 
     expect(snapshot.listeners).toContain(child.pid)
-    const backend = localBackendProcess(port, process.pid)
+    const backend = localBackendProcess(port, process.pid, undefined, payload)
 
     expect(backend).toMatchObject({ pid: child.pid, parentPid: process.pid, ownership: 'child', executable: fs.realpathSync(process.execPath) })
-    expect(() => localBackendProcess(port, child.pid!)).toThrow('found 0')
+    expect(backend.startedAt).toBeGreaterThan(0)
+    expect(() => localBackendProcess(port, child.pid!, undefined, payload)).toThrow('found 0')
+    fs.writeFileSync(path.join(payload, 'manifest.json'), JSON.stringify({ runtime: {
+      storePython: path.relative(payload, process.execPath), sitePackages: 'site'
+    } }))
+    expect(() => readProcessSnapshot(port, payload)).toThrow('observer escapes the installed payload')
   } finally {
     child.kill()
     await once(child, 'exit')
+    fs.rmSync(payload, { recursive: true, force: true })
   }
 })

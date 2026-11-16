@@ -53,6 +53,36 @@ afterEach((): void => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
+test('an unchanged native package consumes a pending update silently after a manual restart', async (): Promise<void> => {
+  for (const nativeVersion of ['0.1.6.0', '0.1.6.7']) {
+    await registerUpdateRelaunch(stable, nativeVersion, { relaunch: (): undefined => undefined })
+
+    assert.deepEqual(consumePendingRelaunch(stable, nativeVersion), {
+      wasUpdateRelaunch: false,
+      fromVersion: nativeVersion
+    })
+    assert.equal(fs.existsSync(marker(stable)), false)
+    assert.deepEqual(consumePendingRelaunch(stable, nativeVersion), { wasUpdateRelaunch: false })
+  }
+})
+
+test('a changed package reports an update once including a native revision-only update', async (): Promise<void> => {
+  for (const [fromVersion, currentVersion] of [
+    ['0.1.6.0', '0.1.7.0'],
+    ['0.1.6.7', '0.1.6.8'],
+    ['1.4.0', '1.5.0']
+  ]) {
+    await registerUpdateRelaunch(stable, fromVersion, { relaunch: (): undefined => undefined })
+
+    assert.deepEqual(consumePendingRelaunch(stable, currentVersion), {
+      wasUpdateRelaunch: true,
+      fromVersion
+    })
+    assert.equal(fs.existsSync(marker(stable)), false)
+    assert.deepEqual(consumePendingRelaunch(stable, currentVersion), { wasUpdateRelaunch: false })
+  }
+})
+
 test('writes and startup consumption stay in each installation despite a shared Hermes home', async (): Promise<void> => {
   const globalMarker: string = path.join(hermesHome, PENDING_RELAUNCH_FILENAME)
   const legacyContents: string = JSON.stringify({ schemaVersion: 1, fromVersion: 'legacy', startedAt: 1 })

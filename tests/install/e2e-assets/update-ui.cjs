@@ -24,7 +24,7 @@ async function openAbout(page, { prepare, log, shot, confirmSettings = false, hi
     page.getByText(/choose a provider later/i),
   ]
   const settings = [
-    page.getByRole('button', { name: /open settings|settings/i }),
+    page.getByRole('button', { name: /open settings|settings|打开设置|^设置$/i }),
     page.getByLabel('Open settings'), page.locator('[aria-label="Open settings"]'),
     page.locator('[title="Open settings"]'),
   ]
@@ -58,7 +58,7 @@ async function openAbout(page, { prepare, log, shot, confirmSettings = false, hi
   }
   await page.waitForTimeout(1_500)
   await shot(page, '02-settings-open')
-  const about = [page.getByRole('tab', { name: /about/i }), page.getByRole('button', { name: /about/i }), page.getByText('About', { exact: true })]
+  const about = [page.getByRole('tab', { name: /about|^关于$/i }), page.getByRole('button', { name: /about|^关于$/i }), page.getByText('About', { exact: true })]
   const aboutDeadline = Date.now() + 30_000
   for (;;) {
     for (const locator of about) {
@@ -105,8 +105,8 @@ async function assertStagedBranch(page, expectedSha, log) {
 }
 
 async function waitForUpdate(page, { log, shot }) {
-  const update = page.getByRole('button', { name: /update now/i }).first()
-  const details = page.getByRole('button', { name: /^see what['’]s new$/i }).first()
+  const update = page.getByRole('button', { name: /update now|^立即更新$/i }).first()
+  const details = page.getByRole('button', { name: /^see what['’]s new$|^查看更新内容$/i }).first()
   const deadline = Date.now() + 180_000
   while (!await update.isVisible().catch(() => false) && Date.now() < deadline) {
     if (await details.isVisible().catch(() => false)) {
@@ -114,7 +114,7 @@ async function waitForUpdate(page, { log, shot }) {
       log("opened See what's new")
       continue
     }
-    await page.getByRole('button', { name: /check now/i }).first().click({ timeout: 5_000 })
+    await page.getByRole('button', { name: /check now|^立即检查$/i }).first().click({ timeout: 5_000 })
       .then(() => log('nudged Check now')).catch(() => {})
     await page.waitForTimeout(15_000)
   }

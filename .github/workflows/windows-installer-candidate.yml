@@ -1,0 +1,274 @@
+name: Windows installer candidate acceptance
+
+# Test signing and local-only AppInstaller feeds. Public opt-in retains receipts
+# only, never packages or raw diagnostics. This never calls a release,
+# channel, R2, Store, Azure signing or public upload workflow.
+on:
+  push:
+    branches: ['validation/windows-installer/**', 'validation/windows-installer-public/**']
+  workflow_dispatch:
+    inputs:
+      include-arm64:
+        description: Also build and accept on the hosted Windows ARM64 runner
+        type: boolean
+        default: false
+      contracts-only:
+        description: Run contracts without building or reaccepting packages
+        type: boolean
+        default: false
+      public-receipts-only:
+        description: Explicit public OneWhitepaper/Aino feature-branch acceptance; retain safe receipts only
+        type: boolean
+        default: false
+      reuse-run-id:
+        description: Exact prior private candidate run ID (empty builds fresh packages)
+        type: string
+        default: ''
+      reuse-artifact-id:
+        description: Exact private candidate artifact ID
+        type: string
+        default: ''
+      reuse-source-commit:
+        description: Full source SHA baked into the reused packages
+        type: string
+        default: ''
+      reuse-arch:
+        description: Native architecture of the reused artifact
+        type: choice
+        options: [x64, arm64]
+        default: x64
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: private-windows-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-contracts:
+    if: >-
+      github.event.repository.private == true ||
+      (github.repository == 'OneWhitepaper/Aino' && github.event.repository.private == false &&
+      startsWith(github.ref, 'refs/heads/validation/windows-installer-public/') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.public-receipts-only)))
+    name: Windows SDK and native updater contracts
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up the locked toolchain
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          test-environment: 'true'
+          extras: '[]'
+          cache: false
+          cache-python: false
+          cache-node: false
+
+      - name: Record the actual contract host
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'aino-windows-contracts'
+          New-Item -ItemType Directory -Path $out | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          @{ os=$os.Caption; version=$os.Version; productType=$os.ProductType; desktopRuntimeTested=$false } |
+            ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $out 'host.json')
+
+      - name: Install locked contract dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile --filter "{./apps/desktop}..." --filter "{./tests-js}..." --ignore-scripts
+
+      - name: Validate native candidate script behavior
+        shell: bash
+        run: |
+          scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
+            tests/scripts/test_windows_installer_public.py tests/scripts/test_windows_candidate_receipts.py \
+            tests/scripts/test_windows_candidate_acceptance.py \
+            tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
+            tests/scripts/install/test_windows_fixture_python.py \
+            tests/scripts/install/test_bundled_gateway_health.py \
+            tests/desktop/test_appinstaller_check_script.py \
+            2>&1 | tee "$RUNNER_TEMP/aino-windows-contracts/candidate-python.log"
+
+      - name: Validate native acceptance harness contracts on Windows
+        shell: pwsh
+        working-directory: tests-js
+        run: |
+          $tests = @(
+            'bundle-input-ranges.test.mjs', 'bundle-inputs.test.mjs',
+            'scripts/platform-account-fixture.test.ts', 'scripts/platform-login-workspace.test.ts',
+            'scripts/desktop-transcript.test.ts',
+            'scripts/desktop-smoke.test.ts', 'scripts/desktop-smoke-window.test.ts',
+            'scripts/desktop-smoke-launch-failure.test.ts', 'scripts/native-update-handoff.test.ts',
+            'scripts/native-update-recovery.test.ts', 'scripts/native-account-preservation.test.ts',
+            'scripts/desktop-smoke-process-snapshot.test.ts', 'windows-bundled-helpers.test.mjs',
+            'scripts/bundled-upgrade-probe.test.ts',
+            'scripts/released-zip-migration.test.ts', 'released-zip-history.test.mjs'
+          )
+          pnpm exec vitest run @tests 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/harness.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate released ZIP extraction contracts on Windows
+        shell: pwsh
+        run: |
+          node --test tests/install/e2e-assets/released-windows-zip.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/released-zip.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate production MSIX manifests with the native SDK
+        shell: pwsh
+        working-directory: apps/desktop
+        env:
+          AZURE_SIGN_PUBLISHER: CN=Aino SDK Contract Fixture
+        run: |
+          node scripts/side-by-side.windows.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/sdk-manifests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate PowerShell waiter and installer contracts
+        shell: pwsh
+        working-directory: apps/desktop
+        env:
+          AZURE_SIGN_PUBLISHER: CN=Aino SDK Contract Fixture
+        run: |
+          pnpm exec vitest run --project electron scripts/windows-bundle-tools.test.mjs scripts/msix-shared.test.mjs scripts/sign-msix.test.mjs scripts/commit-bundles.windows.test.mjs scripts/windows-install-contract.test.mjs electron/appinstaller-checker.test.ts electron/updater/app-installer-source.test.ts electron/updater/app-installer-source-flow.test.ts electron/updater/app-installer-strategy.test.ts electron/updater/app-installer-recovery.test.ts electron/updater/relaunch-waiter.windows-live.test.ts electron/updater/relaunch-waiter-spawn.windows-live.test.ts electron/updater/relaunch-waiter-lifecycle.test.ts e2e/windows-user-state.unit.test.ts 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/contracts.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify native driver contracts and GUI environment restoration
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-bundled-processes.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-native-environment.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate AppInstaller descriptors and candidate admission
+        shell: pwsh
+        run: |
+          node --test tests/install/e2e-assets/windows-bundled-helpers.test.mjs 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/aino-windows-contracts/descriptors.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve private contract receipts
+        if: always() && github.event.repository.private == true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aino-windows-contracts-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/aino-windows-contracts
+            ${{ runner.temp }}/hermes-sxs-sdk-*/*.json
+            ${{ runner.temp }}/hermes-sxs-sdk-*/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  candidate:
+    if: >-
+      !inputs.contracts-only && (github.event.repository.private == true ||
+      (github.repository == 'OneWhitepaper/Aino' && github.event.repository.private == false &&
+      startsWith(github.ref, 'refs/heads/validation/windows-installer-public/') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.public-receipts-only)) &&
+      inputs.reuse-run-id == '' && inputs.reuse-artifact-id == '' && inputs.reuse-source-commit == ''))
+    name: Test-signed installer (${{ matrix.target.arch }})
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 360
+    env:
+      CANDIDATE_ARCH: ${{ matrix.target.arch }}
+      CANDIDATE_PUBLIC_RECEIPTS_ONLY: ${{ github.event.repository.private == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.reuse-run-id != '' && (inputs.reuse-arch == 'arm64' && '[{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]') || ((github.event_name == 'push' || inputs.include-arm64) && '[{"runner":"windows-latest","arch":"x64"},{"runner":"windows-11-arm","arch":"arm64"}]' || '[{"runner":"windows-latest","arch":"x64"}]')) }}
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up the locked toolchain
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          test-environment: 'true'
+          extras: '[]'
+          cache: false
+          cache-python: false
+          cache-node: false
+
+      - name: Build, test sign and accept the native update
+        if: inputs.reuse-run-id == ''
+        # Preparation supplies the build workspaces. The helper installs the
+        # separate acceptance driver after OLD and NEW packaging finishes.
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $mode = @()
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -eq 'true') { $mode += '--public-receipts-only' }
+          python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --execute-e2e @mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reaccept exact private signed candidates
+        if: github.event.repository.private == true && inputs.reuse-run-id != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_RUN_ID: ${{ inputs.reuse-run-id }}
+          REUSE_ARTIFACT_ID: ${{ inputs.reuse-artifact-id }}
+          REUSE_SOURCE_COMMIT: ${{ inputs.reuse-source-commit }}
+          REUSE_ARCH: ${{ inputs.reuse-arch }}
+        run: |
+          python scripts/ci/windows_candidate_reaccept.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Remove disposable signing key and package trust
+        if: always()
+        shell: pwsh
+        run: |
+          $mode = @()
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -eq 'true') { $mode += '--public-receipts-only' }
+          python scripts/ci/windows_installer_candidate.py --cleanup @mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:CANDIDATE_PUBLIC_RECEIPTS_ONLY -ne 'true') {
+            python scripts/ci/windows_candidate_reaccept.py --cleanup
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Curate public receipts without copying packages or raw diagnostics
+        id: public_receipts
+        if: always() && github.event.repository.private == false
+        shell: pwsh
+        run: |
+          python scripts/ci/windows_installer_candidate.py --arch $env:CANDIDATE_ARCH --public-receipts-only --collect-public-receipts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve only the curated public receipt
+        if: always() && github.event.repository.private == false && steps.public_receipts.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aino-windows-public-receipts-${{ matrix.target.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/aino-windows-public-receipts/receipts.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Preserve private acceptance artifacts and diagnostics
+        if: always() && github.event.repository.private == true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aino-windows-installer-candidate-${{ matrix.target.arch }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/aino-windows-installer/*.json
+            ${{ runner.temp }}/aino-windows-installer/*.log
+            ${{ runner.temp }}/aino-windows-installer/*.cer
+            ${{ runner.temp }}/aino-windows-installer/*.msixbundle
+            ${{ runner.temp }}/aino-windows-installer/*.appinstaller
+            ${{ runner.temp }}/aino-windows-reaccept/*.json
+            ${{ runner.temp }}/aino-windows-reaccept/*.log
+            ${{ runner.temp }}/hermes-bundled-update/proof
+            ${{ runner.temp }}/hermes-bundled-update/outside-job-*/*.log
+            ${{ runner.temp }}/hermes-bundled-update/outside-job-*/exit-code
+          if-no-files-found: warn
+          retention-days: 7

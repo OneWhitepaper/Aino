@@ -3,7 +3,8 @@ import {
   parseCheckOutput,
   type PayloadPythonRunner,
   triggerAppInstallerUpdate,
-  win32AppInstallerFeedPath
+  win32AppInstallerFeedPath,
+  win32AppInstallerFeedUrl
 } from '../app-updater'
 // updater/app-installer.ts — the win32 out-of-store MSIX strategy.
 //
@@ -19,12 +20,16 @@ import {
 // marker) are injected, so vitest covers the arm without a payload.
 import { PRODUCT_NAME } from '../product-identity'
 
+import { readAppInstallerSource } from './app-installer-source'
 import type { ChannelTarget } from './channel'
 import { channelPublicBase } from './channel-protocol'
 import { applyPackagedHandoff } from './packaged-handoff'
 import type { RelaunchRegistration } from './relaunch'
 
 import type { UpdaterApplyResultWire, UpdaterStatusWire } from './index'
+
+const SOURCE_MISMATCH =
+  'The registered App Installer source differs from the configured feed; remove updates.desktop_feed_base_url or reinstall using the target .appinstaller file to register it.'
 
 export interface AppInstallerStrategyDeps {
   /** Absolute path to the bundled payload python (tools/<entry>/python.exe). */
@@ -111,10 +116,24 @@ export class AppInstallerStrategy {
       }
     }
 
+    return appInstallerCheckToStatus(await this.checkRegisteredSource(), this.deps.appVersion)
+  }
+
+  private async checkRegisteredSource(): Promise<AppInstallerCheck> {
     const { code, stdout } = await this.deps.run(this.deps.python, this.deps.module)
     const check = parseCheckOutput(code, stdout)
 
-    return appInstallerCheckToStatus(check, this.deps.appVersion)
+    if (
+      this.deps.feedBaseUrl &&
+      check.sourceUri !== win32AppInstallerFeedUrl(this.deps.feedBaseUrl, this.deps.channel, this.deps.light)
+    ) {
+      return {
+        available: null,
+        error: SOURCE_MISMATCH
+      }
+    }
+
+    return check
   }
 
   async apply(): Promise<UpdaterApplyResultWire> {
@@ -135,9 +154,18 @@ export class AppInstallerStrategy {
       }
     }
 
-    if (!feedBaseUrl && !sourceUri) {
-      const { code, stdout } = await this.deps.run(this.deps.python, this.deps.module)
-      sourceUri = parseCheckOutput(code, stdout).sourceUri
+    if (!feed) {
+      const source = await readAppInstallerSource(this.deps)
+
+      if (source.kind === 'error') {
+        throw new Error(source.error)
+      }
+
+      sourceUri = source.kind === 'registered' ? source.sourceUri : undefined
+
+      if (feedBaseUrl && sourceUri !== win32AppInstallerFeedUrl(feedBaseUrl, this.deps.channel, this.deps.light)) {
+        throw new Error(SOURCE_MISMATCH)
+      }
 
       if (sourceUri) {
         channelPublicBase(sourceUri)

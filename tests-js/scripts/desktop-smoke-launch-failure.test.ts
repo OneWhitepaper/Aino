@@ -35,3 +35,25 @@ test('an app that dies before Playwright attaches leaves a failed receipt carryi
     fs.rmSync(work, { recursive: true, force: true })
   }
 })
+
+test('the post-update CLI accepts retained-account enforcement before attempting its launch', (): void => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-retained-cli-'))
+  const out = path.join(work, 'out')
+
+  try {
+    // Node rejects Electron's launch arguments. Reaching that error proves the
+    // real CLI accepted the required account flag instead of rejecting it first.
+    const result = spawnSync(process.execPath, [driver, '--exe', process.execPath, '--root', work, '--origin', 'bundled',
+      '--home', path.join(work, 'home'), '--user-data', path.join(work, 'user-data'), '--out', out,
+      '--phase', 'new', '--expect-commit', '0'.repeat(40), '--platform-account', '--require-existing-account'],
+    { cwd: work, encoding: 'utf8', timeout: 60_000 })
+
+    expect(result.status).toBe(1)
+    expect(fs.existsSync(path.join(out, 'desktop-chat-new.json'))).toBe(true)
+    const receipt = JSON.parse(fs.readFileSync(path.join(out, 'desktop-chat-new.json'), 'utf8'))
+    expect(receipt).toMatchObject({ status: 'failed', phase: 'new' })
+    expect(receipt.error).toContain('Process failed to launch!')
+    expect(receipt.account).toMatchObject({ existingSessionRequired: true,
+      authenticatedProfileRequests: 0, authenticationPreservedWithoutLogin: false })
+  } finally { fs.rmSync(work, { recursive: true, force: true }) }
+})

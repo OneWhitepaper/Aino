@@ -135,9 +135,12 @@ The following limits from the earlier audit are resolved:
   7 installer tests passed in CI.
 - Service runtime selection uses the shared selected-environment resolver.
   PM facts supply managed Node paths. Native fixtures use disposable homes.
-- The Windows updater uses its registered App Installer source unless an
-  explicit feed override is configured. It downloads the descriptor before
-  teardown and opens the local file. It does not require the disabled
+- The Windows updater uses its registered App Installer source. An explicit
+  `updates.desktop_feed_base_url` must resolve to that exact registered descriptor;
+  otherwise checking and installation stop with guidance to remove the override
+  or reinstall through the target `.appinstaller` file to register its source.
+  It downloads the descriptor before teardown and opens the local file.
+  It does not require the disabled
   `ms-appinstaller:` protocol.
 
 ## Non-E2E closeout
