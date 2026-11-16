@@ -193,6 +193,272 @@ set CI admission variables to run CI-only scripts on an ordinary machine.
    pretrusted standard-user lifecycle, not production signing trust. Production
    installation without manually added trust requires its own acceptance.
 
+### Existing helper commands for the manual handoff
+
+The complete candidate/reaccept entry points, native driver and GUI environment
+publisher require an elevated disposable Actions runner. They cannot certify a
+local standard-user session. Do not fabricate `GITHUB_ACTIONS`, `RUNNER_*` or
+`AINO_PRIVATE_*` to run them. The recipe below reuses their input, certificate,
+feed and fixture helpers; it remains a manual acceptance awaiting a host and does
+not generate the driver's automatic `proof/acceptance.json`.
+
+Run tool commands from the repository root using the locked PM Python/Node;
+prepare isolated, process-local `HERMES_HOME`/`HERMES_RUNTIME_DIR` and activate as
+in the [developer workflow](../../../website/docs/reference/package-management.md#developer-workflow),
+then run `just js-install-tests`. Ensure `openssl` is on PATH. Never persist those
+tool-shell data-home overrides or launch Aino from the tool shell. Replace all
+placeholders below, use a new absolute work directory, and record
+`git rev-parse HEAD` as the harness revision separately from the baked source.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$Repo = (Get-Location).Path
+$Python = (Get-Command python.exe).Source
+$Work = '<new-absolute-work-directory>'
+$Repository = '<owner/private-repository>'
+$Source = '<full-40-character-candidate-source-commit>'
+$Arch = 'x64' # Match the actual host and candidate; use arm64 on ARM64.
+$RunId = '<completed-origin-run-id>'
+$ArtifactId = '<exact-candidate-artifact-id>'
+New-Item -ItemType Directory -Path $Work | Out-Null
+$Proof = Join-Path $Work 'proof'
+New-Item -ItemType Directory -Path $Proof | Out-Null
+gh repo view $Repository --json isPrivate,nameWithOwner |
+    Set-Content -Encoding UTF8 "$Work\origin-repository.json"
+if ($LASTEXITCODE -ne 0) { throw 'Private repository lookup failed' }
+$facts = Get-Content -Raw "$Work\origin-repository.json" | ConvertFrom-Json
+if (-not $facts.isPrivate -or $facts.nameWithOwner -cne $Repository) { throw 'Exact private repository required' }
+gh api "repos/$Repository/actions/runs/$RunId" | Set-Content -Encoding UTF8 "$Work\origin-run.json"
+if ($LASTEXITCODE -ne 0) { throw 'Origin run lookup failed' }
+gh api "repos/$Repository/actions/artifacts/$ArtifactId" | Set-Content -Encoding UTF8 "$Work\origin-artifact.json"
+if ($LASTEXITCODE -ne 0) { throw 'Artifact lookup failed' }
+@'
+import json, os, sys
+from pathlib import Path
+from scripts.ci.windows_candidate_reuse import validate_origin, relocate_manifest
+from scripts.ci.windows_candidate_reaccept import download_archive, extract_inputs
+work, repository, source, arch, run_id, artifact_id = sys.argv[1:]
+work = Path(work)
+artifact = json.loads((work / "origin-artifact.json").read_text(encoding="utf-8-sig"))
+run = json.loads((work / "origin-run.json").read_text(encoding="utf-8-sig"))
+origin = validate_origin(artifact, run, source, arch, int(run_id), int(artifact_id))
+(work / "artifact-origin.json").write_text(json.dumps(origin, indent=2) + "\n", encoding="utf-8")
+archive, inputs = work / "candidate.zip", work / "inputs"
+download_archive(repository, int(artifact_id), artifact["digest"], artifact["size_in_bytes"], archive, dict(os.environ))
+inputs.mkdir()
+extract_inputs(archive, inputs)
+relocate_manifest(inputs, source, arch)
+archive.unlink()
+'@ | & $Python - $Work $Repository $Source $Arch $RunId $ArtifactId
+if ($LASTEXITCODE -ne 0) { throw 'Candidate origin, archive or input verification failed' }
+$Inputs = Join-Path $Work 'inputs'
+$m = Get-Content -Raw "$Inputs\reuse-inputs.json" | ConvertFrom-Json
+```
+
+Use an authenticated `gh` session with access to the exact private repository;
+keep tokens out of commands and evidence. These existing functions bind the
+completed origin workflow, source, architecture, artifact ID/name, expiry,
+archive digest/size and package SHA-256 values. Extraction admits only these
+five original files: `old.msixbundle`, `new.msixbundle`, `candidate-inputs.json`,
+`candidate-public.cer`, `candidate-receipt.json`. Keep them unchanged under
+`$Work\inputs`; `reuse-inputs.json` is a separate derived manifest with relocated
+absolute paths. OLD/NEW must preserve identity/publisher/application ID and
+increase native version. A failed but completed origin can supply packages;
+its artifact is not a passing lifecycle receipt. Rebuild expired two-day
+certificates instead of changing the clock or checks.
+
+In a separate administrator shell at the same checkout, set the same explicit
+`$Python` and `$Work`, then use the existing public-certificate helper:
+
+```powershell
+@'
+import os, sys
+from pathlib import Path
+from scripts.ci.windows_candidate_reaccept import trust_candidate
+print(trust_candidate(Path(sys.argv[1]) / "inputs", dict(os.environ)))
+'@ | & $Python - $Work
+if ($LASTEXITCODE -ne 0) { throw 'Candidate public certificate trust failed' }
+```
+
+It rejects private-key input, expired/not-yet-valid certificates, foreign
+subjects/signers and preexisting trust, verifies both signatures after importing
+only into `LocalMachine\TrustedPeople`, and writes the owned thumbprint to
+`$Work\trust-state.json`. Sign out of the administrator; use only the standard
+user for the lifecycle. In its tool shell retain these host/token facts and
+confirm a non-administrator token, desktop `ProductType=1` and actual
+`10.0.19045.*` for the Win10 claim (record Windows 11 separately):
+
+```powershell
+Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,ProductType,OSArchitecture |
+    ConvertTo-Json | Set-Content -Encoding UTF8 "$Proof\host.json"
+Get-CimInstance Win32_Processor | Select-Object Name,Architecture |
+    ConvertTo-Json | Set-Content -Encoding UTF8 "$Proof\processor.json"
+Get-AppxPackage Microsoft.DesktopAppInstaller | Select-Object Name,Version,PackageFullName |
+    ConvertTo-Json | Set-Content -Encoding UTF8 "$Proof\app-installer.json"
+whoami /all | Set-Content -Encoding UTF8 "$Proof\token.txt"
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Standard-user token required' }
+```
+
+In another PM-activated standard-user console at the same checkout, set the same
+`$Work` and keep the existing combined inference/account fixture alive across
+ZIP, OLD and automatic NEW. The second script argument is a prior-port
+placeholder; the third is the account environment output:
+
+```powershell
+node tests/install/e2e-assets/mock-provider.mjs "$Work\mock-url" http://127.0.0.1:0 "$Work\account-env.json"
+```
+
+Wait for both files. Back in the first tool shell extract only the uppercase
+keys below: the JSON also contains lowercase proxy aliases, which Windows
+PowerShell 5.1 cannot decode as distinct keys. Save original User values,
+including absent values, then write the fixture values and reuse only the
+unguarded environment broadcast function:
+
+```powershell
+$fixture = @'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    values = json.load(source)
+keys = ("HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS")
+print(json.dumps({key: values[key] for key in keys}))
+'@ | & $Python - "$Work\account-env.json" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Fixture environment extraction failed' }
+$prior = @{}
+foreach ($entry in $fixture.PSObject.Properties) {
+    $prior[$entry.Name] = [Environment]::GetEnvironmentVariable($entry.Name, 'User')
+}
+$prior | ConvertTo-Json | Set-Content -Encoding UTF8 "$Proof\prior-user-environment.json"
+foreach ($entry in $fixture.PSObject.Properties) {
+    [Environment]::SetEnvironmentVariable($entry.Name, [string]$entry.Value, 'User')
+}
+. .\tests\install\e2e-assets\windows-native-environment.ps1
+Send-NativeEnvironmentChange
+$UserData = Join-Path $env:APPDATA 'Aino'
+$AccountHome = @'
+import { resolveDesktopHermesHome } from './apps/desktop/electron/data-paths.mjs'
+console.log(resolveDesktopHermesHome({ home: process.env.USERPROFILE, accountWorkspace: {
+  userData: process.argv[2], origin: 'https://api.agentera.com.cn', userId: '17'
+} }))
+'@ | node --input-type=module - $UserData
+if ($LASTEXITCODE -ne 0) { throw 'Account home resolution failed' }
+$MockUrl = (Get-Content -Raw "$Work\mock-url").Trim()
+node tests-js/scripts/mock-provider-config.ts $AccountHome $MockUrl
+if ($LASTEXITCODE -ne 0) { throw 'Account mock configuration failed' }
+node tests/install/e2e-assets/released-windows-zip.mjs --arch $Arch --out "$Work\released-zip" --python $Python --report "$Proof\released-zip-artifact.json"
+if ($LASTEXITCODE -ne 0) { throw 'Released ZIP provenance verification failed' }
+```
+
+Keep normal `%APPDATA%\Aino` and the account home returned by the production
+resolver. A fresh dedicated user must have no existing Aino state or User
+`HERMES_HOME`, `HERMES_DESKTOP_USER_DATA_DIR` or `HERMES_DATA_DIR_SUFFIX` override.
+Do not change User `APPDATA`/`LOCALAPPDATA` or import the fixture CA into a store.
+Open the verified ZIP executable recorded in `released-zip-artifact.json` from
+File Explorer. Sign in with `+8613800138000`, accept the fixture agreement, select
+keep signed in, request a code and enter `246810`. Create the unique chat/Bot/model
+evidence in checklist step 4 and retain actual account-home/session/message IDs.
+
+A User environment write and broadcast do not prove GUI inheritance. For the
+Explorer-launched ZIP, Start-launched OLD and actual automatic NEW, retain the
+main-process PID/birth time, the five inherited fixture values and authenticated
+fixture request/mock-response witnesses. If that binding cannot be established,
+mark the stage untested. A tool-shell launch cannot substitute for Start or
+automatic NEW. Keep the fixture console running; use Ctrl+C at the end so it
+writes `account-env.json.proof.json`, and retain that proof without tokens.
+
+In a third standard-user tool console at the same checkout, set the same `$Work`
+and keep the existing byte-range-capable loopback feed running:
+
+```powershell
+node tests/install/e2e-assets/windows-bundled-helpers.mjs serve --feed "$Work\feed" --port-file "$Work\feed-url"
+```
+
+After its URL file exists, return to the first shell. These `descriptor` commands
+call the existing local XML writer; they do not publish to a release service:
+
+```powershell
+$Feed = Join-Path $Work 'feed'
+Copy-Item "$Inputs\old.msixbundle","$Inputs\new.msixbundle" -Destination $Feed
+$Base = (Get-Content -Raw "$Work\feed-url").Trim()
+$Helper = Join-Path $Repo 'tests\install\e2e-assets\windows-bundled-helpers.mjs'
+$Shared = Join-Path $Repo 'scripts\msix-shared.mjs'
+$env:HERMES_PYTHON = $Python
+node $Helper descriptor --feed $Feed --base-url $Base --identity $m.old.identity --publisher $m.old.publisher --version $m.old.version --bundle old.msixbundle --msix-shared $Shared
+if ($LASTEXITCODE -ne 0) { throw 'OLD descriptor failed' }
+if (Get-AppxPackage -Name $m.old.identity) { throw 'Refusing to replace an existing package' }
+Add-AppxPackage -AppInstallerFile "$Feed\update.appinstaller"
+# Perform checklist step 4 from the actual Start entry before continuing.
+node $Helper descriptor --feed $Feed --base-url $Base --identity $m.new.identity --publisher $m.new.publisher --version $m.new.version --bundle new.msixbundle --msix-shared $Shared
+if ($LASTEXITCODE -ne 0) { throw 'NEW descriptor failed' }
+```
+
+For each installed stage compare `Get-AppxPackage -Name $m.old.identity`,
+`Get-AppxPackageManifest` and `app\resources\install-stamp.json` with the pinned
+identity, architecture, application ID, version, tag and source. Retain the
+matching `Get-StartApps` entry. Observe automatic NEW before any manual launch.
+For the separate preparation-failure snapshot, first let Settings report NEW
+available, then move `update.appinstaller` to `update.appinstaller.recovery-held`
+before clicking update. Require the apply preparation's real descriptor HTTP
+404, the same usable OLD process/window, no pending relaunch marker and another
+completed chat. Restore the descriptor in every outcome. A 404 before the
+availability check does not test this gate. Cancellation requires an observed
+Aino-bound App Installer window; missing UI is unmet coverage. Uninstall only
+the exact current-user package returned by `Get-AppxPackage -Name
+$m.old.identity`, then verify external data survives uninstall/reinstall.
+
+Save `proof/manual-acceptance.json` separately from automatic driver receipts.
+Use `passed`, `failed` or `untested` per stage and retain screenshots, native
+package/stamp facts, process birth times, account-home/history rows, gateway
+owner replacement, fixture requests and cleanup receipts. This template starts
+pending; it is not a passing receipt:
+
+```json
+{
+  "kind": "manual-windows-native-lifecycle", "status": "pending",
+  "harnessCommit": "<full SHA>", "testedSourceCommit": "<full SHA>",
+  "artifactOrigin": "../artifact-origin.json", "candidateInputs": "../inputs/candidate-inputs.json",
+  "host": "host.json", "processor": "processor.json", "appInstaller": "app-installer.json", "token": "token.txt", "isElevated": false,
+  "trust": { "mode": "pretrusted-test-certificate", "receipt": "../trust-state.json" },
+  "fixtureBinding": { "zip": "untested", "oldStart": "untested", "automaticNew": "untested", "evidence": [] },
+  "releasedZip": { "status": "untested", "artifact": "released-zip-artifact.json", "accountHome": "", "sessionIds": [], "messageIds": [] },
+  "migration": { "status": "untested", "gatewayOwners": [], "evidence": [] },
+  "update": { "status": "untested", "oldPid": null, "oldBirthTime": null, "newPid": null, "newBirthTime": null, "automaticNewObservedBeforeManualLaunch": false, "evidence": [] },
+  "preparation404": { "status": "untested", "sameOldProcess": false, "evidence": [] },
+  "cancelManualReopen": { "status": "untested", "installerObserved": false, "evidence": [] },
+  "uninstallReinstall": { "status": "untested", "dataRetained": false, "evidence": [] },
+  "cleanup": { "userEnvironmentRestored": false, "ownedPackageAndDataRemoved": false, "testCertificateRemoved": false },
+  "productionTrustTested": false
+}
+```
+
+On success or failure, restore the exact saved User values and broadcast again;
+stop the two owned consoles and remove only this test's package and dedicated
+user data after retaining evidence:
+
+```powershell
+$prior = Get-Content -Raw "$Proof\prior-user-environment.json" | ConvertFrom-Json
+foreach ($entry in $prior.PSObject.Properties) {
+    [Environment]::SetEnvironmentVariable($entry.Name, $entry.Value, 'User')
+}
+Send-NativeEnvironmentChange
+```
+
+Finally, in the separate administrator shell at the same checkout, use the
+existing cleanup to remove only the certificate owned by `trust-state.json`:
+
+```powershell
+@'
+import os, sys
+from pathlib import Path
+from scripts.ci.windows_candidate_reaccept import cleanup_trust
+cleanup_trust(Path(sys.argv[1]), dict(os.environ))
+'@ | & $Python - $Work
+if ($LASTEXITCODE -ne 0) { throw 'Owned candidate trust cleanup failed' }
+```
+
+This handoff establishes only a pretrusted standard-user lifecycle. Production
+installation/update without manually added trust needs separate acceptance.
+
 The account fixture uses the real desktop bridge and encrypted local token store,
 but synthetic authentication and mock inference. It does not certify production
 SMS, billing or platform-model availability. See [BUILDING.md](../BUILDING.md)
