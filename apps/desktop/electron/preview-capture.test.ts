@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import type { Session } from 'electron'
 import { expect, test, vi } from 'vitest'
 
+import { previewPartitionForProfile } from '../shared/preview-partition'
+
 import {
   captureOwnedPreviewContents,
   capturePreviewContents,
@@ -10,7 +12,7 @@ import {
   normalizeCaptureRect
 } from './preview-capture'
 import { registerNativePreviewGuest, setNativePreviewOwner } from './preview-guest-owner'
-import { applyPreviewGuestAttachPrefs, previewPartitionForProfile } from './preview-guest-throttle'
+import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
 
 function ownedPreview() {
   const owner = { getType: () => 'window', isDestroyed: () => false }

@@ -3,15 +3,14 @@ import { EventEmitter } from 'node:events'
 import type { Session, WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 
+import { isPreviewPartition, PREVIEW_GUEST_PARTITION, previewPartitionForProfile } from '../shared/preview-partition'
+
 import { isPreviewGuestSession, registerNativePreviewGuest, setNativePreviewOwner } from './preview-guest-owner'
 import {
   applyPreviewGuestAttachPrefs,
   beginPreviewGuestActivity,
   endPreviewGuestActivity,
-  executePreviewGuestScript,
-  isPreviewPartition,
-  PREVIEW_GUEST_PARTITION,
-  previewPartitionForProfile
+  executePreviewGuestScript
 } from './preview-guest-throttle'
 import { createStreamThrottle } from './stream-throttle'
 

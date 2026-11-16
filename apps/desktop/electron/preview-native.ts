@@ -11,11 +11,12 @@ import type {
   NativePreviewMountRequest,
   NativePreviewSnapshot
 } from '../shared/preview-native'
+import { isPreviewPartition } from '../shared/preview-partition'
 
 import { assertPreviewBrowserDialogResolved } from './preview-browser-interactions'
 import { registerNativePreviewGuest, setNativePreviewOwner } from './preview-guest-owner'
 import { GUEST_EXTERNAL_CHANNEL } from './preview-guest-preload'
-import { hasPreviewGuestApproval, isPreviewPartition } from './preview-guest-throttle'
+import { hasPreviewGuestApproval } from './preview-guest-throttle'
 import { createPreviewPageZoom, type PreviewPageZoom } from './preview-page-zoom'
 
 const PREFIX = 'hermes:preview-native:'
