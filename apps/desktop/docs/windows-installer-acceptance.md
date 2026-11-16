@@ -166,8 +166,13 @@ runners, release/feed uploads or installer publication.
 Public artifacts contain only the generated
 `aino-windows-public-receipts/receipts.json`, a typed projection of fixed source,
 architecture, package digest/version and native gate/status fields. Candidate
-build status, complete native acceptance and cleanup remain separate; missing
-or invalid native receipts do not establish acceptance. Raw logs, screenshots,
+build status, complete native acceptance and cleanup remain separate. The top-level
+`status` is `accepted` only when candidate/package provenance, complete native
+and supporting migration/automatic-NEW/recovery/state receipts, and successful
+certificate cleanup all agree. Otherwise it is `unaccepted`, with fixed boolean
+`acceptanceGates` identifying unmet evidence; copied candidate/native `accepted`
+claims are downgraded. Missing or invalid receipts never establish acceptance.
+Raw logs, screenshots,
 account/environment/history payloads, certificates/state, private keys, installers,
 ZIPs and the full workspace are never selected for public artifact upload. Raw
 diagnostics stay in the ephemeral runner and the masked Actions console. Private

@@ -1,4 +1,4 @@
-name: Private Windows installer candidate
+name: Windows installer candidate acceptance
 
 # Test signing and local-only AppInstaller feeds. Public opt-in retains receipts
 # only, never packages or raw diagnostics. This never calls a release,
@@ -90,6 +90,7 @@ jobs:
         run: |
           scripts/run_tests.sh tests/scripts/test_windows_installer_candidate.py \
             tests/scripts/test_windows_installer_public.py tests/scripts/test_windows_candidate_receipts.py \
+            tests/scripts/test_windows_candidate_acceptance.py \
             tests/scripts/test_windows_candidate_reaccept.py tests/scripts/test_windows_candidate_reuse.py \
             tests/scripts/install/test_windows_fixture_python.py \
             tests/scripts/install/test_bundled_gateway_health.py \

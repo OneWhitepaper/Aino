@@ -116,7 +116,8 @@ def test_missing_malformed_oversized_and_untyped_receipts_never_claim_acceptance
     assert result["migration"] == {"document": "invalid"}
     assert result["cancellation"] == {"document": "missing"}
     assert SECRET not in json.dumps(result)
-    assert "accepted" not in json.dumps(result)
+    assert result["status"] == "unaccepted"
+    assert all(summary.get("status") != "accepted" for summary in result.values() if isinstance(summary, dict))
 
 
 @pytest.mark.parametrize("source,arch", [("main", "x64"), (SOURCE, "amd64"), (None, "x64")])
