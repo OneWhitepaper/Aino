@@ -33,6 +33,7 @@
 - [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. x64 later failed and ARM64 stalled at replacement/automatic NEW; neither is accepted.
 - [x] Add bounded package/process observations, OLD-bound waiter-stage diagnostics, deployment HRESULT projection and bounded disposable cleanup; flush migration/recovery evidence before potentially blocking teardown. Product gateway behavior remains unchanged pending evidence.
 - [x] Reproduce x64 with bounded diagnostics: 282 samples confirm OLD registration unchanged and waiter package-timeout; deployment query has no matching events.
+- [x] Complete and verify the expanded diagnostic/control chain on Windows: shared signed-framework UIA initialization, owned descendant activity/timeout cleanup, truthful native event-query outcomes and all existing Windows contracts (`43876559015`). This does not close native package replacement/activation acceptance.
 - [ ] Establish the remaining package-replacement cause with installer-window/process facts; verify the strict confirmation selection and then reaccept the complete native lifecycle.
 - [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
 - [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
@@ -74,7 +75,10 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   reproduced the former false-empty result and passed locally after the fix.
   The Windows lane will also exercise the native empty-selection error. Earlier
   `queryStatus=ok` receipts cannot rule out a suppressed read failure. The new
-  Windows PowerShell 5.1 verification is pending.
+  Windows PowerShell 5.1 verification passed in `43876559015` at
+  `5b48381c8c`, job `133331017203`: native empty-event selection and all
+  existing Windows suites succeeded (159 Python, four skips; 74 JS, nine skips;
+  eight extractor, eight SDK, 113 updater/state and nine observer tests).
 - Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
   Its Windows Python contracts passed 158 tests (four skips), including the four
   actual worker/tree cleanup tests. Contracts then stopped at a preexisting

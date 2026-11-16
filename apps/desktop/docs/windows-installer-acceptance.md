@@ -38,6 +38,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Diagnostic Windows contracts (`c0ff3179dc`, run `43846856927`, job `133229083523`) | SUCCESS: 149 Python (four skips), existing JS/SDK/updater/state/UIA contracts and all seven native-observation tests passed, including real PowerShell provenance/process queries and killed-child deadlines |
 | Focused Windows provider/timeout contracts (`6bd68031f5`, run `43873843738`, job `133321640396`) | SUCCESS: explicit framework UIA registration changes the same Win32 control from Pane to Button; all existing Python/JS/SDK/updater/native-observation suites passed |
 | Integrated provider/process-tree Windows contracts (`0e261a89a0`, run `43875036256`, job `133325740395`) | SUCCESS: 159 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state plus all existing driver/observer/environment/descriptor suites |
+| Complete diagnostic contracts (`5b48381c8c`, run `43876559015`, job `133331017203`) | SUCCESS: shared UIA initializer, actual owned worker/tree cleanup/activity, native empty-event query, failure-vs-empty classification, and all existing Windows suites; complete package lifecycle still unaccepted |
 | Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | Both failed at unchanged OLD registration; no automatic NEW; both owned-package and disposable-trust cleanups succeeded |
 | Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
@@ -357,8 +358,11 @@ its specific `NoMatchingEventsFound` result becomes an empty successful query;
 access, channel and provider errors remain failed bounded probes. A regression
 first reproduced the false-empty result, then passed with the correction. It
 also preserves matched HRESULT/count facts and will exercise the actual native
-empty-selection error on Windows. The new Windows PowerShell 5.1 receipt is
-pending. Earlier receipts that report `queryStatus=ok` without events do not by
+empty-selection error on Windows. Windows PowerShell 5.1 verification passed in `43876559015` at
+`5b48381c8c`, job `133331017203`, including the real native empty-selection
+case and all existing Windows contracts (159 Python, four skips; 74 JS, nine
+skips; eight extractor; eight SDK; 113 updater/state; nine native-observation;
+existing driver/environment and four descriptor checks). Earlier receipts that report `queryStatus=ok` without events do not by
 themselves distinguish a real empty selection from a suppressed native read error.
 
 A public opt-in ref ending in `/contracts-only` runs the standard Windows
