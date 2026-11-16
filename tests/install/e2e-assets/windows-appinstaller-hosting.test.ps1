@@ -49,7 +49,7 @@ try {
             if (-not $handle -or $before -contains $handle -or $window.Current.IsOffscreen) { continue }
             foreach ($process in $processes) {
                 $condition = [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.ProcessId)
+                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$process.ProcessId)
                 $children = $window.FindAll([System.Windows.Automation.TreeScope]::Subtree, $condition)
                 if ($children.Count -eq 0) { continue }
                 $owned += [pscustomobject]@{ Element=$window; Handle=$handle;
