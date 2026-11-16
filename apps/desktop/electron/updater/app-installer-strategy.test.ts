@@ -202,6 +202,24 @@ describe('AppInstallerStrategy.apply', () => {
     expect(result).toEqual({ ok: true, manual: true, bundled: true, mechanism: 'app-installer' })
     expect(calls).toEqual([])
   })
+
+  it.each(['check failed: Access is denied', 'check failed: timeout', 'winrt import failed: missing projection'])(
+    'retains an unknown registered-source error before any update side effects: %s',
+    async (error: string): Promise<void> => {
+      const progress: string[] = []
+      const { deps, calls } = makeDeps({
+        feedBaseUrl: '',
+        run: async () => ({ code: 1, stdout: JSON.stringify({ available: null, error }) }),
+        emitUpdateProgress: event => { progress.push(event.stage) }
+      })
+
+      const strategy = new AppInstallerStrategy(deps)
+      expect(await strategy.check()).toMatchObject({ updateAvailable: undefined, error })
+      await expect(strategy.apply()).rejects.toThrow(error)
+      expect(calls).toEqual([])
+      expect(progress).toEqual([])
+    }
+  )
 })
 
 it.each([

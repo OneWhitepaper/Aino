@@ -154,7 +154,7 @@ export class AppInstallerStrategy {
     if (!feed) {
       const check = await this.checkRegisteredSource()
 
-      if (feedBaseUrl && check.available === null) {
+      if (check.available === null) {
         throw new Error(check.error)
       }
 
