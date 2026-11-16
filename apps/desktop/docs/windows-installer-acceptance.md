@@ -36,7 +36,7 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Windows updater/state and descriptor contracts                 | 68 updater/state and four descriptor tests passed                                |
 | Windows PowerShell 5.1 driver contracts                        | Five process/English/Chinese confirmation contracts passed                       |
 | Released v0.1.5 ZIP launch, account login and chat             | Observed on x64 with synthetic account and mock inference                        |
-| Real ZIP to MSIX retained-login migration                      | Partial: first MSIX installed, retained login observed; complete journey pending |
+| Real ZIP to MSIX retained-login migration                      | Passed on diagnostic source `00e438fc2b`; current-source reaccept pending          |
 | In-app update and actual automatic NEW workspace               | Pending                                                                          |
 | Preparation failure, OS cancellation and manual OLD reopen     | Pending                                                                          |
 | Native uninstall preserving user data                          | Pending                                                                          |
@@ -106,6 +106,30 @@ admission rule remains strict. `43777044333` instead uses the already completed
 origin run's exact artifact `14181849856`, with signed source `00e438fc2b`.
 This diagnostic source lacks the checker correction, so even a complete pass
 cannot certify the corrected `ec74611f0d` production source.
+
+Diagnostic run `43777044333` completed ZIP-to-first-MSIX migration. It retained
+encrypted authentication without another login, verified the exact old chat
+rows through the installed UI, naturally replaced the ZIP gateway, and passed
+all 25 account/Bot/configuration/file preservation checks. It then failed:
+descriptor-404 preparation recovery opened a manual-terminal-update card, and
+the native update driver repeatedly selected About before Check now. Therefore
+update, automatic NEW, cancellation and uninstall remain unaccepted.
+
+`0eef5140dd` corrects navigation priority and busy-state waiting; Windows
+job `133018750411` passed the expanded six driver contracts and the full existing
+contract selection. `1598939d05` fixes the product's no-override apply path so an
+unknown checker result rejects with its original error before preparation,
+marker registration or teardown. Three regressions failed before that change
+and passed afterward; 40 related Electron tests passed.
+
+Current source `27bbc1d8f2` is building both architectures in private run
+[`43783849762`](https://github.com/OneWhitepaper/Aino-private-validation-20261105/actions/runs/43783849762).
+It also captures bounded raw checker output from the actual installed main
+process before recovery apply. Four diagnostic/recovery contracts, full desktop
+and harness typechecks, changed-file lint and all 15 repository checks passed.
+Neither the diagnostic manual-card failure nor the screenshots distinguish
+old API denial from missing package identity; that requires the new receipt.
+Older signed pairs remain useful diagnostics but cannot certify this source.
 
 ## Remaining native receipts
 
