@@ -30,6 +30,7 @@
 - [x] Implement explicit public receipts-only execution and complete, fail-closed 13-gate proof projection; independent review of `006d35b6b3` is clean.
 - [x] Implement source-only apply and bounded UIA About scrolling at `f5d12ce3dc`; local Python, Electron, PowerShell, type/lint and repository checks pass.
 - [x] Complete independent review of `f5d12ce3dc` (no Critical/Important findings) and start public standard-runner run `43801657955`; its Windows contracts job passed. Both native jobs completed with a driver UIA error after migration and preparation recovery passed.
+- [x] Correct the UIA API at `3fd5e9c26c`; follow-up run `43819576334` Windows contracts job `133139302779` passed, including the actual native-control regression. Native package jobs remain in progress.
 - [ ] Accept the latest-source test-signed package's complete native lifecycle on available x64 and ARM64 hosts.
 - [ ] Verify actual Windows 11 x64 desktop, Windows 10 22H2 desktop and standard-user lifecycles. Elevated Windows Server x64 CI is not equivalent.
 
@@ -67,14 +68,21 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   contract cover own-window identity, foreign-window refusal and disabled About.
   The original one-OLD-process check remains at the driver's scroll call site.
   Mac parsing and seven pure PowerShell groups pass; native UIA validation still
-  requires a new Windows run.
+  required a new Windows run. Follow-up source `3fd5e9c26c` passed the actual
+  Windows PowerShell 5.1 UIA regression in successful contracts job `133139302779`.
+  It accepts an independently resolved own window and rejects foreign or disabled
+  controls; all existing Windows contract suites also passed.
 - Actual automatic NEW, observed OS cancellation/manual OLD reopen and final
   uninstall/reinstall preservation were not reached. Both public receipts are
   `unaccepted`; disposable certificate/key cleanup recorded removed. x64 ran on
   elevated Windows Server 2025; ARM64 on elevated Windows 11. Actual Windows 10
   22H2 desktop, Windows 11 x64 desktop and standard-user lifecycles remain open.
 - The public `validation/windows-installer-public/20261116` ref stays frozen at
-  `f5d12ce3dc`; the correction will use a separate public opt-in ref. Only curated
+  `f5d12ce3dc`. The correction uses frozen
+  `validation/windows-installer-public/20261116-uia-binding` at `3fd5e9c26c` in
+  run `43819576334`; x64 job `133139303070` and ARM64 job `133139303136` are
+  running. Later documentation updates use `codex/windows-native-acceptance`.
+  Only curated
   receipts may be uploaded. There is no installer/release/feed/site publication,
   `main` merge, production signing or production-trust acceptance.
 

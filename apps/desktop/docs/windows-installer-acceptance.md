@@ -1,9 +1,10 @@
 # Windows installation and update acceptance
 
-Status: public run `43801657955` completed. Its Windows contracts passed, but both
-native architectures failed at an incorrect UIA method call in the acceptance
-driver, after migration and preparation recovery passed. No complete native
-lifecycle has been accepted. Distribution is held; this document does not authorize
+Status: follow-up public run `43819576334` at `3fd5e9c26c` passed its Windows
+contracts, including the new real UIA regression. x64/ARM64 package acceptance is
+still running. The preceding run failed at the driver's incorrect UIA API after
+migration and preparation recovery passed; no complete native lifecycle has been
+accepted. Distribution is held; this document does not authorize
 installer, release, feed or website publication, or a merge to `main`. The user
 authorized test-signing acceptance first; production signing and ordinary
 production trust remain deferred to release preparation.
@@ -31,6 +32,8 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Related Electron updater/checker/descriptor contracts (`f5d12ce3dc`) | 72 passed across six files |
 | Full desktop typecheck, changed-file lint, repository checks and independent review (`f5d12ce3dc`) | Passed; review found no Critical/Important findings |
 | Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
+| Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
+| Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | In progress in jobs `133139303070` and `133139303136`; no native lifecycle receipt yet |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
 | Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
 | Actual installed PackageManager update query | Both architectures returned exit 2, `AVAILABLE`, registered loopback source and empty stderr |
@@ -59,9 +62,13 @@ The correction uses that documented API and exercises the actual helper against
 owned native Windows controls: the About element must bind to an independently
 resolved instance of its own window, reject another window, and reject a disabled
 button. The driver retains its original process identity guard before scrolling.
-Local PowerShell 7.5.4 parsing and seven pure contract groups pass; the native
-UIA group is skipped on Mac and requires Windows execution before acceptance.
-UTF-8 BOM and CRLF remain in the Windows scripts.
+Local PowerShell 7.5.4 parsing, seven pure contract groups and all 15 repository
+checks pass. The native UIA group is skipped on Mac and passed on actual Windows
+PowerShell 5.1 in job `133139302779` of follow-up run
+[`43819576334`](https://github.com/OneWhitepaper/Aino/actions/runs/43819576334).
+That job completed successfully; package x64/ARM64 jobs remain in progress.
+UTF-8 BOM and CRLF remain in the Windows scripts. The successful owned-control
+regression does not establish the installed application's complete lifecycle.
 
 Work continues only in `aino-windows-native-acceptance/Aino`, branch
 `codex/windows-native-acceptance`, based on `b121c42af7`. The other chat's browser
@@ -87,6 +94,12 @@ preparation recovery passed. Public standard-runner admission was not blocked
 by the private-repository billing limitation.
 The opt-in ref remains frozen at `f5d12ce3dc`; documentation updates use a separate
 ref so they do not restart the two package builds.
+
+The UIA correction `3fd5e9c26c` uses a new frozen opt-in ref,
+`validation/windows-installer-public/20261116-uia-binding`, for follow-up run
+`43819576334`. Its contracts job passed, including real Windows UIA execution;
+both native package jobs are still running. Later documentation commits use the
+ordinary `codex/windows-native-acceptance` ref and do not restart those builds.
 
 Native execution on the public `OneWhitepaper/Aino` repository is allowed only
 through the explicit `validation/windows-installer-public/**` branch prefix.
@@ -124,8 +137,8 @@ ZIPs and the full workspace are never selected for public artifact upload. Raw
 diagnostics stay in the ephemeral runner and the masked Actions console. Private
 candidate/reuse artifact behavior and origin validation remain unchanged.
 
-Both public native receipts are `unaccepted`; the UIA correction requires a new
-run. The standard x64 runner is Windows Server 2025; the ARM64 runner is Windows
+Both preceding public native receipts are `unaccepted`; the follow-up native
+jobs have no final receipts yet. The standard x64 runner is Windows Server 2025; the ARM64 runner is Windows
 11 ARM64. Neither establishes Windows 11 x64 desktop, Windows 10 19045 desktop,
 standard-user or production-trust acceptance.
 
