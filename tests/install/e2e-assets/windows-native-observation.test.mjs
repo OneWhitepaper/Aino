@@ -90,6 +90,33 @@ test('a real observation timeout retains the last native phase before returning 
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
+test('the observer retains only the manifest-verified executable and a fresh main process on success', async () => {
+  const { observeNativeUpdate } = await subject()
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-observe-success-'))
+  const request = path.join(root, 'request.json')
+  const script = path.join(root, 'probe.cjs')
+  const installed = { exe: process.execPath }
+  const fresh = { ProcessId: process.pid, ExecutablePath: process.execPath, CreationDate: new Date().toISOString() }
+  fs.writeFileSync(request, JSON.stringify({ oldPid: 1, oldBirth: '2020-01-01T00:00:00Z', identity: 'Aino.Contract',
+    startedAt: new Date().toISOString() }))
+  fs.writeFileSync(script, `
+const operation = process.argv[2]
+if (operation === 'package') console.log(JSON.stringify({state:'target',version:'2.0.0.0',installed:${JSON.stringify(installed)}}))
+else if (process.argv[3] === '-NewExecutable' && process.argv[4] === process.execPath)
+  console.log(JSON.stringify({newMain:[${JSON.stringify(fresh)}],oldPayloadCount:0}))
+else process.exit(9)
+`)
+  try {
+    assert.equal(await observeNativeUpdate(request, { timeoutMs: 5000, queryMs: 3000,
+      powershell: process.execPath, probeArgs: (operation, extra) => [script, operation, ...extra] }), true)
+    const result = JSON.parse(fs.readFileSync(path.join(root, 'native-observation.json'), 'utf8'))
+    assert.equal(result.status, 'observed')
+    assert.equal(result.phase, 'new-observed')
+    assert.deepEqual(result.installed, installed)
+    assert.deepEqual(result.process, fresh)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
 test('the real PowerShell package probe exposes mismatched provenance instead of returning target', { skip: process.platform !== 'win32' }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-package-contract-'))
   const requestFile = path.join(root, 'request.json')
