@@ -1,0 +1,43 @@
+{
+  "full_ui": {
+    "numTotalTests": 14880,
+    "numPassedTests": 14875,
+    "numFailedTests": 5,
+    "success": false
+  },
+  "final_targeted": {
+    "files": 6,
+    "tests": 66,
+    "passed": true,
+    "includes": [
+      "notifications",
+      "notification lifecycle",
+      "workspace header",
+      "tool strip styles",
+      "connection switcher",
+      "assistant identity"
+    ]
+  },
+  "notes": [
+    "Full UI initially had 5 failures: 2 Router harness assertions and 3 assertions bound to superseded pixel classes. Their original functional assertions remain. All affected files passed the final targeted run. The full UI suite was not repeated after these test-only repairs.",
+    "Source detector ran once over 214 changed UI targets, with 89 findings (10 primary and 79 advisory). This regex scan is not a rendered contrast audit.",
+    "Renderer/Electron/E2E/builder typecheck passed. Production build passed. Shared UI ESLint has 0 errors and 2 existing warnings. Prettier and git diff whitespace checks passed."
+  ],
+  "review_fix_checks": {
+    "account_cloud_sync": {
+      "tests": 10,
+      "passed": true
+    },
+    "icon_adapter": {
+      "tests": 5,
+      "passed": true
+    },
+    "final_typecheck": {
+      "passed": true
+    },
+    "final_build": {
+      "passed": true
+    },
+    "review_verdict": "ship, limited to fixlist; all three scored resolved"
+  }
+}
