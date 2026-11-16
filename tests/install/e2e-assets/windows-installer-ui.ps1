@@ -72,13 +72,18 @@ function Get-VerifiedInstallerWindows {
     if ($installerPackages.Count -ne 1) { throw 'Cannot identify one installed Windows App Installer package' }
     $installerRoot = $installerPackages[0].InstallLocation.TrimEnd('\') + '\'
     $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $windows = @($root.FindAll([System.Windows.Automation.TreeScope]::Children,
+        [System.Windows.Automation.Condition]::TrueCondition))
     foreach ($candidate in @(Get-Process -Name 'AppInstaller' -ErrorAction SilentlyContinue)) {
         $candidatePath = $candidate.Path
         if (-not $candidatePath -or -not $candidatePath.StartsWith($installerRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
         $condition = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $candidate.Id)
-        foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)) {
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$candidate.Id)
+        foreach ($window in $windows) {
             if ($window.Current.NativeWindowHandle -eq 0 -or $window.Current.IsOffscreen) { continue }
+            # UWP's visible frame belongs to a system host. Bind it through the
+            # actual installer-owned subtree, never the frame title or host name.
+            if ($null -eq $window.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $condition)) { continue }
             [pscustomobject]@{ Element=$window; ProcessId=$candidate.Id; Birth=$candidate.StartTime;
                 Handle=$window.Current.NativeWindowHandle; Title=$window.Current.Name }
         }
@@ -121,11 +126,9 @@ function Invoke-TestInstallerCancel($Window) {
 function Test-InstallerWindowClosed($Window) {
     $candidate = Get-Process -Id $Window.ProcessId -ErrorAction SilentlyContinue
     if (-not $candidate -or $candidate.StartTime -ne $Window.Birth) { return $true }
-    $root = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $Window.ProcessId)
-    foreach ($current in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)) {
-        if ($current.Current.NativeWindowHandle -eq $Window.Handle -and -not $current.Current.IsOffscreen) { return $false }
+    foreach ($current in @(Get-VerifiedInstallerWindows)) {
+        if ($current.ProcessId -eq $Window.ProcessId -and $current.Birth -eq $Window.Birth -and
+            $current.Handle -eq $Window.Handle) { return $false }
     }
     return $true
 }
