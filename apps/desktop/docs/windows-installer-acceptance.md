@@ -33,6 +33,8 @@ manually. The stable identity and `%APPDATA%\Aino` remain unchanged.
 | Full desktop typecheck, changed-file lint, repository checks and independent review (`f5d12ce3dc`) | Passed; review found no Critical/Important findings |
 | Public Windows contracts (`f5d12ce3dc`, run `43801657955`, job `133083110675`) | SUCCESS: 145 Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113 updater/state across 14 files, seven Windows PowerShell 5.1 groups, GUI-environment suite and four descriptor tests passed |
 | Follow-up Windows contracts (`3fd5e9c26c`, run `43819576334`, job `133139302779`) | SUCCESS: existing suites plus real UIA About binding, foreign-window refusal and disabled-control checks passed on Windows PowerShell 5.1 |
+| Diagnostic Windows contracts (`c0ff3179dc`, run `43846856927`, job `133229083523`) | SUCCESS: 149 Python (four skips), existing JS/SDK/updater/state/UIA contracts and all seven native-observation tests passed, including real PowerShell provenance/process queries and killed-child deadlines |
+| Diagnostic x64/ARM64 package reproduction (`c0ff3179dc`, run `43846856927`) | In progress; complete acceptance and stall cause are pending |
 | Follow-up x64/ARM64 package acceptance (`3fd5e9c26c`) | x64 failed at the 15-minute replacement/automatic-NEW wait; ARM64 was cancelled after 29 minutes with no progress in that phase; neither accepted |
 | Public x64 and ARM64 signed OLD/NEW packages (`f5d12ce3dc`) | Built, test signed and verified; native lifecycle failed later |
 | Released v0.1.5 ZIP chat and first-MSIX migration | Passed on both architectures: encrypted login without re-login, original chat history, natural gateway rotation and all 25 data checks |
@@ -198,6 +200,13 @@ update, and recovery receipts are flushed before cleanup.
 
 Local child-timeout, phase/provenance, safe-projection tests and PowerShell parsing
 are covered; actual Windows probes are also wired into the existing contracts job.
+Local verification passed 81 Python tests (two Windows skips), five Node tests
+(two Windows skips), all five PowerShell parser checks and all 15 repository checks.
+Commit `c0ff3179dc` is frozen on
+`validation/windows-installer-public/20261116-native-observation` for run
+[`43846856927`](https://github.com/OneWhitepaper/Aino/actions/runs/43846856927).
+Windows contracts job `133229083523` passed, including all seven observation tests
+on the actual host. The x64 and ARM64 candidate jobs are still in progress.
 Native diagnostic reproduction is pending and these changes do not establish a
 successful update. Use its evidence to distinguish deployment from activation.
 Automatic NEW, cancellation/manual reopen and

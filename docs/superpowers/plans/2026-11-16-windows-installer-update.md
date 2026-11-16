@@ -51,6 +51,13 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Diagnostic commit `c0ff3179dc` passed local 81 Python tests, five Node tests,
+  five PowerShell parser checks and all 15 repository checks. Public standard-runner
+  run [`43846856927`](https://github.com/OneWhitepaper/Aino/actions/runs/43846856927)
+  is frozen on `validation/windows-installer-public/20261116-native-observation`.
+  Its Windows contracts job `133229083523` passed all seven observation tests
+  including native package/process probes; x64/ARM64 package jobs are in progress.
+  No diagnostic receipt yet identifies the deployment/activation stall cause.
 - Public standard-runner run [`43801657955`](https://github.com/OneWhitepaper/Aino/actions/runs/43801657955)
   completed at `f5d12ce3dc`. Windows contracts job `133083110675` passed: 145
   Python (four skips), 74 JS (nine skips), eight extractor, eight SDK, 113
