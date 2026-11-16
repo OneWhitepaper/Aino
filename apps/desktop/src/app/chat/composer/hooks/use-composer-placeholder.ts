@@ -1,72 +1,67 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
+import { $workspaceOwnerLabels } from '@/components/pane-shell/workspace-scope'
 import { useI18n } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
+import { useStoresSelector } from '@/lib/use-session-slice'
+import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
 import { resetBrowseState } from '@/store/composer-input-history'
+import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
+import { $sessionStates, $sessionTiles, storedSessionIdForRuntimeId } from '@/store/session-states'
 
-import { pickPlaceholder } from '../composer-utils'
+import { botComposerCopy } from '../bot-composer-copy'
 
 interface UseComposerPlaceholderOptions {
+  canonicalBotChat?: boolean
   disabled: boolean
   homeLayout?: boolean
   reconnecting: boolean
   sessionId: null | string | undefined
+  storedSessionId?: null | string
 }
 
-/**
- * The composer's placeholder text. A resting starter (new session) / continuation
- * (existing session) is picked once and only re-rolled when we genuinely move to
- * a *different* conversation — the null→id persist of a freshly-started session
- * keeps its starter so the text doesn't flip mid-stream. A late locale resolve
- * re-rolls the same session pool so a separate renderer (such as HUD) does not
- * keep its initial English copy. While the transport is down, it swaps to a
- * reconnecting / starting message instead.
- */
+/** Identity follows this composer's durable session, including background Bot panes. */
 export function useComposerPlaceholder({
+  canonicalBotChat,
   disabled,
-  homeLayout = false,
   reconnecting,
-  sessionId
+  sessionId,
+  storedSessionId
 }: UseComposerPlaceholderOptions): string {
   const { locale, t } = useI18n()
-  const newSessionPlaceholders = t.composer.newSessionPlaceholders
-  const followUpPlaceholders = t.composer.followUpPlaceholders
 
-  const [restingPlaceholder, setRestingPlaceholder] = useState(() =>
-    pickPlaceholder(sessionId ? followUpPlaceholders : newSessionPlaceholders)
+  const name = useStoresSelector(
+    [
+      $workspaceOwnerLabels,
+      $botChatScopes,
+      $botChatSessionIds,
+      $sessionStates,
+      $sessionTiles,
+      $activeSessionId,
+      $selectedStoredSessionId
+    ],
+    () => {
+      const storedId = storedSessionId || (sessionId ? storedSessionIdForRuntimeId(sessionId) || sessionId : null)
+      const tile = $sessionTiles.get().find(item => item.storedSessionId === storedId)
+      const bot = storedId && ($botChatSessionIds.get().has(storedId) || tile?.workspaceMode === 'bots')
+      const ownerKey = storedId && ($botChatScopes.get()[storedId]?.workspaceOwnerKey || tile?.workspaceOwnerKey)
+
+      return bot ? (ownerKey && $workspaceOwnerLabels.get()[ownerKey]) || t.common.bots : PRODUCT_NAME
+    }
   )
 
   const prevSessionIdRef = useRef(sessionId)
-  const prevLocaleRef = useRef(locale)
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
     const prev = prevSessionIdRef.current
-    const localeChanged = prevLocaleRef.current !== locale
-    const sessionChanged = prev !== sessionId
-
     prevSessionIdRef.current = sessionId
-    prevLocaleRef.current = locale
 
-    if (!sessionChanged && !localeChanged) {
-      return
-    }
-
-    // null → id: the new session we're already in just got persisted. Keep the
-    // starter we showed instead of swapping to a follow-up under the user.
-    if (prev == null && sessionId) {
-      if (localeChanged) {
-        setRestingPlaceholder(pickPlaceholder(newSessionPlaceholders))
-      }
-
-      return
-    }
-
-    if (sessionChanged) {
+    // Persisting the draft adopts the same input-history cursor.
+    if (prev !== sessionId && !(prev == null && sessionId)) {
       resetBrowseState(prev)
     }
-
-    setRestingPlaceholder(pickPlaceholder(sessionId ? followUpPlaceholders : newSessionPlaceholders))
-  }, [followUpPlaceholders, locale, newSessionPlaceholders, sessionId])
+  }, [sessionId])
 
   // When the transport is disabled it's because the gateway isn't open.
   // Distinguish a cold start ("Starting Hermes...") from a dropped connection
@@ -77,7 +72,7 @@ export function useComposerPlaceholder({
     ? reconnecting
       ? t.composer.placeholderReconnecting
       : t.composer.placeholderStarting
-    : homeLayout
-      ? t.home.placeholder
-      : restingPlaceholder
+    : canonicalBotChat
+      ? botComposerCopy(locale).placeholder(name)
+      : t.composer.placeholderTo(name)
 }

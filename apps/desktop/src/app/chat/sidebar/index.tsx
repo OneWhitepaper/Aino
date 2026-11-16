@@ -1,3 +1,5 @@
+import './sidebar.css'
+
 import { KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { useStore } from '@nanostores/react'
@@ -6,20 +8,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 
 import { PlatformAvatar } from '@/app/messaging/platform-icon'
-import navArtifactsIcon from '@/assets/aino-home/nav-artifacts.svg'
-import navCronIcon from '@/assets/aino-home/nav-cron.svg'
-import navMessagingIcon from '@/assets/aino-home/nav-messaging.svg'
 import navNewSessionIcon from '@/assets/aino-home/nav-new-session.svg'
-import navSkillsIcon from '@/assets/aino-home/nav-skills.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
-import { SearchField } from '@/components/ui/search-field'
 import { Sidebar, SidebarContent } from '@/components/ui/sidebar'
 import { Tip } from '@/components/ui/tooltip'
-import { Contribute } from '@/contrib/react/contribute'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { type SessionInfo } from '@/hermes'
 import { useI18n } from '@/i18n'
@@ -28,8 +24,9 @@ import { cn } from '@/lib/utils'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { $activeConnectionId } from '@/store/connections'
 import { $cronJobs } from '@/store/cron'
-import { $interfaceMode, $showsAdvancedChrome, shownInMode } from '@/store/interface-mode'
+import { $showsAdvancedChrome } from '@/store/interface-mode'
 import {
+  $dismissedAutoProjectIds,
   $panesFlipped,
   $pinnedSessionIds,
   $sidebarCardRows,
@@ -52,6 +49,7 @@ import {
   $sidebarStatusFilter,
   $sidebarWorkspaceOrderIds,
   $sidebarWorkspaceParentOrderIds,
+  filterVisibleProjects,
   pinSession,
   SESSION_SEARCH_FOCUS_EVENT,
   setPinnedSessionOrder,
@@ -128,16 +126,7 @@ import { $archivedSessions, loadArchivedSessions } from '@/store/sidebar-archive
 import { applySidebarNavPrefs, SIDEBAR_NAV_PREFS_AREA } from '@/store/sidebar-nav'
 import { $sidebarSessionRankIds } from '@/store/sidebar-sort'
 
-import {
-  type AppView,
-  ARTIFACTS_ROUTE,
-  CAPABILITIES_ROUTE,
-  CRON_ROUTE,
-  MESSAGING_ROUTE,
-  PROFILES_ROUTE,
-  SESSION_IMPORT_ROUTE,
-  SIDEBAR_NAV_AREA
-} from '../../routes'
+import { type AppView, SESSION_IMPORT_ROUTE } from '../../routes'
 import type { SidebarNavItem } from '../../types'
 import { type NewSessionSplitHandler } from '../new-session-drag'
 
@@ -146,7 +135,8 @@ import { SidebarCronJobsSection } from './cron-jobs-section'
 import { SidebarFilterMenu } from './filter-menu'
 import { buildGatewaySessionGroups, scopeGatewaySessionGroups, useGatewaySessionGroups } from './gateway-group-model'
 import { SidebarLoadMoreRow } from './load-more-row'
-import { contributedSidebarNav, isDraftNavigationActive, SidebarNavigation } from './navigation'
+import { isDraftNavigationActive, SidebarNavigation } from './navigation'
+import { BUILTIN_SIDEBAR_NAV } from './navigation-items'
 import { orderByIds, reconcileOrderIds, resolveManualSessionOrderIds, sameIds } from './order'
 import { filterSessionsByProfileScope } from './profile-scope'
 import { ProjectDialog } from './project-dialog'
@@ -175,10 +165,12 @@ import {
 import { useWorkspaceNodeOpen } from './projects/model'
 import { WorkspaceAddButton } from './projects/workspace-header'
 import { WorktreeDialog } from './projects/worktree-dialog'
+import { SidebarRecentFooter } from './recent-footer'
 import { recentSessionsOutsideProjects } from './recent-sessions'
 import { SidebarLoadErrorState, SidebarSessionSkeletons, SidebarStorageCorruptNotice } from './section-states'
 import { buildSessionByAnyId, resolvePinnedSessions } from './session-index'
 import { mergeSearchResults } from './session-search'
+import { SidebarSessionSearchDialog } from './session-search-dialog'
 import { SidebarSessionsSection, VIRTUALIZE_THRESHOLD } from './sessions-section'
 import { useEnteredProjectSessions } from './use-entered-project-sessions'
 import { useServerSessionSearch } from './use-server-session-search'
@@ -193,53 +185,6 @@ const NON_SESSION_LOAD_STEP = 10
 // the grouped view. Long enough that the flat list — the thing actually on
 // screen — has the connection to itself first.
 const PROJECT_TREE_WARM_MS = 2_000
-
-const SIDEBAR_NAV: SidebarNavItem[] = [
-  {
-    id: 'new-session',
-    label: '',
-    icon: props => <AinoDesignIcon src={navNewSessionIcon} {...props} />,
-    action: 'new-session',
-    keybindActionId: 'session.new'
-  },
-  {
-    id: 'profiles',
-    label: '',
-    icon: props => <Codicon name="organization" {...props} />,
-    route: PROFILES_ROUTE,
-    keybindActionId: 'nav.profiles'
-  },
-  {
-    id: 'skills',
-    label: '',
-    icon: props => <AinoDesignIcon src={navSkillsIcon} {...props} />,
-    route: CAPABILITIES_ROUTE,
-    keybindActionId: 'nav.capabilities'
-  },
-  {
-    id: 'messaging',
-    label: '',
-    icon: props => <AinoDesignIcon src={navMessagingIcon} {...props} />,
-    route: MESSAGING_ROUTE,
-    keybindActionId: 'nav.messaging'
-  },
-  {
-    id: 'artifacts',
-    label: '',
-    icon: props => <AinoDesignIcon src={navArtifactsIcon} {...props} />,
-    route: ARTIFACTS_ROUTE,
-    keybindActionId: 'nav.artifacts',
-    tier: 'advanced'
-  },
-  {
-    id: 'cron',
-    label: '',
-    icon: props => <AinoDesignIcon src={navCronIcon} {...props} />,
-    route: CRON_ROUTE,
-    keybindActionId: 'nav.cron',
-    tier: 'advanced'
-  }
-]
 
 const SESSION_IMPORT_NAV: SidebarNavItem = {
   id: 'session-import',
@@ -324,19 +269,16 @@ export function ChatSidebar({
   const { t } = useI18n()
   const s = t.sidebar
   const { pathname } = useLocation()
-  // Contributed nav rows (plugins pairing a page with a sidebar entry) render
-  // below the built-ins with the same chrome; active = at their route.
-  const navContributions = useContributions(SIDEBAR_NAV_AREA)
-
-  const contributedNav = useMemo(() => contributedSidebarNav(navContributions), [navContributions])
-
-  const interfaceMode = useStore($interfaceMode)
   const showsAdvancedChrome = useStore($showsAdvancedChrome)
   const navPrefs = useContributions(SIDEBAR_NAV_PREFS_AREA)
 
   const navItems = useMemo(
-    () => applySidebarNavPrefs([...SIDEBAR_NAV, ...contributedNav].filter(shownInMode(interfaceMode)), navPrefs),
-    [contributedNav, interfaceMode, navPrefs]
+    () =>
+      applySidebarNavPrefs(
+        BUILTIN_SIDEBAR_NAV.filter(item => item.id === 'new-session'),
+        navPrefs
+      ),
+    [navPrefs]
   )
 
   const connectionsRegistry = useStore($connectionsRegistry)
@@ -415,6 +357,13 @@ export function ChatSidebar({
   const projects = useStore($projects)
   const projectTree = useStore($projectTree)
   const openedProjectTree = useStore($openedProjectTree)
+  const dismissedAutoProjects = useStore($dismissedAutoProjectIds)
+
+  const visibleOpenedProjectTree = useMemo(
+    () => filterVisibleProjects(openedProjectTree, dismissedAutoProjects),
+    [openedProjectTree, dismissedAutoProjects]
+  )
+
   const projectOwners = useStore($projectOwnerBySessionId)
 
   // The persisted project filter's storage is shared across profiles, so ids
@@ -433,22 +382,26 @@ export function ChatSidebar({
   const projectScope = useStore($projectScope)
   const gatewayState = useStore($gatewayState)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [messagingLoadMorePending, setMessagingLoadMorePending] = useState<Record<string, boolean>>({})
   const [recentsLoadMorePending, setRecentsLoadMorePending] = useState(false)
   const messagingOpenIds = useStore($sidebarMessagingOpenIds)
   // Per-platform count of rows currently revealed (starts at NON_SESSION_INITIAL_ROWS).
   const [messagingVisible, setMessagingVisible] = useState<Record<string, number>>({})
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const trimmedQuery = searchQuery.trim()
 
   // Hotkey (session.focusSearch) → focus the field once it's mounted.
   useEffect(() => {
-    const onFocus = () => searchInputRef.current?.focus({ preventScroll: true })
+    const onFocus = () => {
+      if (routeView === 'chat' && paneVisible) {
+        setSearchOpen(true)
+      }
+    }
 
     window.addEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
 
     return () => window.removeEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
-  }, [])
+  }, [routeView, paneVisible])
 
   const activeSidebarSessionId = currentView === 'chat' ? selectedSessionId : null
 
@@ -615,11 +568,12 @@ export function ChatSidebar({
   )
 
   // Selecting a result is the one action that both resumes a session and
-  // dismisses the search panel. Clear the query before navigating so the
-  // titlebar projection cannot flash stale results during the route change.
+  // dismisses the search dialog. Clear the query before navigating so
+  // reopening search cannot paint the previous session's results.
   const onResumeSearchResult = useCallback(
     (sessionId: string, session?: SessionInfo) => {
       setSearchQuery('')
+      setSearchOpen(false)
       onResumeSession(sessionId, session)
     },
     [onResumeSession]
@@ -656,11 +610,12 @@ export function ChatSidebar({
   // section (orderRowsWithinGroups) rather than baked into the list here, so a drag ranks a row
   // among its own day's chats instead of flattening the whole sidebar into an undated manual mode.
   const agentSessions = unpinnedAgentSessions
-  const { owners, ownerKey, tree: gatewayProjectTree } = useGatewayProjectTree(openedProjectTree, agentSessions)
+  const { owners, ownerKey, tree: gatewayProjectTree } = useGatewayProjectTree(visibleOpenedProjectTree, agentSessions)
 
   const displayAgentSessions = useMemo(
-    () => (showArchived ? agentSessions : recentSessionsOutsideProjects(agentSessions, projects, openedProjectTree)),
-    [agentSessions, projects, openedProjectTree, showArchived]
+    () =>
+      showArchived ? agentSessions : recentSessionsOutsideProjects(agentSessions, projects, visibleOpenedProjectTree),
+    [agentSessions, projects, visibleOpenedProjectTree, showArchived]
   )
 
   // Recents are local-only: messaging-platform sessions are fetched as their
@@ -868,7 +823,7 @@ export function ChatSidebar({
   // overview sort. Membership is the backend tree's — never re-derived here.
   const projectModel = useMemo<SidebarProjectTree[]>(() => {
     const sorted = sortProjectsForOverview(
-      gatewayProjectTree
+      filterVisibleProjects(gatewayProjectTree, dismissedAutoProjects)
         // A filtered-out project drops its whole lane, header included — hiding
         // only its rows would leave a row of empty folders behind.
         .filter(project => !project.isNoProject && (!projectFilter.length || projectFilter.includes(project.id)))
@@ -901,7 +856,16 @@ export function ChatSidebar({
     })
 
     return orderProjectsByIds(deduped, projectOrderIds)
-  }, [gatewayProjectTree, orderRepos, activeProjectId, projectFilter, projectOrderIds, isHiddenFromProjects, s])
+  }, [
+    gatewayProjectTree,
+    dismissedAutoProjects,
+    orderRepos,
+    activeProjectId,
+    projectFilter,
+    projectOrderIds,
+    isHiddenFromProjects,
+    s
+  ])
 
   // The overview only renders in grouped mode; the model stays live regardless
   // so scoping is consistent across views.
@@ -1389,62 +1353,30 @@ export function ChatSidebar({
         // paints itself fully.
         'relative h-full min-w-0 overflow-hidden border-t-0 border-b-0 text-foreground transition-none',
         panesFlipped ? 'border-l border-r-0' : 'border-r border-l-0',
-        'border-(--sidebar-edge-border) bg-(--ui-sidebar-surface-background) opacity-100'
+        'border-(--sidebar-edge-border) bg-(--aino-navigation-rail) opacity-100'
       )}
       collapsible="none"
       data-aino-sidebar=""
       data-tip-region=""
       data-tour="sessions-sidebar"
     >
-      {routeView === 'chat' && paneVisible && (
-        <Contribute area="titleBar.center" id="sessions:search">
-          <div className="relative flex h-full w-full min-w-0 items-center" data-session-search-shell="">
-            <SearchField
-              aria-label={s.searchAria}
-              containerClassName={cn('w-full', !searchQuery && 'opacity-70 hover:opacity-100')}
-              inputClassName="flex-1 [field-sizing:fixed]"
-              inputRef={searchInputRef}
-              onChange={setSearchQuery}
-              placeholder={s.searchPlaceholder}
-              value={searchQuery}
-            />
-            {trimmedQuery && (
-              <div
-                className="pointer-events-auto absolute top-full right-0 z-(--z-over-modal-content) mt-2 max-h-[min(24rem,calc(100vh-4rem))] w-full min-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-[var(--aino-radius-panel)] border border-(--stroke-nous) bg-(--ui-chat-bubble-background) text-(--ui-text-primary) shadow-nous"
-                data-session-search-results=""
-              >
-                <SidebarSessionsSection
-                  activeSessionId={activeSidebarSessionId}
-                  contentClassName="max-h-[min(20rem,calc(100vh-8rem))] overflow-y-auto px-1 pb-1"
-                  emptyState={
-                    searchPending ? (
-                      <SidebarSessionSkeletons />
-                    ) : (
-                      <div className="wrap-anywhere grid min-h-24 place-items-center rounded-lg px-2 text-center text-xs text-(--ui-text-tertiary)">
-                        {s.noMatch(trimmedQuery)}
-                      </div>
-                    )
-                  }
-                  label={s.results}
-                  onArchiveSession={onArchiveSession}
-                  onBranchSession={onBranchSession}
-                  onDeleteSession={onDeleteSession}
-                  onResumeSession={onResumeSearchResult}
-                  onToggle={() => undefined}
-                  onTogglePin={pinSession}
-                  onToggleUnread={toggleUnread}
-                  open
-                  pinned={false}
-                  rootClassName="min-h-0 p-2"
-                  sectionLabelTone="neutral"
-                  sessions={searchResults}
-                  showProfileTags={showAllProfiles}
-                />
-              </div>
-            )}
-          </div>
-        </Contribute>
-      )}
+      <SidebarSessionSearchDialog
+        activeSessionId={activeSidebarSessionId}
+        onArchiveSession={onArchiveSession}
+        onBranchSession={onBranchSession}
+        onDeleteSession={onDeleteSession}
+        onOpenChange={setSearchOpen}
+        onQueryChange={setSearchQuery}
+        onResumeSession={onResumeSearchResult}
+        onTogglePin={pinSession}
+        onToggleUnread={toggleUnread}
+        open={searchOpen && routeView === 'chat' && paneVisible}
+        pending={searchPending}
+        query={searchQuery}
+        recentSessions={sortedSessions}
+        results={searchResults}
+        showProfileTags={showAllProfiles}
+      />
 
       <SidebarContent className="aino-sidebar-content">
         <SidebarNavigation
@@ -1595,13 +1527,11 @@ export function ChatSidebar({
               )
             }
             footer={
-              !showSessionSkeletons && hasMoreSessions ? (
-                <SidebarLoadMoreRow
-                  loading={sessionsLoading || recentsLoadMorePending}
-                  onClick={() => void onLoadMoreRecents()}
-                  step={0}
-                />
-              ) : null
+              <SidebarRecentFooter
+                hasMore={!showSessionSkeletons && hasMoreSessions}
+                loading={sessionsLoading || recentsLoadMorePending}
+                onLoadMore={() => void onLoadMoreRecents()}
+              />
             }
             forceEmptyState={showSessionSkeletons || Boolean(sessionsLoadError)}
             grouping={showArchived || rankedGlobally ? 'none' : grouping === 'status' ? 'status' : 'date'}

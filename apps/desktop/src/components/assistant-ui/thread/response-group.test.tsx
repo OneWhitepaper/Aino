@@ -9,7 +9,7 @@ import type { SessionMessage } from '@/types/hermes'
 
 import { assistantMessage, stubThreadEnvironment, ThreadRuntime, userMessage } from '../test-utils'
 
-import { AssistantMessageParts } from './message-parts'
+import { AssistantMessage } from './assistant-message'
 import { ResponseMessages } from './response-group'
 
 import { Thread } from '.'
@@ -39,7 +39,7 @@ it('does not rederive historical tool outcomes for streamed tokens but exposes u
     content: [part, { type: 'text', text: 'Read complete.', displayPhase: 'final' }]
   } as ThreadMessage
 
-  const components = { AssistantMessage: AssistantMessageParts, UserMessage: () => null }
+  const components = { AssistantMessage, UserMessage: () => null }
   const indices = [1]
   const prompt = userMessage('historical-prompt', 'Read the file.')
   const nextPrompt = userMessage('next-prompt', 'Explain it.')
@@ -84,7 +84,10 @@ it('does not rederive historical tool outcomes for streamed tokens but exposes u
       content: [{ ...part, isError: true }, history.content[1]]
     } as ThreadMessage)
   )
-  await waitFor(() => expect(container.querySelector('[data-slot="aui_response-process-header"]')).toBeNull())
+  await waitFor(() => {
+    const header = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+    expect(within(header).queryByRole('button')).toBeNull()
+  })
   expect(outcome.mock.calls.length).toBeGreaterThan(initialDerivations)
 })
 
@@ -135,11 +138,15 @@ it('keeps background continuations in one response with one action bar and the o
     // response-copy-scope.test.tsx.
     fireEvent.click(within(actions).getAllByRole('button', { name: /^copy$/i })[0]!)
     await waitFor(() => expect(clipboard.writeText).toHaveBeenLastCalledWith('The deployment is verified.'))
-    fireEvent.click(within(actions).getByRole('button', { name: /copy full response/i }))
+    fireEvent.pointerDown(within(actions).getByRole('button', { name: 'More actions' }), {
+      button: 0,
+      pointerType: 'mouse'
+    })
+    fireEvent.click(await within(window.document.body).findByRole('menuitem', { name: /copy full response/i }))
     await waitFor(() =>
       expect(clipboard.writeText).toHaveBeenLastCalledWith('Checking the deployment.\n\nThe deployment is verified.')
     )
-    fireEvent.click(within(actions).getByRole('button', { name: /branch/i }))
+    fireEvent.click(await within(window.document.body).findByRole('menuitem', { name: /branch/i }))
     expect(branch).toHaveBeenLastCalledWith(messages[3]!.id)
 
     const pending: ThreadMessage[] = [

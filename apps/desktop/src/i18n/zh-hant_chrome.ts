@@ -25,7 +25,7 @@ export const zhHantChrome = {
     hideSidebar: '隱藏側邊欄',
     showSidebar: '顯示側邊欄',
     search: '搜尋',
-    searchTitle: '搜尋工作階段、檢視和動作',
+    searchTitle: '跨 Bot 尋找對話',
     swapSidebarSides: '交換側邊欄位置',
     hideRightSidebar: '隱藏右側邊欄',
     showRightSidebar: '顯示右側邊欄',
@@ -38,7 +38,8 @@ export const zhHantChrome = {
   },
 
   sidebar: {
-    profileRail: '設定檔列',
+    viewAllSessions: '查看所有會話',
+    profileRail: '機器人列',
     markAllRead: '全部標示為已讀',
     filter: {
       grouping: '分組',
@@ -47,7 +48,7 @@ export const zhHantChrome = {
       filters: '篩選',
       status: '狀態',
       pullRequest: '提取請求',
-      profile: '設定檔',
+      profile: '機器人',
       project: '專案',
       archived: '已封存',
       resetToDefaults: '重設為預設值',
@@ -88,7 +89,7 @@ export const zhHantChrome = {
       messaging: '訊息平台',
       artifacts: '成品',
       cron: '排程工作',
-      profiles: '工作區',
+      profiles: 'Bot 管理',
 
       skills: '技能與工具'
     },
@@ -104,15 +105,15 @@ export const zhHantChrome = {
     review: '審查',
     logs: '記錄',
     cronJobs: '排程任務',
-    groupAriaGrouped: '以單一清單顯示工作階段',
-    groupAriaUngrouped: '依工作區分組工作階段',
+    groupAriaGrouped: '以單一清單顯示對話',
+    groupAriaUngrouped: '依專案分組對話',
     showProjects: '顯示專案',
     showSessions: '顯示工作階段',
     groupTitleGrouped: '取消分組',
-    groupTitleUngrouped: '依工作區分組',
+    groupTitleUngrouped: '依專案分組',
     allPinned: '這裡的全部已釘選。取消釘選某個聊天即可在最近中顯示。',
     shiftClickHint: 'Shift + 點擊聊天以釘選 · 拖曳以重新排序',
-    noWorkspace: '無工作區',
+    noWorkspace: '未關聯專案',
     projectEmpty: '尚無工作階段',
     projectLoadFailed: '會話載入失敗',
     noSessions: '尚無工作階段',
@@ -146,7 +147,7 @@ export const zhHantChrome = {
       reveal: '在資料夾中顯示',
       copyPath: '複製路徑',
       removeFromSidebar: '從側邊欄移除',
-      createdInPreviousContext: '專案已在先前的連線或設定檔中建立。請切換回去；IDEA.md 尚未寫入。',
+      createdInPreviousContext: '專案已在先前的連線或機器人中建立。請切回查看；IDEA.md 尚未寫入。',
       hiddenFromSidebar: '已從側邊欄移除',
       undoHide: '復原',
       createFailed: '無法建立專案',
@@ -200,13 +201,13 @@ export const zhHantChrome = {
 
       keepOneFolder: '至少保留一個資料夾',
 
-      contextChanged: '對話或工作區已切換，請重新開啟此視窗後操作。',
+      contextChanged: '對話或專案已切換，請重新開啟此視窗後操作。',
 
       menuClose: '關閉專案',
 
-      unavailableAllProfiles: '全部工作區僅供瀏覽。請在設定中選擇專案所屬工作區後管理專案。',
+      unavailableAllProfiles: '目前清單僅供瀏覽。請開啟對應機器人後管理其專案。',
 
-      activeProfileChanged: '連線期間使用中的設定檔已變更'
+      activeProfileChanged: '連線期間目前機器人已切換。'
     },
     newSessionIn: label => `在 ${label} 中新建工作階段`,
     showMoreIn: (count, label) => `在 ${label} 中再顯示 ${count} 個`,
@@ -239,7 +240,7 @@ export const zhHantChrome = {
       backgroundRunning: '背景任務執行中',
       draftSession: '草稿 — 尚未傳送',
       handoffOrigin: platform => `從 ${platform} 轉接`,
-      ownedByProfile: profile => `設定檔：${profile}`,
+      ownedByProfile: profile => `機器人：${profile}`,
       renamed: '已重新命名',
       renameFailed: '重新命名失敗',
       renameTitle: '重新命名工作階段',

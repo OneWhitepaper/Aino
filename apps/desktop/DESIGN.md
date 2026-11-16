@@ -1,59 +1,70 @@
 ---
 name: Aino Desktop
-description: Approved neutral desktop presentation, aligned to the 2026-11-09 interactive design.
+description: Approved neutral desktop presentation, aligned to the 2026-11-15 Codex-style interactive design.
 colors:
-  primary: "#353a49"
-  canvas: "#fcfcfd"
-  navigation: "#f6f7f9"
-  surface: "#ffffff"
-  soft: "#f0f1f4"
-  line: "#e4e6eb"
-  ink: "#252831"
-  secondary-ink: "#555d6b"
-  supporting-ink: "#677080"
-  warning: "#966419"
-  danger: "#b33e3e"
-  success: "#287054"
+  primary: '#26292d'
+  canvas: '#ffffff'
+  navigation: '#f7f7f8'
+  surface: '#ffffff'
+  soft: '#f7f7f8'
+  line: '#e6e7e9'
+  ink: '#26292d'
+  secondary-ink: '#71757b'
+  supporting-ink: '#71757b'
+  warning: '#966419'
+  danger: '#b33e3e'
+  success: '#287054'
 typography:
   body:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", emoji'
-    fontSize: "14px"
+    fontSize: '14px'
     fontWeight: 400
     lineHeight: 1.6
   label:
-    fontSize: "13px"
+    fontSize: '13px'
     fontWeight: 500
     lineHeight: 1.5
   caption:
-    fontSize: "12px"
+    fontSize: '12px'
     fontWeight: 400
     lineHeight: 1.6
+  section:
+    fontSize: '11px'
+    fontWeight: 400
+    lineHeight: 1.6
+  micro:
+    fontSize: '10px'
+    fontWeight: 400
+    lineHeight: 1.5
   title:
-    fontSize: "16px"
+    fontSize: '16px'
     fontWeight: 600
     lineHeight: 1.5
   dialog-title:
-    fontSize: "18px"
+    fontSize: '18px'
     fontWeight: 600
     lineHeight: 1.4
 rounded:
-  control: "6px"
-  card: "14px"
-  menu: "12px"
-  panel: "16px"
-  composer: "20px"
+  control: '6px'
+  activity: '9px'
+  toolbar: '7px'
+  card: '14px'
+  menu: '12px'
+  panel: '16px'
+  composer: '20px'
+  group-message-tail: '3px'
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.surface}"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
-    height: "32px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.surface}'
+    typography: '{typography.label}'
+    rounded: '{rounded.control}'
+    height: '32px'
   notification-summary:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.card}"
-    padding: "16px"
-    width: "380px"
+    backgroundColor: '{colors.surface}'
+    rounded: '{rounded.card}'
+    padding: '16px'
+    width: '380px'
 ---
 
 # Desktop Design System
@@ -73,12 +84,79 @@ This doc contains two kinds of content, maintained differently:
 - **Principles** (flatness, intent, feedback, motion, cancellation) are durable.
   They hold as components come and go.
 - **Named contracts** (tokens, `Button` variants, primitive names) are the
-  design system's current API. They are maintained *with* the code: if you
+  design system's current API. They are maintained _with_ the code: if you
   change a primitive, token, or variant, update its entry here **in the same
   change** — a stale name in this file is a bug, exactly like a stale type.
 
 When a rule and the code disagree, fix whichever is wrong rather than forking a
 one-off at the call site.
+
+## Approved desktop composition (2026-11-15)
+
+The approved `aino-desktop-codex-preview` defines the desktop composition.
+Implement its proportions through the real route, pane, composer and settings
+components. Prototype messages, prices, statuses and mock actions are illustrative;
+they never replace product data or existing handlers.
+
+- The app-wide activity rail is 52px (`--aino-activity-width`), with 36px icon
+  buttons and 9px corners. At window widths of 820px and 640px it becomes 48px and 44px.
+  Its app destinations use the approved Lucide outline family at 1.65px stroke;
+  product and plugin brand icons retain their own identities. The More menu keeps
+  secondary destinations and the existing HUD action.
+  Aino and Bot select conversation workspaces; feature icons and Settings open
+  their own route pages. The rail remains available on these pages.
+- An available desktop update adds a blue downward-arrow icon on a pale blue
+  fill directly above Docs, retaining the rail's button geometry and icon stroke.
+  Dark mode lightens this blue through the existing foreground token.
+  Its small status mark never pulses or opens anything automatically. Hover and
+  keyboard focus name the available version; activation opens the existing client
+  update details, with installation remaining an explicit action there. Genuine
+  apply progress and recovery retain this door; no-update and failed background
+  checks leave the slot empty. Cloud-owned clients and an already installed app
+  awaiting bundle restart follow their existing update ownership policy.
+- The conversation navigation defaults to 252px (`--aino-navigation-width` /
+  `SIDEBAR_DEFAULT_WIDTH`). Its existing resize, hide/show, saved width and
+  Sessions/Bot ownership remain authoritative. Project and recent-chat rows
+  belong here; app-wide destinations belong in the activity rail.
+  Project menus offer naming, folder management and lifecycle actions without
+  a color/icon appearance picker. Existing project metadata remains readable.
+- Every non-chat route occupies the complete work area below the native titlebar,
+  beside the activity rail. It shows its own page or category navigation, with
+  no conversation list, Summary or sibling tool pane competing for space.
+  This is a presentation override through `$workspaceIsPage`: it never changes
+  `$sidebarOpen`, saved pane widths, the tiling tree or a user's visibility choice.
+  Returning to a conversation restores its navigation and layout.
+  The native titlebar names the current first-party destination beside Back and
+  Forward, using the activity rail's matching outline icon and localized label.
+- Settings owns a 252px category column and an independently scrolling 832px
+  maximum reading column, with 48px desktop side gutters (36px at the compact
+  desktop breakpoint). It replaces the conversation list. Below 760px, categories
+  move into the existing complete navigation dropdown above the content, with
+  20px page gutters. Existing search, nested routes, plugin destinations,
+  account pages and system actions remain reachable.
+- Ordinary messages and their composer share the same 832px maximum content
+  width. Canonical one-to-one Bot chats use a shared 760px measure for both.
+  Their 6px transcript scrollbar reserve participates in
+  both width and centering calculations, so short and long transcripts keep the
+  same edges. Group transcripts use a separate 1120px lane and at most 78% message
+  bubbles; group composers use the Bot 760px bound.
+  Ordinary chats' 108px resting composer card contains the editor and one control row;
+  the live project/Git context stays available in a compact 10px underside row.
+  Home, HUD and popped-out composer placement retain their existing context row.
+- Summary occupies a 344px rail: a 320px paper card with 12px outer margins.
+  Its 14px corners, compact typography and close shadow follow the prototype.
+  The heading, current conversation title, outputs, plan, child agents,
+  background work, sources and environment use existing authoritative data.
+  Canonical Bot titles resolve through `workspaceOwnerTitle` so the current
+  readable Bot name appears without changing the backend's `Bot Chat` identity.
+- Route-page exclusivity is visibility, not lifecycle. Hidden chats retain
+  drafts and running turns; browser `WebContents`, terminal instances, file
+  editors and tool tabs remain mounted under their existing owners. Hidden
+  surfaces are inert to focus and pointer input. Navigating back reveals the
+  same instances, rather than rebuilding a browser, terminal or agent session.
+
+The more detailed behavior contracts below remain in force. These composition
+rules supersede older sidebar widths and route-overlay geometry.
 
 ## Approved desktop alignment (2026-11-10)
 
@@ -93,15 +171,16 @@ ThemeProvider owns the default light/dark palette and remembered font choice.
 Body and navigation are 14px; actions/labels 13px; supporting text 12px; section
 headings 16px; modal headings 18px. Do not redefine the global ladder inside a
 settings page. Semantic syntax, diff, chart and status colors keep their roles.
-General-purpose icons use official Codicon geometry through the existing
-SVG/ref-compatible adapters. Eight compatibility symbols retain their original
-sources where Codicons has no equivalent; brand portraits, provider logos, file
-types and specialized geometry keep their identity.
+Application navigation, management pages and tool chrome use the approved
+Lucide outline family described above. Existing SVG/ref-compatible Codicon
+adapters remain available to specialized editor and extension surfaces;
+brand portraits, provider logos, file types and specialized geometry keep
+their identity.
 
 Window action glyphs share `WindowChromeIcon`: rounded outlines on a 24px
-viewBox at 18px with a 1.65px stroke, inside the existing 24px titlebar controls.
-Bell, HUD, Summary, terminal and both sidebar toggles use this family and one
-vertical alignment. Buttons share the UI text/hover tokens and 6px corners.
+viewBox at 18px with a 1.65px stroke, inside 28px titlebar controls with 6px gaps.
+Session search, Bell, Summary, terminal and both sidebar toggles use this family
+and one vertical alignment. Buttons share the UI text/hover tokens and 7px toolbar corners.
 The shared Button owns the titlebar CSS icon size; wrappers do not pin a
 second inline default. Bell, chat and resource glyphs are optically balanced
 against the panel frames' 3–21 drawing bounds. All titlebar controls use
@@ -114,13 +193,13 @@ Back and Forward precede the navigation toggle and share its Button geometry.
 They traverse this window's page and conversation history; unavailable directions
 are disabled. New navigation after going back replaces the forward branch, and
 account or connection changes reset the history.
-The native and renderer titlebars share one 43px band. Toolbar centers follow
+The native and renderer titlebars share one 44px band. Toolbar centers follow
 the actual macOS traffic-light coordinates, converting DIP to CSS pixels at the
 current window zoom; fullscreen and non-Mac controls retain their centered band.
 Outside the titlebar, the shared glyphs follow the containing Button's icon size.
 Notification and Summary card triggers use the same `titlebar-popover` open
 fill and toolbar tooltip placement. Positional pane toggles keep their existing
-show/hide semantics; the terminal uses solid/dashed panel outlines for its state.
+show/hide semantics; the terminal uses the shared square-terminal outline.
 Native traffic lights and contributed brand icons retain
 their own identities.
 
@@ -130,7 +209,7 @@ nodes for generic integrations. Use 1.65px round-ended strokes on a 24px
 viewBox, scaled by the existing conversation glyph size and fixed glyph cell.
 Ordinary chats, Bot chats and child transcripts share this component. File-type
 icons remain separate from action icons; status, errors and provider logos keep
-their existing meanings. App navigation retains its approved Codicon geometry.
+their existing meanings. App navigation follows the approved Lucide geometry.
 
 Session action menus share `SessionMenuIcon` across the header, sidebar and tabs:
 16px outlines on a 24px viewBox with 1.75px round-ended strokes. Rename uses a
@@ -160,8 +239,8 @@ Existing Aino/Hermes components, routes, feature ownership and capabilities rema
 canonical. Do not replace them with prototype handlers or remove capabilities
 that the mockup does not show.
 
-- The default primary rail is 260px, resizable and persisted through the existing
-  layout store. Pale neutral navigation, soft selected rows, white reading and
+- The default conversation navigation is 252px, resizable and persisted through
+  the existing layout store. Pale neutral navigation, soft selected rows, white reading and
   management surfaces, hairline seams and restrained shadows form one hierarchy.
 - Use the existing system sans stack and remembered font preference. Reading
   and navigation roles are 14px, controls and labels 13px,
@@ -181,15 +260,12 @@ that the mockup does not show.
   Workspace selection still previews; only the explicit switch action activates it.
 - Native OS file pickers and third-party embedded documents keep their native
   presentation. Only app-owned surrounding chrome is themed.
-- The default Sessions/Bot rail uses a shared 56px brand row below the
-  native window controls. Its current title (Aino or the contributed pane name)
-  opens the existing dropdown menu, with descriptions and a checked current item.
-  This two-option menu uses a compact 240px width capped by the viewport,
-  56px minimum rows, 14px names and 12px descriptions, with shared menu/control
-  corners. Long localized descriptions wrap rather than widening the menu.
-  A lone pane has a static brand without a chevron. The host owns presentation;
-  existing pane activation still owns chat and routines. Unknown guests, layout
-  editing, detached panes and minimized zones retain the ordinary pane strip.
+- The persistent activity rail owns direct Aino and Bot workspace selectors.
+  They reuse existing pane activation and workspace scope; navigation does not
+  create a second chat or replace the active conversation. The conversation
+  column retains project, session and Bot roster controls rather than repeating
+  app-wide destinations. Detached panes and minimized zones retain their ordinary
+  pane strip.
 - Approval menus share one presentation in the composer and status bar: a
   320px surface (clamped to the viewport), 16px icons, 13px option names and
   12px supporting text. Plain-language choices explain the existing profile
@@ -197,11 +273,13 @@ that the mockup does not show.
   setting does not grant filesystem/network access or bypass system permissions
   and safety rules. Keep the existing gateway configuration and approval flow.
 
-Ordinary and one-to-one Bot conversations use the same 832px maximum measure
-for message bodies and the composer. Assistant portraits occupy a separate 44px
-left gutter so they never consume the body width. At chat-pane widths of 58rem
-or less, the portrait moves into an identity row above the reply to avoid edge
-clipping. Group conversations retain their independent, wider proportions.
+Ordinary conversations use an 832px maximum measure; canonical one-to-one Bot
+conversations use 760px. Each transcript stays aligned with its own composer.
+Ordinary assistant portraits are 25px and occupy a 38px gutter inside that
+measure. In chat panes at most 34rem wide, their identity moves above the reply
+to avoid clipping. Canonical Bot replies keep their identity row above the
+full-width answer at every width. Names come from the current conversation's
+exact owner. Group conversations retain their independent, wider proportions.
 
 ## Messaging connections
 
@@ -228,7 +306,7 @@ saved account retains its credentials; enabling it reuses the existing connectio
 Group conversations are a named-member desktop chat surface, scoped to the
 contracts in [the group design system](../../docs-local/group-human-redesign/DESIGN.md).
 Robot messages stay on the left and human messages on the right, using existing
-32px avatars, 14px body text, 12px metadata and a 74ch maximum message measure.
+32px avatars, 13px body text and 11px author labels.
 Historical human labels are preserved unless the current user's identity is
 known. The transcript uses a centered 1120px maximum lane, independently of the
 bounded 832px composer. Message bubbles take at most 78% of the desktop lane,
@@ -237,7 +315,8 @@ which become 16px in narrow panes, including when files or group information
 reduce the available reading area.
 
 A main group has one shell-owned title. Its content begins with a compact
-participant toolbar, sharing the `--aino-band-row2` height with adjacent tool tabs:
+participant toolbar using `--aino-band-row2`; adjacent tool tabs use their own
+41px strip rather than importing the conversation toolbar's height:
 existing portraits, readable names and state,
 search and group information. Standalone and older in-rail fallback surfaces
 retain their own title and Back; loading and failure gates follow the same
@@ -265,8 +344,9 @@ Bot keeps its shared search above one scrolling roster with separate
 Bots and Group chats sections. They stay visibly separate even on one gateway,
 with group counts beside their heading; activity never interleaves the two kinds.
 Bot and group rows share 32px portraits and a compact two-line layout:
-name, state and time above a real message preview or member summary. Time never
-adds a third row; long names truncate inside the available rail. Existing
+name and current state above a real Bot description or member summary. Bots without
+a description use the localized identity/conversation placeholder; historical message
+previews and age remain in the row's tooltip. Long names truncate inside the available rail. Existing
 remembered width, custom sections, hidden bots, filters, drag
 operations, context menus, notifications and host-owned account controls retain
 their owners. Group rows without real message previews show member information,
@@ -278,6 +358,48 @@ actions use the same eligible conversations; explicit splits retain independent
 current titles. Files, browser, review and terminal keep their tool tabs.
 Contributed group panes use captured room authority and workspaceScope metadata;
 renaming never changes identity or close/disband lifecycle callbacks.
+
+Canonical one-to-one Bot chats use a compact identity menu below the native
+window bar: a 28px avatar inside a 38px identity trigger, the exact source's name,
+Bot switching, its existing editor and its own model settings. Direct settings
+and a five-action menu sit on the right: settings, ordinary side chat, compact,
+search this chat, and manage Bots. Low-frequency session actions remain in the
+native tab/context menu;
+canonical registry titles cannot be renamed. Low-frequency roster activity
+notifications live in the search/filter menu. These surfaces use Aino's existing
+Light/Dark/System tokens, never a separate Grok palette.
+
+An idle, genuinely empty Bot chat centers a welcome heading, the existing live
+composer and three starting suggestions. Suggestions append to that exact
+session's draft and never auto-send. Flexible space surrounds the same mounted
+editor, so the first message changes placement without replacing draft or IME
+state. The composer keeps Add on the left and model, voice and send on the
+right; approval mode and reasoning intensity move into the Add menu. The model
+picker continues to label its changes as current-session only. Bot defaults
+remain in the existing configuration flow. Approval preferences retain their
+existing Profile semantics, scoped to the owning connection. Ordinary side
+threads, group chats, drafts, tool panels and their ownership keep their own
+layout and lifecycle.
+
+The canonical Bot composer uses a 28px radius and a 104px resting card: 54px
+input area plus a 48px toolbar and its border. It has one microphone entry;
+project choice, context usage and reasoning remain available through Add. The
+underside shows `/` skills and the current-chat model hint. Transcript and input
+share a 760px maximum measure with up to 52px gutters. The existing editor,
+draft, uploads, execution status and approval lifecycle stay mounted.
+
+Bot Summary uses a 320px rail and a 302px, 16px-radius card without a shadow.
+Its task plan shows completed and pending entries in their original order.
+The tool strip has stable Browser, Files, Terminal, Review and Collaboration
+categories; all retained and contributed tabs remain reachable from More.
+The default tool width is about 476px at 1440px, but a saved user width wins.
+Opening tools collapses Summary, closing restores it; a manual Summary reopen
+remains available. Browser and terminal bodies keep their lifecycle throughout.
+
+Group conversations use a 68px room identity row plus a 54px member/search row.
+Member portraits still mention that exact member; unavailable/not-joined badges
+remain visible and management retains the full roster and source details.
+Group models remain per member, and only advertised gateway actions are shown.
 
 The reply strip above the composer shows the current member's real 24px avatar,
 name and response/approval/stopping state. Queued counts come from actual member
@@ -319,17 +441,20 @@ animation invents streamed reply text or rewrites historical facts.
 
 - **Chat is the home surface.** The transcript and composer stay primary; tools,
   previews, files, review, and terminal complement the conversation.
-- **Workspace selection previews before switching.** A compact, searchable left
-  list sits beside the selected workspace's wider detail area. Selecting an item
-  only changes the inspected profile; the explicit footer switch action alone
-  reuses the existing profile activation flow. Selected and current are separate
-  states. Closing the inspector does not switch profiles or reopen it on a roster
-  refresh. The heading owns New workspace; the detail header reuses the existing
-  rename dialog and menus. Model settings, capabilities, SOUL.md editing and
-  storage retain their routes, persistence and profile scope. Narrow containers
-  stack list and detail; the overview may use compact cards when no detail is
-  inspected. The default workspace uses the Aino mark, while named workspaces
-  retain ProfileGlyph and their configured identity colors.
+- **Bot management owns persistent assistant identities.** The former workspace
+  page remains a full-page destination, named Bot management. Each named Bot is
+  one existing Profile with its own identity, model, skills, memory and history.
+  Aino is the protected main assistant, separate from the count of created Bots.
+  A searchable list previews the selected Bot's configuration; only an explicit
+  Open chat action enters its existing canonical conversation. Selection,
+  creation and import never switch the ordinary conversation's Profile. The page
+  reuses the Bot roster, avatars, creator, editor, deletion and archive flows,
+  contributed through `profiles.manager`; core retains its management fallback.
+  Config reads and actions bind the selected connection and backend Profile,
+  including same-named Bots on different services. Import preserves the current
+  conversation and window layout. Existing Profiles, files and conversations are
+  retained. Narrow containers stack list and detail. Internal route, CSS and
+  Profile identifiers remain compatible; they are not separate user concepts.
 - **Pages are durable destinations.** Chat, Settings, Skills, Messaging, and
   Artifacts remain in shell chrome. Durable management pages temporarily occupy
   the full work area while navigation remains available; saved pane layout and
@@ -390,9 +515,9 @@ animation invents streamed reply text or rewrites historical facts.
   Auxiliary task tables and MoA sections retain dynamic tasks, all routing,
   reasoning and existing autosave; schema-backed fallback/delegation controls
   keep their original owners. Hidden sources retain their local drafts.
-- **Route overlays are short tasks.** Command Center, Cron,
-  and Starmap render as `OverlayView` cards and return to the previous route on
-  close. Settings is a full-page workspace with its own navigation and return
+- **Route overlays are short tasks.** Command Center and Starmap render as
+  `OverlayView` cards and return to the previous route on close. Cron is a
+  full-page task directory; Settings is a full-page workspace with its own navigation and return
   affordance. Model/session pickers and dialogs layer above the current
   surface; they are not navigation stacks.
 - **Panes are working context.** Preview, files, review, and terminal remain
@@ -439,19 +564,24 @@ animation invents streamed reply text or rewrites historical facts.
   inside its pane, before sibling file, preview, review or terminal panes.
   File and preview focus never moves the card out of that conversation.
   It reserves a right-hand column, recentering the transcript and composer
-  together within that chat. It sits in a 320px rail with 12px outer gutters.
+  together within that chat. It sits in a 344px rail with a 320px card and
+  12px outer gutters.
   The rail shares the active chat
   canvas instead of painting a separate full-height sidebar; its compact paper
-  card uses 14px corners, the compact `--shadow-sm` elevation, 12px section labels and 13px regular
-  resource rows. Outputs and Sources keep their add actions in the section
-  header. Its shadow stays close to the card instead of tinting the full-height
-  rail or forming a clipped dark band. Empty Outputs retains that action without a large placeholder row.
+  card uses 14px corners, a close two-layer shadow, 11px section labels and regular
+  12px resource rows. Its 13px visible heading includes a More menu with the collapse action;
+  a current conversation title appears only when known. Outputs and Sources keep
+  their add actions in the section header. Its shadow stays close to the card instead of tinting the full-height
+  rail or forming a clipped dark band. Empty Outputs and Sources retain their add
+  actions and concise empty copy. Environment begins with one project row; paths,
+  model, profile, Git and changes expand only when the user opens it. The 10px
+  footer names the current conversation scope, never a prototype/sample status.
   The card scrolls independently and never mutates the user's saved tiling tree
-  or remounts chat/terminal surfaces. When its owning chat has less than 960px
+  or remounts chat/terminal surfaces. When its owning chat has less than 984px
   available, it floats at that chat's top-right, within the same pane. It never
   stacks beneath the composer or enters the file/tool panel. The compact card
-  keeps the same 320px width capped by its chat, scrolls independently, and uses
-  a scoped CSS anchor to stop above the existing composer dock. It does not
+  keeps the same 344px rail and 320px card, capped by its chat, scrolls independently,
+  and uses a scoped CSS anchor to stop above the existing composer dock. It does not
   reduce the chat's height. Opening takes 240ms and closing 160ms with a
   decelerating ease. Docked mode crops a fixed-width card as its rail expands;
   floating mode keeps its width and lightly shifts/fades the card. Closing
@@ -560,17 +690,17 @@ animation invents streamed reply text or rewrites historical facts.
   the entered project has no separate New session row. The compose icon reuses
   the main navigation artwork and the existing project-scoped creation action.
   Project menus own folder membership and the primary folder. Removing a project
-  or folder registration never deletes files or conversation history. Profile
-  management lives in Sidebar → Workspaces. Selecting a row only previews its
-  configuration; switching is an explicit action. The page reuses profile
-  creation, cloning, rename/delete and SOUL editing,
-  with profile-scoped model and capability controls. All profiles is a browse
-  scope, and opening a folder resolves to the active writable profile.
+  or folder registration never deletes files or conversation history. Bot
+  management lives in its own navigation destination. Projects supply folders
+  to ordinary conversations using Aino on the selected service; they do not
+  select another assistant identity. Explicit Bot conversations keep their
+  captured owner, while legacy conversations remain accessible without migration.
 - **Sidebar identity is the signed-in account.** Its circular avatar and name
   open Settings → My account. Use the account display name, falling back to its
   login identifier; workspace/profile selection must not change this identity.
-  The navigation shell owns this footer, so Sessions and Agent Hub keep the same
-  account and settings entry, including in the narrow-window sidebar overlay.
+  The far-left activity rail owns the account and settings entries, shared by
+  Sessions and Bot. Their conversation navigation columns leave the bottom blank,
+  without a service/connection footer or an extra settings shortcut.
   My account edits the nickname through the account backend. The sidebar follows
   the confirmed account state; a failed save keeps the prior name and editable draft.
 - **Conversation navigation has three sections:** Pinned appears only when it
@@ -590,15 +720,14 @@ animation invents streamed reply text or rewrites historical facts.
   Loading placeholders belong to the first read of a gateway/profile scope, so
   background refreshes never push the Recent list down and back up.
 
-Profile icons and condensed profile rows offer **Open in new window** and
-**Set as default** in their existing context menus. Opening a profile creates a
-full peer window without switching the source window. The desktop default
-applies at startup and to generic new chats; explicit profile/project actions
-and profile-specific windows keep their own destinations. Changing the default
-does not move existing sessions or replace the active conversation.
-Ordinary **New Window** (`⌘⇧N` / `Ctrl+Shift+N`) inherits its opener's device and
-profile only at startup, not as a window-specific default. Later device/profile
-selections remain authoritative for new chats unless a desktop default is set.
+Ordinary new conversations always use the selected service's `default` assistant
+(Aino), retaining the project's working folder. Returning from Bot restores the
+ordinary conversation and draft. Explicit Bot actions retain their captured
+owner and canonical chat registry. Legacy Profile shortcuts open that Bot chat
+through the manager contribution instead of switching the ordinary draft.
+Global Settings entries target Aino; an explicit Bot configuration entry targets
+that Bot. A peer window may retain its selected service, while ordinary New chat
+there still uses Aino. None of these actions migrates existing conversations.
 
 Navigation must preserve context. A background session finishing, a tool result
 arriving, or a project refresh may update badges and cached data; it must not
@@ -636,7 +765,7 @@ body copy at 1.6 line height, 14px navigation,
 13px controls, activity and group labels, 12px supporting metadata, and 16px
 section headings and 18px dialog headings. Conversation size aliases resolve
 from these existing Aino roles. Conversation text defaults to 100% (14px),
-with a 1.6 reading line height, 18px/16px first/second-level reply headings,
+with a 1.75 conversation line height, 18px/16px first/second-level reply headings,
 and 13px code and reasoning text. These sizes scale together with the reader's
 saved chat preference; metadata and surrounding navigation remain independent.
 Settings inherits the same 14px reading/navigation role, 13px form labels,
@@ -767,6 +896,18 @@ Its content owns internal spacing and viewport limits. `showArrow={false}` omits
 the pointer for toolbar cards; other popovers keep their existing arrow.
 The summary rail reuses its paper surface through `CARD_SURFACE_CLASS` in
 `src/components/ui/card-surface.ts`, without popover dismissal or focus capture.
+It commits its final 344px dock width once and reveals through a 220ms crop;
+closing releases the reading column immediately and crops the old card at its
+captured viewport bounds over 160ms. It shares the tool deck's timing rather
+than continuously rewrapping prose. Compact summaries remain overlays. Tool
+opening still collapses Summary, and tool closing restores it; an explicit
+Summary toggle remains available while tools are open.
+Summary uses 13px resource/task labels and 12px headings, status and metadata.
+Empty output/source chapters do not reserve separate cards or repeated empty
+copy. Creation stays available as a compact action and source attachment in the
+existing menu. Pending plans and running, failed or interrupted child work stay
+visible; completed plan items and child outcomes have explicit history
+disclosures. Every child row retains its original owner and detail target.
 
 **Queued cards:** `CardStack` (`src/components/ui/card-stack.tsx`) consumes a live,
 keyed list, retaining the current item when more arrive. Inline and floating
@@ -812,21 +953,21 @@ renderer and Electron's first window paint.
 
 ## Stroke & color tokens
 
-| Token | Use |
-| --- | --- |
-| `--ui-stroke-primary…quaternary` | hairlines, in descending strength |
-| `--ui-stroke-tertiary` | the default in-panel divider / list hairline — and every bordered surface in the transcript |
-| `--stroke-nous` | the overlay hairline (pairs with `shadow-nous`) |
-| `--ui-text-primary / -secondary / -tertiary` | text hierarchy |
-| `--ui-bg-quaternary` | soft control fill (secondary button) |
-| `--ui-widget-surface-background` | fill for inline chat widgets (`WIDGET_SHELL_CLASS`) |
-| `--chrome-action-hover` | hover fill for quiet controls |
-| `--theme-primary`, `--ui-accent` | brand/accent |
-| `--aino-action-bg / -fg / -hover` | muted brand primary action and contrast-safe inverse; shared by button, switch and checkbox |
-| `--aino-radius-control / -row / -panel` | 6px controls and selected rows, 16px floating panels |
-| `--aino-text-caption / -label / -ui / -body / -title / -page-title` | 12 / 13 / 13 / 14 / 16 / 24px base roles; settings shares these roles and uses a 22px page title |
-| `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
-| `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
+| Token                                                               | Use                                                                                                       |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `--ui-stroke-primary…quaternary`                                    | hairlines, in descending strength                                                                         |
+| `--ui-stroke-tertiary`                                              | the default in-panel divider / list hairline — and every bordered surface in the transcript               |
+| `--stroke-nous`                                                     | the overlay hairline (pairs with `shadow-nous`)                                                           |
+| `--ui-text-primary / -secondary / -tertiary`                        | text hierarchy                                                                                            |
+| `--ui-bg-quaternary`                                                | soft control fill (secondary button)                                                                      |
+| `--ui-widget-surface-background`                                    | fill for inline chat widgets (`WIDGET_SHELL_CLASS`)                                                       |
+| `--chrome-action-hover`                                             | hover fill for quiet controls                                                                             |
+| `--theme-primary`, `--ui-accent`                                    | brand/accent                                                                                              |
+| `--aino-action-bg / -fg / -hover`                                   | muted brand primary action and contrast-safe inverse; shared by button, switch and checkbox               |
+| `--aino-radius-control / -row / -panel`                             | 6px controls and selected rows, 16px floating panels                                                      |
+| `--aino-text-caption / -label / -ui / -body / -title / -page-title` | 12 / 13 / 13 / 14 / 16 / 24px base roles; settings shares these roles and uses a 22px page title          |
+| `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring`             | shared paper, rail, strokes, state fills, backdrop and input focus                                        |
+| `--aino-landing-*`, `--shadow-aino-landing-composer`                | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
 Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. The two tiles in
 `BrandMark` (white in light mode, `#0d1117` in dark) are the sanctioned literals
@@ -843,7 +984,7 @@ fill/shadow), `ghost`, `floating` (a control loose from any surface — opaque
 popover fill + shared elevation, hover lifts the glyph only), `link`, `text`
 (boxless quiet inline — "Cancel", "Clear"), `textStrong` (bold underlined
 inline affordance — "Change", "Open logs"), `titlebar-popover` (quiet toolbar
-trigger with a soft open fill; `icon-titlebar` uses the shared control radius).
+trigger with a soft open fill; `icon-titlebar` uses the shared toolbar radius).
 `grip` is the quiet, fill-free drawer handle; pair it with size `grip` for a
 48×16 hit area around a small horizontal ridge.
 
@@ -946,10 +1087,11 @@ context-dependent (e.g. "Show" / "Hide"). Never hardcode combos; always use
 `useKeybindHint` or `TipKeybindLabel`.
 
 Notes:
+
 - Text and icon buttons use the shared 6px control radius; text sizes use padding
-  + line-height with a 32px default / 28px small minimum, allowing wrapped or
-  scaled content to grow. Boxless text/link actions have no radius.
-  Primary actions use `--aino-action-*`, not the link accent.
+  - line-height with a 32px default / 28px small minimum, allowing wrapped or
+    scaled content to grow. Boxless text/link actions have no radius.
+    Primary actions use `--aino-action-*`, not the link accent.
 - SVGs inherit `size-3.5` (`size-3` at `xs`). Don't re-set icon size.
 - Polymorph with `asChild` when the button must render as a link/Slot.
 
@@ -1020,7 +1162,7 @@ cancelled or scrolling gestures do not. Native Desktop keeps its overlay until
 Escape, the toggle or hover-out. Touch transcript gestures select a pane without
 focusing its composer.
 
-- **Navigation rail:** new layouts open at 260px. Existing saved widths remain
+- **Navigation rail:** new layouts open at 252px. Existing saved widths remain
   authoritative, and the supported 245px minimum is unchanged. A quiet gray rail
   continues into its portion of the native titlebar, with one continuous hairline at the content boundary.
   The tree sash owns the divider and its resize target; panes do not add
@@ -1039,7 +1181,9 @@ focusing its composer.
   Navigation uses bare line icons, primary-ink labels, smaller section labels
   and soft neutral hover/selection fills without inset outlines.
 - **Primary chat header:** the active conversation title and its existing
-  session menu share the window titlebar with session search. Slots shrink
+  session menu share the window titlebar with session search. Its folder or
+  conversation icon has no status-dot overlay; session status stays in the list.
+  Slots shrink
   within the chat pane and native/window-tool boundaries; long titles ellipsize and search
   results open below the field without resizing the chat. Do not reserve a
   second header row for a session-only primary group. Mixed pane tabs,
@@ -1047,21 +1191,30 @@ focusing its composer.
   Settings and auxiliary windows never borrow the primary window's header.
 - **Shell boundaries:** titlebar, navigation, tool tab strips and tree sashes use
   one 1px `--ui-stroke-secondary` border at full opacity, aligned to whole pixels.
-  The header boundary stays visible on Home and in conversations; vertical seams
-  begin immediately beneath it, including alongside tool tabs. Rail paint stops
-  above the header border. The existing 8px resize target and hover/drag band
+  The main window's workspace (navigation plus content) uses the shared 16px panel
+  radius on all four corners, including full-page management routes. Its frame
+  owns the outer edges instead of duplicating titlebar/activity-rail borders;
+  interior panes remain square. Keep the rounded frame free of transforms and new
+  scrolling/positioning contexts so fixed panels and native previews retain their hosts.
+  The header boundary stays visible on Home and in conversations; internal vertical seams
+  begin immediately beneath it, including alongside tool tabs. The existing 8px resize target and hover/drag band
   remain independent of the resting line; panes never add competing edge borders.
+  Windows/Linux tools start at the left inset from the first paint and reserve
+  native caption buttons on the right. Live WCO measurements are already CSS pixels;
+  only the native DIP fallback is divided by page zoom. Renderer-owned WSLg captions
+  retain their CSS width, and fullscreen releases the caption reservation. Pane
+  overlap calculations use the same shared 44px band as the native window.
 - **Gutters:** generic overlays reuse `PAGE_INSET_X` / `PAGE_INSET_NEG_X`
   (`src/app/layout-constants.ts`). Management page owners align heading, tabs,
-  search and results on one 1088px outer column with 32px side gutters, reducing
+  search and results on one 1040px outer column with 54px desktop side gutters, reducing
   to their compact gutters on narrow containers. Settings owns its separate
   reading column. Do not add a theme-wide route selector to correct a page's
   internal geometry.
 - **Master/detail overlays:** `OverlaySplitLayout` + `OverlaySidebar` /
-  `OverlayMain`. Cron, profiles, etc. ride this — don't rebuild a titlebar
-  shell.
+  `OverlayMain`. Detail-oriented routes reuse these primitives; Cron uses its
+  full-page directory and inline details. Do not rebuild a titlebar shell.
 - **Settings shell:** `SettingsShell` reuses `OverlaySplitLayout` and `OverlayNav`
-  for the 236px navigation column (220px at the compact desktop breakpoint),
+  for its own 252px category column,
   back/search controls and active-route title. Four open, non-interactive
   section labels organize every destination: personal/appearance, conversation/
   intelligence, work/connections and security/system. Settings navigation never
@@ -1073,9 +1226,11 @@ focusing its composer.
   navigation has no system footer. More retains configuration import/export,
   confirmed reset and About with live version/update state. Runtime popovers
   open below the header; their existing profile and connection scope remains.
-  Main content uses a white reading surface with a bounded 56rem body, 44px
-  desktop insets and its own scroll owner. Embedded bare content keeps its
-  caller's width instead of importing a 56rem minimum. The complete native
+  Main content uses a white reading surface with a bounded 52rem body, 48px
+  desktop insets (36px below 1200px) and its own scroll owner. Below 760px,
+  the existing full navigation dropdown replaces the category column and
+  content insets become 20px. Embedded bare content keeps its
+  caller's width instead of importing a 52rem minimum. The complete native
   account subtree — wallet, subscriptions, orders, usage and devices — remains
   behind its existing account and runtime capability gates. Preview fixtures
   must exercise that native account path rather than treating a legacy dev
@@ -1111,6 +1266,13 @@ focusing its composer.
   Search and saved field links resolve to the owning child before highlighting.
 - **Rows:** `ListRow` (settings `primitives.tsx`) for label/description/action
   rows. Flat, flush-left; no per-row indentation that fights flush headers.
+  Settings use 13px labels, 14px section titles, 32px form controls and a
+  29×17px switch. Account device details stay flat inside their owning section.
+- **Scheduled tasks:** a bounded 1040px page with title, description, New task,
+  search and refresh above flat task rows. Selecting a row reveals the existing
+  detail and run-history controls. Collapsing it keeps live run history mounted.
+  Blueprints remain available in a collapsed catalogue; searching reveals them.
+  A failed initial load offers Retry instead of presenting an empty task list.
 - **Messaging:** platform cards open the existing configuration in a shared
   `Dialog`; they do not change the active workspace. Domestic platforms lead,
   runtime/plugin platforms remain discoverable, and gateway health is separate
@@ -1131,7 +1293,7 @@ focusing its composer.
   one, and clicking the current category or All clears it. Sources and tags retain
   their existing multi-select filter behavior.
   Skills, plugins, connectors and toolset search/results share the capability
-  page owner's 1088px outer column and 32px gutters, with space above the first
+  page owner's 1040px outer column and 54px desktop gutters, with space above the first
   section. Embedded catalogues respect the owner's supplied width.
   Skill details open in the existing dialog as a right drawer with overview and
   usage tabs; usage retains the full original instructions and existing editing
@@ -1162,6 +1324,11 @@ adjacent toolbar and panel reservations do not jump when native state arrives.
 Windows/Linux retain their previous toolbar startup fallback until native state arrives.
 
 The left window-control cluster contains one navigation expand/collapse button.
+The main window's activity rail owns Aino/Bot mode navigation; its sidebar
+header identifies the current mode without repeating the dropdown. Auxiliary
+windows and narrow overlays retain the mode menu where it is needed. Sidebar
+search keeps its current list/profile scope; titlebar search explicitly names
+its cross-Bot conversation scope, including its dialog's input placeholder.
 Its rounded panel glyph is shared with the right-sidebar and local panel Hide
 controls. Navigation collapses completely, leaving no vertical Sessions/Bot tab
 rail; the titlebar button restores the saved width and current mode. Notification,
@@ -1292,17 +1459,23 @@ so glass and message-bubble transparency do not reveal scrolling text.
 Ordinary and Bot transcripts and composers share a bounded 832px maximum
 and the same centered column in their actual chat container. Group transcripts
 use the wider lane described above, while their composers retain this bound.
-The transcript measures that outer container, including its scrollbar, so
+The transcript and composer reserve the same fixed 6px scrollbar space, so
 scrolling cannot shift its edges away from the composer in narrow panes.
 Opening tools or Summary reduces that container instead of borrowing the window
 width. Narrow panes reduce their gutters; resizing the window never stretches
 the editor across an unbounded reading surface. The home composition retains
-its existing measure. Composer surfaces use one lightly tinted theme fill for
-the editor and attached drawers, a fine border, and a stronger editor-focus
-border shared with group chat; light and dark palettes come from ThemeProvider.
+its existing measure. Conversation composers use the elevated paper fill for
+the editor and attached drawers, a fine border, a close shadow and a stronger
+editor-focus border shared with group chat; light and dark palettes come from ThemeProvider.
 Bot reply portraits resolve through the message's
 exact workspace owner and existing Bot artwork; another selected Bot cannot
 replace a split conversation's identity. Ordinary replies retain the Aino mark.
+Conversation prose uses a 1.75 line height, 14px paragraph gaps and 32px turn gaps.
+Composer model/approval labels and reply metadata use the 12px caption role.
+Ordinary user bubbles have 14px
+corners with a 4px trailing lower corner; group bubbles have 12px corners with
+a 3px upper corner facing the speaker. These message-specific corners do not
+change the shared card or control radius scale.
 
 Appearance → Theme & text keeps **Global UI Scale** as whole-window zoom (100% by
 default), including navigation, settings, controls and chat text. **Chat Text Size**
@@ -1360,12 +1533,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   regular weight and the shared line-height and glyph columns. At the normal
   desktop scale, prose and user bubbles are 14px, activity uses the 13px UI role
   and shared conversation line height, and glyphs are 14px in a 16px cell.
-  Prose uses 1.6 line height; headings scale from the reading size
+  Conversation prose uses 1.75 line height; headings scale from the reading size
   (18/16/14px for h1/h2/h3 at that scale). The approved reply presentation uses a
   neutral soft user bubble, a faint shared table-header fill and continuous
   unboxed prose. Disclosure carets sit immediately
-  after their label, with width reserved while hidden. They appear on that
-  toggle's hover or keyboard focus; touch inputs retain a visible affordance.
+  after their label and remain visible at rest, strengthening on hover or
+  keyboard focus. Touch inputs retain the same discoverable affordance.
   Independent row actions stay outside the toggle. Native thinking keeps
   its full content behind a fine vertical guide; code surfaces use a hairline
   border and retain their copy, scrolling and expansion controls. Markdown
@@ -1401,6 +1574,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   rows, without a second process heading or divider. After completion, one
   plain disclosure can fold the response activity; explicit user choices
   survive subsequent running/completed transitions.
+  The first assistant message retains the same portrait and header through
+  running, completion and resumed work. Aino and recorded duration share one
+  row; completion does not move the portrait to another container. The final
+  answer remains outside the process fold. If a person is using a control
+  inside the process when work finishes, keep that detail open until focus
+  leaves; approvals, interrupted replies and failures never auto-fold.
   The header reports the recorded turn duration, or simply "Activity" when
   no duration is available. Explicit final text stays outside the collapsed
   process; progress and tool detail retain their chronological order inside.
@@ -1502,9 +1681,18 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 - Files, previews, Browser, Terminal, Review and explicitly opened Logs share one
   tool group backed by the existing pane tree. Its plus opens a localized new-tab
   chooser, with a discoverable tab list, maximize/restore and full-panel hide.
-  The tool-only PaneTabStrip variant is 45px high with 32px tabs, 3px gaps,
-  6px selected outlines, 12px labels and 14px lead icons; other
+  The tool-only PaneTabStrip variant is 41px high with 40px flat tabs,
+  a 2px selected underline, 12px labels and 14px lead icons; other
   custom tab strips retain their existing geometry.
+  Safe tool groups share a 34vw default width capped at 650px, independent of
+  which tool is selected. A saved user resize remains authoritative. Resize and
+  explicit reset apply to hidden tool tabs too, so an old Files width cannot
+  reappear when switching tabs. Existing chat and tool instances stay mounted.
+  Browser navigation/address/zoom and operation/status controls occupy separate
+  45px and 33px rows. Files and terminal metadata use 43px rows. File trees have
+  32px rows without an extra legacy titlebar spacer; file previews share the same
+  compact typography. Browser, Files, Review and Terminal retain their native
+  content, controls and persistent instances behind this common presentation.
   Hide releases all of that group's width and keeps its selected tab and live
   resources. Every safe tool-only group uses this chrome, including an unmarked
   group created by dragging; minimized tools never leave a vertical header rail.
@@ -1542,7 +1730,7 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 - **Inline widgets** — a tool result that renders as a panel the user reads or
   acts on (clarify, artifact card) wears `WIDGET_SHELL_CLASS`
   (`src/components/chat/widget-shell.ts`): shared radius, the
-  `--ui-widget-surface-background` fill, no border. Its actions sit *outside*
+  `--ui-widget-surface-background` fill, no border. Its actions sit _outside_
   the panel, below it. Don't give one widget its own radius or fill.
 - Bordered surfaces in the transcript (tables, fences, callouts, attachments)
   use `--ui-stroke-tertiary`. Not `border-border` — that's the app-wide
@@ -1634,18 +1822,32 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   (toasts, tooltips, command surfaces) and `--z-over-modal-content`,
   `--z-switcher-backdrop` / `--z-switcher`, then the boot chain
   `--z-connecting` → `--z-onboarding` → `--z-setup` → `--z-crash`. Plain
-  `z-10`/`z-20` are still right for stacking *within* one component.
+  `z-10`/`z-20` are still right for stacking _within_ one component.
 
 ## Iconography & brand
 
+- Approved activity navigation, management pages and tool chrome use the existing
+  `lucide-react` line family at 1.65px. Shared toolbar icons use 18px drawings;
+  compact tool and menu rows use 14–16px. Existing provider brands, editor symbols
+  and file artwork retain their accurate identities.
+
+- The Bot mode entry and its pane tab share `BotModeIcon`: the user-selected
+  Open Bot Avatar Ghost, with its white silhouette and dark pill eyes. A fine
+  contrast edge retains legibility on the light navigation rail; dark mode
+  keeps the same white identity. The original local renderer supplies gentle
+  movement, blinks and pointer-following at 20px/14px. It respects system reduced
+  motion, sleeps offscreen and pauses with hidden/minimized windows and panes;
+  React never renders its animation frames. The pinned definition and MIT notice
+  live in `src/assets/open-bot-avatar/`; the plugin consumes the existing UI SDK.
+
 - **Codicons** supplies 128 official SVG geometries from `@vscode/codicons`
-  0.0.45 for application/chrome icons. Eight symbols without a semantic
+  0.0.45 for existing editor and extension icons. Eight symbols without a semantic
   equivalent retain their IconPark source, normalized into the same 16-unit
   viewport with one-pixel optical strokes at 16px; they are not official Codicons.
   Import the existing curated aliases and `iconSize` scale from `src/lib/icons.ts`;
-  feature code must not import another icon package. Static paths, licenses and
+  specialized editor and extension consumers retain these aliases. Static paths, licenses and
   exact source mappings live in `src/assets/aino-icons/`, including
-  `codicon-provenance.json`; navigation masks use that same geometry.
+  `codicon-provenance.json`.
 - **`Codicon`** preserves the editor/plugin name API. Common application names
   render the same approved SVGs through `src/components/ui/codicon.tsx`, including
   `codiconIcon()` for component-shaped consumers. Specialized editor/Git names
@@ -1679,11 +1881,11 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   `prefers-reduced-motion` for anything beyond a fade.
 - Hover paints instantly; only the return eases. Put the transition on the
   resting state and drop it while hovered (`transition-colors duration-100
-  hover:transition-none`, or the CSS equivalent on `:hover`). A group that
+hover:transition-none`, or the CSS equivalent on `:hover`). A group that
   dims siblings goes instant too. Exceptions are named, e.g. the catalog
   card's arc border fades in and out.
 - Choreographed exits (e.g. onboarding's "matrix" fade-down) stagger per-element
-  then settle the surface — the outer container's fade is *delayed* so it
+  then settle the surface — the outer container's fade is _delayed_ so it
   doesn't swallow the inner animation. Don't let a global fade race the detail.
 - Motion follows state; it never delays state. Selection, drag targets, cancel,
   and pressed feedback paint in the current frame.
@@ -1837,7 +2039,6 @@ The detailed state contract lives in the scoped
 - [ ] Touched a primitive, token, or variant? Its named-contract entry in this
       file is updated in the same change.
 
-
 ### Collaboration capsule
 
 Subagent inspection uses one standing **Subagents** tab in the existing tool
@@ -1848,10 +2049,12 @@ same receipt-bound portrait and short name. Full instructions and execution
 activity belong in the detail view, with Back returning to the list. New
 delegations can supply a short display name; older unnamed tasks retain a short
 title without changing the original goal. Names never participate in routing.
-When no child is running or queued, Summary collapses to one clickable row of
-up to four receipt-bound portraits and truthful status counts, without task names
-or a separate view-all link. Only live children expand into named rows; the compact
-row still opens the same Subagents tab and never treats an old dispatch as completion.
+Summary shows up to five current or attention-needed child rows, with running
+and queued children first. Completed outcomes and historical dispatches stay
+behind an explicit history disclosure, retaining their recorded status.
+Every row opens that exact child's detail;
+the section header opens the complete list. Portraits and status counts come from
+the same receipts, and a historical dispatch never counts as completion.
 Summary and transcript entries follow the existing tool-session owner and conversation.
 The capsule's View session opens the exact captured child inside this same tab,
 without activating its parent or a group's hidden member chat. The inspection
@@ -1883,7 +2086,6 @@ dismiss after six seconds while collapsed; failures stay until reviewed or dismi
 Returning to retry prepares the original goal in that conversation's existing draft
 without sending it or pretending to revive a terminated child. Details retain live
 activity, files, model/usage and optional additional instructions.
-
 
 ### Browser page fitting and fixed workspace regions
 

@@ -6,14 +6,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.625rem;
-  padding: 0.875rem 1rem;
-  border-radius: var(--aino-radius-row);
-  background: var(--ui-bg-tertiary);
+  gap: 0.8125rem;
+  margin-bottom: 2rem;
+  padding: 1.1875rem 0 1.375rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-current-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: var(--aino-navigation-rail);
+}
+.default-main-model-current-icon > svg {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 .default-main-model-current-copy {
   min-width: 0;
+  flex: 1;
 }
 .default-main-model-current-label {
   margin: 0 0 0.3125rem;
@@ -22,18 +35,18 @@
 }
 .default-main-model-current-value {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 0.5625rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-body);
-  font-weight: 500;
+  font-size: 0.9375rem;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .default-main-model-current-source,
 .default-main-model-current-state {
   color: var(--ui-text-tertiary);
-  font-size: var(--aino-text-caption);
+  font-size: 0.6875rem;
   font-weight: 400;
 }
 .default-main-model-current-state {
@@ -41,38 +54,23 @@
   align-items: center;
   flex-shrink: 0;
   gap: 0.3125rem;
+  color: var(--ui-green);
 }
 .default-main-model-current-state > svg {
   width: 0.875rem;
   height: 0.875rem;
 }
 .default-main-model-heading {
-  margin-bottom: 0.875rem;
+  margin-bottom: 0.625rem;
 }
-.default-main-model-heading [data-settings-section-heading] {
-  margin-bottom: 0.3125rem;
-}
-.default-main-model-heading > p {
-  margin: 0 0 0 1.5rem;
-  color: var(--ui-text-secondary);
-  font-size: var(--aino-text-caption);
-  line-height: 1.6;
-}
-.default-main-model-fields {
-  border-top: 1px solid var(--ui-stroke-tertiary);
+.default-main-model-heading h2 {
+  font-size: var(--aino-text-body);
+  font-weight: 600;
 }
 .default-main-model-source-row {
-  display: grid;
-  grid-template-columns: 8.375rem minmax(0, 1fr);
+  display: flex;
   align-items: start;
-  gap: 1.5rem;
-  padding-block: 1.0625rem;
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
-}
-.default-main-model-source-label {
-  padding-top: 0.5rem;
-  color: var(--ui-text-secondary);
-  font-size: var(--aino-text-body);
+  padding-block: 0.3125rem 1.125rem;
 }
 .default-main-model-source-choice {
   min-width: 0;
@@ -81,18 +79,15 @@
   display: inline-flex;
   flex-wrap: wrap;
   max-width: 100%;
-  gap: 0.25rem;
-  padding: 0.25rem;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  border-radius: 0.5rem;
+  background: var(--aino-navigation-rail);
 }
 .default-main-model-source-options > button {
-  min-height: 2rem;
-  gap: 0.4375rem;
-  padding-inline: 0.875rem;
-  font-size: var(--aino-text-body);
-}
-.default-main-model-source-options > button > svg {
-  width: 0.9375rem;
-  height: 0.9375rem;
+  min-height: 1.8125rem;
+  padding-inline: 0.9375rem;
+  font-size: var(--aino-text-caption);
 }
 .default-main-model-source-description,
 .default-main-model-scope-hint {
@@ -120,24 +115,37 @@
 }
 .default-main-model-controls .settings-row-label {
   color: var(--ui-text-secondary);
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
   font-weight: 400;
 }
 .default-main-model-controls [data-slot='select-trigger'] {
-  min-height: 2.25rem;
-  font-size: var(--aino-text-body);
+  min-height: 2rem;
+  font-size: var(--aino-text-caption);
 }
-.default-main-model-controls-builtin [aria-haspopup='dialog'] {
+.platform-model-settings-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.6875rem;
   min-height: 3rem;
   text-align: start;
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
+}
+.platform-model-settings-trigger > svg {
+  flex-shrink: 0;
+  color: var(--ui-text-tertiary);
+}
+.platform-model-settings-dropdown {
+  width: var(--radix-popover-trigger-width);
+  max-height: min(28rem, var(--radix-popover-content-available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .default-main-model-connection {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4375rem;
-  margin: 0.6875rem 0 0 9.875rem;
+  margin: 1.25rem 0 0;
   color: var(--ui-text-secondary);
   font-size: var(--aino-text-caption);
   line-height: 1.6;
@@ -155,12 +163,20 @@
   gap: 0.75rem 1.25rem;
   margin-top: 1.0625rem;
 }
+.default-main-model-actions .default-main-model-scope-hint {
+  flex: 1 1 18rem;
+  max-width: 48ch;
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.7;
+}
 .default-main-model-save-state {
   color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
 }
 .default-main-model-actions > button {
-  min-height: 2.125rem;
+  margin-inline-start: auto;
+  min-height: 2rem;
   padding-inline: 0.75rem;
   font-size: var(--aino-text-caption);
 }
@@ -171,7 +187,20 @@
   margin-top: 0.875rem;
 }
 .default-main-model-defaults {
-  margin-top: 2rem;
+  margin-top: 1rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+.default-main-model-defaults > summary {
+  cursor: pointer;
+  padding-block: 0.375rem;
+}
+.default-main-model-defaults > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+.default-main-model-defaults > div {
+  padding-top: 1rem;
 }
 .default-main-model-parameters > [data-settings-section-heading] {
   margin-bottom: 0.3125rem;
@@ -195,7 +224,7 @@
   padding-block: 0.8125rem;
 }
 .default-main-model-parameters .settings-row-label {
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
   font-weight: 400;
 }
 .default-main-model-parameters .settings-row-description {
@@ -215,14 +244,10 @@
   font-size: var(--aino-text-caption);
 }
 @container (max-width: 34rem) {
-  .default-main-model-source-row,
   .default-main-model-controls [data-settings-row-body],
   .default-main-model-parameters [data-settings-row-body] {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5625rem;
-  }
-  .default-main-model-source-label {
-    padding-top: 0;
   }
   .default-main-model-current {
     align-items: start;
@@ -234,6 +259,67 @@
     justify-content: flex-start;
     justify-self: start;
   }
+}
+
+.platform-model-settings-catalog {
+  min-width: 0;
+}
+.platform-model-settings-catalog [data-slot='command'] {
+  overflow: hidden;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0.5625rem;
+  background: transparent;
+}
+.platform-model-settings-catalog [data-slot='command-list'] {
+  max-height: 26rem;
+}
+.platform-model-settings-catalog [cmdk-group] {
+  padding: 0;
+}
+.platform-model-settings-catalog [cmdk-item] {
+  min-height: 4.1875rem;
+  gap: 0.6875rem;
+  padding: 0.8125rem 0.875rem;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-ui);
+}
+.platform-model-settings-catalog [cmdk-item] + [cmdk-item] {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+.platform-model-settings-catalog [cmdk-item][data-model-selected] {
+  background: var(--aino-navigation-rail);
+}
+.platform-model-settings-catalog [cmdk-item][data-selected='true'] {
+  background: var(--ui-row-hover-background);
+}
+.platform-model-settings-catalog [cmdk-item] > svg:first-child {
+  flex: 0 0 auto;
+  color: var(--ui-text-tertiary);
+}
+.platform-model-settings-catalog [cmdk-item] > span:first-of-type > span:first-child {
+  font-weight: 550;
+}
+.platform-model-settings-catalog [cmdk-item] > span:first-of-type > span:last-child {
+  margin-top: 0.1875rem;
+  font-size: 0.6875rem;
+}
+.platform-model-settings-catalog > details {
+  margin-top: 0.4375rem;
+  padding: 0.25rem 0;
+  border: 0;
+  font-size: 0.6875rem;
+}
+.platform-model-settings-catalog > details > summary {
+  width: fit-content;
+  margin-inline-start: auto;
+}
+.platform-model-settings-catalog > details[open] {
+  padding-bottom: 0.75rem;
+}
+.platform-model-settings-catalog > details[open] > summary {
+  margin-bottom: 0.75rem;
 }
 
 .default-main-model-connection[data-connected]::before {

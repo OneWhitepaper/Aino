@@ -442,6 +442,52 @@ describe('composer queue terminal payload persistence', () => {
     resetFrozenQueuedTransportsForTests()
   })
 
+  it('retains exact frozen transport across queue and edit while persisting only the chip projection', () => {
+    const transport = `\n    ${SELECTION_A_TRANSPORT}  \n\n`
+
+    const entry = enqueueQueuedPrompt(SESSION_KEY, {
+      attachments: [],
+      text: transport,
+      displayText: TERMINAL_CHIP_DRAFT,
+      frozenTransport: transport
+    })!
+
+    expect(getFrozenQueuedTransport(entry.id)).toBe(transport)
+    expect(resolveQueuedPromptTransport(entry)).toEqual({
+      ok: true,
+      displayText: TERMINAL_CHIP_DRAFT,
+      transportText: transport
+    })
+    const raw = String(window.localStorage.getItem(QUEUE_STORAGE_KEY))
+
+    expect(raw).not.toContain(SELECTION_A)
+    expect(JSON.parse(raw)[SESSION_KEY][0].text).toBe(TERMINAL_CHIP_DRAFT)
+
+    const replacement = `${transport}\n`
+
+    updateQueuedPrompt(SESSION_KEY, entry.id, {
+      text: TERMINAL_CHIP_DRAFT,
+      displayText: TERMINAL_CHIP_DRAFT,
+      frozenTransport: replacement
+    })
+    const updated = getQueuedPrompts(SESSION_KEY)[0]!
+
+    expect(getFrozenQueuedTransport(entry.id)).toBe(replacement)
+    expect(resolveQueuedPromptTransport(updated)).toEqual({
+      ok: true,
+      displayText: TERMINAL_CHIP_DRAFT,
+      transportText: replacement
+    })
+    expect(queuedSubmissionId(updated)).not.toBe(entry.id)
+
+    updateQueuedPrompt(SESSION_KEY, entry.id, {
+      text: TERMINAL_CHIP_DRAFT,
+      displayText: TERMINAL_CHIP_DRAFT,
+      frozenTransport: `${replacement}\n`
+    })
+    expect(queuedSubmissionId(getQueuedPrompts(SESSION_KEY)[0]!)).not.toBe(queuedSubmissionId(updated))
+  })
+
   it('does not persist frozen terminal CONTENTS into hermes.desktop.composerQueue.v1', () => {
     const entry = enqueueQueuedPrompt(SESSION_KEY, {
       attachments: [],

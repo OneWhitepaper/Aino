@@ -81,7 +81,7 @@ import { useComposerActions } from './hooks/use-composer-actions'
 import { paneMirror } from './pane-mirror'
 import { SessionDraftTitle } from './session-draft-title'
 import { startSessionDrag } from './session-drag'
-import { SessionStatusDot } from './session-status-dot'
+import { SessionHeaderLead } from './session-header-lead'
 import { useSessionTileActions } from './session-tile-actions'
 import { tileOwnerRoute } from './session-tile-owner'
 import { reasoningEffortPending, type SessionView, SessionViewProvider } from './session-view'
@@ -1048,8 +1048,6 @@ export const watchSessionTiles = paneMirror<SessionTile>({
   // slice, so the strip must re-sync when the slice that owns a gateway
   // conversation lands — it arrives on its own fetch, after the tiles register,
   // and without it the tab stays stuck on its "New session" placeholder.
-  // (The tab's status dot subscribes to color/state itself, so it needs no
-  // `also` entry.)
   also: [$sessions, $cronSessions, $messagingSessions, $projectTree, $workspaceOwnerLabels],
   key: t => t.storedSessionId,
   prefix: 'session-tile',
@@ -1058,13 +1056,7 @@ export const watchSessionTiles = paneMirror<SessionTile>({
   before: t => t.before,
   minWidth: '20rem',
   title: tileCaption,
-  // The tab's status dot — the SAME primitive the sidebar row renders, keyed by
-  // the stored id, so a session's status/color can never disagree between the
-  // two surfaces. Self-subscribing (live state + resolved color), so the strip
-  // needn't re-sync when it changes.
-  tabLead: storedSessionId => (
-    <SessionStatusDot session={tileStoredRow(storedSessionId)} storedSessionId={storedSessionId} />
-  ),
+  tabLead: storedSessionId => <SessionHeaderLead session={tileStoredRow(storedSessionId)} />,
   // Until the first turn lists a row there is no title to register, so the tab
   // takes its name from the composer instead — live, without re-registering.
   tabTitle: storedSessionId =>

@@ -47,7 +47,9 @@ import {
   refChipElement,
   renderComposerContents,
   replaceBeforeCaret,
-  RICH_INPUT_SLOT
+  RICH_INPUT_SLOT,
+  textAfterSelection,
+  textBeforeSelection
 } from '@/app/chat/composer/rich-editor'
 import { detectTrigger, openDirectiveScope, textBeforeCaret, type TriggerState } from '@/app/chat/composer/text-utils'
 import { composerTextEntryProps, touchTapFocusHandlers } from '@/app/chat/composer/touch-text-entry'
@@ -198,7 +200,7 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
 
   const appendExternalText = useCallback(
     (text: string, mode: ComposerInsertMode): boolean => {
-      const value = text.trim()
+      const value = mode === 'verbatim' ? text : text.trim()
 
       if (!value) {
         return false
@@ -206,8 +208,12 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
 
       rememberInitialDraft()
       const base = mode === 'inline' ? draftRef.current.trimEnd() : draftRef.current
-      const sep = mode === 'inline' ? (base ? ' ' : '') : base && !base.endsWith('\n') ? '\n\n' : ''
-      const next = `${base}${sep}${value}`
+
+      const sep =
+        mode === 'verbatim' ? '' : mode === 'inline' ? (base ? ' ' : '') : base && !base.endsWith('\n') ? '\n\n' : ''
+
+      const inserted = mode === 'verbatim' ? pathifyRefs(linkifyUrls(value, base), base) : value
+      const next = `${base}${sep}${inserted}`
 
       draftRef.current = next
       aui.composer().setText(next)
@@ -680,9 +686,11 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
     // Links land as `@url:` chips, same as the main composer — including
     // consuming an open `@url:` scope rather than stacking a second directive
     // in front of the chip.
+    const before = textBeforeSelection(event.currentTarget)
+    const after = textAfterSelection(event.currentTarget)
     insertComposerContentsAtCaret(
       event.currentTarget,
-      pathifyRefs(linkifyUrls(pastedText)),
+      pathifyRefs(linkifyUrls(pastedText, before, after), before, after),
       openDirectiveScope(event.currentTarget)
     )
     syncDraftFromEditor(event.currentTarget)
@@ -913,7 +921,7 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
               {...composerTextEntryProps(touchPointer)}
               {...tapFocus}
               className={cn(
-                'ui-prompt-input-editor__input max-h-48 w-full resize-none overflow-y-auto bg-transparent p-0 pr-7 text-[length:var(--conversation-text-font-size)] text-foreground/95 outline-none',
+                'ui-prompt-input-editor__input max-h-48 w-full resize-none overflow-y-auto whitespace-pre-wrap [tab-size:4] bg-transparent p-0 pr-7 text-[length:var(--conversation-text-font-size)] text-foreground/95 outline-none',
                 '**:data-ref-text:cursor-default',
                 expanded ? 'min-h-16' : 'min-h-[1.25rem]'
               )}

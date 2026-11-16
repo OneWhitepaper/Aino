@@ -65,6 +65,6 @@ it('badges the room lead on its header chip when the room routes through a lead'
   const chips = within(roster).getAllByRole('button', { name: /^Mention / })
 
   expect(chips).toHaveLength(2)
-  expect(chips[0].textContent).toContain('Lead')
-  expect(chips[1].textContent).not.toContain('Lead')
+  expect(chips[0].getAttribute('aria-description')).toBe('Lead')
+  expect(chips[1].getAttribute('aria-description')).toBeNull()
 })

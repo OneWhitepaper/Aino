@@ -57,7 +57,7 @@ async function shot(page, name) {
 
 // Hard ceiling so a hung renderer can't wedge the CI job; the driver's own
 // step timeout is the real guard, this is belt-and-braces.
-const KILL_AFTER_MS = 15 * 60 * 1000
+const KILL_AFTER_MS = (nativeHandoff ? 40 : 15) * 60 * 1000
 const killer = setTimeout(() => {
   console.error('[drive-update] global timeout — aborting')
   process.exit(1)
@@ -65,6 +65,20 @@ const killer = setTimeout(() => {
 killer.unref()
 
 async function main() {
+  if (nativeHandoff) {
+    // Use the same real account/login/backend/chat path as the installed NEW
+    // checkpoint. In particular, native preservation must open the caller's
+    // exact seeded Chromium profile, rather than a source-update clone.
+    const { runInstalledDesktopSmoke } = await import('./desktop-smoke.ts')
+    await runInstalledDesktopSmoke({
+      exe: path.resolve(exePath), root: path.join(path.dirname(path.resolve(exePath)), 'resources', 'agent-payload'),
+      origin: 'bundled', home: process.env.HERMES_HOME,
+      'user-data': process.env.HERMES_DESKTOP_USER_DATA_DIR, out: path.resolve(proofDir),
+      phase: 'old', 'expect-commit': oldSha, 'mock-url': process.env.HERMES_E2E_MOCK_URL,
+      'platform-account': true, 'native-handoff': true, 'require-existing-account': true, 'keep-signed-in': true,
+    })
+    return
+  }
   const { runUpdateWindowChat } = await import('./update-window-chat.mjs')
   const { isolateUpdateWindowEnvironment, isolatedElectronArgs, updateWindowEnvironment } = await import('./smoke-env.mjs')
   const origin = nativeHandoff ? 'bundled' : 'source'
@@ -109,13 +123,6 @@ async function main() {
     origin, root, executable: exePath, userData,
   })
   await shot(page, '01-app-booted')
-
-  if (nativeHandoff) {
-    fs.writeFileSync(path.join(proofDir, 'old-chat-ready.json'), JSON.stringify({ pid: appPid, exe: exePath, oldSha }) + '\n')
-    await waitForProcessClose(15 * 60 * 1000)
-    log('native OLD process closed; the OS updater owns relaunch')
-    return
-  }
 
   await openAbout(page, { log, shot, prepare: () => prepareWindowForInput(app, page) })
   const updateNow = await waitForUpdate(page, { log, shot })

@@ -19,8 +19,8 @@
 .model-settings-subpage-heading h3 {
   margin: 0;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-title);
-  font-weight: 500;
+  font-size: var(--aino-text-body);
+  font-weight: 600;
   line-height: 1.4;
 }
 .model-settings-subpage-heading p {
@@ -58,7 +58,7 @@
 }
 .model-settings-aux-table tbody th {
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
   font-weight: 500;
 }
 .model-settings-aux-purpose {
@@ -259,8 +259,62 @@
 .model-settings-context > p {
   margin: 0;
   color: var(--ui-text-secondary);
+  font-size: var(--aino-text-ui);
+  line-height: 1.7;
+}
+.model-settings-navigation {
+  min-width: 0;
+}
+.model-settings-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.model-settings-preferences {
+  margin-top: 1.9375rem;
+}
+.model-settings-preferences h2 {
+  margin: 0 0 0.625rem;
   font-size: var(--aino-text-body);
-  line-height: 1.6;
+  font-weight: 600;
+}
+.model-settings-preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  min-height: 3.625rem;
+  padding-block: 0.9375rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.model-settings-preference-row > div {
+  min-width: 0;
+}
+.model-settings-preference-row span {
+  font-size: var(--aino-text-ui);
+}
+.model-settings-preference-row p {
+  margin: 0.25rem 0 0;
+  color: var(--ui-text-tertiary);
+  font-size: 0.6875rem;
+  line-height: 1.7;
+}
+.model-settings-more {
+  margin-top: 0.5rem;
+  padding-inline: 0.375rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+.model-settings-category-header .model-settings-more {
+  margin-top: 0;
+}
+@container (max-width: 32rem) {
+  .model-settings-preference-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }
 .model-settings-schema > .settings-group {
   padding-inline: 0;
@@ -269,7 +323,8 @@
   background: transparent;
 }
 #setting-section-fallbacks .settings-row-label {
-  font-size: var(--aino-text-title);
+  font-size: var(--aino-text-body);
+  font-weight: 600;
 }
 #setting-section-fallbacks .settings-row-body {
   padding-top: 0;

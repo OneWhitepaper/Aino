@@ -307,7 +307,7 @@ async def async_owner_scope(authority):
     runner = getattr(authority, 'runner', None)
     home = Path(str(authority.profile_id))
     if not getattr(getattr(runner, 'config', None), 'multiplex_profiles', False) or not home.is_absolute():
-        with owner_scope(authority):  # the launch scope (frozen sources) or nullcontext: no profile files
+        with owner_scope(authority):  # launch scope/marker or nullcontext: no profile files before activation
             yield
         return
     prepared = await asyncio.to_thread(_prepare_owner_scope, home)
@@ -333,13 +333,18 @@ def owner_scope(authority, *, hydrate_secrets=False):
     A standalone gateway that already hosts a second home (a profile created over the wire froze
     the launch env and made unscoped secret reads fail closed) binds the launch profile's own scope
     instead: unbound, every launch-profile session.create raised UnscopedSecretError (#141623).
+    Before activation its body is marked so an in-flight RPC survives that transition. Only the
+    process's owning home may use this launch marker; a foreign or symbolic owner stays unbound.
     """
     from contextlib import nullcontext
     runner = getattr(authority, 'runner', None)
+    home = Path(str(authority.profile_id))
     if not getattr(getattr(runner, 'config', None), 'multiplex_profiles', False):
+        from agent.secret_scope import _is_process_home
+        if not home.is_absolute() or not _is_process_home(home):
+            return nullcontext()
         from tui_gateway.launch_profile_policy import launch_profile_scope_if_multiplexed
         return launch_profile_scope_if_multiplexed()
-    home = Path(str(authority.profile_id))
     if not home.is_absolute() or not home.is_dir():
         return nullcontext()
     from gateway.run import _profile_runtime_scope

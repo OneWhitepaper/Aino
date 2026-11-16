@@ -275,17 +275,17 @@ describe('merged hover timestamps and touch actions', () => {
       createdAt.toISOString(),
       new Date(completedAt * 1000).toISOString()
     ])
-    expect(container.querySelector('.aui-message-actions-desktop time')).toBeTruthy()
+    expect(container.querySelector('[data-slot="aui_msg-actions"] time')).toBeTruthy()
 
     act(() => $displayTimestamps.set(true))
     expect(hoverTimes.every(time => !time.isConnected)).toBe(true)
     expect(container.querySelector('[data-slot="timeline-timestamp"]')).toBeTruthy()
   })
 
-  it('mounts the touch More menu only while the pointer is coarse', async () => {
+  it('keeps the same compact More menu available to both desktop and coarse pointers', async () => {
     render(<Harness />)
     await screen.findByText('done')
-    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeTruthy()
 
     act(() => $touchPointer.set(true))
     expect(screen.getByRole('button', { name: 'More actions' })).toBeTruthy()
@@ -388,14 +388,14 @@ describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
     }
   })
 
-  it('reloads once from either desktop or touch Refresh', async () => {
-    $touchPointer.set(true)
+  it.each([false, true])('reloads once from the common More menu with touch=%s', async touch => {
+    $touchPointer.set(touch)
     const onReload = vi.fn(async () => {})
     render(<Harness onReload={onReload} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
-    await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1))
-    onReload.mockClear()
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), { button: 0, pointerType: 'touch' })
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions' }), {
+      button: 0,
+      pointerType: touch ? 'touch' : 'mouse'
+    })
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Refresh' }))
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1))
   })
@@ -413,7 +413,7 @@ describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
       return
     }
 
-    expect((await screen.findByRole('button', { name: 'Refresh' })).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), { button: 0, pointerType: 'touch' })
     const refresh = await screen.findByRole('menuitem', { name: 'Refresh' })
     expect(refresh.getAttribute('aria-disabled')).toBe('true')
@@ -423,7 +423,11 @@ describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
   it('shows the Branch in new chat button when a handler is provided (open chat)', async () => {
     render(<Harness onBranchInNewChat={() => undefined} />)
 
-    expect(await screen.findByRole('button', { name: 'Branch in new chat' })).toBeTruthy()
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions' }), {
+      button: 0,
+      pointerType: 'mouse'
+    })
+    expect(await screen.findByRole('menuitem', { name: 'Branch in new chat' })).toBeTruthy()
   })
 
   it('hides the Branch in new chat button when no handler is provided (session-tile / branched chat)', async () => {
@@ -434,7 +438,9 @@ describe('AssistantMessage branch button visibility (bug #2 fix)', () => {
     // unrendered message.
     await screen.findByText('done')
 
-    expect(screen.queryByRole('button', { name: 'Branch in new chat' })).toBeNull()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), { button: 0, pointerType: 'mouse' })
+    await screen.findByRole('menuitem', { name: 'Refresh' })
+    expect(screen.queryByRole('menuitem', { name: 'Branch in new chat' })).toBeNull()
   })
 
   it('reaches Branch in new chat from the touch More menu', async () => {

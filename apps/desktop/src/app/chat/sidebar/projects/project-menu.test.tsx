@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { dismissAutoProject, restoreAutoProject } from '@/store/layout'
 import { notify } from '@/store/notifications'
@@ -18,20 +18,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// jsdom doesn't implement ResizeObserver; Radix's PopoverContent/Arrow use it
-// (via @radix-ui/react-use-size) to measure the arrow once the popover is
-// actually mounted.
-beforeAll(() => {
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-  )
-})
-
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     t: {
@@ -48,7 +34,6 @@ vi.mock('@/i18n', () => ({
           menuDelete: 'Delete',
           menuRename: 'Rename',
           menuSetActive: 'Set active',
-          noColor: 'No color',
           hiddenFromSidebar: 'Hidden from sidebar',
           removeFromSidebar: 'Remove from sidebar',
           reveal: 'Reveal in file manager',
@@ -61,15 +46,6 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('@/store/layout', () => ({
-  $panesFlipped: {
-    get: () => false,
-    listen: () => () => {},
-    subscribe: (fn: (v: boolean) => void) => {
-      fn(false)
-
-      return () => {}
-    }
-  },
   dismissAutoProject: vi.fn(),
   restoreAutoProject: vi.fn()
 }))
@@ -86,8 +62,7 @@ vi.mock('@/store/projects', () => ({
   openProjectFolders: vi.fn(),
   openProjectRename: vi.fn(),
   revealPath: vi.fn(),
-  setActiveProject: vi.fn(),
-  setProjectAppearance: vi.fn().mockResolvedValue(false)
+  setActiveProject: vi.fn()
 }))
 
 const project = {
@@ -179,26 +154,25 @@ describe('ProjectMenu', () => {
     expect(tipTrigger(button)).toBeNull()
   })
 
-  // When anchorRef is absent, PopoverAnchor wraps the dropdown trigger so the
-  // appearance popover positions against the kebab. asChild must still reach
-  // the real button (no non-forwarding wrappers inside the chain — #67500).
-  it('opens the appearance popover through the kebab trigger when anchorRef is absent', async () => {
-    render(<ProjectMenu isActive={false} project={project} />)
+  it.each(['kebab', 'context'])('offers project management without appearance customization ($0)', menu => {
+    if (menu === 'kebab') {
+      render(<ProjectMenu isActive={false} project={project} />)
+      openTriggerMenu(screen.getByRole('button', { name: 'Actions' }))
+    } else {
+      render(
+        <ProjectContextMenu isActive={false} project={project}>
+          <button type="button">Project row</button>
+        </ProjectContextMenu>
+      )
+      fireEvent.contextMenu(screen.getByRole('button', { name: 'Project row' }))
+    }
 
-    const trigger = screen.getByRole('button', { name: 'Actions' })
-
-    openTriggerMenu(trigger)
-
-    const appearanceItem = await screen.findByRole('menuitem', { name: 'Appearance' })
-
-    fireEvent.click(appearanceItem)
-
-    // The color-swatch "No color" clear option only renders once the
-    // appearance Popover is actually open — proving the click reached the
-    // real button through the full Tip > PopoverAnchor > DropdownMenuTrigger
-    // chain rather than getting silently dropped on an intermediate wrapper.
-    expect(await screen.findByRole('button', { name: 'No color' })).toBeTruthy()
-  }, 15000)
+    expect(screen.queryByRole('menuitem', { name: 'Appearance' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Add folder' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage folders' }))
+    expect(openProjectFolders).toHaveBeenCalledWith({ id: 'p1', name: 'Test D', profile: 'worker' })
+  })
 
   // #73091: "Hide from sidebar" on an auto project used to be one-way — the
   // toast had no Undo and there was no restore control, so a mis-click was

@@ -18,9 +18,9 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 
 import { validateDownloadedBundle } from './bundle-manifest.cjs'
 
-export function validateBundledManifest(manifest, { expectedPublisher, arch = 'x64' }) {
+export function validateBundledManifest(manifest, { expectedPublisher, arch = 'x64', candidateCommit }) {
   try {
-    validateDownloadedBundle(manifest, 'windows', arch)
+    validateDownloadedBundle(manifest, 'windows', arch, { candidateCommit })
     for (const side of ['old', 'new']) {
       if (manifest[side].publisher !== expectedPublisher) {
         throw new Error(`${side}.publisher does not equal the production OUT_OF_STORE_PUBLISHER`)
@@ -56,6 +56,15 @@ export async function loadMsixShared(msixSharedPath) {
   return import(pathToFileURL(resolved).href)
 }
 
+export function admitCandidateCommit(commit, env = process.env) {
+  const reuse = env.AINO_PRIVATE_REUSE_SOURCE_COMMIT === commit && env.AINO_PRIVATE_CANDIDATE === 'true' &&
+    env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.RUNNER_ENVIRONMENT === 'github-hosted'
+  if (!/^[a-f0-9]{40}$/.test(commit) || env.GITHUB_ACTIONS !== 'true' ||
+    (commit !== env.GITHUB_SHA && !reuse)) {
+    throw new Error('Local candidates require the exact checkout or an explicitly verified private artifact source')
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
@@ -74,11 +83,14 @@ async function main() {
     path.resolve(fileURLToPath(new URL('../../../scripts/msix-shared.mjs', import.meta.url)))
 
   if (cmd === 'validate-manifest') {
+    const candidateCommit = flags['candidate-commit']
+    if (candidateCommit) admitCandidateCommit(candidateCommit)
     const shared = await loadMsixShared(msixShared)
     const manifest = JSON.parse(fs.readFileSync(flags.manifest, 'utf8'))
     const result = validateBundledManifest(manifest, {
       expectedPublisher: shared.OUT_OF_STORE_PUBLISHER,
-      arch: flags.arch || undefined
+      arch: flags.arch || undefined,
+      candidateCommit
     })
     console.log(JSON.stringify(result))
     process.exit(result.ok ? 0 : 1)

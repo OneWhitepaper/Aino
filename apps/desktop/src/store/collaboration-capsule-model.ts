@@ -82,7 +82,12 @@ function projectTask(
     owner: typeof source.owner === 'object' && source.owner ? { ...source.owner } : source.owner,
     sourceKey,
     displayName: subagentDisplayName(item, fallbackTaskName),
-    canControl: Boolean(collaborationOwnerKey(source.owner) && source.parentRuntimeId && source.canControl !== false)
+    canControl: Boolean(
+      collaborationOwnerKey(source.owner) &&
+      source.parentRuntimeId &&
+      source.canControl !== false &&
+      item.canControl !== false
+    )
   }
 }
 

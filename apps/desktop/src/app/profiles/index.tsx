@@ -14,6 +14,8 @@ import { ProfileGlyph } from '@/components/ui/profile-glyph'
 import { RowButton } from '@/components/ui/row-button'
 import { SearchField } from '@/components/ui/search-field'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
+import { useContributions } from '@/contrib/react/use-contributions'
 import { getProfileSoul, type ProfileInfo, updateProfileSoul } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
@@ -28,9 +30,10 @@ import {
   $profiles,
   normalizeProfileKey,
   profileLabel,
-  refreshProfiles,
-  selectProfile
+  refreshProfiles
 } from '@/store/profile'
+import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
+import { $connection } from '@/store/session'
 import { setSettingsScope } from '@/store/settings-scope'
 
 import { useRefreshHotkey } from '../hooks/use-refresh-hotkey'
@@ -40,12 +43,29 @@ import { navigateToWorkspacePage, SETTINGS_ROUTE } from '../routes'
 import { CreateProfileDialog } from './create-profile-dialog'
 import { DeleteProfileDialog } from './delete-profile-dialog'
 import { RenameProfileDialog } from './rename-profile-dialog'
-import { WorkspaceControls } from './workspace-controls'
 
 const CapabilitiesView = lazy(async () => ({ default: (await import('../capabilities')).CapabilitiesView }))
 
+function managedProfileLabel(profile: ProfileInfo): string {
+  const label = profileLabel(profile)
+
+  return profile.is_default && label === profile.name ? 'Aino' : label
+}
+
 export function ProfilesView() {
   const connectionId = useStore($activeGatewayConnectionId)
+  const manager = useContributions('profiles.manager').find(contribution => contribution.render)
+
+  if (manager) {
+    return (
+      <ContribBoundary
+        id={`${manager.source ?? 'core'}:${manager.id}`}
+        key={`${connectionId ?? ''}:${manager.source ?? 'core'}:${manager.id}`}
+      >
+        <ContribRender render={manager.render!} />
+      </ContribBoundary>
+    )
+  }
 
   return <ProfilesManager key={connectionId ?? ''} />
 }
@@ -56,12 +76,12 @@ function ProfilesManager() {
   const activeProfile = useStore($activeGatewayProfile)
   const profiles = useStore($profiles)
   const [loaded, setLoaded] = useState(false)
-  // undefined chooses the initial workspace; null is an explicitly closed inspector.
-  const [selectedName, setSelectedName] = useState<null | string | undefined>(undefined)
+  const [selectedName, setSelectedName] = useState<null | string>(null)
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingRename, setPendingRename] = useState<null | ProfileInfo>(null)
   const [pendingDelete, setPendingDelete] = useState<null | ProfileInfo>(null)
+  const [archiveBusy, setArchiveBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -88,13 +108,9 @@ function ProfilesManager() {
         return current
       }
 
-      return (
-        profiles.find(profile => normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile))?.name ??
-        profiles[0]?.name ??
-        null
-      )
+      return null
     })
-  }, [activeProfile, loaded, profiles])
+  }, [loaded, profiles])
 
   const selected = useMemo(
     () => profiles.find(profile => profile.name === selectedName) ?? null,
@@ -104,13 +120,15 @@ function ProfilesManager() {
   const visibleProfiles = useMemo(() => {
     const q = normalize(query)
 
-    return profiles.filter(
-      profile =>
-        !q ||
-        normalize(profileLabel(profile)).includes(q) ||
-        profile.name.toLowerCase().includes(q) ||
-        (profile.model ?? '').toLowerCase().includes(q)
-    )
+    return profiles
+      .filter(
+        profile =>
+          !q ||
+          normalize(managedProfileLabel(profile)).includes(q) ||
+          profile.name.toLowerCase().includes(q) ||
+          (profile.model ?? '').toLowerCase().includes(q)
+      )
+      .sort((a, b) => Number(b.is_default) - Number(a.is_default))
   }, [profiles, query])
 
   const selectAndRefresh = useCallback(
@@ -120,6 +138,44 @@ function ProfilesManager() {
     },
     [refresh]
   )
+
+  async function importBot() {
+    if ($connection.get()?.mode === 'remote') {
+      notifyError(new Error(t.promptNotices.desktopCommands.importRemote), p.failedImport)
+
+      return
+    }
+
+    const scope = { connectionId: $activeGatewayConnectionId.get() || 'local' }
+    setArchiveBusy(true)
+
+    try {
+      await runImportProfileFlow({ management: true, scope })
+    } catch (error) {
+      notifyError(error, p.failedImport)
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
+
+  async function exportBot(profile: ProfileInfo) {
+    if ($connection.get()?.mode === 'remote') {
+      notifyError(new Error(t.promptNotices.desktopCommands.exportRemote), p.failedExport)
+
+      return
+    }
+
+    const scope = { connectionId: $activeGatewayConnectionId.get() || 'local', profile: profile.name }
+    setArchiveBusy(true)
+
+    try {
+      await runExportProfileFlow(profile.name, scope)
+    } catch (error) {
+      notifyError(error, p.failedExport)
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
 
   return (
     <section
@@ -132,14 +188,22 @@ function ProfilesManager() {
         <div className="min-w-0">
           <div className="workspace-heading">
             <h2>{t.sidebar.nav.profiles}</h2>
-            {loaded && <span className="workspace-count">{p.count(profiles.length)}</span>}
+            {loaded && (
+              <span className="workspace-count">{p.count(profiles.filter(profile => !profile.is_default).length)}</span>
+            )}
           </div>
           <p>{p.workspaceDesc}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} size="sm">
-          <Codicon name="add" />
-          {p.newProfile}
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button disabled={archiveBusy} onClick={() => void importBot()} size="sm" variant="outline">
+            <Codicon name="cloud-download" />
+            {p.importProfile}
+          </Button>
+          <Button onClick={() => setCreateOpen(true)} size="sm">
+            <Codicon name="add" />
+            {p.newProfile}
+          </Button>
+        </div>
       </header>
       <div className="workspace-layout" data-inspecting={selected !== null}>
         <div className="workspace-overview-pane">
@@ -195,14 +259,14 @@ function ProfilesManager() {
               <Codicon name="layers" size="1rem" />
               <span>{p.workspaceHint}</span>
             </p>
-            <WorkspaceControls />
           </footer>
         </div>
         {selected && (
           <ProfileDetail
-            current={normalizeProfileKey(selected.name) === normalizeProfileKey(activeProfile)}
+            archiveBusy={archiveBusy}
             key={selected.name}
             onClose={() => setSelectedName(null)}
+            onExport={() => void exportBot(selected)}
             onRename={() => setPendingRename(selected)}
             profile={selected}
           />
@@ -224,7 +288,7 @@ function ProfilesManager() {
       <DeleteProfileDialog
         onClose={() => setPendingDelete(null)}
         onDeleted={async () => {
-          setSelectedName(undefined)
+          setSelectedName(null)
           await refresh()
         }}
         open={pendingDelete !== null}
@@ -246,7 +310,7 @@ function WorkspaceGlyph({ profile }: { profile: ProfileInfo }) {
       aria-hidden="true"
       color={resolveProfileColor(profile.name, colors)}
       isDefault={false}
-      name={profileLabel(profile)}
+      name={managedProfileLabel(profile)}
       size="lg"
     />
   )
@@ -263,7 +327,7 @@ interface ProfileRowProps {
 function ProfileRow({ active, current, menuItems, onSelect, profile }: ProfileRowProps) {
   const { t } = useI18n()
   const p = t.profiles
-  const label = profileLabel(profile)
+  const label = managedProfileLabel(profile)
 
   return (
     <ActionsContextMenu ariaLabel={label} contentClassName="w-40" items={renderPanelMenuItems(menuItems)}>
@@ -314,13 +378,14 @@ function ProfileRow({ active, current, menuItems, onSelect, profile }: ProfileRo
 }
 
 interface ProfileDetailProps {
-  current: boolean
+  archiveBusy: boolean
   onClose: () => void
+  onExport: () => void
   onRename: () => void
   profile: ProfileInfo
 }
 
-function ProfileDetail({ current, onClose, onRename, profile }: ProfileDetailProps) {
+function ProfileDetail({ archiveBusy, onClose, onExport, onRename, profile }: ProfileDetailProps) {
   const { t } = useI18n()
   const p = t.profiles
   const navigate = useNavigate()
@@ -328,12 +393,12 @@ function ProfileDetail({ current, onClose, onRename, profile }: ProfileDetailPro
   const [capabilitiesVisited, setCapabilitiesVisited] = useState(false)
 
   return (
-    <aside aria-label={profileLabel(profile)} className="workspace-inspector">
+    <aside aria-label={managedProfileLabel(profile)} className="workspace-inspector">
       <header className="workspace-inspector-heading">
         <div className="flex min-w-0 items-center gap-3">
           <WorkspaceGlyph profile={profile} />
           <div className="min-w-0">
-            <h3>{profileLabel(profile)}</h3>
+            <h3>{managedProfileLabel(profile)}</h3>
             <div className="workspace-inspector-meta">{profile.is_default && <span>{p.defaultBadge}</span>}</div>
           </div>
         </div>
@@ -410,17 +475,10 @@ function ProfileDetail({ current, onClose, onRename, profile }: ProfileDetailPro
       )}
       <footer className="workspace-inspector-footer">
         <p>{p.previewHint}</p>
-        {current ? (
-          <span className="workspace-current-status">
-            <Codicon name="check" size="0.8125rem" />
-            {p.currentBadge}
-          </span>
-        ) : (
-          <Button onClick={() => selectProfile(profile.name)} size="sm">
-            <Codicon name="arrow-swap" />
-            {p.switchToProfile(profileLabel(profile))}
-          </Button>
-        )}
+        <Button disabled={archiveBusy} onClick={onExport} size="sm" variant="outline">
+          <Codicon name="cloud-upload" />
+          {p.exportProfile}
+        </Button>
       </footer>
     </aside>
   )

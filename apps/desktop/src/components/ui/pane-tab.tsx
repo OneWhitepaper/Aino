@@ -320,7 +320,7 @@ export const PaneTabStrip = React.forwardRef<HTMLDivElement, PaneTabStripProps>(
           : variant === 'tool'
             ? 'h-(--aino-tool-strip-height) [-webkit-app-region:no-drag]'
             : variant === 'conversation'
-              ? 'h-[43px] [-webkit-app-region:no-drag]'
+              ? 'h-11 [-webkit-app-region:no-drag]'
               : 'h-7 [-webkit-app-region:no-drag]',
         className
       )}

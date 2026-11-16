@@ -57,7 +57,7 @@ import {
   resolveNewChatOwnerRoute
 } from '@/store/profile'
 import { $projectScope } from '@/store/project-scope'
-import { projectProfile, resolveNewSessionCwd } from '@/store/projects'
+import { resolveNewSessionCwd } from '@/store/projects'
 import { clearStoredTranscriptReadOnly, markStoredTranscriptReadOnly } from '@/store/read-only-transcript'
 import {
   $connection,
@@ -116,6 +116,7 @@ import {
   type TileDock
 } from '@/store/session-states'
 import { broadcastSessionsChanged } from '@/store/session-sync'
+import { setSettingsScope } from '@/store/settings-scope'
 import { $archivedSessions } from '@/store/sidebar-archive'
 import { restoreSessionTodosFromSnapshot } from '@/store/todos'
 import { dropTranscriptTail, saveTranscriptTail } from '@/store/transcript-tail-cache'
@@ -711,16 +712,10 @@ export function useSessionActions({
       const listed = options?.listed ?? true
 
       try {
-        // A tile anchored at a project path belongs to the profile the project
-        // tree is rendered under — the same owner the fresh-draft "+" pins
-        // (#79005). The occupied-chat "+" and project-row drags reach this
-        // path instead, where a stale $newChatProfile pin would otherwise win
-        // and land the session in the wrong profile (#124265). All-profiles
-        // view has no owner and keeps the ordinary fallback.
+        // A project supplies the working folder and current service; ordinary
+        // conversations use Aino. Explicit Bot routes remain authoritative.
         const projectOwnerProfile =
-          options?.profile === undefined && typeof options?.cwd === 'string'
-            ? (projectProfile() ?? undefined)
-            : undefined
+          options?.profile === undefined && typeof options?.cwd === 'string' ? 'default' : undefined
 
         const optionProfile = options?.profile ?? projectOwnerProfile
 
@@ -888,6 +883,7 @@ export function useSessionActions({
   )
 
   const openSettings = useCallback(() => {
+    setSettingsScope('default')
     navigate(SETTINGS_ROUTE)
   }, [navigate])
 

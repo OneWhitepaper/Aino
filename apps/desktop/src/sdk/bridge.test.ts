@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { $pluginDecisions } from '@/contrib/plugins-store'
 import { host } from '@/sdk'
+import * as gateway from '@/store/gateway'
+import { $connection } from '@/store/session'
 
 // The bridge must hit the SAME api-module functions the Capabilities page
 // calls (not a parallel fetch path), forwarding the ProfileScope untouched —
@@ -10,6 +12,8 @@ const apiMocks = vi.hoisted(() => ({
   getProfiles: vi.fn(async () => ({ profiles: [] })),
   getSkills: vi.fn(async () => []),
   getToolsets: vi.fn(async () => []),
+  runExportProfileFlow: vi.fn(async () => '/tmp/writer.tar.gz'),
+  runImportProfileFlow: vi.fn(async () => 'writer-copy'),
   setSkillEnabled: vi.fn(async () => ({ enabled: false, name: 'docx', ok: true })),
   setToolsetEnabled: vi.fn(async () => ({ enabled: true, name: 'browser', ok: true }))
 }))
@@ -17,6 +21,16 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/api/skills', () => ({ getSkills: apiMocks.getSkills, setSkillEnabled: apiMocks.setSkillEnabled }))
 vi.mock('@/api/toolsets', () => ({ getToolsets: apiMocks.getToolsets, setToolsetEnabled: apiMocks.setToolsetEnabled }))
 vi.mock('@/api/profiles', () => ({ getProfiles: apiMocks.getProfiles }))
+vi.mock('@/store/profile-share', () => ({
+  runExportProfileFlow: apiMocks.runExportProfileFlow,
+  runImportProfileFlow: apiMocks.runImportProfileFlow
+}))
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.clearAllMocks()
+  $connection.set(null)
+})
 
 describe('host capabilities bridge', () => {
   it('routes list/setEnabled through the Capabilities api modules with the profile scope', async () => {
@@ -33,6 +47,29 @@ describe('host capabilities bridge', () => {
     expect(apiMocks.getToolsets).toHaveBeenCalledWith('writer')
     expect(apiMocks.setToolsetEnabled).toHaveBeenCalledWith('browser', true, 'writer')
     expect(apiMocks.getProfiles).toHaveBeenCalledWith(undefined)
+  })
+
+  it('imports without activating the bot and exports the selected exact local owner', async () => {
+    vi.spyOn(gateway, 'activeGatewayConnectionId').mockReturnValue('local')
+    const route = { connectionId: 'local', profile: 'writer', targetProfile: 'writer', mode: 'local' as const }
+
+    await expect(host.profiles.import()).resolves.toBe('writer-copy')
+    await expect(host.profiles.export('writer', route)).resolves.toBe('/tmp/writer.tar.gz')
+
+    expect(apiMocks.runImportProfileFlow).toHaveBeenCalledWith({ management: true, scope: { connectionId: 'local' } })
+    expect(apiMocks.runExportProfileFlow).toHaveBeenCalledWith('writer', { connectionId: 'local', profile: 'writer' })
+  })
+
+  it('refuses a different owner or remote archive before opening a local filesystem dialog', async () => {
+    const local = { connectionId: 'local', profile: 'writer', targetProfile: 'writer', mode: 'local' as const }
+    const remote = { ...local, connectionId: 'server', mode: 'remote' as const }
+
+    await expect(host.profiles.export('other-bot', local)).rejects.toThrow('owner')
+    await expect(host.profiles.export('writer', remote)).rejects.toThrow()
+    $connection.set({ mode: 'remote' } as never)
+    await expect(host.profiles.import()).rejects.toThrow()
+    expect(apiMocks.runImportProfileFlow).not.toHaveBeenCalled()
+    expect(apiMocks.runExportProfileFlow).not.toHaveBeenCalled()
   })
 
   // Declined by design: a plugin must not flip another plugin's enable state,

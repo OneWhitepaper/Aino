@@ -44,7 +44,7 @@ export const esPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedMessage: 'Hermes no pudo reiniciar el servidor.',
   stillWorking:
     'Hermes sigue trabajando, pero aún no llegó ningún resultado de reinicio. Puede que el comando del servidor siga en primer plano.',
-  workspaceReloading: 'El espacio de trabajo cambió, recargando vista previa',
+  workspaceReloading: 'El proyecto ha cambiado; recargando la vista previa',
   fileChanged: url => `Archivo cambiado, recargando vista previa: ${url}`,
   filesChanged: (count, url) => `${count} cambios de archivo, recargando vista previa: ${url}`,
   watchFailed: message => `No se pudo vigilar el archivo de vista previa: ${message}`,

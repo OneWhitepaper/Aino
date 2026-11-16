@@ -27,20 +27,29 @@ export const $findInPage = atom<FindInPageState>({ ...EMPTY })
  * for the route-change close logic; see lib/find-in-page-scope.ts for the
  * "current view" predicate (#81726).
  */
-export function openFindBar(): void {
+export function openFindBar(root?: HTMLElement): void {
   const prev = $findInPage.get()
 
   if (prev.active) {
+    if (root && currentFindScope() !== root) {
+      releaseFindScope()
+      captureFindScope(root)
+    }
+
     // Already visible: keep the typed query and the captured scope. A fresh
     // EMPTY write would clear the query, and captureFindScope() would tear
     // down the highlight observer.
     $findInPage.set({ ...prev, focusRequest: prev.focusRequest + 1 })
 
+    if (root && prev.query) {
+      void setFindQuery(prev.query)
+    }
+
     return
   }
 
   $findInPage.set({ ...EMPTY, active: true })
-  captureFindScope()
+  captureFindScope(root)
 }
 
 export function closeFindBar(): void {

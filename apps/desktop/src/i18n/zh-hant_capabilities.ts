@@ -157,7 +157,7 @@ export const zhHantCapabilities = {
   },
 
   agents: {
-    extendedTranscript: '完整記錄尾端',
+    extendedTranscript: '執行日誌',
     transcriptTruncated: '顯示最新 16 KiB',
     transcriptUnavailable: '即時記錄無法使用',
 
@@ -180,6 +180,9 @@ export const zhHantCapabilities = {
     steerQueued: '已排隊，等待下一個檢查點',
     stopRequested: '已請求停止',
     requestRejected: '子代理未接受請求',
+    controlUnavailable: '目前的對話僅可檢視此子智能體',
+    requestFinished: '任務已結束或正在收尾，請查看最新結果',
+    requestFailed: '操作未能送出，請重試',
     delegation: index => `派發 ${index}`,
     workers: count => `${count} 個工作單元`,
     workersActive: count => `${count} 個活躍`,

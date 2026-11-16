@@ -1,5 +1,6 @@
 import './approval-mode-menu.css'
 
+import { registryBackendScopeKey } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect } from 'react'
 
@@ -70,12 +71,13 @@ export function useApprovalModeStatusbarItem(
   gatewayState: string,
   // Identity of the route the profile is served on (the active socket): a
   // move between gateways that serve the same profile name re-reads the mode.
-  routeIdentity?: unknown
+  routeIdentity?: unknown,
+  connectionId?: null | string
 ): StatusbarItem {
   const { t } = useI18n()
   const copy = t.shell.approvalMode
   const modes = useStore($approvalModes)
-  const mode = modes[profile.trim() || 'default'] ?? 'smart'
+  const mode = modes[registryBackendScopeKey(connectionId, profile)] ?? 'smart'
 
   const labels: Record<ApprovalMode, string> = { manual: copy.manual, smart: copy.smart, off: copy.off }
 
@@ -90,8 +92,8 @@ export function useApprovalModeStatusbarItem(
       return
     }
 
-    void syncApprovalModeForProfile(requestGateway, profile).catch(() => undefined)
-  }, [gatewayState, profile, requestGateway, routeIdentity])
+    void syncApprovalModeForProfile(requestGateway, profile, connectionId).catch(() => undefined)
+  }, [connectionId, gatewayState, profile, requestGateway, routeIdentity])
 
   return {
     className: mode === 'off' ? 'approval-mode-trigger-warning' : undefined,
@@ -104,7 +106,7 @@ export function useApprovalModeStatusbarItem(
       <ApprovalModeOptions
         mode={mode}
         onValueChange={value => {
-          void setApprovalModeForProfile(requestGateway, profile, value).catch(() => undefined)
+          void setApprovalModeForProfile(requestGateway, profile, value, connectionId).catch(() => undefined)
         }}
       />
     ),

@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 from tests.gateway.fixtures.local_recovery_probe import child_env
 
 
@@ -27,3 +29,28 @@ def test_desktop_subagent_steer_and_stop_reach_only_this_sessions_children(tmp_p
                                   'stop': {'found': False, 'subagent_id': 'sibling'}}, receipt
     assert receipt['delivered'] == {'owned': [['check owned'], 1], 'sibling': [[], 0]}, receipt
     assert receipt['late']['status'] == 'rejected', receipt
+    assert [(r['subagent_id'], r['can_control'], r['accepting_steer']) for r in receipt['list']] == [
+        ('owned', True, True)], receipt
+    assert [(r['can_control'], r['accepting_steer']) for r in receipt['closing']] == [(True, False)], receipt
+    assert [(r['subagent_id'], r['can_control']) for r in receipt['rebuilt']] == [('owned', False)], receipt
+    assert receipt['rebuilt_stop']['found'] is False, receipt
+
+
+@pytest.mark.parametrize('mode', ['controls', 'managed-controls'])
+def test_background_children_remain_controllable_after_the_parent_turn_returns(tmp_path, mode):
+    """A real loopback model delegates, returns, and leaves a child tool blocked until the viewer stops it."""
+    root = Path(__file__).resolve().parents[2]
+    home, user = tmp_path / 'state', tmp_path / 'user'
+    home.mkdir()
+    user.mkdir()
+    env = child_env()
+    env.update(HOME=str(user), USERPROFILE=str(user), HERMES_HOME=str(home),
+               PYTHONPATH=str(root), PYTHONUNBUFFERED='1')
+    result = subprocess.run([sys.executable, str(root / 'tests/gateway/fixtures/subagent_live_peer.py'), mode],
+                            cwd=root, env=env, capture_output=True, text=True, timeout=150, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    receipt = json.loads((home / 'receipt.json').read_text())
+    assert receipt['parent_idle'] is True, receipt
+    assert all(row['can_control'] is True for row in receipt['list']), receipt
+    assert receipt['steer_after_parent']['status'] == 'queued', receipt
+    assert receipt['stop_after_parent']['found'] is True, receipt

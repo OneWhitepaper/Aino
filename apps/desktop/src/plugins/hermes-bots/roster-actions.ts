@@ -30,7 +30,7 @@ import { botsText } from './i18n'
 import { displayName } from './labels'
 import { botRosterMeta, botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
 import { botCanonicalSessionId } from './row-helpers'
-import { bumpBotOpenGeneration, getBotOpenGeneration, getPluginCtx } from './shared'
+import { bumpBotOpenGeneration, getBotOpenGeneration, getPluginCtx, ID } from './shared'
 import type { RosterRow } from './types'
 
 // last_active watermark per source-qualified bot, seeded on first poll so a
@@ -278,6 +278,8 @@ export async function openRosterBot(
   haptic('tap')
   saveSelectedRosterBot(bot)
   setBotsWorkspaceOwner(botWorkspaceOwnerKey(bot), bot)
+  // A full page retains the previous sidebar tab underneath it.
+  host.revealPane?.(`${ID}:pane`)
   const dismissedGroup = dismissGroupChatForBotOpen()
 
   if (!dismissedGroup) {

@@ -1,5 +1,49 @@
-# Journey-owned mock and ordinary window close, shared by source and MSIX drivers.
+﻿# Journey-owned mock and ordinary window close, shared by source and MSIX drivers.
 # Callers supply a checkout-provisioned Node; never resolve tooling from OLD.
+function Get-DevToolsPastePhrase([string]$Names) {
+    # Chromium 152 compares the localized allowPasting phrase exactly:
+    # https://github.com/ChromeDevTools/devtools-frontend/blob/04db1f5240b636511ec4e9058a78f8274a7f65ee/front_end/panels/console/ConsolePrompt.ts#L364-L366
+    foreach ($phrase in @('允许粘贴', 'allow pasting')) {
+        if ($Names -match $phrase) { return $phrase }
+    }
+    return $null
+}
+
+function Get-UpdateNavigationButton([object[]]$Buttons) {
+    $visible = @($Buttons | Where-Object { -not $_.IsOffscreen })
+    $checks = @($visible | Where-Object { $_.Name -match '^(Check now|立即检查|立即檢查)$' })
+    foreach ($button in $checks) {
+        if ($button.IsEnabled) { return $button }
+    }
+    if ($checks.Count -gt 0 -or @($visible | Where-Object { $_.Name -match '^(Checking…|检查中…|檢查中…)$' }).Count -gt 0) {
+        return $null
+    }
+    # A short settings sidebar keeps About mounted below its viewport.
+    $about = @($Buttons | Where-Object { $_.IsEnabled -and $_.Name -match '^(About|关于|關於)$' })
+    if ($about.Count -gt 0) { return @($about | Sort-Object IsOffscreen)[0] }
+    foreach ($pattern in @('^(Open settings|打开设置|设置|開啟設定|設定)$', 'choose a provider later')) {
+        foreach ($button in $visible) {
+            if ($button.IsEnabled -and $button.Name -match $pattern) { return $button }
+        }
+    }
+    return $null
+}
+
+function Invoke-UpdateNavigationButton($Button, [scriptblock]$Refresh, [scriptblock]$Scroll, [scriptblock]$Invoke) {
+    if ($null -eq $Button) { return $false }
+    $fresh = & $Refresh
+    if ($null -eq $fresh -or -not $fresh.IsEnabled -or $fresh.Name -cne $Button.Name -or
+        -not [object]::Equals($fresh.Element, $Button.Element)) { return $false }
+    if ($fresh.IsOffscreen) {
+        if ($fresh.Name -notmatch '^(About|关于|關於)$' -or -not (& $Scroll $fresh.Element)) { return $false }
+        # Re-select the whole window: a check can become busy/actionable while scrolling.
+        $fresh = & $Refresh
+    }
+    if ($null -eq $fresh -or $fresh.IsOffscreen -or -not $fresh.IsEnabled -or
+        $fresh.Name -cne $Button.Name -or -not [object]::Equals($fresh.Element, $Button.Element)) { return $false }
+    return [bool](& $Invoke $fresh.Element)
+}
+
 function Start-DesktopJourneyMock([string]$Node, [string]$Assets, [string]$Work, [string]$HermesHome, [string]$Out) {
     New-Item -ItemType Directory -Path $Out -Force | Out-Null
     $urlFile = Join-Path $Work 'chat-mock-url'
@@ -61,7 +105,7 @@ try {
 }
 '@
 
-function Invoke-OutsideRunnerJob([string]$Name, [string]$Work, [string]$Exe, [string[]]$Arguments, [int]$TimeoutMinutes = 45) {
+function Start-OutsideRunnerJob([string]$Name, [string]$Work, [string]$Exe, [string[]]$Arguments) {
     $dir = Join-Path $Work "outside-job-$Name"
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $spec = Join-Path $dir 'spec.json'
@@ -79,11 +123,29 @@ function Invoke-OutsideRunnerJob([string]$Name, [string]$Work, [string]$Exe, [st
     # The same PowerShell as this step, so native argument passing matches a direct call.
     $shell = (Get-Process -Id $PID).Path
     $commandLine = "`"$shell`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$wrapper`" -SpecPath `"$spec`""
-    $wrapperPid = 0
+    $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $cwd }
+    if ($created.ReturnValue -ne 0) {
+        Remove-Item -LiteralPath $spec -Force -ErrorAction SilentlyContinue
+        throw "Outside-job run '$Name' could not start (Win32_Process.Create returned $($created.ReturnValue))"
+    }
+    return [pscustomobject]@{ Name=$Name; Id=[int]$created.ProcessId; Spec=$spec; Log=$log; ExitFile=$exitFile }
+}
+
+function Stop-OutsideRunnerJob($Run) {
+    # A completed run may own a canonical detached gateway; only unfinished trees
+    # are ours to reap. WMI children otherwise outlive a failed Actions step.
+    if (-not (Test-Path -LiteralPath $Run.ExitFile) -and (Get-Process -Id $Run.Id -ErrorAction SilentlyContinue)) {
+        & taskkill.exe /PID $Run.Id /T /F | Out-Null
+    }
+    Remove-Item -LiteralPath $Run.Spec -Force -ErrorAction SilentlyContinue
+}
+
+function Wait-OutsideRunnerJob($Run, [int]$TimeoutMinutes = 45) {
+    $Name = $Run.Name
+    $wrapperPid = $Run.Id
+    $exitFile = $Run.ExitFile
+    $log = $Run.Log
     try {
-        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $cwd }
-        if ($created.ReturnValue -ne 0) { throw "Outside-job run '$Name' could not start (Win32_Process.Create returned $($created.ReturnValue))" }
-        $wrapperPid = [int]$created.ProcessId
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         while (-not (Test-Path -LiteralPath $exitFile)) {
             if ((Get-Date) -ge $deadline) { throw "Outside-job run '$Name' did not finish within $TimeoutMinutes minutes" }
@@ -96,18 +158,19 @@ function Invoke-OutsideRunnerJob([string]$Name, [string]$Work, [string]$Exe, [st
             Start-Sleep -Seconds 2
         }
     } finally {
-        # Outside the runner's job, nothing reaps an unfinished run's tree. A finished run's
-        # detached gateway is meant to outlive it, so only a run without an exit code is killed.
-        if ($wrapperPid -and -not (Test-Path -LiteralPath $exitFile) -and (Get-Process -Id $wrapperPid -ErrorAction SilentlyContinue)) { & taskkill.exe /PID $wrapperPid /T /F | Out-Null }
+        Stop-OutsideRunnerJob $Run
         Write-Host "--- outside-job '$Name' output ($log) ---"
         if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Encoding UTF8 | ForEach-Object { Write-Host $_ } }
         Write-Host "--- end outside-job '$Name' output ---"
-        # The spec replays this step's environment, runner tokens included.
-        Remove-Item -LiteralPath $spec -Force -ErrorAction SilentlyContinue
     }
     $text = (Get-Content -LiteralPath $exitFile -Raw).Trim()
     if ($text -notmatch '^-?\d+$') { throw "Outside-job run '$Name' wrote no exit code ('$text')" }
     return [int]$text
+}
+
+function Invoke-OutsideRunnerJob([string]$Name, [string]$Work, [string]$Exe, [string[]]$Arguments, [int]$TimeoutMinutes = 45) {
+    $run = Start-OutsideRunnerJob $Name $Work $Exe $Arguments
+    return Wait-OutsideRunnerJob $run $TimeoutMinutes
 }
 
 function Get-VerifiedDesktopWindows([string]$Exe) {
@@ -139,4 +202,13 @@ function Close-VerifiedDesktop([string]$Exe, [int]$ProcessId = 0) {
 function Main-Processes([string]$Exe) {
     # Prevent the function output pipeline from unrolling zero/one process arrays.
     return ,@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ieq $Exe -and $_.CommandLine -notmatch '(?:^|\s)--type(?:=|\s)' })
+}
+
+function Remove-DesktopJourneyPackage([string]$Identity) {
+    $package = Get-AppxPackage -Name $Identity
+    if (-not $package) { return }
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.ExecutablePath -and $_.ExecutablePath.StartsWith($package.InstallLocation + '\', [StringComparison]::OrdinalIgnoreCase)
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
+    Remove-AppxPackage -Package $package.PackageFullName
 }

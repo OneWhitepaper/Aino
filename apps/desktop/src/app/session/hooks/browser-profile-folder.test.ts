@@ -25,11 +25,10 @@ import { clearWebappSession, seedWebappSession } from '@/test/webapp-session'
 
 import { useSessionActions } from './use-session-actions'
 
-// A Webapp tab keeps each profile's default folder under its own key. The
-// window also caches ONE folder, filled at boot for the profile it booted on,
-// and a profile picked from the rail never refills it. These cases drive the
-// real browser bridge, the real rail switch and the real session actions; only
-// the gateway sockets are faked.
+// Folder selection stays independent of assistant ownership: ordinary chats
+// use Aino's default profile, while an explicit Bot route keeps its own folder.
+// These cases drive the real browser bridge and session actions; only gateway
+// sockets are faked.
 
 const gateway = vi.hoisted(() => ({
   ensureGatewayForProfile: vi.fn(async (_profile: string) => undefined)
@@ -132,7 +131,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('browser default folder follows the profile a new session belongs to', () => {
+describe('browser folders stay independent of ordinary and Bot session ownership', () => {
   it('uses the folder Settings saved on the gateway own profile', () => {
     const { result } = mountActions()
 
@@ -142,13 +141,15 @@ describe('browser default folder follows the profile a new session belongs to', 
   })
 
   it.each([
-    { expected: '/srv/beta', pick: 'beta', saved: '/srv/beta' },
-    { expected: '', pick: 'beta', saved: null },
+    { draftFolder: '/srv/beta', pick: 'beta', saved: '/srv/beta' },
+    { draftFolder: '', pick: 'beta', saved: null },
     // The booted profile's folder is not the `default` profile's.
-    { expected: '', pick: 'default', saved: null }
+    { draftFolder: '/srv/aino', pick: 'default', saved: null }
   ])(
-    'after a rail switch to $pick (folder $saved), a new chat and a new tab start in $expected',
-    async ({ expected, pick, saved }) => {
+    'after selecting $pick (folder $saved), ordinary Aino tabs use their own configured folder',
+    async ({ draftFolder, pick, saved }) => {
+      await saveFolderOn('default', '/srv/aino')
+
       if (saved) {
         await saveFolderOn(pick, saved)
       }
@@ -160,15 +161,26 @@ describe('browser default folder follows the profile a new session belongs to', 
       expect($connection.get()?.profile).toBe(pick)
 
       act(() => result.current.startFreshSessionDraft())
-      expect($currentCwd.get()).toBe(expected)
+      expect($currentCwd.get()).toBe(draftFolder)
 
       await act(() => result.current.openNewSessionTile('center', { listed: false }))
 
       const params = requestGateway.mock.calls.find(([method]) => method === 'session.create')?.[1]
-      expect(params).toMatchObject({ profile: pick })
-      expect(params?.cwd ?? '').toBe(expected)
+      expect(params).toMatchObject({ cwd: '/srv/aino', profile: 'default' })
     }
   )
+
+  it('keeps an explicitly selected project folder on Aino without borrowing the selected Bot identity', async () => {
+    await saveFolderOn('beta', '/srv/beta')
+    selectProfile('beta')
+    await vi.waitFor(() => expect($connection.get()?.profile).toBe('beta'))
+    const { result, requestGateway } = mountActions()
+
+    await act(() => result.current.openNewSessionTile('center', { cwd: '/srv/project', listed: false }))
+
+    const params = requestGateway.mock.calls.find(([method]) => method === 'session.create')?.[1]
+    expect(params).toMatchObject({ cwd: '/srv/project', profile: 'default' })
+  })
 
   it('starts a Bot Mode "+" tab in the bot profile folder, not the active profile one', async () => {
     await saveFolderOn('writer', '/srv/writer')

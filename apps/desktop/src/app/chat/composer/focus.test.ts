@@ -489,6 +489,15 @@ describe('insert acknowledgement', () => {
     expect(seen).toEqual(['snippet'])
   })
 
+  it('keeps the exact payload when the addressed insert explicitly requests verbatim mode', async () => {
+    const seen: string[] = []
+    const text = '\n    snippet  \n\n'
+
+    mountInsert('tile:sess-a', seen)
+    await expect(requestComposerInsertAcked(text, { mode: 'verbatim', target: 'tile:sess-a' })).resolves.toBe(true)
+    expect(seen).toEqual([text])
+  })
+
   it('resolves false when no surface claims it', async () => {
     await expect(requestComposerInsertAcked('hello', { target: 'tile:gone' })).resolves.toBe(false)
   })

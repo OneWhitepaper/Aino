@@ -2,36 +2,41 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
-  padding: 30px 24px;
+  padding: 26px 20px;
   color: var(--ui-text-primary);
 }
 .aino-tool-chooser h2 {
   margin: 0 0 5px;
-  font-size: var(--aino-text-title);
-  font-weight: 600;
+  font-size: var(--aino-text-body);
+  font-weight: 550;
   letter-spacing: normal;
 }
 .aino-tool-chooser > p {
-  margin: 0 0 23px;
-  font-size: var(--aino-text-label);
+  margin: 0 0 21px;
+  font-size: var(--aino-text-caption);
   color: var(--ui-text-secondary);
 }
 .aino-tool-choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 0;
 }
 .aino-tool-choices .aino-tool-choice {
   height: auto;
-  min-height: 72px;
+  min-height: 64px;
   justify-content: flex-start;
   gap: 10px;
-  padding: 13px 10px;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: var(--aino-radius-row);
   text-align: start;
   white-space: normal;
-  background: var(--ui-sidebar-surface-background);
+  background: transparent;
+  box-shadow: none;
 }
 .aino-tool-choice > svg {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   color: var(--ui-text-tertiary);
 }
@@ -43,7 +48,7 @@
 .aino-tool-choice small {
   display: block;
   margin-top: 2px;
-  font-size: var(--aino-text-caption);
+  font-size: var(--aino-text-section);
   line-height: 1.6;
   color: var(--ui-text-secondary);
 }
@@ -87,35 +92,87 @@
 /* This variant belongs only to the unified right-side workspace. */
 [data-pane-variant='tool'] {
   box-sizing: border-box;
-  height: var(--aino-band-row2);
-  padding: 6px;
+  height: var(--aino-tool-strip-height);
+  padding: 0 6px;
   align-items: center;
   border-bottom: 1px solid var(--aino-workbench-divider);
-  --pane-tab-active-bg: var(--ui-bg-elevated);
-  --pane-tab-strip-bg: transparent;
+  --pane-tab-active-bg: var(--ui-editor-surface-background);
+  --pane-tab-strip-bg: var(--ui-editor-surface-background);
+  background: var(--ui-editor-surface-background);
 }
 [data-pane-variant='tool'] > [role='tablist'] {
-  height: 32px;
-  gap: 3px;
-  align-items: center;
+  height: 100%;
+  gap: 1px;
+  align-items: stretch;
 }
 [data-pane-variant='tool'] [data-slot='pane-tab'] {
-  height: 32px;
-  min-width: 100px;
+  height: 40px;
+  min-width: 0;
   max-width: 185px;
-  border: 1px solid transparent;
-  border-radius: var(--aino-radius-control);
-  font-size: var(--aino-text-label);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: var(--aino-text-section);
+  font-weight: 400;
   font-family: var(--font-sans);
 }
 [data-pane-variant='tool'] [data-slot='pane-tab'][data-active='true'] {
-  border: 1px solid var(--ui-stroke-secondary);
-  background: var(--ui-bg-elevated);
+  border: 0;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--ui-text-secondary);
+  background: var(--ui-editor-surface-background);
 }
 [data-pane-variant='tool'] [data-slot='pane-tab-label'] {
-  font-size: var(--aino-text-label);
+  font-size: var(--aino-text-section);
+  padding-inline: 9px;
+}
+
+[data-pane-variant='tool'] > span [data-size='icon-xs'] {
+  width: 23px;
+  height: 25px;
 }
 [data-pane-variant='tool'] [data-slot='pane-tab'] > .pane-tab-content > span:first-child svg {
   width: 14px;
   height: 14px;
+}
+
+[data-bot-tool-strip] {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-bot-tool-strip] [data-pane-variant='tool'] {
+  flex: 1;
+}
+
+[data-bot-tool-strip] [role='tablist'] {
+  scrollbar-width: none;
+}
+
+[data-bot-tool-strip] [data-slot='pane-tab'].aino-tool-category {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding-inline: 9px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-section);
+  cursor: pointer;
+}
+
+[data-bot-tool-strip] [data-slot='pane-tab'].aino-tool-category[data-active='true'] {
+  color: var(--ui-text-primary);
+}
+
+[data-bot-tool-strip] .aino-tool-category > .pane-tab-content {
+  justify-content: center;
+  gap: 5px;
+}
+
+[data-bot-tool-strip] .aino-tool-category > .pane-tab-content > span {
+  white-space: nowrap;
 }

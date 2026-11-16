@@ -169,6 +169,62 @@ describe('useComposerQueue park integration', () => {
     }
   })
 
+  it.each(['local', 'canonical'] as const)(
+    'preserves pasted source when queueing through the %s owner',
+    async owner => {
+      const source = '    const value = 1\t\n\n| Name | Count |\n| --- | --- |\n| Aino | 2 |  \n\n'
+
+      if (owner === 'canonical') {
+        $connection.set({ mode: 'local', wsUrl: 'ws://localhost/api/ws?native_dial=unminted' } as HermesConnection)
+      }
+
+      try {
+        const { hook, onSubmit } = renderQueueHook({ busy: true, draft: source })
+
+        await act(async () => {
+          expect(await hook.result.current.queueCurrentDraft()).toBe(true)
+        })
+
+        if (owner === 'local') {
+          expect(getQueuedPrompts(SESSION_KEY)[0]?.text).toBe(source)
+          simulateComposerQueueReloadForTests()
+
+          await act(async () => {
+            expect(await hook.result.current.drainNextQueued()).toBe(true)
+          })
+        }
+
+        expect(onSubmit).toHaveBeenCalledWith(source, expect.objectContaining({ fromQueue: true }))
+      } finally {
+        $connection.set(null)
+      }
+    }
+  )
+
+  it('keeps pasted boundary whitespace when saving a queued edit and restoring the interrupted draft', async () => {
+    const entry = enqueueQueuedPrompt(SESSION_KEY, { attachments: [], text: 'before edit' })!
+    const { draftRef, hook, onSubmit } = renderQueueHook({ busy: true, draft: 'interrupted\n\n' })
+    const source = '\n    edited\tcode  \n\n'
+
+    act(() => {
+      hook.result.current.beginQueuedEdit(entry)
+    })
+    draftRef.current = source
+
+    act(() => {
+      expect(hook.result.current.exitQueuedEdit('save')).toBe(true)
+    })
+
+    expect(getQueuedPrompts(SESSION_KEY)[0]?.text).toBe(source)
+    expect(draftRef.current).toBe('interrupted\n\n')
+
+    await act(async () => {
+      expect(await hook.result.current.drainNextQueued()).toBe(true)
+    })
+
+    expect(onSubmit).toHaveBeenCalledWith(source, expect.objectContaining({ fromQueue: true }))
+  })
+
   it('does not clear the next session draft when a queue ACK arrives after navigation', async () => {
     $connection.set({ mode: 'local', wsUrl: 'ws://localhost/api/ws?native_dial=unminted' } as HermesConnection)
     let accept!: (value: boolean) => void

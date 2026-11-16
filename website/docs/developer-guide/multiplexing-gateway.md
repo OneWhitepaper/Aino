@@ -282,6 +282,14 @@ profile enumeration and configuration live in
 `profiles.get_asset`. Reads and writes run under the target profile's
 HERMES_HOME override. Asset writes are atomic, type- and size-capped.
 
+The desktop's named-home resolver, `methods_profiles.py::_profile_home`
+(published on the `tui_gateway.server` facade), seeds upgraded bundled skills
+the first time an existing Bot is served by a new process. It uses the same
+profile-scoped sync as startup and profile creation, preserving edited,
+deleted, disabled, and explicitly opted-out skills. The served-home roster
+prevents repeated hashing on later RPCs; existing agents retain their cached
+conversation prompts.
+
 ## Failure modes
 
 - Fatal at startup: multiplex config errors and a secondary profile enabling a

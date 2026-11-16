@@ -41,6 +41,10 @@ export interface SubagentProgress {
   summary?: string
   /** Active tool while running — cleared on terminal status. */
   currentTool?: string
+  /** Caller authority from subagent.list; durable roster visibility alone does not grant control. */
+  canControl?: boolean
+  /** The child's final steering drain can close before its completion event arrives. */
+  acceptingSteer?: boolean
 }
 
 export interface SubagentNode extends SubagentProgress {
@@ -102,6 +106,7 @@ const getSubagentsForSession = (
 const isStr = (v: unknown): v is string => typeof v === 'string'
 const str = (v: unknown) => (isStr(v) ? v : '')
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+const bool = (v: unknown, fallback?: boolean) => (typeof v === 'boolean' ? v : fallback)
 const strList = (v: unknown) => (Array.isArray(v) ? v.filter(isStr) : [])
 
 const asStatus = (v: unknown, terminalEvent = false): SubagentStatus => {
@@ -245,6 +250,8 @@ function toProgress(
     sessionId: str(payload.child_session_id) || prev?.sessionId,
     delegationId: str(payload.delegation_id) || prev?.delegationId,
     model: str(payload.model) || prev?.model,
+    canControl: bool(payload.can_control, prev?.canControl),
+    acceptingSteer: bool(payload.accepting_steer, prev?.acceptingSteer),
     status,
     taskCount: num(payload.task_count) ?? prev?.taskCount ?? 1,
     taskIndex: num(payload.task_index) ?? prev?.taskIndex ?? 0,

@@ -10,19 +10,21 @@ import { parseArgs } from 'node:util'
 import { startHttpsEdge } from '../../../apps/desktop/e2e/update/github-edge.ts'
 import { resolveDesktopHermesHome } from '../../../apps/desktop/electron/data-paths.mjs'
 import { applyBundleEnvironment } from '../../../apps/desktop/scripts/bundle-env.mjs'
+import { bundledUpgradeHealth } from '../../../tests-js/scripts/bundled-upgrade-probe.ts'
 import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatReady } from '../../../tests-js/scripts/desktop-chat-smoke.ts'
 import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit, reusedDesktopBuildCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
 import { desktopToolMarker } from '../../../tests-js/scripts/desktop-tool-smoke.ts'
 import { _electron, type ElectronApplication, type Page, z } from '../../../tests-js/scripts/e2e-driver-deps.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
-import { bundledUpgradeHealth } from '../../../tests-js/scripts/bundled-upgrade-probe.ts'
 import { type MockServer, startMockServer } from '../../../tests-js/scripts/mock-server.ts'
 import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture.ts'
 
-import { type SmokeEnvironment, smokeEnvironment, within } from './smoke-env.mjs'
+import { isolatedElectronArgs, type SmokeEnvironment, smokeEnvironment, within } from './smoke-env.mjs'
 import { sourceRuntimeSettleCommand } from './source-runtime-settle.mjs'
+import { type FixtureAccount, fixtureAccountForHome } from './windows-user-state.mjs'
 
 const require = createRequire(import.meta.url)
+const { observeProcessClose }: { observeProcessClose: (child: ReturnType<ElectronApplication['process']>) => (timeoutMs?: number) => Promise<void> } = require('./process-close.cjs')
 const { pickAppWindow }: { pickAppWindow: (app: ElectronApplication, log: (message: string) => void) => Promise<Page> } = require('./update-ui.cjs')
 const { prepareWindowForInput }: { prepareWindowForInput: (app: ElectronApplication, page: Page) => Promise<void> } = require('./window-input.cjs')
 
@@ -33,6 +35,9 @@ const optionsSchema = z.object({
   phase: z.enum(['old', 'new', 'installed']), 'expect-commit': z.string().regex(/^[0-9a-f]{40}$/),
   'launch-spec': absolutePath.optional(), 'mock-url': z.string().optional(),
   'platform-account': z.boolean().optional(), 'tool-smoke': z.boolean().optional(), appimage: absolutePath.optional(),
+  'native-handoff': z.boolean().optional(),
+  'keep-signed-in': z.boolean().optional(),
+  'require-existing-account': z.boolean().optional(),
 })
 type SmokeOptions = z.infer<typeof optionsSchema>
 
@@ -152,6 +157,7 @@ export function resolveSmokeLaunch(options: SmokeOptions): Launch {
   if (args.some((arg: string): boolean => /^--(?:no-sandbox|disable-setuid-sandbox)(?:=|$)/.test(arg))) {
     throw new Error('Desktop smoke requires Chromium sandboxing')
   }
+  if (options['native-handoff']) { args = isolatedElectronArgs([...args, '--force-renderer-accessibility'], options['user-data']) }
   return { chromiumSandbox: true, executablePath: smokeExecutable(options), args, cwd, env }
 }
 
@@ -279,7 +285,7 @@ export function assertAppImageIdentity(running: Pick<RunningDesktop, 'appimage' 
   if (!extractedStamp.equals(mountedStamp)) { throw new Error('Mounted AppImage stamp differs from the extracted artifact') }
 }
 
-async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOptions, launch: Launch, predictedHome?: string): Promise<RunningDesktop> {
+export async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOptions, launch: Launch, predictedHome?: string): Promise<RunningDesktop> {
   const running = await app.evaluate(({ app: electronApp }): RunningDesktop => {
     // SAFETY: this callback runs in Electron main, whose process includes resourcesPath.
     const runtime = process as ElectronProcess
@@ -292,17 +298,13 @@ async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOpti
   // (NSHomeDirectory) and Windows (CSIDL_PROFILE) ignore it, so the home
   // equality is a contract only there. On those platforms the isolation proof
   // is the userData pin plus the seeded Hermes home the backend booted from.
-  // When the artifact bakes its own env (bundleEnv known from the stamp), the
-  // driver's --user-data pin is not authoritative: the app may legitimately
-  // resolve a different userData, and the home the driver predicted and seeded
-  // is verified against the app's own report below instead.
-  if (!predictedHome) {
-    const homeHonored = process.platform === 'linux'
+  // Preservation only means anything when Electron actually opened the supplied
+  // profile. A predicted backend home cannot waive the Chromium profile check.
+  const homeHonored = !predictedHome && process.platform === 'linux'
       ? fs.realpathSync(running.home) === fs.realpathSync(launch.env.HOME!)
       : true
-    if (fs.realpathSync(running.userData) !== fs.realpathSync(options['user-data']) || !homeHonored) {
-      throw new Error('Desktop did not honor the isolated home and userData directories')
-    }
+  if (fs.realpathSync(running.userData) !== fs.realpathSync(options['user-data']) || !homeHonored) {
+    throw new Error('Desktop did not honor the isolated home and userData directories')
   }
   if (options.appimage) {
     assertAppImageIdentity(running, options)
@@ -333,17 +335,102 @@ function assertResolvedIdentity(identity: ChatIdentity, options: SmokeOptions, p
 
 export type LaunchElectron = (launch: Parameters<typeof _electron.launch>[0]) => Promise<ElectronApplication>
 
-export async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment) {
+interface NativeUpdateHandoff {
+  out: string
+  pid: number
+  exe: string
+  oldSha: string
+  userData: string
+  hermesHome: string
+  env: NodeJS.ProcessEnv
+  waitForProcessClose: (timeoutMs?: number) => Promise<void>
+  observeAutomaticNew?: (phase: NativeAccountPhase) => unknown
+}
+
+interface NativeAccountPhase {
+  phase: string
+  startedAt: number
+  observedAt: number
+}
+
+function writeHandoffReceipt(out: string, name: string, value: unknown): void {
+  const file = path.join(out, name)
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
+  fs.renameSync(`${file}.tmp`, file)
+}
+
+/** OLD owns the fixture until the harness has observed the OS-owned NEW relaunch. */
+export async function holdNativeUpdate(handoff: NativeUpdateHandoff): Promise<void> {
+  const { out, waitForProcessClose, env, observeAutomaticNew, ...identity } = handoff
+  const whitelist = ['HERMES_HOME', 'HERMES_DESKTOP_USER_DATA_DIR', 'HERMES_DESKTOP_SKIP_QUIT_CONFIRM',
+    'NODE_USE_ENV_PROXY', 'NODE_EXTRA_CA_CERTS', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY']
+  writeHandoffReceipt(out, 'native-relaunch-environment.json', Object.fromEntries(
+    whitelist.flatMap(key => env[key] ? [[key, env[key]]] : [])))
+  writeHandoffReceipt(out, 'old-chat-ready.json', identity)
+  await waitForProcessClose(15 * 60_000)
+  writeHandoffReceipt(out, 'old-process-closed.json', { ...identity, closed: true })
+  const release = path.join(out, 'native-update-complete')
+  await new Promise<void>((resolve, reject) => {
+    const finish = (): void => {
+      clearTimeout(timer)
+      clearInterval(poll)
+      watcher.close()
+      resolve()
+    }
+    let observed = false
+    const inspect = (): void => {
+      const request = path.join(out, 'automatic-new-authentication-request.json')
+      if (observeAutomaticNew && !observed && fs.existsSync(request)) {
+        observed = true
+        try {
+          const phase = z.object({ phase: z.literal('automatic-new'), startedAt: z.number().int().positive(),
+            observedAt: z.number().int().positive() }).parse(JSON.parse(fs.readFileSync(request, 'utf8')))
+          if (phase.observedAt < phase.startedAt || phase.observedAt > Date.now()) { throw new Error('Invalid automatic NEW observation interval') }
+          writeHandoffReceipt(out, 'automatic-new-authentication.json', { status: 'passed', ...observeAutomaticNew(phase) as object })
+        } catch (error) {
+          writeHandoffReceipt(out, 'automatic-new-authentication.json', { status: 'failed', error: String(error) })
+          clearTimeout(timer)
+          clearInterval(poll)
+          watcher.close()
+          reject(error)
+          return
+        }
+      }
+      if (fs.existsSync(release)) { finish() }
+    }
+    const watcher = fs.watch(out, inspect)
+    // Filesystem events can coalesce across the atomic receipt renames.
+    const poll = setInterval(inspect, 1000)
+    const timer = setTimeout(() => {
+      clearInterval(poll)
+      watcher.close()
+      reject(new Error('Native NEW verification did not release the OLD account fixture'))
+    }, 20 * 60_000)
+    watcher.on('error', error => { clearTimeout(timer); clearInterval(poll); watcher.close(); reject(error) })
+    inspect()
+  })
+}
+
+export async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment,
+  login: { keepSignedIn?: boolean; allowExisting?: boolean; requireExisting?: boolean } = {}) {
   if (!enabled) { return undefined }
   const account = await startPlatformServer()
   try {
     const edge = await startHttpsEdge(out, { host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false })
     Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
-    return {
-      signIn: signInPlatformFixture,
-      proof: () => ({
+    const proof = (phase?: NativeAccountPhase) => {
+      const requests = phase ? account.requests.filter(request => request.receivedAt >= phase.startedAt && request.receivedAt <= phase.observedAt) : account.requests
+      const authenticatedProfileRequests = requests.filter(request => request.authenticatedProfile).length
+      const freshAuthenticationRequests = requests.filter(request => request.method === 'POST'
+        && request.path.startsWith('/api/v1/auth/') && request.path.split('?')[0] !== '/api/v1/auth/refresh').length
+      return {
+        ...phase,
         mode: 'synthetic-account-real-native-bridge',
-        requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
+        requests: requests.map(({ method, path: route }) => ({ method, path: route })),
+        authenticatedProfileRequests,
+        freshAuthenticationRequests,
+        existingSessionRequired: !!login.requireExisting,
+        authenticationPreservedWithoutLogin: !!login.requireExisting && authenticatedProfileRequests > 0 && freshAuthenticationRequests === 0,
         proxyHits: edge.apiHits, proxyConnects: edge.connects, blockedConnects: edge.deniedConnects,
         certificates: ['ca.pem', 'leaf.pem'].map(name => {
           const certificate = new X509Certificate(fs.readFileSync(path.join(out, 'edge-ca', name)))
@@ -351,7 +438,16 @@ export async function prepareAccountFixture(enabled: boolean | undefined, out: s
             fingerprint: certificate.fingerprint256, validFrom: certificate.validFrom, validTo: certificate.validTo }
         }),
         boundary: 'Local account fixture and custom mock inference; no production SMS, platform model lease or billing verification.'
-      }),
+      }
+    }
+    return {
+      signIn: (app: ElectronApplication, page: Page) => signInPlatformFixture(app, page, login),
+      proof,
+      assertPreserved: (phase?: NativeAccountPhase) => {
+        if (login.requireExisting && !proof(phase).authenticationPreservedWithoutLogin) {
+          throw new Error('Retained account did not authenticate without a new login')
+        }
+      },
       close: async () => {
         try { await edge.close() } finally {
           await account.close()
@@ -369,8 +465,21 @@ function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undef
   }
 }
 
-function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string): string | undefined {
+function preservedSmokeAccount(options: SmokeOptions): FixtureAccount | null {
+  if (!options['platform-account']) { return null }
+  const home = resolveDesktopHermesHome({ home: options.home, accountWorkspace: {
+    userData: options['user-data'], origin: 'https://api.agentera.com.cn', userId: '17'
+  } })
+  return fixtureAccountForHome({ root: options['user-data'], home })
+}
+
+export function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string): string | undefined {
   if (!options['platform-account']) { return predictedHome }
+  const preserved = preservedSmokeAccount(options)
+  if (preserved) {
+    if (preserved.baseUrl !== `${mockUrl}/v1`) { throw new Error('Preserved account mock endpoint differs from this journey') }
+    return preserved.home
+  }
   // Seed fixture config directly into this known account; shared history is never adopted.
   const accountHome = resolveDesktopHermesHome({ home: options.home, accountWorkspace: {
     userData: options['user-data'], origin: 'https://api.agentera.com.cn', userId: '17'
@@ -380,6 +489,94 @@ function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefin
   writeEnvFile(accountHome, 'e2e-mock-key', mockUrl)
 
   return accountHome
+}
+
+/** Read through the authenticated app's normal local API, including the Bot's own profile. */
+export async function readPreservedAccountHistory(page: Page, account: FixtureAccount) {
+  const scopes = [{ profile: 'default', sessionId: account.sessionIds[0] },
+    { profile: account.profile, sessionId: account.sessionIds[1] }]
+  const replies = await page.evaluate(async items => {
+    const bridge = (window as unknown as { hermesDesktop: {
+      api: (request: { path: string; profile: string; connectionId: string; method: string; timeoutMs: number }) => Promise<unknown>
+    } }).hermesDesktop
+    const rows = []
+    for (const item of items) {
+      const request = { profile: item.profile, connectionId: 'local', method: 'GET', timeoutMs: 60_000 }
+      const assignment = await bridge.api({ ...request, path: '/api/providers/custom-endpoints' })
+      const history = await bridge.api({ ...request, path: `/api/sessions/${encodeURIComponent(item.sessionId)}/messages` })
+      rows.push({ ...item, assignment, history })
+    }
+    return rows
+  }, scopes)
+  const schema = z.object({ profile: z.string(), sessionId: z.string(),
+    assignment: z.object({ current: z.object({ model: z.string(), provider: z.string(), base_url: z.string() }) }),
+    history: z.object({ session_id: z.string(), messages: z.array(z.object({ role: z.string(), content: z.string() })) }),
+  })
+  const sessions = z.array(schema).parse(replies).map(row => {
+    const model = row.assignment.current
+    if (model.model !== account.model || model.provider !== 'custom' || model.base_url !== account.baseUrl) {
+      throw new Error(`Preserved ${row.profile} model configuration differs in the active account`)
+    }
+    const expected = [
+      { role: 'user', content: `${account.displayName}：请保留我的历史记录。` },
+      { role: 'assistant', content: `${account.displayName}：历史回答和模型设置应在升级后保留。` },
+    ]
+    if (row.history.session_id !== row.sessionId || expected.some(message => !row.history.messages.some(
+      actual => actual.role === message.role && actual.content === message.content))) {
+      throw new Error(`Preserved ${row.profile} historical messages are missing from the active account`)
+    }
+    return { profile: row.profile, sessionId: row.sessionId, model, messages: expected }
+  })
+  return { home: account.home, origin: account.origin, userId: account.userId, sessions }
+}
+
+export interface AutomaticNewWorkspace {
+  home: string
+  commit: string
+  scopes: { profile: string; model: string; baseUrl: string; sessionId: string;
+    messages: { id: string | number; role: string; content: string }[] }[]
+}
+
+/** Serialized into the existing native DevTools console; never signs in or selects a workspace. */
+export async function collectAutomaticNewWorkspace(expected: AutomaticNewWorkspace) {
+  const bridge = (window as unknown as { hermesDesktop: {
+    getVersion: () => Promise<{ appVersion: string; commit: string; hermesHome: string; hermesRoot: string; platform: string }>
+    platformAccount: { status: () => Promise<{ phase: string; account?: { id: string | number }; mode: string; remember_state: string; error: unknown }> }
+    getConnection: () => Promise<{ baseUrl: string; mode: string }>
+    api: (request: unknown) => Promise<unknown>
+  } }).hermesDesktop
+  const status = await bridge.platformAccount.status()
+  if (status.phase !== 'signed_in' || String(status.account?.id) !== '17' || status.mode !== 'production'
+      || status.remember_state !== 'encrypted' || status.error !== null) {
+    throw new Error('Automatic NEW is not the retained authenticated encrypted account')
+  }
+  const version = await bridge.getVersion()
+  const normalize = (value: string): string => value.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
+  if (normalize(version.hermesHome) !== normalize(expected.home)) { throw new Error('Automatic NEW selected another account home') }
+  if (version.commit !== expected.commit) { throw new Error('Automatic NEW selected another build') }
+  const selected = await bridge.getConnection()
+  const histories = []
+  for (const scope of expected.scopes) {
+    const request = { profile: scope.profile, connectionId: 'local', method: 'GET', timeoutMs: 60_000 }
+    const assignment = await bridge.api({ ...request, path: '/api/providers/custom-endpoints' }) as {
+      current: { model: string; provider: string; base_url: string }
+    }
+    const history = await bridge.api({ ...request, path: `/api/sessions/${encodeURIComponent(scope.sessionId)}/messages` }) as {
+      session_id: string; messages: { id: string | number; role: string; content: string }[]
+    }
+    const model = assignment.current
+    if (model.model !== scope.model || model.provider !== 'custom' || model.base_url !== scope.baseUrl) {
+      throw new Error('Automatic NEW changed the retained model')
+    }
+    if (history.session_id !== scope.sessionId || scope.messages.some(message => !history.messages.some(actual =>
+      String(actual.id) === String(message.id) && actual.role === message.role && actual.content === message.content))) {
+      throw new Error('Automatic NEW lost retained history')
+    }
+    histories.push({ profile: scope.profile, sessionId: scope.sessionId, model, messages: scope.messages })
+  }
+  return { identity: { appVersion: version.appVersion, commit: version.commit, hermesHome: version.hermesHome, hermesRoot: version.hermesRoot, platform: version.platform },
+    account: { phase: status.phase, userId: String(status.account?.id), rememberState: status.remember_state },
+    connection: { baseUrl: selected.baseUrl, mode: selected.mode }, histories }
 }
 
 export async function prepareSmokeWindow(
@@ -399,9 +596,71 @@ export async function prepareSmokeWindow(
   return page
 }
 
+function assertNativeHandoffOptions(options: SmokeOptions): void {
+  if (options['native-handoff'] && (options.phase !== 'old' || options.origin !== 'bundled' || !options['platform-account'])) {
+    throw new Error('Native handoff requires OLD bundled platform-account smoke')
+  }
+}
+
+async function prepareAccountLaunch(options: SmokeOptions, launch: Launch) {
+  const preserved = preservedSmokeAccount(options)
+  const account = await prepareAccountFixture(options['platform-account'], options.out, launch.env, {
+    keepSignedIn: options['native-handoff'] || options['keep-signed-in'], allowExisting: !!preserved,
+    requireExisting: options['require-existing-account'],
+  })
+  try {
+    const bundleEnv = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
+    const predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
+    // Check before the driver creates its sandbox folders inside this home.
+    if (predictedHome && !(preserved && options.phase !== 'installed')) { assertSmokeHermesHome(predictedHome, options) }
+    return { account, preserved, predictedHome }
+  } catch (error) {
+    await account?.close()
+    throw error
+  }
+}
+
+function observeNativeClose(options: SmokeOptions, app: ElectronApplication) {
+  return options['native-handoff'] ? observeProcessClose(app.process()) : undefined
+}
+
+async function observePreservedHistory(options: SmokeOptions, page: Page, preserved: FixtureAccount | null) {
+  if (!preserved) { return undefined }
+  const proof = await readPreservedAccountHistory(page, preserved)
+  fs.writeFileSync(path.join(options.out, `desktop-preserved-account-${options.phase}.json`), JSON.stringify(proof, null, 2) + '\n')
+  return proof
+}
+
+interface SmokeCompletion {
+  result: unknown
+  running: RunningDesktop
+  identity: ChatIdentity
+  env: SmokeEnvironment
+  waitForProcessClose: ReturnType<typeof observeNativeClose>
+  account: Awaited<ReturnType<typeof prepareAccountFixture>>
+}
+
+async function completeSmokeWindow(options: SmokeOptions, app: ElectronApplication, completion: SmokeCompletion): Promise<void> {
+  const receiptPath = path.join(options.out, `desktop-chat-${options.phase}.json`)
+  const { result, running, identity, env, waitForProcessClose, account } = completion
+  if (waitForProcessClose) {
+    fs.writeFileSync(receiptPath, `${JSON.stringify(result, null, 2)}\n`)
+    await holdNativeUpdate({ out: options.out, pid: running.pid, exe: running.executable, oldSha: options['expect-commit'],
+      userData: running.userData, hermesHome: identity.hermesHome!, env, waitForProcessClose,
+      observeAutomaticNew: phase => { account!.assertPreserved(phase); return account!.proof(phase) } })
+    account?.assertPreserved()
+    fs.writeFileSync(path.join(options.out, 'native-account-lifetime.json'), JSON.stringify(account?.proof(), null, 2) + '\n')
+    return
+  }
+  await gracefulClose(app)
+  fs.writeFileSync(receiptPath, `${JSON.stringify(result, null, 2)}\n`)
+}
+
 // `launchApp` is a parameter so a test can substitute a failing launcher and
 // exercise the seeding that happens before the launch without touching Playwright.
-export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch)): Promise<void> {
+export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch),
+  checkpoint?: (app: ElectronApplication, page: Page) => Promise<unknown>): Promise<void> {
+  assertNativeHandoffOptions(options)
   const out = options.out
   fs.mkdirSync(out, { recursive: true })
   const receiptPath = path.join(out, `desktop-chat-${options.phase}.json`)
@@ -415,12 +674,9 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     fs.accessSync(options.exe, fs.constants.X_OK)
     fs.accessSync(options.root)
     const launch: Launch = resolveSmokeLaunch(options)
-    account = await prepareAccountFixture(options['platform-account'], out, launch.env)
-    const bundleEnv: Record<string, string | null> | undefined = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
-    predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
-
-    // Check before the driver creates its sandbox folders inside this home.
-    if (predictedHome) { assertSmokeHermesHome(predictedHome, options) }
+    const prepared = await prepareAccountLaunch(options, launch)
+    account = prepared.account
+    predictedHome = prepared.predictedHome
 
     fs.mkdirSync(options.home, { recursive: true })
     fs.mkdirSync(options['user-data'], { recursive: true })
@@ -445,6 +701,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     seedSmokeProviders(options, predictedHome, mockUrl)
     predictedHome = seedSmokeAccount(options, predictedHome, mockUrl)
     app = await launchApp({ ...launch, timeout: 120_000 })
+    const waitForProcessClose = observeNativeClose(options, app)
     app.process().stdout?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
     app.process().stderr?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
 
@@ -459,6 +716,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     }
     const identity = await readChatIdentity(page)
     assertResolvedIdentity(identity, options, predictedHome)
+    const preservation = await observePreservedHistory(options, page, prepared.preserved)
     // The ordinary host-attach path may reuse the updater's relaunched app's
     // backend, and `hermes gateway ensure` attaches to (or starts, detached) the
     // canonical gateway. Observe the ledger and gateway_state.json the app's home
@@ -467,6 +725,10 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     fs.writeFileSync(path.join(out, `desktop-backend-${options.phase}.log`), connection.logs.map(redact).join('\n'))
     const backend = localBackendProcess(Number(base.port), running.pid, predictedHome ?? options.home,
       observerPayloadRoot(options))
+    fs.writeFileSync(path.join(out, `desktop-backend-${options.phase}.json`), JSON.stringify({
+      userData: running.userData, hermesHome: identity.hermesHome, expectedCommit: options['expect-commit'],
+      actualCodeSha: backend.codeSha ?? null, backend: { ...backend, command: redact(backend.command) },
+    }, null, 2) + '\n')
     // `identity.hermesRoot` was asserted against options.root above. For a listener that
     // descends from this app process, on a platform that cannot read the backend's own
     // environment, those two facts are the available evidence; a ledger-attached host
@@ -480,6 +742,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const reusedBuildCommit = reusedDesktopBuildCommit(options.root, options.origin, provenanceCommit)
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit })
+    const checkpointProof = await checkpoint?.(app, page)
     let tool
     if (options['tool-smoke']) {
       const marker = desktopToolMarker(identity, options.home, predictedHome)
@@ -491,12 +754,12 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
       tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
     }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, tool, gatewayHealth, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    account?.assertPreserved()
+    const result = { ...chat, tool, gatewayHealth, preservation, checkpoint: checkpointProof, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
-    await gracefulClose(app)
+    await completeSmokeWindow(options, app, { result, running, identity, env: launch.env, waitForProcessClose, account })
     app = undefined
-    fs.writeFileSync(receiptPath, `${JSON.stringify(result, null, 2)}\n`)
   } catch (error) {
     if (page) { await page.screenshot({ path: path.join(out, `desktop-chat-${options.phase}-failed.png`) }).catch((): void => {}) }
     if (app) { await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}-failed.zip`) }).catch((): void => {}) }
@@ -523,6 +786,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     'user-data': { type: 'string' }, out: { type: 'string' }, phase: { type: 'string' },
     'expect-commit': { type: 'string' }, 'launch-spec': { type: 'string' }, 'mock-url': { type: 'string' },
     'platform-account': { type: 'boolean' }, 'tool-smoke': { type: 'boolean' }, appimage: { type: 'string' },
+    'native-handoff': { type: 'boolean' },
+    'keep-signed-in': { type: 'boolean' },
+    'require-existing-account': { type: 'boolean' },
   } })
 
   // When the app exits before printing its debugger line, Playwright's Electron.launch rejects

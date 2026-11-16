@@ -1,5 +1,27 @@
+import {
+  Archive,
+  Bell,
+  BookOpen,
+  CircleDashed,
+  Command,
+  Cpu,
+  Folder,
+  Globe,
+  House,
+  Info,
+  Link,
+  type LucideIcon,
+  MessageSquare,
+  Mic,
+  Settings2,
+  ShieldCheck,
+  SquareTerminal,
+  SunMoon
+} from 'lucide-react'
+import { createElement } from 'react'
+
 import type { SettingsNavigationCopy } from '@/i18n/settings-navigation'
-import { Network, Settings2, ShieldLock, Zap } from '@/lib/icons'
+import type { IconComponent } from '@/lib/icons'
 import { normalize } from '@/lib/text'
 
 import type { OverlayNavGroup, OverlayNavLink } from '../overlays/overlay-split-layout'
@@ -11,7 +33,37 @@ const sections = [
   { id: 'system', pages: ['config:safety', 'config:advanced', 'about'] }
 ] as const
 
-const icons = { 'config:model': Zap, 'config:safety': ShieldLock, providers: Network, gateway: Settings2 }
+const navigationIcons = {
+  account: House,
+  'config:appearance': SunMoon,
+  notifications: Bell,
+  keybinds: Command,
+  'config:model': Cpu,
+  'config:chat': MessageSquare,
+  'config:memory': CircleDashed,
+  'config:voice': Mic,
+  sessions: Archive,
+  'config:workspace': Folder,
+  'config:browser': Globe,
+  providers: Link,
+  gateway: SquareTerminal,
+  plugins: BookOpen,
+  'config:safety': ShieldCheck,
+  'config:advanced': Settings2,
+  about: Info
+}
+
+// OverlayNav's existing icon contract uses numeric `stroke` for line width.
+function navigationIcon(Icon: LucideIcon): IconComponent {
+  return ({ stroke, ...props }) =>
+    createElement(Icon, {
+      ...props,
+      stroke: typeof stroke === 'string' ? stroke : 'currentColor',
+      strokeWidth: typeof stroke === 'number' ? stroke : 1.65
+    })
+}
+
+const icons = Object.fromEntries(Object.entries(navigationIcons).map(([id, Icon]) => [id, navigationIcon(Icon)]))
 
 const keywords: Record<string, string> = {
   account: 'account balance wallet billing recharge profile 账户 余额 钱包 充值 账单',

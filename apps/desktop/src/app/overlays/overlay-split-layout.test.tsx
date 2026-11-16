@@ -1,11 +1,50 @@
-import { cleanup, fireEvent, render, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { Settings2 } from '@/lib/icons'
+import { stubMenuDomApis } from '@/test/jsdom'
 
 import { OverlayNav, type OverlayNavGroup } from './overlay-split-layout'
 
 afterEach(cleanup)
+
+it('keeps nested settings routes available through the compact full-page navigation', async () => {
+  stubMenuDomApis()
+
+  const select = vi.fn()
+
+  const { container } = render(
+    <OverlayNav
+      fullPage
+      groups={[
+        {
+          active: true,
+          id: 'plugins',
+          label: 'Plugins',
+          icon: Settings2,
+          onSelect: vi.fn(),
+          children: [
+            {
+              active: true,
+              id: 'hello',
+              label: 'Hello Runtime',
+              icon: Settings2,
+              onSelect: vi.fn(),
+              children: [{ active: true, id: 'about', label: 'About', icon: Settings2, onSelect: select }]
+            }
+          ]
+        }
+      ]}
+      responsive
+    />
+  )
+
+  const compact = within(container.querySelector('[data-aino-overlay-nav-dropdown]') as HTMLElement)
+
+  fireEvent.pointerDown(compact.getByRole('button'), { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Hello Runtime › About' }))
+  expect(select).toHaveBeenCalledOnce()
+})
 
 it('expands independently of navigation and reveals a newly selected child', () => {
   const select = vi.fn()

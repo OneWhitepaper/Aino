@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PreviewCloseConfirm } from '@/app/chat/preview-close-confirm'
+import { TITLEBAR_HEIGHT, TOUCH_TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { $narrowOverlayPaneIds } from '@/components/pane-shell/narrow-overlay-state'
 import { registry } from '@/contrib/registry'
@@ -375,8 +376,11 @@ describe('narrow overlay of a stacked zone', () => {
       return inset
     }
 
-    // The touch titlebar is taller than the pointer one; the tabs clear it.
-    expect(overlayInset(true)).toBeGreaterThan(overlayInset(false))
+    // Both titlebars now meet the 44px touch target; overlay tabs clear the
+    // actual host band rather than relying on a difference between them.
+    expect(overlayInset(true)).toBe(TOUCH_TITLEBAR_HEIGHT)
+    expect(overlayInset(false)).toBe(TITLEBAR_HEIGHT)
+    expect(overlayInset(true)).toBeGreaterThanOrEqual(44)
   })
   it('mirrors the zone tab strip so every stacked collapsible stays reachable', () => {
     const { getByTestId, queryByTestId } = render(<NarrowOverlays />)
@@ -464,14 +468,13 @@ describe('narrow overlay of a stacked zone', () => {
     render(<NarrowOverlays />)
     revealPane('sessions')
 
-    // Controls rect = { x: 0, y: 0, width: 24 + 58, height: 34 }; the
-    // reservation is the overlap's bottom edge, so the strip starts below it.
+    // The strip and drag target must clear the full shared caption band.
     const overlay = globalThis.document.querySelector<HTMLElement>('[data-narrow-overlay="sessions"]')
-    expect(overlay?.style.paddingTop).toBe('34px')
+    expect(overlay?.style.paddingTop).toBe(`${TITLEBAR_HEIGHT}px`)
     // The reserved band stays a window-drag target, as in a docked TreeGroup.
     const dragSpacer = overlay?.querySelector<HTMLElement>('[aria-hidden="true"]')
     expect(dragSpacer).not.toBeNull()
-    expect(dragSpacer?.style.height).toBe('34px')
+    expect(dragSpacer?.style.height).toBe(`${TITLEBAR_HEIGHT}px`)
   })
 
   it('honors the user drag width, not the declared width, when the zone collapsed', () => {

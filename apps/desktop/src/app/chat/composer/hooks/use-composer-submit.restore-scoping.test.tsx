@@ -204,7 +204,7 @@ function Harness({ pendingScope, suspend, onSubmit }: HarnessProps) {
 
   return (
     <>
-      <div contentEditable data-testid="editor" ref={draft.editorRef} />
+      <div contentEditable data-slot="composer-rich-input" data-testid="editor" ref={draft.editorRef} />
       <PendingNavigation suspend={suspend} />
     </>
   )

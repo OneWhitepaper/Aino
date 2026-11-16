@@ -51,28 +51,7 @@ function minimalControlStyle(browserHost: boolean, minimal: boolean): CSSPropert
   return browserHost && minimal ? { flexWrap: 'wrap', justifyContent: 'flex-end' } : {}
 }
 
-export function ComposerControls({
-  autoSpeak,
-  busy,
-  busyAction,
-  canSubmit,
-  cardWaiting = false,
-  compactModelPill = false,
-  conversation,
-  continuation,
-  disabled,
-  editingQueue = false,
-  foldVoice = false,
-  hasComposerPayload,
-  hideModelPill = false,
-  minimal = false,
-  state,
-  voiceStatus,
-  onDictate,
-  onQueue,
-  onSteer,
-  onToggleAutoSpeak
-}: {
+interface ComposerControlsProps {
   autoSpeak: boolean
   busy: boolean
   busyAction: 'interrupt' | 'steer' | 'queue' | 'stop'
@@ -86,7 +65,9 @@ export function ComposerControls({
   editingQueue?: boolean
   foldVoice?: boolean
   hasComposerPayload: boolean
+  hideContextUsage?: boolean
   hideModelPill?: boolean
+  hideReasoningPill?: boolean
   minimal?: boolean
   state: ChatBarState
   voiceStatus: VoiceStatus
@@ -94,7 +75,32 @@ export function ComposerControls({
   onQueue: () => void
   onSteer?: () => void
   onToggleAutoSpeak: () => void
-}) {
+}
+
+export function ComposerControls({
+  autoSpeak,
+  busy,
+  busyAction,
+  canSubmit,
+  cardWaiting = false,
+  compactModelPill = false,
+  conversation,
+  continuation,
+  disabled,
+  editingQueue = false,
+  foldVoice = false,
+  hasComposerPayload,
+  hideContextUsage = false,
+  hideModelPill = false,
+  hideReasoningPill = false,
+  minimal = false,
+  state,
+  voiceStatus,
+  onDictate,
+  onQueue,
+  onSteer,
+  onToggleAutoSpeak
+}: ComposerControlsProps) {
   const { t } = useI18n()
   const c = t.composer
   const hudMode = useStore($hudMode)
@@ -127,15 +133,14 @@ export function ComposerControls({
   const foldedVoice = hudMode || foldVoice
 
   const modelControls = (
-    <>
-      {state.contextUsage}
-      {hideModelPill ? null : (
-        <>
-          <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
-          {compactModelPill ? null : <ReasoningPill disabled={disabled} model={state.model} />}
-        </>
-      )}
-    </>
+    <ComposerModelControls
+      compactModelPill={compactModelPill}
+      disabled={disabled}
+      hideContextUsage={hideContextUsage}
+      hideModelPill={hideModelPill}
+      hideReasoningPill={hideReasoningPill}
+      state={state}
+    />
   )
 
   const voiceMenu = (
@@ -226,6 +231,65 @@ export function ComposerControls({
       {hudMode ? <HudWindowButtons /> : null}
     </div>
   )
+}
+
+interface ComposerModelControlsProps {
+  compactModelPill: boolean
+  disabled: boolean
+  hideContextUsage: boolean
+  hideModelPill: boolean
+  hideReasoningPill: boolean
+  state: ChatBarState
+}
+
+function ComposerModelControls({
+  compactModelPill,
+  disabled,
+  hideContextUsage,
+  hideModelPill,
+  hideReasoningPill,
+  state
+}: ComposerModelControlsProps) {
+  return (
+    <>
+      {!hideContextUsage && state.contextUsage}
+      {hideModelPill ? null : (
+        <>
+          <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
+          {compactModelPill || hideReasoningPill ? null : <ReasoningPill disabled={disabled} model={state.model} />}
+        </>
+      )}
+    </>
+  )
+}
+
+interface ComposerControlsPresentation {
+  canonicalBotChat: boolean
+  chatOnboardingSolo: boolean
+  compactPill: boolean
+  foldVoice: boolean
+  guidedChat: boolean
+  minimal: boolean
+  poppedOut: boolean
+}
+
+export function composerControlsPresentation({
+  canonicalBotChat,
+  chatOnboardingSolo,
+  compactPill,
+  foldVoice,
+  guidedChat,
+  minimal,
+  poppedOut
+}: ComposerControlsPresentation) {
+  return {
+    compactModelPill: poppedOut || (!canonicalBotChat && compactPill),
+    foldVoice: canonicalBotChat || foldVoice,
+    hideContextUsage: canonicalBotChat,
+    hideModelPill: guidedChat,
+    hideReasoningPill: canonicalBotChat,
+    minimal: minimal || chatOnboardingSolo
+  }
 }
 
 function composerContinuation(

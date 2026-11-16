@@ -25,6 +25,10 @@ export const CHAT_EMPTY_AREA = 'chat.empty'
 export interface ChatEmptyProps {
   /** The live session whose transcript is empty. */
   sessionId: string
+  /** Durable identity of this surface, including an unfocused session tile. */
+  storedSessionId?: string
+  /** Opaque owner key supplied by the canonical chat opener. */
+  ownerKey?: string
 }
 
 /** Payload of a `chat.empty` contribution's `data`. */
@@ -35,4 +39,7 @@ export interface ChatEmptyContribution {
    *  appear once they load — the roster a bot chat needs arrives after the
    *  transcript does. A throw degrades to an inline error, not a dead chat. */
   render: (props: ChatEmptyProps) => ReactNode
+  /** Optional starting actions below the host's live composer. The shell only
+   *  mounts this placement for a canonical companion chat with no messages. */
+  renderComposerFooter?: (props: ChatEmptyProps) => ReactNode
 }

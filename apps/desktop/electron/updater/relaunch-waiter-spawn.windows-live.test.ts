@@ -6,6 +6,8 @@ import path from 'node:path'
 import { buildSync } from 'esbuild'
 import { expect, it } from 'vitest'
 
+import { PRODUCT_IDENTITY } from '../product-identity'
+
 import { startRelaunchWaiter } from './relaunch-waiter'
 
 it.runIf(process.platform === 'win32')(
@@ -67,7 +69,9 @@ Set-Content -LiteralPath $IdentityName -Value 'parent exited'
       outfile: bundle,
       bundle: true,
       platform: 'node',
-      format: 'cjs'
+      format: 'cjs',
+      // Packaged builds inject their identity; CJS has no import.meta fallback.
+      define: { __HERMES_PRODUCT_IDENTITY__: JSON.stringify(PRODUCT_IDENTITY) }
     })
 
     try {

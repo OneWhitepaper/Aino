@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
 import { DropdownMenu, DropdownMenuContent } from '@/components/ui/dropdown-menu'
+import { platformModelCatalog } from '@/store/platform-models'
 import { deferred } from '@/test/deferred'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
@@ -78,6 +79,28 @@ it('uses catalog labels, searches and blocks unavailable models while retaining 
   await waitFor(() =>
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'catalog-a', model: 'wire-model' }))
   )
+})
+
+it('keeps an active settings search editable when a refreshed catalog becomes small', async () => {
+  let models = Array.from({ length: 7 }, (_, index) => ({
+    ...platformModel(`model-${index}`),
+    display_name: `Model ${index}`
+  }))
+
+  await installPlatform(async () => models)
+  const select = vi.fn()
+
+  render(<PlatformModelList managedCapability="supported" onSelect={select} presentation="settings" />)
+  await screen.findByRole('option', { name: /Model 6/ })
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Model 6' } })
+  expect(screen.queryByRole('option', { name: /Model 0/ })).toBeNull()
+  models = [{ ...platformModel('retained-model'), display_name: 'Retained model' }]
+  await act(async () => platformModelCatalog().refresh())
+  expect((screen.getByRole('combobox') as HTMLInputElement).value).toBe('Model 6')
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
+  fireEvent.click(await screen.findByRole('option', { name: /Retained model/ }))
+  await waitFor(() => expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'retained-model' })))
 })
 
 it('fails closed when route capability is unknown', async () => {

@@ -15,6 +15,9 @@ export const ruModelSettings: TranslationOverride<ModelSettingsTranslations> = {
   },
   pages: {
     description: 'Управляйте моделью по умолчанию и моделями для разных задач.',
+    preferences: 'Параметры моделей',
+    moreSettings: 'Другие настройки моделей',
+    fallbackDescription: 'Выберите резервную модель на случай временной недоступности основной.',
     auxiliaryTask: 'Задача',
     auxiliaryPurpose: 'Назначение',
     auxiliaryModel: 'Модель',

@@ -499,7 +499,7 @@ const jaBaseOverrides = {
     hideSidebar: 'サイドバーを非表示',
     showSidebar: 'サイドバーを表示',
     search: '検索',
-    searchTitle: 'セッション、ビュー、アクションを検索',
+    searchTitle: 'Bot 全体の会話を検索',
     swapSidebarSides: 'サイドバーの向きを切り替え',
     hideRightSidebar: '右サイドバーを非表示',
     showRightSidebar: '右サイドバーを表示',
@@ -748,7 +748,7 @@ const jaBaseOverrides = {
       model: 'モデル',
       chat: 'チャット',
       appearance: '外観',
-      workspace: 'ワークスペース',
+      workspace: 'プロジェクトとファイル',
       safety: '安全性',
       memory: 'メモリとコンテキスト',
       voice: '音声',
@@ -764,7 +764,7 @@ const jaBaseOverrides = {
     },
     modeOptions: {
       light: { label: 'ライト', description: '明るいデスクトップ表示' },
-      dark: { label: 'ダーク', description: 'まぶしさを抑えたワークスペース' },
+      dark: { label: 'ダーク', description: 'まぶしさを抑えた画面' },
       system: { label: 'システム', description: 'OS の外観に合わせる' }
     },
     appearance: {
@@ -855,8 +855,7 @@ const jaBaseOverrides = {
       composerPopoutDesc:
         '入力欄をドックからドラッグして外せるようにします。オフの間は画面下部にドッキングされたままです。',
       fileBrowserTitle: 'ファイルブラウザ',
-      fileBrowserDesc:
-        'ワークスペースを開いているとき、チャットの横にファイルブラウザを表示します。タイトルバーのボタンでも切り替わります。',
+      fileBrowserDesc: 'チャットの横にファイルブラウザーを表示します。タイトルバーの切り替えボタンからも変更できます。',
       vibeHeartsTitle: 'バイブハート',
       vibeHeartsDesc:
         'ありがとう・愛してる・good bot・ハート絵文字のときに浮かぶハート。上のメッセージリアクションとは別です。',
@@ -930,12 +929,12 @@ const jaBaseOverrides = {
     fieldDescriptions: configPageFieldDescriptions,
     about: { updates: '更新', channel: jaUpdateChannel },
     poolLimits: {
-      warmBotBackendsAria: '維持するプロファイル接続数',
-      warmBotBackendsTitle: '維持するプロファイル接続数',
+      warmBotBackendsAria: '維持するBot接続数',
+      warmBotBackendsTitle: '維持するBot接続数',
       warmBotBackendsDesc:
         'プロファイルをすばやく切り替えるために維持するセカンダリ接続数を制限します。上限に達するとホバー時の先行接続を停止し、余分なアイドル接続を閉じます。手動で開いたプロファイルや使用中のプロファイルは引き続き利用できます。',
-      backendIdleTimeoutAria: 'プロファイル接続のアイドル時間（ミリ秒）',
-      backendIdleTimeoutTitle: 'プロファイル接続のアイドル時間（ms）',
+      backendIdleTimeoutAria: 'Bot接続のアイドル時間（ミリ秒）',
+      backendIdleTimeoutTitle: 'Bot接続のアイドル時間（ms）',
       backendIdleTimeoutDesc:
         '未使用のプロファイル接続を閉じるまでの時間です。閉じるのはアイドル状態のソケットだけで、共有 Hermes ゲートウェイやバックグラウンド処理は停止しません。'
     },
@@ -1223,7 +1222,7 @@ const jaBaseOverrides = {
     },
     profileScope: {
       appliesTo: '適用対象',
-      editsProfile: profile => `このページの変更は「${profile}」プロファイルに適用されます。`
+      editsProfile: profile => `このページの変更は「${profile}」Botに適用されます。`
     },
     mcp: {
       loading: 'MCP サーバーを読み込み中...',
@@ -1672,7 +1671,7 @@ const jaBaseOverrides = {
     couldNotReadCode: 'マップコードを読み取れませんでした。'
   },
   agents: {
-    extendedTranscript: '詳細な実行ログ',
+    extendedTranscript: '実行ログ',
     transcriptTruncated: '最新の 16 KiB を表示',
     transcriptUnavailable: 'ライブログは利用できません',
 
@@ -1695,6 +1694,9 @@ const jaBaseOverrides = {
     steerQueued: '次のチェックポイントで処理します',
     stopRequested: '停止を要求しました',
     requestRejected: 'サブエージェントが要求を受け付けませんでした',
+    controlUnavailable: 'この会話では、このサブエージェントの閲覧のみ可能です',
+    requestFinished: 'タスクは完了したか、終了処理中です。最新の結果を確認してください',
+    requestFailed: '操作を送信できませんでした。もう一度お試しください',
     delegation: index => `委任 ${index}`,
     workers: count => `${count} ワーカー`,
     workersActive: count => `${count} アクティブ`,
@@ -2071,41 +2073,42 @@ const jaBaseOverrides = {
   },
 
   profiles: {
-    workspaceListTitle: 'マイワークスペース',
-    previewHint: 'カードを選択すると設定を確認できます。ワークスペースは切り替わりません。',
-    workspaceHint: '各ワークスペースの設定と会話は独立しています。フォルダーは「プロジェクト」で管理します。',
+    workspaceListTitle: 'マイBot',
+    previewHint: 'Botを選択すると設定を確認できます。会話するにはチャットを開いてください。',
+    workspaceHint:
+      'Botごとに役割、設定、メモリ、会話を管理します。通常チャットのフォルダーは「プロジェクト」で管理します。',
     soulApplyHint: '変更は新しい会話から適用されます。',
-    close: 'プロファイルを閉じる',
+    close: 'Botを閉じる',
     nameHint: '小文字、数字、ハイフン、アンダースコア。文字または数字で始める必要があります。',
-    title: 'プロファイル',
-    count: count => `${count} プロファイル`,
-    search: 'プロファイルを検索...',
-    loading: 'プロファイルを読み込み中...',
-    newProfile: '新しいプロファイル',
-    importProfile: 'プロファイルをインポート…',
-    exportProfile: 'プロファイルをエクスポート…',
-    imported: 'プロファイルをインポートしました',
-    exported: 'プロファイルをエクスポートしました',
-    failedImport: 'プロファイルのインポートに失敗しました',
-    failedExport: 'プロファイルのエクスポートに失敗しました',
+    title: 'Bot管理',
+    count: count => `${count} Bot`,
+    search: 'Botを検索...',
+    loading: 'Botを読み込み中...',
+    newProfile: 'Botを作成',
+    importProfile: 'Botをインポート…',
+    exportProfile: 'Botをエクスポート…',
+    imported: 'Botをインポートしました',
+    exported: 'Botをエクスポートしました',
+    failedImport: 'Botのインポートに失敗しました',
+    failedExport: 'Botのエクスポートに失敗しました',
     exportNeedsHost: name =>
-      `ブラウザーではプロファイルのアーカイブを保存できません。Hermes ホストで次を実行してください: hermes profile export ${name}`,
-    allProfiles: 'すべてのプロファイル',
-    showAllProfiles: 'すべてのプロファイルを表示',
+      `ブラウザーではBotのアーカイブを保存できません。Aino ホストで次を実行してください: hermes profile export ${name}`,
+    allProfiles: 'すべてのBot',
+    showAllProfiles: 'すべてのBotを表示',
     notServedHere: 'ここでは提供されていません',
     switchToProfile: name => `${name} に切り替え`,
     switchToConnection: name => `${name} に切り替え`,
     switchConnectionFailed: name => `${name} に接続できませんでした`,
-    manageProfiles: 'プロファイルを管理…',
+    manageProfiles: 'Botを管理…',
     fleet: {
       switchDeviceTitle: 'このデバイスに切り替えますか？',
       switchDeviceDesc: 'このコンピューターで新しいセッションを開きます。現在の会話は別の実行サービスに残ります。',
       switchDeviceConfirm: '切り替え',
       localDevice:
-        'このデバイス（ローカルバックエンド — Hermes が無ければインストールし、あれば新しいセッションを開きます）',
-      installDeviceTitle: 'このデバイスに Hermes をインストールしますか？',
+        'このデバイス（ローカルバックエンド — Aino が無ければインストールし、あれば新しいセッションを開きます）',
+      installDeviceTitle: 'このデバイスに Aino をインストールしますか？',
       installDeviceDesc:
-        'Hermes をローカルにインストールしてから、このコンピュータで新しいセッションを開きます。確認するまでインストールは始まりません。',
+        'Aino をローカルにインストールしてから、このコンピュータで新しいセッションを開きます。確認するまでインストールは始まりません。',
       installDeviceConfirm: 'ローカルにインストール',
       connectExistingInstead: '代わりに既存環境へ接続'
     },
@@ -2113,7 +2116,7 @@ const jaBaseOverrides = {
       menuItem: 'リモートホストに接続…',
       badge: (host: string) => `${host} で実行中`,
       title: (profile: string) => `${profile} をリモートホストに接続`,
-      description: 'このプロファイルのセッションは、このパソコンではなく指定したリモートの Hermes で実行されます。',
+      description: 'このBotのセッションは、このパソコンではなく指定したリモートの Aino で実行されます。',
       urlLabel: 'リモートアドレス',
       urlPlaceholder: 'https://hermes.example.com',
       urlInvalid: 'http:// または https:// で始まる完全なアドレスを入力してください',
@@ -2123,15 +2126,15 @@ const jaBaseOverrides = {
       plainTextOptIn:
         'このパソコンには安全な鍵ストレージがないため、トークンは暗号化されずにディスクへ保存されます。それでも保存する。',
       collisionWarning: (label: string) =>
-        `「${label}」という名前のゲートウェイが設定に既に存在します。このプロファイル接続は別物であり、それを変更しません。`,
-      confirmTitle: 'このプロファイルをリモートホストに接続しますか？',
+        `「${label}」という名前のゲートウェイが設定に既に存在します。このBot接続は別物であり、それを変更しません。`,
+      confirmTitle: 'このBotをリモートホストに接続しますか？',
       confirmNote: (profile: string, host: string) =>
         `${profile} の新しいチャットは ${host} で実行されます。コマンドの実行やファイルの読み取りはこのパソコンではなくそのコンピュータで行われます。信頼できるホストにのみ接続してください。`,
       confirmBack: '戻る',
       connect: '接続',
       connecting: '接続中…',
       disconnect: 'リモート接続を解除',
-      savedTitle: 'プロファイルを接続しました',
+      savedTitle: 'Botを接続しました',
       savedMessage: (profile: string, host: string) => `${profile} は ${host} で実行されます`,
       removedTitle: 'リモート接続を解除しました',
       removedMessage: (profile: string) => `${profile} はこのパソコンで実行されます`,
@@ -2147,20 +2150,20 @@ const jaBaseOverrides = {
     colorFor: 'カラー',
     openInNewWindow: '新しいウィンドウで開く',
     setAsDefault: 'デフォルトに設定',
-    defaultProfile: 'デフォルトのプロファイル',
+    defaultProfile: '既定のBot',
     defaultSet: name => `${name} をデフォルトに設定しました`,
-    defaultDescription: 'Hermes の起動時と新しいチャットに使用します。既存のセッションのプロファイルは変わりません。',
-    failedSetDefault: 'デフォルトのプロファイルを設定できませんでした',
+    defaultDescription: 'Aino の起動時と新しいチャットに使用します。既存のセッションのBotは変わりません。',
+    failedSetDefault: 'デフォルトのBotを設定できませんでした',
     setColor: color => `カラー ${color} に設定`,
     autoColor: '自動',
-    noProfiles: 'プロファイルが見つかりません。',
-    selectPrompt: '詳細を表示するにはプロファイルを選択してください。',
-    refresh: 'プロファイルを更新',
-    refreshing: 'プロファイルを更新中',
+    noProfiles: 'Botが見つかりません。',
+    selectPrompt: '詳細を表示するにはBotを選択してください。',
+    refresh: 'Botを更新',
+    refreshing: 'Botを更新中',
     default: 'デフォルト',
     skills: count => `${count} スキル`,
     env: 'env',
-    defaultBadge: 'デフォルト',
+    defaultBadge: 'メインアシスタント',
     rename: '名前を変更',
     renameMenu: '名前を変更…',
     exportMenu: 'エクスポート…',
@@ -2170,14 +2173,14 @@ const jaBaseOverrides = {
     modelLabel: 'モデル',
     skillsLabel: 'スキル',
     notSet: '未設定',
-    storageLocation: 'ワークスペースの場所',
+    storageLocation: 'Botデータの場所',
     soulTitle: '人格と振る舞い',
-    soulDesc: 'このプロファイルに組み込まれたシステムプロンプトとペルソナの指示。',
+    soulDesc: 'このBotに組み込まれたシステムプロンプトとペルソナの指示。',
     soulMissing:
-      'このプロファイルにはまだ SOUL.md がありません。下に指示を入力して保存すると作成できます。config.yaml のペルソナ設定は別途管理されます。',
+      'このBotにはまだ SOUL.md がありません。下に指示を入力して保存すると作成できます。config.yaml のペルソナ設定は別途管理されます。',
     soulOptional: '省略可能',
     soulPlaceholder: mode =>
-      `このプロファイルのシステムプロンプト / ペルソナ。\n空欄のままにすると ${mode} のデフォルトを使用します。`,
+      `このBotのシステムプロンプト / ペルソナ。\n空欄のままにすると ${mode} のデフォルトを使用します。`,
     soulPlaceholderCloned: 'クローン済み',
     soulPlaceholderEmpty: '空',
     unsavedChanges: '未保存の変更',
@@ -2185,24 +2188,24 @@ const jaBaseOverrides = {
     emptySoul: '空の SOUL.md — ペルソナの記述を始めてください...',
     saving: '保存中...',
     saveSoul: 'SOUL を保存',
-    deleteTitle: 'プロファイルを削除しますか？',
+    deleteTitle: 'Botを削除しますか？',
     deleteDescPrefix: 'これにより ',
     deleteDescMid: ' が削除され、その ',
     deleteDescSuffix: ' ディレクトリが削除されます。この操作は元に戻せません。',
     deleting: '削除中...',
-    createDesc: 'プロファイルは独立した Hermes 環境です：設定、スキル、SOUL.md が別々になります。',
+    createDesc: '役割、モデル、スキル、メモリ、会話を個別に持つBotを作成します。',
     nameLabel: '名前',
     cloneFrom: '複製元',
     cloneFromNone: 'なし（空）',
-    cloneFromDesc: '選択したプロファイルから設定、スキル、SOUL.md をコピーします。',
-    cloneFromDefault: 'デフォルトプロファイルから設定を複製',
-    cloneFromDefaultDesc: 'デフォルトプロファイルから設定、スキル、SOUL.md をコピーします。',
-    invalidName: hint => `無効なプロファイル名。${hint}`,
+    cloneFromDesc: '選択したBotから設定、スキル、SOUL.md をコピーします。',
+    cloneFromDefault: 'デフォルトBotから設定を複製',
+    cloneFromDefaultDesc: 'デフォルトBotから設定、スキル、SOUL.md をコピーします。',
+    invalidName: hint => `無効なBot名。${hint}`,
     nameRequired: '名前は必須です',
     creating: '作成中...',
-    createAction: 'プロファイルを作成',
-    renameTitle: 'プロファイルの名前を変更',
-    renameDescPrefix: '名前を変更するとプロファイルディレクトリと ',
+    createAction: 'Botを作成',
+    renameTitle: 'Botの名前を変更',
+    renameDescPrefix: '名前を変更するとBotディレクトリと ',
     renameDescSuffix: ' 内のラッパースクリプトが更新されます。',
     newNameLabel: '新しい名前',
     renaming: '名前を変更中...',
@@ -2211,26 +2214,25 @@ const jaBaseOverrides = {
     deleted: '削除しました',
     setupCopied: 'セットアップコマンドをコピーしました',
     soulSaved: 'SOUL.md を保存しました',
-    failedLoad: 'プロファイルの読み込みに失敗しました',
-    failedDelete: 'プロファイルの削除に失敗しました',
+    failedLoad: 'Botの読み込みに失敗しました',
+    failedDelete: 'Botの削除に失敗しました',
     failedCopy: 'セットアップコマンドのコピーに失敗しました',
     failedLoadSoul: 'SOUL.md の読み込みに失敗しました',
     failedSaveSoul: 'SOUL.md の保存に失敗しました',
-    failedCreate: 'プロファイルの作成に失敗しました',
-    failedRename: 'プロファイルの名前変更に失敗しました',
-    workspaceDesc: '各ワークスペースには、エージェント独自の設定、スキル、メモリ、会話が保存されます。',
-
-    currentBadge: '現在のワークスペース',
-
+    failedCreate: 'Botの作成に失敗しました',
+    failedRename: 'Botの名前変更に失敗しました',
+    workspaceDesc: 'Botの役割、モデル、スキル、メモリを管理します。',
+    currentBadge: '使用中のBot',
     overview: '基本設定',
 
     capabilities: 'スキルとツール',
 
     configureModel: 'モデルを設定',
 
-    archiveFilter: 'Hermes プロファイル',
-
-    advanced: '詳細ワークスペース'
+    archiveFilter: 'Aino Bot',
+    advanced: 'Botの詳細設定',
+    displayNameDesc: 'アプリ全体で表示する名前を設定します。内蔵Ainoアシスタントの内部識別情報は変更されません。',
+    defaultProfileDeleteBlocked: '内蔵Ainoアシスタントは削除できません。'
   },
 
   modelAssignment: {
@@ -2438,7 +2440,7 @@ const jaBaseOverrides = {
   },
 
   sidebar: {
-    profileRail: 'プロファイルバー',
+    profileRail: 'Botバー',
     markAllRead: 'すべて既読にする',
     filter: {
       grouping: 'グループ化',
@@ -2447,7 +2449,7 @@ const jaBaseOverrides = {
       filters: 'フィルター',
       status: 'ステータス',
       pullRequest: 'プルリクエスト',
-      profile: 'プロファイル',
+      profile: 'Bot',
       project: 'プロジェクト',
       archived: 'アーカイブ',
       resetToDefaults: 'デフォルトに戻す',
@@ -2488,10 +2490,11 @@ const jaBaseOverrides = {
       messaging: 'メッセージング',
       artifacts: 'アーティファクト',
       cron: 'スケジュール済みジョブ',
-      profiles: 'ワークスペース',
+      profiles: 'Bot管理',
 
       skills: 'スキルとツール'
     },
+    viewAllSessions: 'すべての会話を表示',
     searchAria: 'セッションを検索',
     searchPlaceholder: 'セッションを検索…',
     clearSearch: '検索をクリア',
@@ -2504,15 +2507,15 @@ const jaBaseOverrides = {
     review: 'レビュー',
     logs: 'ログ',
     cronJobs: 'Cronジョブ',
-    groupAriaGrouped: 'セッションを単一リストとして表示',
-    groupAriaUngrouped: 'ワークスペースごとにセッションをグループ化',
+    groupAriaGrouped: '会話を単一リストとして表示',
+    groupAriaUngrouped: '会話をプロジェクト別にグループ化',
     showProjects: 'プロジェクトを表示',
     showSessions: 'セッションを表示',
-    groupTitleGrouped: 'セッションのグループ化を解除',
-    groupTitleUngrouped: 'ワークスペースでグループ化',
+    groupTitleGrouped: '会話のグループ化を解除',
+    groupTitleUngrouped: 'プロジェクト別にグループ化',
     allPinned: 'ここにあるものはすべてピン留めされています。チャットのピン留めを解除すると最近のものに表示されます。',
     shiftClickHint: 'Shift クリックでピン留め · ドラッグで並べ替え',
-    noWorkspace: 'ワークスペースなし',
+    noWorkspace: 'プロジェクト未設定',
     projectEmpty: 'セッションはまだありません',
     projectLoadFailed: 'セッションの読み込みに失敗しました',
     noSessions: 'セッションはまだありません',
@@ -2549,7 +2552,7 @@ const jaBaseOverrides = {
       backgroundRunning: 'バックグラウンドタスク実行中',
       draftSession: '下書き — 未送信',
       handoffOrigin: platform => `${platform} から引き継ぎ`,
-      ownedByProfile: profile => `プロファイル: ${profile}`,
+      ownedByProfile: profile => `Bot: ${profile}`,
       renamed: '名前を変更しました',
       renameFailed: '名前の変更に失敗しました',
       renameTitle: 'セッションの名前を変更',
@@ -2584,6 +2587,7 @@ const jaBaseOverrides = {
   composer: {
     message: 'メッセージ',
     wakingProfile: profile => `${profile} を起動中…`,
+    placeholderTo: name => `${name} にメッセージ、または / でスキルを使用`,
     placeholderStarting: 'Hermes を起動中...',
     placeholderReconnecting: 'Hermes に再接続中…',
     placeholderFollowUp: 'フォローアップを送信',
@@ -2662,8 +2666,8 @@ const jaBaseOverrides = {
       '/worktree': '分離した Git ワークツリーを表示、一覧、作成、整理',
       '/compress': '会話コンテキストを圧縮',
       '/rollback': 'チェックポイントを一覧または復元',
-      '/export': 'プロファイルの設定、スキル、テーマを共有用アーカイブに書き出す',
-      '/import': '共有アーカイブを新しいプロファイルとして読み込む',
+      '/export': 'Botの設定、スキル、テーマを共有用アーカイブに書き出す',
+      '/import': '共有アーカイブを新しいBotとして読み込む',
       '/stop': '進行中のターンとバックグラウンドプロセスを停止',
       '/pause': '新しい処理を全体で一時停止（緊急停止）；/pause off で再開',
       '/bg': '別のバックグラウンドセッションでプロンプトを実行',
@@ -2684,7 +2688,7 @@ const jaBaseOverrides = {
       '/egress': 'Docker の送信プロキシの状態を表示',
       '/context': 'コンテキスト使用量、内訳、圧縮統計、処理速度を表示',
       '/whoami': 'スラッシュコマンドのアクセス権を表示',
-      '/profile': 'アクティブな Hermes プロファイルを切り替え',
+      '/profile': 'アクティブな Aino Botを切り替え',
       '/codex-runtime': 'OpenAI/Codex モデルの Codex app-server ランタイムを切り替え',
       '/personality': 'このセッションの人格を切り替え',
       '/battery': 'ステータスバーのバッテリー表示を切り替え',
@@ -2918,7 +2922,7 @@ const jaBaseOverrides = {
       add: '追加'
     },
     coding: {
-      title: 'ワークツリー',
+      title: 'プロジェクト',
       noBranch: 'ブランチなし',
       detached: 'デタッチ',
       clean: 'クリーン',
@@ -3505,8 +3509,8 @@ const jaBaseOverrides = {
     tab: 'プレビュー',
     imageFit: 'パネルに合わせる',
     imageActualSize: '実際のサイズ（100%）',
-    pin: 'ワークスペースにピン留め',
-    unpin: 'ワークスペースからピン留めを外す',
+    pin: 'メイン画面に固定',
+    unpin: 'メイン画面から固定を解除',
     closePane: 'プレビューペインを閉じる',
     loading: 'プレビューを読み込み中',
     unavailable: 'プレビューは利用できません',
@@ -3655,7 +3659,7 @@ const jaBaseOverrides = {
       skill: name => `スキル ${name}`,
       kind: { plugin: 'プラグイン', skill: 'スキル' },
       tier: { official: '公式', verified: '認証済み', community: 'コミュニティ' },
-      targetProfile: profile => `${profile} プロファイルにインストールします`,
+      targetProfile: profile => `${profile} Botにインストールします`,
       sendFailed: '回答を送信できませんでした。もう一度お試しください。',
       commitLabel: 'コミット',
       subdirLabel: 'フォルダー',
@@ -3813,6 +3817,7 @@ const jaBaseOverrides = {
       processTitle: '実行の詳細',
 
       replyMetrics: {
+        usageAndCost: '使用量と費用',
         duration: '所要時間',
         tokens: '使用量',
         context: 'コンテキスト',
@@ -4147,10 +4152,10 @@ const jaBaseOverrides = {
     yoloToggleFailed: 'YOLO を切り替えられませんでした',
     profileStatus: current =>
       `プロファイル: ${current}。/profile <name> または「新しいセッション」ピッカーを使って別のプロファイルでチャットを始めてください。`,
-    unknownProfile: '不明なプロファイル',
-    noProfileNamed: (target, available) => `"${target}" という名前のプロファイルはありません。利用可能: ${available}`,
-    newChatsProfile: name => `新しいチャットはプロファイル ${name} を使用します。`,
-    setProfileFailed: 'プロファイルの設定に失敗しました',
+    unknownProfile: '不明なBot',
+    noProfileNamed: (target, available) => `"${target}" という名前のBotはありません。利用可能: ${available}`,
+    newChatsProfile: name => `新しいチャットはBot ${name} を使用します。`,
+    setProfileFailed: 'Botの設定に失敗しました',
     sttDisabled: '音声認識は設定で無効になっています。',
     stopFailed: '停止に失敗しました',
     regenerateFailed: '再生成に失敗しました',
@@ -4291,8 +4296,8 @@ const jaBaseOverrides = {
         text: 'セッション、設定、スキル、コマンドはすべてパレットから呼び出せます。'
       },
       profiles: {
-        title: 'プロファイルは独立しています',
-        text: 'それぞれが独自のキー・メモリ・セッションを持つ、別の Hermes です。'
+        title: 'Botは独立しています',
+        text: '各Botは独立した役割、設定、モデル、スキル、メモリ、会話を持ちます。'
       },
       'composer-mentions': {
         title: 'ファイルとコマンド',
@@ -4304,7 +4309,7 @@ const jaBaseOverrides = {
         action: '今すぐ更新'
       },
       'right-pane': {
-        title: '作業用ペイン',
+        title: 'チャット横のツールパネル',
         text: 'ファイル、ターミナル、レビュー、アプリ内ブラウザはサイドペインにまとまっています。'
       }
     }
@@ -4348,7 +4353,7 @@ const jaBaseOverrides = {
       inboxStyle: '受信トレイ形式',
       status: 'ステータス',
       pullRequest: 'プルリクエスト',
-      profile: 'プロファイル',
+      profile: 'Bot',
       project: 'プロジェクト',
       archived: 'アーカイブ済み',
       resetDefaults: 'デフォルトに戻す',
@@ -4359,7 +4364,7 @@ const jaBaseOverrides = {
         updated: '更新日時',
         project: 'プロジェクト',
         status: 'ステータス',
-        profile: 'プロファイル',
+        profile: 'Bot',
         created: '作成日時',
         tokens: 'トークン',
         cost: 'コスト',
@@ -4640,6 +4645,8 @@ const jaBaseOverrides = {
   },
 
   summary: {
+    description: 'この会話の成果物、タスク、実行記録をここにまとめています。',
+    currentSession: '現在の会話',
     aria: 'セッション資料',
     title: 'セッション資料',
     close: 'セッション資料を閉じる',
@@ -4649,7 +4656,7 @@ const jaBaseOverrides = {
       workingDirectory: '作業ディレクトリ',
       model: 'モデル',
       provider: 'プロバイダー',
-      profile: 'プロファイル',
+      profile: 'Bot',
       branch: 'ブランチ',
       connection: '接続',
       noProject: 'プロジェクトが開かれていません',
@@ -4658,7 +4665,7 @@ const jaBaseOverrides = {
       remote: 'リモート'
     },
     changes: {
-      title: 'ワークスペースの変更',
+      title: 'プロジェクトの変更',
       files: count => `${count} ファイル`,
       additions: '追加',
       deletions: '削除',
@@ -4682,10 +4689,11 @@ const jaBaseOverrides = {
       push: 'プッシュ',
       reviewAndCommit: 'レビュー、コミット、PR の作成',
       clean: '先行・遅延コミットなし',
-      unavailable: 'このワークスペースでは Git を利用できません',
-      noRepository: 'このワークスペースは Git リポジトリではありません'
+      unavailable: 'このプロジェクトではGitを利用できません',
+      noRepository: 'このプロジェクトはGitリポジトリではありません'
     },
     agents: {
+      history: count => `過去のサブタスク (${count})`,
       title: 'サブエージェント',
       running: count => `${count} 件実行中`,
       completed: count => `${count} 件完了`,
@@ -4720,11 +4728,13 @@ const jaBaseOverrides = {
       open: 'ソースを開く'
     },
     outputs: {
+      none: 'この会話ではまだファイルが生成されていません。',
       title: '出力',
       create: 'ファイルやサイトを作成',
       prompt: 'ファイルやサイトを作成してください：'
     },
     plan: {
+      history: count => `記録された計画 (${count})`,
       title: '作業計画',
       progress: (done, total) => `${total} 件中 ${done} 件完了`,
       recorded: '会話に最後に記録された計画',

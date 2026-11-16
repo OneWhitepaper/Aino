@@ -9,8 +9,10 @@
  */
 
 import { render, screen } from '@testing-library/react'
+import { atom } from 'nanostores'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { PRIMARY_SESSION_VIEW, SessionViewProvider } from '@/app/chat/session-view'
 import { registry } from '@/contrib'
 import { CHAT_EMPTY_AREA, type ChatEmptyContribution } from '@/lib/chat-empty'
 
@@ -29,6 +31,34 @@ afterEach(() => {
 })
 
 describe('an empty transcript asks every contributor', () => {
+  it('passes a retained surface’s durable identity to its separate composer footer', () => {
+    disposers.push(
+      registry.register({
+        id: 'scoped-footer',
+        area: CHAT_EMPTY_AREA,
+        data: {
+          render: () => <span>Transcript heading</span>,
+          renderComposerFooter: ({ sessionId, storedSessionId }: { sessionId: string; storedSessionId?: string }) => (
+            <span>
+              {sessionId}:{storedSessionId}
+            </span>
+          )
+        }
+      })
+    )
+
+    render(
+      <SessionViewProvider
+        value={{ ...PRIMARY_SESSION_VIEW, kind: 'tile', $storedId: atom<string | null>('tile-stored') }}
+      >
+        <ChatEmptySlot placement="composer-footer" sessionId="tile-runtime" />
+      </SessionViewProvider>
+    )
+
+    expect(screen.getByText('tile-runtime:tile-stored')).toBeTruthy()
+    expect(screen.queryByText('Transcript heading')).toBeNull()
+  })
+
   it('renders the owner even when an earlier contributor declined', () => {
     contribute('declines', () => null)
     contribute('owns', ({ sessionId }) => <span data-testid="owner">owner of {sessionId}</span>)

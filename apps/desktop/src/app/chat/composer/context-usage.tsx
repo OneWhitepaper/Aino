@@ -1,16 +1,18 @@
 import { compactNumber } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 import { summaryContextUsage } from '@/app/right-sidebar/summary/summary-data'
 import { ContextUsagePanel } from '@/app/shell/context-usage-panel'
 import { useContextBreakdown } from '@/app/shell/hooks/use-context-breakdown'
 import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
+import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
 import { Tip } from '@/components/ui/tooltip'
-import { useI18n } from '@/i18n'
+import { type Translations, useI18n } from '@/i18n'
 import { useStoreSelector } from '@/lib/use-session-slice'
 import { sessionCompacting } from '@/store/compaction'
 import { platformModelCatalog } from '@/store/platform-models'
@@ -26,8 +28,12 @@ interface ComposerContextUsageProps {
 
 const EMPTY_USAGE: UsageStats = { calls: 0, input: 0, output: 0, total: 0 }
 
+/** Reuses the existing owner-bound context panel inside the Bot's add menu. */
+export const ComposerContextUsagePresentation = createContext<'pill' | 'submenu'>('pill')
+
 /** The model row's own session, using its existing owner-routed gateway request. */
 export function ComposerContextUsage({ enabled, requestGateway }: ComposerContextUsageProps) {
+  const presentation = useContext(ComposerContextUsagePresentation)
   const view = useSessionView()
   const sessionId = useStore(view.$runtimeId)
   const busy = useStore(view.$busy)
@@ -104,20 +110,7 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
     return null
   }
 
-  const status = compacting
-    ? copy.compacting
-    : percent !== null
-      ? `${resolvedUsage.context_estimated ? '~' : ''}${copy.percentFull(percent)}`
-      : resolvedUsage.context_used != null || resolvedUsage.context_max != null
-        ? copy.tokenSummary(
-            resolvedUsage.context_used == null
-              ? '\u2014'
-              : `${resolvedUsage.context_estimated ? '~' : ''}${compactNumber(resolvedUsage.context_used)}`,
-            resolvedUsage.context_max == null ? '\u2014' : compactNumber(resolvedUsage.context_max)
-          )
-        : loading
-          ? copy.loading
-          : copy.empty
+  const status = contextUsageStatus(copy, compacting, percent, resolvedUsage, loading)
 
   const label = `${copy.title} · ${status}`
   const panelProps = { breakdown, compacting, loading, unavailable, onRetry: refetch, usage: resolvedUsage }
@@ -126,6 +119,20 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
     if (!breakdown && !loading && enabled && visible && !busy && !compacting) {
       refetch()
     }
+  }
+
+  if (presentation === 'submenu') {
+    return (
+      <DropdownMenuSub onOpenChange={nextOpen => nextOpen && retryUnavailable()}>
+        <DropdownMenuSubTrigger aria-label={label}>
+          <Codicon name="pie-chart" size="0.875rem" />
+          <span>{copy.title}</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="max-h-[min(28rem,var(--radix-dropdown-menu-content-available-height))] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain">
+          <ContextUsagePanel {...panelProps} />
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    )
   }
 
   return (
@@ -172,4 +179,27 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
       </PopoverContent>
     </Popover>
   )
+}
+
+function contextUsageStatus(
+  copy: Translations['shell']['statusbar']['contextUsagePanel'],
+  compacting: boolean,
+  percent: number | null,
+  usage: UsageStats,
+  loading: boolean
+) {
+  return compacting
+    ? copy.compacting
+    : percent !== null
+      ? `${usage.context_estimated ? '~' : ''}${copy.percentFull(percent)}`
+      : usage.context_used != null || usage.context_max != null
+        ? copy.tokenSummary(
+            usage.context_used == null
+              ? '\u2014'
+              : `${usage.context_estimated ? '~' : ''}${compactNumber(usage.context_used)}`,
+            usage.context_max == null ? '\u2014' : compactNumber(usage.context_max)
+          )
+        : loading
+          ? copy.loading
+          : copy.empty
 }

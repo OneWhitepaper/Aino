@@ -55,3 +55,26 @@ def test_shell_runner_forwards_the_upgrade_suite_ref_knobs(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("classification", ["github-hosted", "self-hosted"])
+def test_shell_runner_preserves_disposable_host_classification(tmp_path, classification):
+    case = tmp_path / "test_runner_host_canary.py"
+    case.write_text(
+        "import os\n"
+        "def test_canary():\n"
+        f"    assert os.environ.get('RUNNER_ENVIRONMENT') == {classification!r}\n"
+        "    assert os.environ.get('GITHUB_ACTIONS') == 'true'\n"
+        "    assert 'CANDIDATE_TEST_SECRET' not in os.environ\n",
+        encoding="utf-8",
+    )
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        ["bash", str(root / "scripts/run_tests.sh"), "-j", "1", str(case)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=180,
+        env={**os.environ, "HERMES_PYTHON": sys.executable, "HERMES_TEST_FILE_RETRIES": "0",
+             "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": classification, "CANDIDATE_TEST_SECRET": "discard-me"},
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

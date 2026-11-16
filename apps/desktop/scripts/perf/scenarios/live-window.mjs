@@ -34,7 +34,18 @@ export default {
       if (before.visibility !== 'visible' || !before.focused || !before.visibleThreads) {
         throw new Error('live-window requires a visible workspace with mounted transcripts')
       }
-      const frames = [], longTasks = []
+      const frames = [], longTasks = [], readingWidths = []
+      const workspaces = [...document.querySelectorAll('[data-slot="summary-workspace-main"]')]
+      const widths = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          if (!entry.target.checkVisibility({ visibilityProperty: true })) continue
+          readingWidths.push({
+            time: performance.now(),
+            workspace: workspaces.indexOf(entry.target),
+            width: entry.contentRect.width
+          })
+        }
+      })
       let last, frame
       const observer = new PerformanceObserver(list => {
         longTasks.push(...list.getEntries().map(e => e.duration))
@@ -46,6 +57,7 @@ export default {
       }
       const start = performance.now()
       observer.observe({ type: 'longtask' })
+      for (const workspace of workspaces) widths.observe(workspace)
       frame = requestAnimationFrame(tick)
       try {
         await new Promise(resolve => setTimeout(resolve, ${seconds * 1000}))
@@ -53,8 +65,9 @@ export default {
         cancelAnimationFrame(frame)
         longTasks.push(...observer.takeRecords().map(e => e.duration))
         observer.disconnect()
+        widths.disconnect()
       }
-      return { before, after: inventory(), elapsed: performance.now() - start, frames, longTasks }
+      return { before, after: inventory(), elapsed: performance.now() - start, frames, longTasks, readingWidths }
     })()`)
     const afterHeap = await cdp.send('Runtime.getHeapUsage')
     const afterDOM = await cdp.send('Memory.getDOMCounters')

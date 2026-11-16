@@ -125,6 +125,7 @@ import {
   pluginRouteStillRegistered,
   requestPluginProfile
 } from './profile-request'
+import { searchSession } from './session-search'
 import { sessionsHost } from './sessions'
 import { desktopSettings } from './settings'
 import { spellcheckHost } from './spellcheck'
@@ -649,6 +650,9 @@ export const host = {
     // does for the sidebar and keybinds.
     syncWorkspaceRoute(to)
   },
+
+  /** Find text only in the exact visible conversation, without changing owners. */
+  searchSession,
 
   /** Open the existing model settings for this owner without activating its
    *  workspace. Settings currently shares the ambient REST connection, so a
@@ -1676,6 +1680,7 @@ export type { FloatingAnchor } from '@/components/pane-shell/tree/renderer/float
 export { StatusDot, type StatusTone } from '@/components/status-dot'
 export { Alert, AlertDescription } from '@/components/ui/alert'
 export { Badge } from '@/components/ui/badge'
+export { BotModeIcon } from '@/components/ui/bot-mode-icon'
 export { Button } from '@/components/ui/button'
 export { Checkbox } from '@/components/ui/checkbox'
 export { Codicon } from '@/components/ui/codicon'

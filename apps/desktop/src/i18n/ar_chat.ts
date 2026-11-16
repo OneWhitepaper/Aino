@@ -4,6 +4,7 @@ export const arChat = {
   composer: {
     message: 'الرسالة',
     wakingProfile: profile => `جار إيقاظ ${profile}`,
+    placeholderTo: name => `أرسل رسالة إلى ${name}، أو اكتب / لاستخدام مهارة`,
     placeholderStarting: 'جار بدء Hermes...',
     placeholderReconnecting: 'جار إعادة الاتصال...',
     placeholderFollowUp: 'اكتب متابعة...',
@@ -57,8 +58,8 @@ export const arChat = {
       '/worktree': 'عرض أشجار عمل Git المعزولة أو سردها أو إنشاؤها أو تنظيفها',
       '/compress': 'ضغط سياق المحادثة الحالية',
       '/rollback': 'عرض نقاط استعادة الملفات أو استعادتها مع الحفاظ على تعديلاتك اليدوية',
-      '/export': 'تصدير الملف الشخصي بإعداداته ومهاراته وسمته إلى أرشيف قابل للمشاركة',
-      '/import': 'استيراد أرشيف مشترك كملف شخصي جديد',
+      '/export': 'تصدير الروبوت بإعداداته ومهاراته وسمته إلى أرشيف قابل للمشاركة',
+      '/import': 'استيراد أرشيف مشترك كروبوت جديد',
       '/stop': 'إيقاف الدور الجاري والعمليات الخلفية',
       '/pause': 'إيقاف العمل الجديد مؤقتًا للجميع؛ الاستئناف باستخدام /pause off',
       '/bg': 'تشغيل طلب في جلسة خلفية منفصلة',
@@ -79,7 +80,7 @@ export const arChat = {
       '/egress': 'عرض حالة وكيل الاتصالات الصادرة في Docker',
       '/context': 'عرض استخدام السياق وتفاصيله وإحصاءات الضغط ومعدل المعالجة',
       '/whoami': 'عرض صلاحية الوصول إلى أوامر الشرطة المائلة',
-      '/profile': 'تبديل ملف Hermes الشخصي النشط',
+      '/profile': 'تبديل ملف Aino الشخصي النشط',
       '/codex-runtime': 'تبديل بيئة Codex app-server لنماذج OpenAI/Codex',
       '/personality': 'اختيار شخصية محددة مسبقًا',
       '/battery': 'تبديل عرض مؤشر البطارية الملون في شريط الحالة',
@@ -299,7 +300,7 @@ export const arChat = {
       add: 'إضافة'
     },
     coding: {
-      title: 'شجرة العمل',
+      title: 'المشروع',
       noBranch: 'لا يوجد فرع',
       detached: 'منفصل',
       clean: 'نظيف',
@@ -430,10 +431,10 @@ export const arChat = {
     yoloTitle: 'وضع YOLO',
     yoloToggleFailed: 'فشل تبديل YOLO',
     profileStatus: current => `الملف الحالي: ${current}`,
-    unknownProfile: 'ملف شخصي غير معروف',
+    unknownProfile: 'روبوت غير معروف',
     noProfileNamed: (target, available) => `لا يوجد ملف باسم ${target}. المتاح: ${available}`,
     newChatsProfile: name => `المحادثات الجديدة تستخدم ${name}`,
-    setProfileFailed: 'فشل ضبط الملف الشخصي',
+    setProfileFailed: 'فشل ضبط الروبوت',
     sttDisabled: 'تحويل الكلام إلى نص معطل',
     stopFailed: 'فشل الإيقاف',
     regenerateFailed: 'فشلت إعادة التوليد',
@@ -553,8 +554,8 @@ export const arChat = {
         text: 'الجلسات والإعدادات والمهارات والأوامر كلها تستجيب للوحة الأوامر.'
       },
       profiles: {
-        title: 'الملفات الشخصية منفصلة',
-        text: 'كل واحد منها Hermes مستقل — مفاتيحه وذاكرته وجلساته الخاصة.'
+        title: 'الروبوتات منفصلة',
+        text: 'لكل روبوت هويته وإعداداته ونموذجه ومهاراته وذاكرته ومحادثاته المستقلة.'
       },
       'composer-mentions': {
         title: 'المرفقات والأوامر',
@@ -566,7 +567,7 @@ export const arChat = {
         action: 'التحديث الآن'
       },
       'right-pane': {
-        title: 'لوحة العمل',
+        title: 'الأدوات بجانب المحادثة',
         text: 'الملفات والطرفية والمراجعة والمتصفح المدمج تتشارك اللوحة الجانبية.'
       }
     }

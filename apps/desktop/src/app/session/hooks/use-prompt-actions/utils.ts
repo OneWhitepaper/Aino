@@ -752,10 +752,7 @@ export function renderRpcResult(response: unknown, name: string): string {
 }
 
 export function appendText(message: AppendMessage): string {
-  return message.content
-    .map(part => ('text' in part ? part.text : ''))
-    .join('')
-    .trim()
+  return message.content.map(part => ('text' in part ? part.text : '')).join('')
 }
 
 /** The one visible-user filter every user-ordinal computation must share —

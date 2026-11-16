@@ -1,3 +1,4 @@
+import { registryBackendScopeKey } from '@hermes/shared'
 import { atom } from 'nanostores'
 
 export type ApprovalMode = 'manual' | 'off' | 'smart'
@@ -9,8 +10,10 @@ const confirmedModes = new Map<string, ApprovalMode>()
 
 export const $approvalModes = atom<Record<string, ApprovalMode>>({})
 
-function profileKey(profile: string): string {
-  return profile.trim() || 'default'
+function profileKey(profile: string, connectionId?: null | string): string {
+  // Named profiles are unique only within one gateway. Legacy callers omit
+  // the connection; owned Bot surfaces keep their cache and revisions apart.
+  return registryBackendScopeKey(connectionId, profile)
 }
 
 // The gateway's `config.get` / `config.set` are `@_profile_scoped`: a request with no `profile`
@@ -40,17 +43,20 @@ function normalizeApprovalMode(value: unknown): ApprovalMode {
   return APPROVAL_MODES.has(normalized) ? normalized : 'manual'
 }
 
-export function approvalModeForProfile(profile: string): ApprovalMode {
-  return $approvalModes.get()[profileKey(profile)] ?? 'smart'
+export function approvalModeForProfile(profile: string, connectionId?: null | string): ApprovalMode {
+  return $approvalModes.get()[profileKey(profile, connectionId)] ?? 'smart'
 }
 
-function cacheApprovalMode(profile: string, mode: ApprovalMode): void {
-  const key = profileKey(profile)
+function cacheApprovalMode(key: string, mode: ApprovalMode): void {
   $approvalModes.set({ ...$approvalModes.get(), [key]: mode })
 }
 
-export function reconcileApprovalModeForProfile(profile: string, value: unknown): ApprovalMode {
-  const key = profileKey(profile)
+export function reconcileApprovalModeForProfile(
+  profile: string,
+  value: unknown,
+  connectionId?: null | string
+): ApprovalMode {
+  const key = profileKey(profile, connectionId)
   const mode = normalizeApprovalMode(value)
   nextRevision(key)
   confirmedModes.set(key, mode)
@@ -61,9 +67,10 @@ export function reconcileApprovalModeForProfile(profile: string, value: unknown)
 
 export async function syncApprovalModeForProfile(
   requestGateway: ApprovalModeRequester,
-  profile: string
+  profile: string,
+  connectionId?: null | string
 ): Promise<ApprovalMode> {
-  const key = profileKey(profile)
+  const key = profileKey(profile, connectionId)
   const revision = nextRevision(key)
 
   const result = (await requestGateway('config.get', scopeToProfile(profile, { key: 'approvals.mode' }))) as {
@@ -83,9 +90,10 @@ export async function syncApprovalModeForProfile(
 export async function setApprovalModeForProfile(
   requestGateway: ApprovalModeRequester,
   profile: string,
-  mode: ApprovalMode
+  mode: ApprovalMode,
+  connectionId?: null | string
 ): Promise<ApprovalMode> {
-  const key = profileKey(profile)
+  const key = profileKey(profile, connectionId)
   const revision = nextRevision(key)
   cacheApprovalMode(key, mode)
 

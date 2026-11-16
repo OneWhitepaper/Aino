@@ -55,7 +55,7 @@ function validateSide(item, slot, platform) {
   }
 }
 
-function validateBundleInputs(value, platform, arch) {
+function validateBundleInputs(value, platform, arch, { candidateCommit } = {}) {
   if (!Object.hasOwn(FORMATS, platform) || !['x64', 'arm64'].includes(arch)) {
     throw new Error('Unsupported bundled-update platform or architecture')
   }
@@ -63,7 +63,15 @@ function validateBundleInputs(value, platform, arch) {
     throw new Error('Bundle manifest schema, platform or architecture mismatch')
   }
   for (const slot of ['old', 'new']) validateSide(value[slot], slot, platform)
-  if (value.old.identity !== value.new.identity || value.old.commit === value.new.commit) {
+  if (value.old.identity !== value.new.identity) {
+    throw new Error('Update must preserve package identity and change the build commit')
+  }
+  if (candidateCommit !== undefined) {
+    if (platform !== 'windows' || !COMMIT.test(candidateCommit) ||
+        value.old.commit !== candidateCommit || value.new.commit !== candidateCommit || value.old.tag === value.new.tag) {
+      throw new Error('Local Windows candidates must pin the tested source commit and distinct package tags')
+    }
+  } else if (value.old.commit === value.new.commit) {
     throw new Error('Update must preserve package identity and change the build commit')
   }
   if (value.old.artifact.sha256 === value.new.artifact.sha256) throw new Error('Update artifacts must differ')
@@ -84,8 +92,8 @@ function validateBundleInputs(value, platform, arch) {
 }
 
 // Revalidate normalized JSON on every phase; staging is not a durable trust boundary.
-function validateDownloadedBundle(value, platform, arch) {
-  validateBundleInputs(value, platform, arch)
+function validateDownloadedBundle(value, platform, arch, options) {
+  validateBundleInputs(value, platform, arch, options)
   for (const slot of ['old', 'new']) {
     const filename = value[slot].artifact.path
     // SAFETY: normalized JSON is re-read between phases; validate before filesystem access.

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { getLatestSessionMessages } from '@/api/sessions'
+import { delegateRowsFromCall } from '@/components/assistant-ui/tool/delegate-model'
 import type { DelegateRow } from '@/components/assistant-ui/tool/delegate-model'
 import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { I18nProvider } from '@/i18n'
@@ -152,18 +153,72 @@ it('fails closed without an owner, and lets a visible failed read retry without 
   expect(request.mock.calls.map(call => call[2])).toEqual(['runtime.describe'])
 })
 
-it('reuses the live tail with a captured owner and never duplicates it with REST polling', async () => {
-  render(harness()({ live: true, row: { ...row, subagentId: 'native-worker', status: 'running' } }))
+it.each(['running', 'completed'] as const)('keeps %s raw activity folded below readable output', async status => {
+  render(harness()({ row: { ...row, status, activity: ['Raw tool progress'] } }))
+  await screen.findByText('Verified result')
+  const summary = screen.getByText('Execution log', { selector: 'summary' })
+  const disclosure = summary.closest('details')!
+  expect(disclosure.open).toBe(false)
+  expect(screen.queryByText('Raw tool progress')).toBeNull()
+  fireEvent.click(summary)
+  expect(await screen.findByText('Raw tool progress')).toBeTruthy()
+  expect(screen.getByText('Verified result')).toBeTruthy()
+  fireEvent.click(summary)
+  await waitFor(() => expect(screen.queryByText('Raw tool progress')).toBeNull())
+  expect(request.mock.calls.some(call => ['subagent.tail', 'session.resume', 'prompt.submit'].includes(call[2]))).toBe(
+    false
+  )
+})
+
+it('keeps a settled result visible when only its dispatch receipt remains', async () => {
+  const [finished] = delegateRowsFromCall(
+    { tasks: [{ goal: 'Review sources' }] },
+    { results: [{ status: 'ok', summary: 'All source checks passed.' }] }
+  )
+
+  render(harness()({ row: finished }))
+  expect(await screen.findByText('All source checks passed.')).toBeTruthy()
+  const summary = screen.getByText('Execution log', { selector: 'summary' })
+  expect(summary.closest('details')!.open).toBe(false)
+})
+
+it('reuses one folded live log with a captured owner and never duplicates it with REST polling', async () => {
+  render(
+    harness()({
+      live: true,
+      row: { ...row, subagentId: 'native-worker', status: 'running', activity: ['Raw progress'] }
+    })
+  )
   expect(request.mock.calls.some(call => call[2] === 'subagent.tail')).toBe(false)
-  fireEvent.click(await screen.findByText('Extended transcript'))
+  await screen.findByText('Execution log', { selector: 'summary' })
+  expect(screen.getAllByText('Execution log', { selector: 'summary' })).toHaveLength(1)
+  expect(screen.queryByText('Raw progress')).toBeNull()
+  fireEvent.click(await screen.findByText('Execution log'))
   await screen.findByText('Live owned output')
   expect(request).toHaveBeenCalledWith('remote-source', 'research', 'subagent.tail', {
     session_id: 'parent',
     subagent_id: 'native-worker'
   })
-  fireEvent.click(screen.getByText('Extended transcript', { selector: 'summary' }))
+  fireEvent.click(screen.getByText('Execution log', { selector: 'summary' }))
   await waitFor(() => expect(screen.queryByText('Live owned output')).toBeNull())
   expect(getLatestSessionMessages).not.toHaveBeenCalled()
+})
+
+it('starts folded again when returning to a previously opened child', async () => {
+  const tree = harness()
+  const first = { ...row, subagentId: 'first', status: 'running' as const }
+  const second = { ...row, subagentId: 'second', status: 'running' as const }
+  const view = render(tree({ live: true, row: first }))
+  fireEvent.click(await screen.findByText('Execution log', { selector: 'summary' }))
+  await screen.findByText('Live owned output')
+  const reads = request.mock.calls.filter(call => call[2] === 'subagent.tail').length
+  view.rerender(tree({ live: true, row: second }))
+  expect(screen.getByText('Execution log', { selector: 'summary' }).closest('details')!.open).toBe(false)
+  view.rerender(tree({ live: true, row: first }))
+  expect(screen.getByText('Execution log', { selector: 'summary' }).closest('details')!.open).toBe(false)
+  await act(async () => undefined)
+  expect(screen.queryByText('Live owned output')).toBeNull()
+  expect(request.mock.calls.filter(call => call[2] === 'subagent.tail')).toHaveLength(reads)
 })
 
 it('reads canonical child rows through the captured parent even before the child session id arrives', async () => {

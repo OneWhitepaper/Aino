@@ -13,6 +13,9 @@ export const jaModelSettings: TranslationOverride<ModelSettingsTranslations> = {
       'Aino アカウントで画像を生成します。画像モデルはテキストモデルと別に管理され、選択は新しい会話に適用されます。'
   },
   pages: {
+    preferences: 'モデルの環境設定',
+    moreSettings: 'その他のモデル設定',
+    fallbackDescription: 'メインモデルが一時的に利用できない場合の代替モデルを選択します。',
     description: '既定のモデルと、各タスクで使用するモデルを管理します。',
     auxiliaryTask: 'タスク',
     auxiliaryPurpose: '用途',

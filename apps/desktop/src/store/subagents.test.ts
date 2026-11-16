@@ -21,6 +21,18 @@ const listFor = (sid: string) => $subagentsBySession.get()[sid] ?? []
 describe('subagent store', () => {
   beforeEach(() => $subagentsBySession.set({}))
 
+  it('retains caller control authority separately from whether the child still accepts steering', () => {
+    reconcileSubagentSnapshot('owner', [
+      { subagent_id: 'read-only', status: 'running', can_control: false, accepting_steer: true },
+      { subagent_id: 'closing', status: 'running', can_control: true, accepting_steer: false }
+    ])
+    upsertSubagent('owner', { subagent_id: 'read-only', text: 'Still working' }, false, 'subagent.progress')
+    expect(listFor('owner')).toEqual([
+      expect.objectContaining({ id: 'read-only', canControl: false, acceptingSteer: true }),
+      expect.objectContaining({ id: 'closing', canControl: true, acceptingSteer: false })
+    ])
+  })
+
   it('retains a backend-authored name through progress without using internal identifiers as names', () => {
     upsertSubagent('owner', {
       subagent_id: 'internal-worker',

@@ -67,12 +67,12 @@ it('offers Unpin after a pin and Pin after an unpin, toggling the stored flag ea
   const tabId = $previewTabs.get()[0]!.id
   const pinned = () => $previewTabs.get().find(tab => tab.id === tabId)?.pinned
 
-  expect(clickPinRow(tabId)).toBe('Pin to workspace')
+  expect(clickPinRow(tabId)).toBe('Pin to main view')
   expect(pinned()).toBe(true)
 
-  expect(clickPinRow(tabId)).toBe('Unpin from workspace')
+  expect(clickPinRow(tabId)).toBe('Unpin from main view')
   expect(pinned()).toBe(false)
 
-  expect(clickPinRow(tabId)).toBe('Pin to workspace')
+  expect(clickPinRow(tabId)).toBe('Pin to main view')
   expect(pinned()).toBe(true)
 })

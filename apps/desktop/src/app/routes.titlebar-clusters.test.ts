@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hidesFixedTitlebarClusters, isOverlayView } from './routes'
+import { type AppView, hidesFixedTitlebarClusters, isOverlayView } from './routes'
 
 describe('hidesFixedTitlebarClusters', () => {
   it('hides clusters on contributed full pages and overlays', () => {
@@ -8,16 +8,17 @@ describe('hidesFixedTitlebarClusters', () => {
     expect(hidesFixedTitlebarClusters('settings')).toBe(true)
   })
 
-  it('keeps clusters on chat and first-party workspace pages', () => {
+  it('keeps the fixed chat controls on conversation routes', () => {
     expect(hidesFixedTitlebarClusters('chat')).toBe(false)
-    expect(hidesFixedTitlebarClusters('capabilities')).toBe(false)
-    expect(hidesFixedTitlebarClusters('messaging')).toBe(false)
-    expect(hidesFixedTitlebarClusters('artifacts')).toBe(false)
-    expect(hidesFixedTitlebarClusters('profiles')).toBe(false)
-    expect(isOverlayView('profiles')).toBe(false)
   })
+
+  it.each<AppView>(['capabilities', 'messaging', 'artifacts', 'profiles', 'cron', 'session-import'])(
+    'hides chat-specific controls while the %s page owns the workspace',
+    view => expect(hidesFixedTitlebarClusters(view)).toBe(true)
+  )
 
   it('does not treat extension as an overlay', () => {
     expect(isOverlayView('extension')).toBe(false)
+    expect(isOverlayView('profiles')).toBe(false)
   })
 })

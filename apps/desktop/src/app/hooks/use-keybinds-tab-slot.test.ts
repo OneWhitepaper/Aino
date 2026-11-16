@@ -7,11 +7,11 @@ vi.mock('@/themes/context', () => ({
   useTheme: () => ({ resolvedMode: 'dark' as const, setMode: () => undefined })
 }))
 
-const switchProfileToSlot = vi.hoisted(() => vi.fn())
+const openBotSlot = vi.hoisted(() => vi.fn())
 
-vi.mock('@/store/profile', async importOriginal => ({
+vi.mock('@/app/profiles/management-navigation', async importOriginal => ({
   ...(await importOriginal<object>()),
-  switchProfileToSlot
+  openBotSlot
 }))
 
 import { useKeybinds } from '@/app/hooks/use-keybinds'
@@ -57,7 +57,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  switchProfileToSlot.mockClear()
+  openBotSlot.mockClear()
   unmountKeybinds = renderHook(
     () =>
       useKeybinds({
@@ -93,7 +93,7 @@ describe('⌘N over a tab strip is a tab switch, elsewhere a profile switch', ()
     press(2)
 
     expect(activePane('left')).toBe('a')
-    expect(switchProfileToSlot).not.toHaveBeenCalled()
+    expect(openBotSlot).not.toHaveBeenCalled()
   })
 
   it('falls through to the profile switch when no zone is a tab strip', () => {
@@ -108,7 +108,7 @@ describe('⌘N over a tab strip is a tab switch, elsewhere a profile switch', ()
 
     press(2)
 
-    expect(switchProfileToSlot).toHaveBeenCalledWith(2)
+    expect(openBotSlot).toHaveBeenCalledWith(2, expect.any(Function))
   })
 
   it('falls through when the strip has no Nth tab', () => {
@@ -118,6 +118,6 @@ describe('⌘N over a tab strip is a tab switch, elsewhere a profile switch', ()
     press(3)
 
     expect(activePane('left')).toBe('workspace')
-    expect(switchProfileToSlot).toHaveBeenCalledWith(3)
+    expect(openBotSlot).toHaveBeenCalledWith(3, expect.any(Function))
   })
 })

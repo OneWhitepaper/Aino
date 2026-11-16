@@ -9,10 +9,18 @@ import type { SummaryResource } from './session-content'
 import { SummarySection } from './summary-section'
 import type { SummarySession } from './use-summary-session'
 
-export function SourcesSection({ items, session }: { items: SummaryResource[]; session: SummarySession }) {
+export function SourcesSection({
+  items,
+  session,
+  showEmpty = false
+}: {
+  items: SummaryResource[]
+  session: SummarySession
+  showEmpty?: boolean
+}) {
   const { t } = useI18n()
 
-  if (!items.length) {
+  if (!items.length && !showEmpty) {
     return null
   }
 
@@ -32,6 +40,8 @@ export function SourcesSection({ items, session }: { items: SummaryResource[]; s
           </Button>
         </Tip>
       }
+      emptyMessage={t.summary.sources.none}
+      state={items.length ? 'ready' : 'empty'}
       title={t.summary.sources.title}
     >
       <SummaryResourceList items={items} session={session} />

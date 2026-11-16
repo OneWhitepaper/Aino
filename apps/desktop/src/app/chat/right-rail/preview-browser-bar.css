@@ -1,0 +1,122 @@
+.aino-browser-chrome {
+  flex: none;
+  min-width: 0;
+  background: var(--ui-editor-surface-background);
+  color: var(--ui-text-secondary);
+}
+
+.aino-browser-navigation {
+  display: flex;
+  min-width: 0;
+  min-height: 45px;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--aino-workbench-divider);
+}
+
+.aino-browser-navigation > button[data-size='icon-xs'],
+.aino-browser-tools > button[data-size='icon-xs'] {
+  flex: none;
+  width: 23px;
+  height: 25px;
+  padding: 3px;
+  border-radius: var(--aino-radius-control);
+}
+
+.aino-browser-navigation > button[data-size='xs'] {
+  flex: none;
+  font-size: var(--aino-text-section);
+}
+
+.aino-browser-address {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  margin-inline: 3px;
+}
+
+.aino-browser-address input {
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--aino-radius-control);
+  background: var(--aino-navigation-rail);
+  font-size: var(--aino-text-section);
+  box-shadow: none;
+}
+
+.aino-browser-address input:focus-visible {
+  border-color: var(--ui-text-tertiary);
+}
+
+.aino-browser-address input[aria-invalid='true'] {
+  border-color: var(--ui-red);
+}
+
+.aino-browser-address-icon {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--ui-text-tertiary);
+  pointer-events: none;
+}
+
+.aino-browser-controls {
+  display: flex;
+  min-width: 0;
+  min-height: 33px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  border-bottom: 1px solid var(--aino-workbench-divider);
+  font-size: var(--aino-text-section);
+}
+
+.aino-browser-tools {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+[data-preview-agent-status] {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--aino-text-section);
+}
+
+[data-preview-agent-status] > button {
+  flex: none;
+  padding-inline: 5px;
+  font-size: var(--aino-text-section);
+  font-weight: 400;
+}
+
+@container (width < 360px) {
+  .aino-browser-navigation {
+    gap: 1px;
+    padding-inline: 5px;
+  }
+
+  .aino-browser-controls {
+    flex-wrap: wrap;
+    gap: 2px;
+    padding-inline: 8px;
+  }
+
+  [data-preview-agent-status] {
+    flex-basis: 100%;
+  }
+
+  .aino-browser-tools {
+    margin-inline-start: auto;
+  }
+}

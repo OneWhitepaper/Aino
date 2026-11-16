@@ -23,7 +23,7 @@ vi.mock('@/hermes', () => ({
 vi.mock('@/lib/query-client', () => ({ invalidateProfileScopedQueries: vi.fn() }))
 vi.mock('@/store/starmap', () => ({ reloadOpenStarmapGraph: vi.fn(), resetStarmapGraph: vi.fn() }))
 
-const { applyDesktopOverlay, buildDesktopOverlay, exportProfileBundle, runExportProfileFlow } =
+const { applyDesktopOverlay, buildDesktopOverlay, exportProfileBundle, runExportProfileFlow, runImportProfileFlow } =
   await import('./profile-share')
 
 const { $profileColors, setProfileColor } = await import('./profile')
@@ -134,7 +134,7 @@ describe('runExportProfileFlow', () => {
       expect(window.hermesDesktop.selectSavePath).toBeUndefined()
       await expect(runExportProfileFlow('glam')).resolves.toBeNull()
       expect(exportProfileArchive).not.toHaveBeenCalled()
-      expect($notifications.get().at(-1)).toMatchObject({ kind: 'error', title: 'Failed to export profile' })
+      expect($notifications.get().at(-1)).toMatchObject({ kind: 'error', title: 'Failed to export bot' })
       expect($notifications.get().at(-1)?.message).toContain('hermes profile export glam')
     } finally {
       clearWebappSession()
@@ -188,6 +188,56 @@ describe('importProfileBundle', () => {
     expect(window.localStorage.getItem(folderKey('imported'))).toBe('/srv/deleted-imported')
     expect(window.localStorage.getItem(startupKey)).not.toBeNull()
   })
+
+  it('imports a managed bot without replacing the current conversation, profile, or global layout', async () => {
+    const { group } = await import('@/components/pane-shell/tree/model')
+    const profile = await import('./profile')
+    const { $selectedStoredSessionId } = await import('./session')
+    const { importProfileArchive } = await import('@/hermes')
+    const currentLayout = group(['workspace'], { id: 'current', active: 'workspace' })
+    const importedLayout = group(['files'], { id: 'imported', active: 'files' })
+    const refreshProfiles = vi.spyOn(profile, 'refreshProfiles').mockResolvedValueOnce([])
+    const refreshActiveProfile = vi.spyOn(profile, 'refreshActiveProfile')
+    const selectProfile = vi.spyOn(profile, 'selectProfile')
+    const selectPaths = vi.fn(async () => ['/tmp/in.tar.gz'])
+    const previousSession = $selectedStoredSessionId.get()
+    const previousProfile = profile.$activeGatewayProfile.get()
+
+    const freshRequests = profile.$freshSessionRequest.get()
+
+    ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { selectPaths }
+    $layoutTree.set(currentLayout)
+    $selectedStoredSessionId.set('current-conversation')
+    profile.$activeGatewayProfile.set('writer')
+    vi.mocked(importProfileArchive).mockResolvedValueOnce({
+      desktop: { version: 1, mode: 'dark', layoutTree: importedLayout },
+      name: 'imported',
+      ok: true,
+      path: '/tmp/p'
+    })
+
+    try {
+      await expect(runImportProfileFlow({ management: true, scope: { connectionId: 'local' } })).resolves.toBe(
+        'imported'
+      )
+      expect(importProfileArchive).toHaveBeenCalledWith('/tmp/in.tar.gz', undefined, { connectionId: 'local' })
+      expect(refreshProfiles).toHaveBeenCalledOnce()
+      expect(refreshActiveProfile).not.toHaveBeenCalled()
+      expect(selectProfile).not.toHaveBeenCalled()
+      expect(profile.$activeGatewayProfile.get()).toBe('writer')
+      expect(profile.$freshSessionRequest.get()).toBe(freshRequests)
+      expect($selectedStoredSessionId.get()).toBe('current-conversation')
+      expect($layoutTree.get()).toBe(currentLayout)
+      expect(modePref.resolve('imported')).toBe('dark')
+    } finally {
+      refreshProfiles.mockRestore()
+      refreshActiveProfile.mockRestore()
+      selectProfile.mockRestore()
+      $selectedStoredSessionId.set(previousSession)
+      profile.$activeGatewayProfile.set(previousProfile)
+      Reflect.deleteProperty(window, 'hermesDesktop')
+    }
+  })
 })
 
 describe('exportProfileBundle', () => {
@@ -216,7 +266,7 @@ describe('exportProfileBundle', () => {
 
     expect(selectSavePath).toHaveBeenCalledWith(
       expect.objectContaining({
-        filters: [{ extensions: ['tar.gz', 'tgz'], name: 'Aino 工作区' }]
+        filters: [{ extensions: ['tar.gz', 'tgz'], name: 'Aino 机器人' }]
       })
     )
   })

@@ -25,7 +25,7 @@ import {
   ownerLookupSessionRows,
   sessionMatchesStoredId
 } from './session'
-import { isSessionOwnerRoute, requestForSessionProfile, type SessionOwnerScope } from './session-request-router'
+import { isSessionOwnerRoute, type SessionOwnerScope } from './session-request-router'
 import {
   $sessionStates,
   $sessionTiles,
@@ -33,6 +33,7 @@ import {
   type SessionTileWorkspaceScope,
   storedSessionIdForRuntimeId
 } from './session-states'
+import { sendSubagentControl, SubagentControlError } from './subagent-control'
 import { $subagentsBySession, type SubagentProgress, subagentsWithHistory } from './subagents'
 
 export type {
@@ -177,6 +178,19 @@ function observedTasksFor(
   })
 }
 
+function rosterTaskWithControls(worker: SubagentProgress, tasks: readonly SubagentProgress[]): SubagentProgress {
+  const known = tasks.find(task => task.id === worker.id)
+
+  // Roster activity is newer without granting or reopening exact-runtime control.
+  return known
+    ? {
+        ...worker,
+        canControl: known.canControl ?? worker.canControl,
+        acceptingSteer: known.acceptingSteer ?? worker.acceptingSteer
+      }
+    : worker
+}
+
 function runtimeForRosterSource(
   storedId: string,
   owner: SessionOwnerScope,
@@ -295,14 +309,16 @@ export const $collaborationGroups = computed(
 
         const eventTasks = runtime ? (history[runtime] ?? []) : []
 
-        const snapshot = workers.filter(
-          worker =>
-            !eventTasks.some(
-              event =>
-                event.id === worker.id &&
-                (event.updatedAt >= bucket.at || (event.status !== 'running' && event.status !== 'queued'))
-            )
-        )
+        const snapshot = workers
+          .filter(
+            worker =>
+              !eventTasks.some(
+                event =>
+                  event.id === worker.id &&
+                  (event.updatedAt >= bucket.at || (event.status !== 'running' && event.status !== 'queued'))
+              )
+          )
+          .map(worker => rosterTaskWithControls(worker, eventTasks))
 
         sources.push({ ...source, canControl: Boolean(runtime), taskSnapshot: snapshot })
       }
@@ -312,47 +328,20 @@ export const $collaborationGroups = computed(
   }
 )
 
-export class CollaborationTaskActionError extends Error {
-  constructor(
-    readonly code: 'owner-unavailable' | 'not-running' | 'request-failed',
-    options?: ErrorOptions
-  ) {
-    super(code, options)
-    this.name = 'CollaborationTaskActionError'
-  }
-}
-
 async function controlCollaborationTask(
   task: CollaborationTask,
   action: 'interrupt' | 'steer',
   text?: string
 ): Promise<void> {
   if (!task.canControl || !collaborationOwnerKey(task.owner) || !task.parentRuntimeId) {
-    throw new CollaborationTaskActionError('owner-unavailable')
+    throw new SubagentControlError('owner-unavailable')
   }
 
   if (task.status !== 'running' && task.status !== 'queued') {
-    throw new CollaborationTaskActionError('not-running')
+    throw new SubagentControlError('not-running')
   }
 
-  try {
-    const result = await requestForSessionProfile<{ found?: boolean; status?: string }>(
-      task.owner,
-      async () => {
-        throw new CollaborationTaskActionError('owner-unavailable')
-      },
-      `subagent.${action}`,
-      { session_id: task.parentRuntimeId, subagent_id: task.id, ...(action === 'steer' ? { text } : {}) }
-    )
-
-    if (action === 'steer' ? result.status !== 'queued' : !result.found) {
-      throw new CollaborationTaskActionError('request-failed')
-    }
-  } catch (error) {
-    throw error instanceof CollaborationTaskActionError
-      ? error
-      : new CollaborationTaskActionError('request-failed', { cause: error })
-  }
+  await sendSubagentControl(task.owner, task.parentRuntimeId, task.id, action, text)
 }
 
 /** Route the captured task to its own owner, even after the foreground changes. */
@@ -365,5 +354,5 @@ export function steerCollaborationTask(task: CollaborationTask, text: string): P
 
   return message
     ? controlCollaborationTask(task, 'steer', message)
-    : Promise.reject(new CollaborationTaskActionError('request-failed'))
+    : Promise.reject(new SubagentControlError('request-failed'))
 }

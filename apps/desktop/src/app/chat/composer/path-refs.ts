@@ -11,6 +11,8 @@
  */
 import type { KeyboardEvent } from 'react'
 
+import { containsIndex, markdownLiteralRanges } from '@/lib/markdown-literals'
+
 import { quoteRefValue, REF_RE, refChipElement, replaceBeforeCaret } from './rich-editor'
 import { textBeforeCaret } from './text-utils'
 
@@ -33,7 +35,7 @@ export function barePathRef(path: string) {
 /** Rewrite bare `@path` tokens as typed `@file:`/`@folder:` directives, leaving
  *  anything already inside a directive alone. Returns `text` unchanged when
  *  there are none. */
-export function pathifyRefs(text: string) {
+export function pathifyRefs(text: string, sourcePrefix = '', sourceSuffix = '') {
   if (!text.includes('@')) {
     return text
   }
@@ -46,6 +48,8 @@ export function pathifyRefs(text: string) {
     return { end: start + match[0].length, start }
   })
 
+  fenced.push(...markdownLiteralRanges(text, sourcePrefix, sourceSuffix))
+
   let out = ''
   let cursor = 0
 
@@ -53,7 +57,7 @@ export function pathifyRefs(text: string) {
     const start = match.index ?? 0
     const ref = barePathRef(match[1] || '')
 
-    if (!ref || fenced.some(span => start >= span.start && start < span.end)) {
+    if (!ref || containsIndex(fenced, start)) {
       continue
     }
 
@@ -80,12 +84,12 @@ export function chipTypedPathOnSpace(event: KeyboardEvent<HTMLDivElement>) {
     return false
   }
 
-  const before = textBeforeCaret(editor)
+  const before = textBeforeCaret(editor) ?? ''
   const match = before ? TYPED_BARE_PATH_RE.exec(before) : null
   const token = match?.[0]
   const ref = match?.[1] ? barePathRef(match[1]) : null
 
-  if (!token || !ref) {
+  if (!token || !ref || containsIndex(markdownLiteralRanges(before), before.length - token.length)) {
     return false
   }
 

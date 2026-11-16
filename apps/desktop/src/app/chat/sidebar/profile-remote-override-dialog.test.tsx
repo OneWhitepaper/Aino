@@ -64,7 +64,7 @@ describe('ProfileRemoteOverrideDialog', () => {
 
     // No write yet — the risk note comes first.
     expect(applyConnectionConfig).not.toHaveBeenCalled()
-    expect(screen.getByText('Connect this profile to a remote host?')).toBeTruthy()
+    expect(screen.getByText('Connect this bot to a remote host?')).toBeTruthy()
     expect(screen.getByText(/Only connect to a host you trust/)).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))

@@ -283,6 +283,7 @@ function ScopedSkillCatalog({
   return (
     <CatalogBrowser
       actions={actions}
+      initialInstalledOnly={skills.length > 0}
       installedEntries={catalog.entries}
       installedPending={installedPending || identityPending}
       isInstalled={isInstalled}

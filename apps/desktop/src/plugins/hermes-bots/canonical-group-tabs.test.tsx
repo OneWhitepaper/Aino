@@ -315,8 +315,9 @@ it('opens the production workspace under one host title while preserving group t
   expect(screen.getByRole('heading', { name: room.name, level: 1 })).toBeTruthy()
   expect(within(region).queryByRole('heading', { name: room.name })).toBeNull()
   expect(within(region).getByText(/1 Members/)).toBeTruthy()
-  expect(within(region).getByRole('button', { name: 'Search messages' })).toBeTruthy()
   expect(within(region).getByRole('button', { name: 'Group info' })).toBeTruthy()
+  fireEvent.pointerDown(within(region).getByRole('button', { name: 'Actions' }), { button: 0, ctrlKey: false })
+  expect(screen.getByRole('menuitem', { name: 'Search messages' })).toBeTruthy()
 })
 
 it('keeps a standalone canonical workspace fully named without requiring host chrome', async () => {

@@ -295,6 +295,7 @@ export const arAssistant = {
       sendEdited: 'إرسال التعديل',
       attachingFile: 'جار إرفاق الملف',
       replyMetrics: {
+        usageAndCost: 'الاستخدام والتكلفة',
         duration: 'المدة',
         tokens: 'الاستهلاك',
         context: 'السياق',

@@ -282,18 +282,37 @@ def test_load_gateway_config_bridges_loop_watchdog_keys(tmp_path, monkeypatch):
     assert cfg.loop_watchdog_probe_timeout_s == 15.0
     assert cfg.loop_watchdog_max_strikes == 12
 
-def test_loop_liveness_watchdog_marks_runtime_degraded_before_restart():
-    """The terminal watchdog observation must be visible before ``os._exit``."""
-    from gateway.status import read_runtime_status, write_runtime_status
+def test_loop_liveness_watchdog_marks_runtime_degraded_before_restart(monkeypatch):
+    """A successful terminal write is visible at exit, without a background I/O race."""
+    from gateway import status
 
-    write_runtime_status(gateway_state="running", exit_reason=None)
+    def persist(path, payload):
+        status._write_json_file(path, status._merge_over_on_disk(path, payload))
+        return 1
+
+    # The bounded background-writer case is exercised separately below. This seam makes a
+    # successful write deterministic while retaining the real status merge and file format.
+    writer = MagicMock(spec=status._RuntimeStatusWriter)
+    writer.submit.side_effect = persist
+    writer.wait.return_value = True
+    monkeypatch.setattr(status, "_runtime_status_writer", writer)
+    status.write_runtime_status(gateway_state="running", exit_reason=None)
     loop = MagicMock(spec=asyncio.AbstractEventLoop)
-    fired = threading.Event()
+    fired, ready = threading.Event(), threading.Event()
+    handle_ref = {}
     exit_codes = []
 
     def fake_exit(code: int) -> None:
-        exit_codes.append(code)
-        fired.set()
+        try:
+            assert ready.wait(timeout=2.0)
+            handle_ref["handle"].stop()
+            record = status.read_runtime_status()
+            assert record["gateway_state"] == "degraded"
+            assert record["exit_reason"] == "loop_liveness_watchdog"
+            assert record["restart_requested"] is True
+            exit_codes.append(code)
+        finally:
+            fired.set()
 
     with (
         patch("gateway.shutdown_watchdog.faulthandler.dump_traceback"),
@@ -303,15 +322,80 @@ def test_loop_liveness_watchdog_marks_runtime_degraded_before_restart():
             loop, probe_interval=0.01, probe_timeout=0.01, max_strikes=2
         )
         assert handle is not None
-        assert fired.wait(timeout=2.0), "watchdog did not reach its restart exit"
-        handle.stop()
-        handle.join(timeout=1.0)
+        handle_ref["handle"] = handle
+        ready.set()
+        try:
+            assert fired.wait(timeout=2.0), "watchdog did not reach its restart exit"
+        finally:
+            handle.stop()
+            handle.join(timeout=1.0)
 
-    record = read_runtime_status()
     assert exit_codes == [75]
-    assert record["gateway_state"] == "degraded"
-    assert record["exit_reason"] == "loop_liveness_watchdog"
-    assert record["restart_requested"] is True
+
+
+def test_loop_liveness_watchdog_exits_with_its_terminal_write_blocked(monkeypatch):
+    """A wedged status disk cannot hold the restart; the terminal snapshot is queued first."""
+    from gateway import status
+
+    status.write_runtime_status(gateway_state="running", exit_reason=None)
+    writing, release, fired, ready = (threading.Event() for _ in range(4))
+    submitted, waits, exits, records = [], [], [], []
+    handle_ref = {}
+
+    def blocked_write(path, payload):
+        writing.set()
+        assert release.wait(timeout=5.0)
+        status._write_json_file(path, payload)
+
+    writer = status._RuntimeStatusWriter(write_fn=blocked_write)
+    submit, wait = writer.submit, writer.wait
+
+    def capture_submit(path, payload):
+        submitted.append(payload)
+        return submit(path, payload)
+
+    def capture_wait(generation, timeout=None):
+        waits.append(timeout)
+        return wait(generation, timeout=timeout)
+
+    monkeypatch.setattr(writer, "submit", capture_submit)
+    monkeypatch.setattr(writer, "wait", capture_wait)
+    monkeypatch.setattr(status, "_runtime_status_writer", writer)
+
+    def fake_exit(code):
+        try:
+            assert ready.wait(timeout=2.0)
+            handle_ref["handle"].stop()
+            records.append(status.read_runtime_status())
+            exits.append(code)
+        finally:
+            fired.set()
+
+    with patch("gateway.shutdown_watchdog.faulthandler.dump_traceback"), \
+            patch("gateway.shutdown_watchdog.os._exit", side_effect=fake_exit):
+        handle = start_loop_liveness_watchdog(
+            MagicMock(spec=asyncio.AbstractEventLoop), probe_interval=0.01,
+            probe_timeout=0.01, max_strikes=2)
+        assert handle is not None
+        handle_ref["handle"] = handle
+        ready.set()
+        try:
+            assert fired.wait(timeout=2.0), "a blocked status writer held the restart"
+            assert exits == [75]
+            assert waits == [0.25]
+            assert not release.is_set()
+            assert len(submitted) == 1
+            assert submitted[0]["gateway_state"] == "degraded"
+            assert submitted[0]["exit_reason"] == "loop_liveness_watchdog"
+            assert submitted[0]["restart_requested"] is True
+            assert records[0]["gateway_state"] == "running"
+            assert writing.wait(timeout=2.0)
+        finally:
+            handle.stop()
+            release.set()
+            handle.join(timeout=1.0)
+            # Test-only cleanup: a real os._exit never waits for this pending disk write.
+            assert writer.flush(timeout=2.0)
 
 def test_heartbeat_write_does_not_block_the_loop_it_monitors():
     """The heartbeat write must not freeze the loop the watchdog is watching.

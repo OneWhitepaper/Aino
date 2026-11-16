@@ -10,8 +10,8 @@ const toggled = (list: string[], value: string) =>
 
 /** Rail state for one catalog. `onChange` runs after every change so the
  *  browser can drop paging and selection that no longer apply. */
-export function useCatalogFilters(kind: CatalogKind, onChange: () => void) {
-  const [facets, setFacets] = useState(EMPTY_FACETS)
+export function useCatalogFilters(kind: CatalogKind, onChange: () => void, initialInstalledOnly = false) {
+  const [facets, setFacets] = useState(() => ({ ...EMPTY_FACETS, installedOnly: initialInstalledOnly }))
   const [sort, setSortState] = useState<CatalogSort>(kind === 'plugins' ? 'stars' : 'discover')
 
   const update = (next: (current: CatalogFacets) => CatalogFacets) => {

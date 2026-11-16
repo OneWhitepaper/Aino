@@ -92,9 +92,7 @@ export function resolveCurrentFindScope(): HTMLElement | null {
 }
 
 /** Capture the current view as the find scope. Called when the bar opens. */
-export function captureFindScope(): HTMLElement | null {
-  const root = resolveCurrentFindScope()
-
+export function captureFindScope(root: HTMLElement | null = resolveCurrentFindScope()): HTMLElement | null {
   if (root) {
     root.setAttribute(ROOT_ATTR, '')
   }

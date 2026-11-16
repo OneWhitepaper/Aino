@@ -116,6 +116,7 @@ vi.mock('../settings/plugin-install-modal', () => ({ PluginInstallModal: () => n
 vi.mock('../shell/titlebar-controls', () => ({ TitlebarControls: () => null }))
 vi.mock('../updates-overlay', () => ({ UpdatesOverlay: () => null }))
 vi.mock('./mcp-install-deeplink-dialog', () => ({ McpInstallDeepLinkDialog: () => null }))
+vi.mock('./recovery-surfaces', () => ({ WiringRecoverySurfaces: () => null }))
 vi.mock('./surfaces', () => ({
   ChatRoutesSurface: () => null,
   SidebarSurface: () => null,

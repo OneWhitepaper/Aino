@@ -33,7 +33,8 @@ import { ReactionPicker } from '@/components/assistant-ui/thread/message-reactio
 import {
   ResponseMessageIds,
   responseMessageRole,
-  ResponseProcess,
+  ResponseProcessBody,
+  ResponseProcessHeader,
   ResponseProcessParts
 } from '@/components/assistant-ui/thread/response-group'
 import { ResponseLoadingIndicator, TurnActivityIndicator } from '@/components/assistant-ui/thread/status'
@@ -69,19 +70,9 @@ import {
 import { errorCardText, errorProviderName } from '@/lib/error-surface-copy'
 import { openExternalLink } from '@/lib/external-link'
 import { triggerHaptic } from '@/lib/haptics'
-import {
-  AudioLines,
-  GitForkIcon,
-  Loader2Icon,
-  MoreHorizontal,
-  RefreshCwIcon,
-  SmilePlusIcon,
-  VolumeXIcon,
-  XIcon
-} from '@/lib/icons'
+import { AudioLines, Loader2Icon, MoreHorizontal, RefreshCwIcon, SmilePlusIcon, XIcon } from '@/lib/icons'
 import { extractPreviewTargets } from '@/lib/preview-targets'
 import { markAssistantIdSpoken } from '@/lib/spoken-reply'
-import { $touchPointer } from '@/lib/touch-interaction'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
@@ -100,7 +91,6 @@ import { sessionTileDelegate } from '@/store/session-states'
 import { notifyThreadEditOpen } from '@/store/thread-scroll'
 import { $voicePlayback } from '@/store/voice-playback'
 
-import { AssistantIdentity } from './assistant-identity'
 import { ReplyMetrics } from './reply-metrics'
 import { ResolvedModelError } from './resolved-model-error'
 
@@ -330,43 +320,45 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
-          <ResponseAssistantIdentity />
-          <div
-            className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
-            data-slot="aui_assistant-message-content"
-          >
-            {/* Todos render in the composer status stack now, not inline. */}
-            {MESSAGE_PARTS}
-            <StoppedNotice />
-            <AssistantStatusSlot />
-            <AssistantPreviewEmbeds />
-            <MessagePrimitive.Error>
-              <ErrorCard onDismiss={onDismissError ? () => onDismissError(messageId) : undefined} />
-            </MessagePrimitive.Error>
-          </div>
-          <MessageTimelineTimestamp className="px-(--message-text-indent) pt-0.5" suppressIfDuplicatePart />
-          {/* Sealed interims skip the footer so a tool-heavy turn doesn't grow a
+          <ResponseProcessHeader />
+          <ResponseProcessBody>
+            <div
+              className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
+              data-slot="aui_assistant-message-content"
+            >
+              {/* Todos render in the composer status stack now, not inline. */}
+              {MESSAGE_PARTS}
+              <StoppedNotice />
+              <AssistantStatusSlot />
+              <AssistantPreviewEmbeds />
+              <MessagePrimitive.Error>
+                <ErrorCard onDismiss={onDismissError ? () => onDismissError(messageId) : undefined} />
+              </MessagePrimitive.Error>
+            </div>
+            <MessageTimelineTimestamp className="px-(--message-text-indent) pt-0.5" suppressIfDuplicatePart />
+            {/* Sealed interims skip the footer so a tool-heavy turn doesn't grow a
               copy bar per paragraph (72dd01c553) — EXCEPT when the interim is the
               group's last text-bearing row (the turn ended on a tool-only bubble):
               without the bar that turn has no copy/branch affordance at all
               (#118864). */}
-          {hasVisibleText &&
-            responseTail &&
-            (!isInterim || (responseIds.length > 0 && responseIds.at(-1) === messageId)) && (
-              <AssistantFooter
-                durationS={turnDurationS}
-                fullResponseAvailable={fullResponseAvailable}
-                getFullResponseText={getFullResponseText}
-                getMessageText={getMessageText}
-                messageId={messageId}
-                metrics={turnMetrics}
-                onBranchInNewChat={onBranchInNewChat}
-              />
-            )}
-          {/* Last thing in the turn — under the action bar, the way Cursor ends a
+            {hasVisibleText &&
+              responseTail &&
+              (!isInterim || (responseIds.length > 0 && responseIds.at(-1) === messageId)) && (
+                <AssistantFooter
+                  durationS={turnDurationS}
+                  fullResponseAvailable={fullResponseAvailable}
+                  getFullResponseText={getFullResponseText}
+                  getMessageText={getMessageText}
+                  messageId={messageId}
+                  metrics={turnMetrics}
+                  onBranchInNewChat={onBranchInNewChat}
+                />
+              )}
+            {/* Last thing in the turn — under the action bar, the way Cursor ends a
           turn on its summary rather than burying it above the controls. */}
-          <SettledChangedFiles />
-          <StreamingMarker />
+            <SettledChangedFiles />
+            <StreamingMarker />
+          </ResponseProcessBody>
         </>
       )}
     </MessagePrimitive.Root>
@@ -395,13 +387,6 @@ const StoppedNotice: FC = () => {
       {t.assistant.thread.responseStopped}
     </div>
   )
-}
-
-const ResponseAssistantIdentity: FC = () => {
-  const messageId = useAuiState(s => s.message.id)
-  const { identityMessageId } = useContext(ResponseProcess)
-
-  return !identityMessageId || identityMessageId === messageId ? <AssistantIdentity /> : null
 }
 
 /**
@@ -1335,20 +1320,15 @@ const ErrorActionControl: FC<{
 
 interface ReadAloudActionState {
   disabled: boolean
-  isPreparing: boolean
-  isSpeaking: boolean
   menuLabel: string
   onActivate: (event?: { shiftKey?: boolean }) => void
-  tooltip: string
 }
 
 function useReadAloudAction({
-  fullResponseAvailable,
   getFullText,
   getText,
   messageId
 }: {
-  fullResponseAvailable: boolean
   getFullText: () => string
   getText: () => string
   messageId: string
@@ -1398,22 +1378,12 @@ function useReadAloudAction({
 
   return {
     disabled: isPreparing || (!isSpeaking && anyPlaybackActive),
-    isPreparing,
-    isSpeaking,
-    menuLabel: isSpeaking ? copy.stopReading : copy.readAloud,
-    onActivate,
-    tooltip: isPreparing
-      ? copy.preparingAudio
-      : isSpeaking
-        ? copy.stopReading
-        : fullResponseAvailable
-          ? `${copy.readAloud} (${copy.readAloudFullResponseHint})`
-          : copy.readAloud
+    menuLabel: isPreparing ? copy.preparingAudio : isSpeaking ? copy.stopReading : copy.readAloud,
+    onActivate
   }
 }
 
-const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
-  durationS,
+const AssistantActionBar: FC<MessageActionProps> = ({
   fullResponseAvailable,
   getFullResponseText,
   messageId,
@@ -1423,13 +1393,11 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
   const { t } = useI18n()
   const copy = t.assistant.thread
   const { reload: reloadMessage, disabled: reloadDisabled } = useActionBarReload()
-  const touch = useStore($touchPointer)
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const { enabled: reactionsEnabled, react, reactions: shownReactions } = useMessageReactions(messageId, 'assistant')
 
   const readAloud = useReadAloudAction({
-    fullResponseAvailable,
     getFullText: getFullResponseText,
     getText: getMessageText,
     messageId
@@ -1472,80 +1440,56 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
 
   return (
     <div className="relative flex shrink-0 items-center gap-1.5" data-slot="aui_assistant-actions-row">
-      <ActionBarPrimitive.Root
-        className={
-          // AssistantFooter owns turn visibility; a thread-wide hide here
-          // would also collapse the footers of earlier completed replies.
-          'relative flex flex-row flex-wrap items-center gap-1.5 py-0.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
-        }
-        data-slot="aui_msg-actions"
-      >
-        <div className="aui-message-actions-desktop flex items-center justify-end gap-1.5">
-          <MessageHoverTime className="mr-1 px-0.5" />
-          {branchInNewChat && (
-            <TooltipIconButton onClick={branchInNewChat} tooltip={copy.branchNewChat}>
-              <GitForkIcon className="size-3.5" />
-            </TooltipIconButton>
-          )}
-          {copyButton}
-          {fullResponseAvailable && (
-            <CopyButton appearance="icon" buttonSize="icon" label={copy.copyFullResponse} text={getFullResponseText} />
-          )}
-          <ReadAloudButton action={readAloud} />
-          <TooltipIconButton disabled={reloadDisabled} onClick={reload} tooltip={copy.refresh}>
-            <RefreshCwIcon className="size-3.5" />
-          </TooltipIconButton>
-        </div>
-        {/* Mounted only on touch: each Radix menu root adds a document key
-            listener, and the CSS already hides this cluster everywhere else. */}
-        {touch && (
-          <div className="aui-message-actions-touch items-center justify-end gap-1">
-            {copyButton}
-            <ActionsMenu
-              ariaLabel={copy.moreActions}
-              items={kit => (
-                <>
-                  {branchInNewChat &&
-                    renderActionItem(kit, {
-                      icon: 'git-branch',
-                      key: 'branch',
-                      label: copy.branchNewChat,
-                      onSelect: branchInNewChat
-                    })}
-                  {fullResponseAvailable && (
-                    <CopyButton
-                      appearance={kit.copyAppearance}
-                      label={copy.copyFullResponse}
-                      text={getFullResponseText}
-                    />
-                  )}
-                  {renderActionItem(kit, {
-                    iconNode: <AudioLines className="size-3.5" />,
-                    key: 'read-aloud',
-                    label: readAloud.menuLabel,
-                    onSelect: () => readAloud.onActivate(),
-                    disabled: readAloud.disabled
-                  })}
-                  {renderActionItem(kit, {
-                    iconNode: <RefreshCwIcon className="size-3.5" />,
-                    key: 'refresh',
-                    label: copy.refresh,
-                    disabled: reloadDisabled,
-                    onSelect: reload
-                  })}
-                </>
+      <ActionBarPrimitive.Root className="relative flex flex-row items-center gap-1 py-0.5" data-slot="aui_msg-actions">
+        {copyButton}
+        <ActionsMenu
+          ariaLabel={copy.moreActions}
+          items={kit => (
+            <>
+              {branchInNewChat &&
+                renderActionItem(kit, {
+                  icon: 'git-branch',
+                  key: 'branch',
+                  label: copy.branchNewChat,
+                  onSelect: branchInNewChat
+                })}
+              {fullResponseAvailable && (
+                <CopyButton appearance={kit.copyAppearance} label={copy.copyFullResponse} text={getFullResponseText} />
               )}
-            >
-              <Button aria-label={copy.moreActions} size="icon" type="button" variant="ghost">
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </ActionsMenu>
-          </div>
-        )}
+              {renderActionItem(kit, {
+                iconNode: <AudioLines className="size-3.5" />,
+                key: 'read-aloud',
+                label: readAloud.menuLabel,
+                onSelect: () => readAloud.onActivate(),
+                disabled: readAloud.disabled
+              })}
+              {fullResponseAvailable &&
+                renderActionItem(kit, {
+                  iconNode: <AudioLines className="size-3.5" />,
+                  key: 'read-aloud-full',
+                  label: `${readAloud.menuLabel} (${copy.readAloudFullResponseHint})`,
+                  onSelect: () => readAloud.onActivate({ shiftKey: true }),
+                  disabled: readAloud.disabled
+                })}
+              {renderActionItem(kit, {
+                iconNode: <RefreshCwIcon className="size-3.5" />,
+                key: 'refresh',
+                label: copy.refresh,
+                disabled: reloadDisabled,
+                onSelect: reload
+              })}
+            </>
+          )}
+        >
+          <Button aria-label={copy.moreActions} size="icon" type="button" variant="ghost">
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </ActionsMenu>
+        <MessageHoverTime className="ml-1 px-0.5" />
       </ActionBarPrimitive.Root>
       {/* ONE slot, Slack-style: the picker trigger and the landed reaction are
           the same element, so reacting never shifts layout. Empty → ☺, hidden
-          until hover like its action-bar neighbors (state lives in styles.css
+          until hover (state lives in styles.css
           — the aui_msg-reactions rules outweigh Tailwind utilities here).
           Reacted → the emoji itself, always visible at full strength, and
           clicking it reopens the picker to switch or retract. Outside
@@ -1580,16 +1524,6 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
         </ReactionPicker>
       )}
     </div>
-  )
-}
-
-const ReadAloudButton: FC<{ action: ReadAloudActionState }> = ({ action }) => {
-  const Icon = action.isPreparing ? Loader2Icon : action.isSpeaking ? VolumeXIcon : AudioLines
-
-  return (
-    <TooltipIconButton disabled={action.disabled} onClick={action.onActivate} tooltip={action.tooltip}>
-      <Icon className={cn('size-3.5', action.isPreparing && 'animate-spin')} />
-    </TooltipIconButton>
   )
 }
 
@@ -1658,8 +1592,8 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
           <Codicon name="chevron-right" size="0.875rem" />
         </BranchPickerPrimitive.Next>
       </BranchPickerPrimitive.Root>
-      <ReplyMetrics durationS={durationS} metrics={metrics} />
       <AssistantActionBar {...props} />
+      <ReplyMetrics durationS={durationS} metrics={metrics} />
     </div>
   )
 }

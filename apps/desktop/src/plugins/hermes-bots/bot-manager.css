@@ -1,0 +1,84 @@
+.aino-bot-manager .workspace-header {
+  max-width: 1080px;
+  padding-top: 40px;
+  align-items: flex-start;
+}
+.aino-bot-manager .workspace-header button {
+  border-radius: 9px;
+}
+.aino-bot-manager .workspace-heading h2 {
+  font-size: 25px;
+  font-weight: 550;
+  line-height: 1.3;
+}
+.aino-bot-manager .workspace-layout {
+  max-width: 972px;
+  border-top: 0;
+}
+.aino-bot-manager .workspace-toolbar {
+  min-height: 28px;
+  padding: 0 33px 11px 0;
+}
+.aino-bot-manager .workspace-toolbar h3,
+.aino-manager-config-heading {
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-section);
+  font-weight: 400;
+}
+.aino-manager-search {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: 8px;
+}
+.aino-bot-manager .workspace-card-select {
+  padding-inline-end: 10px;
+}
+.aino-manager-config-scope {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-section);
+  white-space: nowrap;
+}
+.aino-manager-collaboration {
+  margin-top: 42px;
+}
+.aino-manager-collaboration > h3 {
+  font-size: var(--aino-text-body);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.aino-manager-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-block: 17px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.aino-manager-action-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.aino-manager-action-row h4 {
+  font-size: var(--aino-text-label);
+  font-weight: 500;
+}
+.aino-manager-action-row p {
+  margin-top: 5px;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.7;
+}
+@container workspaces (max-width: 540px) {
+  .aino-manager-action-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .aino-manager-config-scope {
+    max-width: 6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

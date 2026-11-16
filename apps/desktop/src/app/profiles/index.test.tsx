@@ -1,11 +1,15 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as Nanostores from 'nanostores'
 import { MemoryRouter, useLocation } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { registry } from '@/contrib/registry'
 import { deleteProfile, getProfileSoul, updateProfileSoul } from '@/hermes'
-import { retireLocalProfileGateways } from '@/store/gateway'
+import { $activeGatewayConnectionId, retireLocalProfileGateways } from '@/store/gateway'
+import { notifyError } from '@/store/notifications'
 import { refreshProfiles, selectProfile, setActiveProfile } from '@/store/profile'
+import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
+import { $connection } from '@/store/session'
 import { setSettingsScope } from '@/store/settings-scope'
 import type { ProfileInfo } from '@/types/hermes'
 
@@ -20,6 +24,37 @@ import { ProfilesView } from './index'
 
 afterEach(cleanup)
 
+beforeEach(() => {
+  $connection.set(null)
+  $activeGatewayConnectionId.set(null)
+  vi.mocked(runImportProfileFlow).mockReset().mockResolvedValue(null)
+  vi.mocked(runExportProfileFlow).mockReset().mockResolvedValue(null)
+  vi.mocked(notifyError).mockClear()
+})
+
+it('uses the contributed manager without loading the fallback and restores fallback on removal', async () => {
+  vi.mocked(refreshProfiles).mockClear()
+  mockProfiles([makeProfile('default', true)])
+
+  const dispose = registry.register({
+    area: 'profiles.manager',
+    id: 'manager-test',
+    render: () => <div>Managed bots</div>
+  })
+
+  try {
+    await renderProfilesView()
+    expect(screen.getByText('Managed bots')).toBeTruthy()
+    expect(refreshProfiles).not.toHaveBeenCalled()
+    act(() => dispose())
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Aino' }).length).toBeGreaterThan(0))
+    expect(screen.queryByText('Managed bots')).toBeNull()
+    expect(refreshProfiles).toHaveBeenCalled()
+  } finally {
+    dispose()
+  }
+})
+
 // Real i18n (useI18n falls back to English with no provider), so labels are the
 // actual strings — no brittle key snapshot to maintain here.
 
@@ -30,7 +65,11 @@ vi.mock('@/components/chat/code-editor', () => ({
   )
 }))
 
-vi.mock('./workspace-controls', () => ({ WorkspaceControls: () => null }))
+vi.mock('./workspace-controls', () => ({ WorkspaceControls: () => <div>Legacy workspace controls</div> }))
+vi.mock('@/store/profile-share', () => ({
+  runExportProfileFlow: vi.fn(async () => null),
+  runImportProfileFlow: vi.fn(async () => null)
+}))
 vi.mock('../capabilities', () => ({
   CapabilitiesView: ({ fixedProfile }: { fixedProfile: string }) => (
     <div data-testid="capabilities-scope">{fixedProfile}</div>
@@ -167,7 +206,85 @@ async function deleteTheNamedProfile() {
 }
 
 describe('ProfilesView', () => {
-  it('browses and configures another workspace without switching until explicitly selected', async () => {
+  it('keeps the main assistant first and counts only custom bots without old workspace switching controls', async () => {
+    mockProfiles([makeProfile(NAMED_PROFILE), makeProfile('default', true)])
+
+    await renderProfilesView()
+
+    expect(screen.queryByText('Legacy workspace controls')).toBeNull()
+    expect(screen.getByText('1 Bot')).toBeTruthy()
+    expect(screen.getByText('Main assistant')).toBeTruthy()
+    const cards = screen.getAllByRole('button', { pressed: false })
+    expect(cards[0].getAttribute('aria-label')).toBe('Aino')
+    realClick(await findRowMenu('Aino'))
+    expect(screen.queryByRole('menuitem', { name: /delete/i })).toBeNull()
+  })
+
+  it('imports through the management flow without selecting a profile', async () => {
+    vi.mocked(selectProfile).mockClear()
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+    $activeGatewayConnectionId.set('device-a')
+
+    await renderProfilesView()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Import bot…' })))
+
+    expect(runImportProfileFlow).toHaveBeenCalledExactlyOnceWith({
+      management: true,
+      scope: { connectionId: 'device-a' }
+    })
+    expect(selectProfile).not.toHaveBeenCalled()
+    expect(activeGateway.get()).toBe('default')
+    expect(screen.getByTestId('location').textContent).toBe('/profiles')
+  })
+
+  it('exports the browsed bot using its captured owner instead of the ordinary conversation profile', async () => {
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+
+    await renderProfilesView()
+    await browseProfile(NAMED_PROFILE)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Export bot…' })))
+
+    expect(runExportProfileFlow).toHaveBeenCalledExactlyOnceWith(NAMED_PROFILE, {
+      connectionId: 'local',
+      profile: NAMED_PROFILE
+    })
+  })
+
+  it('explains unavailable remote archive operations without opening a local picker', async () => {
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    $connection.set({ mode: 'remote' } as NonNullable<ReturnType<typeof $connection.get>>)
+
+    await renderProfilesView()
+    await browseProfile(NAMED_PROFILE)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Import bot…' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Export bot…' })))
+
+    expect(runImportProfileFlow).not.toHaveBeenCalled()
+    expect(runExportProfileFlow).not.toHaveBeenCalled()
+    expect(notifyError).toHaveBeenCalledWith(expect.any(Error), 'Failed to import bot')
+    expect(notifyError).toHaveBeenCalledWith(expect.any(Error), 'Failed to export bot')
+  })
+
+  it('opens with the workspace list and loads a preview only after choosing a workspace', async () => {
+    vi.mocked(getProfileSoul).mockClear()
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+
+    await renderProfilesView()
+
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(getProfileSoul).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Aino', current: true })).toBeTruthy()
+
+    await browseProfile(NAMED_PROFILE)
+
+    expect(screen.getByRole('complementary', { name: NAMED_PROFILE })).toBeTruthy()
+    expect(getProfileSoul).toHaveBeenCalledWith(NAMED_PROFILE)
+  })
+
+  it('browses and configures another bot without changing the ordinary conversation owner', async () => {
     vi.mocked(selectProfile).mockClear()
     mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
     activeGateway.set('default')
@@ -175,7 +292,7 @@ describe('ProfilesView', () => {
     await renderProfilesView()
     await browseProfile(NAMED_PROFILE)
     expect(screen.getByRole('button', { name: NAMED_PROFILE, pressed: true })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'default', current: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Aino', current: true })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
 
     expect((await screen.findByTestId('capabilities-scope')).textContent).toBe(NAMED_PROFILE)
@@ -186,8 +303,8 @@ describe('ProfilesView', () => {
     expect(screen.getByRole('heading', { name: NAMED_PROFILE })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'imported' }).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole('button', { name: `Switch to ${NAMED_PROFILE}` }))
-    expect(selectProfile).toHaveBeenCalledExactlyOnceWith(NAMED_PROFILE)
+    expect(screen.queryByRole('button', { name: `Switch to ${NAMED_PROFILE}` })).toBeNull()
+    expect(selectProfile).not.toHaveBeenCalled()
   })
 
   it('closes the workspace preview without switching or reopening after a roster refresh', async () => {
@@ -234,8 +351,9 @@ describe('ProfilesView', () => {
     vi.mocked(updateProfileSoul).mockRejectedValueOnce(new Error('Read-only profile'))
 
     await renderProfilesView()
+    await browseProfile('Aino')
 
-    const missing = /No SOUL\.md file exists for this profile/
+    const missing = /No SOUL\.md file exists/
     expect(screen.getByText(missing)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('SOUL.md'), { target: { value: '# My instructions' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save SOUL.md' })))
@@ -256,7 +374,7 @@ describe('ProfilesView', () => {
     expect(screen.queryByText(missing)).toBeNull()
 
     vi.mocked(getProfileSoul).mockRejectedValueOnce(new Error('Could not read SOUL.md'))
-    await act(async () => fireEvent.click(selectRow('default')))
+    await act(async () => fireEvent.click(selectRow('Aino')))
     expect(screen.getByText('Could not read SOUL.md')).toBeTruthy()
     expect(screen.queryByText(missing)).toBeNull()
   })
@@ -266,7 +384,7 @@ describe('ProfilesView', () => {
 
     await renderProfilesView()
 
-    realClick(await screen.findByRole('button', { name: 'New profile' }))
+    realClick(await screen.findByRole('button', { name: 'New Bot' }))
 
     const soul = await screen.findByLabelText(/SOUL\.md/i)
 

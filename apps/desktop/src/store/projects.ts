@@ -24,7 +24,6 @@ import {
   ensureActiveGatewayOpen,
   isActivePrimary
 } from '@/store/gateway'
-import { setGatewayProjectAppearance } from '@/store/gateway-project-looks'
 import { $sidebarShowAllSessions, setSidebarAgentsGrouped, setWorkspaceNodeOpen } from '@/store/layout'
 import { notify } from '@/store/notifications'
 import {
@@ -1361,53 +1360,6 @@ export async function updateProject(
   )
 }
 
-// Appearance for an AUTO (inherited git-repo) project has no projects.db row to
-// write to — its id is just the repo path. So the first color/icon change ADOPTS
-// the repo as a real project (folder = repo root, name = its label) carrying the
-// chosen look; from then on it patches in place like any explicit project.
-// Returns true when an adoption happened, so an incremental picker can close
-// (the node's id changes on adopt, and a second stale write would double-create).
-export async function setProjectAppearance(
-  project: Pick<
-    SidebarProjectTree,
-    'color' | 'connectionId' | 'icon' | 'id' | 'isAuto' | 'label' | 'path' | 'profile' | 'ownerProfile'
-  >,
-  patch: { color?: null | string; icon?: null | string }
-): Promise<boolean> {
-  // Another gateway's project: its look is that gateway's record, never one on this window's.
-  if (project.connectionId && project.path) {
-    const route = { connectionId: project.connectionId, profile: project.profile || 'default' }
-
-    await setGatewayProjectAppearance(route, project.path, patch)
-
-    return false
-  }
-
-  if (!project.isAuto) {
-    await updateProject(project.id, patch, project.ownerProfile)
-
-    return false
-  }
-
-  if (!project.path) {
-    return false
-  }
-
-  await createProject(
-    {
-      name: project.label,
-      folders: [project.path],
-      primaryPath: project.path,
-      // Carry any already-set look so setting one field doesn't wipe the other.
-      color: (patch.color ?? project.color) || undefined,
-      icon: (patch.icon ?? project.icon) || undefined
-    },
-    project.ownerProfile
-  )
-
-  return true
-}
-
 export async function addProjectFolder(
   id: string,
   path: string,
@@ -1485,52 +1437,72 @@ export async function addProjectFolder(
 // inside), reconciling from the server payload. A failed delete restores both.
 export async function deleteProject(id: string, ownerProfile?: string): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+  const snap = snapshotProjects()
+  const project = snap.projects.find(project => project.id === id)
+
+  const removed = {
+    id,
+    path: snap.tree.find(node => node.id === id)?.path ?? project?.primary_path ?? project?.folders[0]?.path ?? null
+  }
 
   if (context.scope === ALL_PROFILES && ownerProfile) {
     await gatewayRequestOn(context.gateway, 'projects.delete', projectParams({ id }, context.profile))
+  } else {
+    // Capture membership BEFORE removal — the project's folders (which determine
+    // ownership) are gone once it's dropped from the cache.
+    const kickToIntro = openSessionBelongsToProject(
+      id,
+      snap.projects,
+      $selectedStoredSessionId.get(),
+      $sessions.get(),
+      $projectOwnerBySessionId.get()
+    )
 
-    if (stillOnProjectsContext(context)) {
-      void refreshProjectTree()
+    $projects.set(snap.projects.filter(project => project.id !== id))
+    $projectTree.set(snap.tree.filter(node => node.id !== id))
+
+    if (snap.active === id) {
+      $activeProjectId.set(null)
     }
 
-    return
-  }
+    // The open session's project is gone — reset to the intro draft (the session
+    // itself survives; it just falls back to Recents).
+    if (kickToIntro) {
+      requestFreshSession()
+    }
 
-  const snap = snapshotProjects()
-
-  // Capture membership BEFORE removal — the project's folders (which determine
-  // ownership) are gone once it's dropped from the cache.
-  const kickToIntro = openSessionBelongsToProject(
-    id,
-    snap.projects,
-    $selectedStoredSessionId.get(),
-    $sessions.get(),
-    $projectOwnerBySessionId.get()
-  )
-
-  $projects.set(snap.projects.filter(project => project.id !== id))
-  $projectTree.set(snap.tree.filter(node => node.id !== id))
-
-  if (snap.active === id) {
-    $activeProjectId.set(null)
-  }
-
-  // The open session's project is gone — reset to the intro draft (the session
-  // itself survives; it just falls back to Recents).
-  if (kickToIntro) {
-    requestFreshSession()
-  }
-
-  await persistOrRollback(snap, async () => {
-    applyPayload(
-      await gatewayRequestOn<ProjectsPayload>(
+    try {
+      const payload = await gatewayRequestOn<ProjectsPayload>(
         context.gateway,
         'projects.delete',
         projectParams({ id }, context.profile)
       )
-    )
-  })
-  void refreshProjectTree()
+
+      if (stillOnProjectsContext(context)) {
+        applyPayload(payload)
+      }
+    } catch (error) {
+      if (stillOnProjectsContext(context)) {
+        restoreProjects(snap)
+      }
+
+      throw error
+    }
+  }
+
+  if (activeGateway() === context.gateway && activeGatewayConnectionId() === context.connectionId) {
+    // History/discovery can rebuild this path as an auto project after its
+    // registration is gone. Deletion must also forget the persisted open intent.
+    forgetOpenProject(removed, context.profile)
+
+    if (stillOnProjectsContext(context) && $projectScope.get() === id) {
+      exitProjectScope()
+    }
+  }
+
+  if (stillOnProjectsContext(context)) {
+    void refreshProjectTree()
+  }
 }
 
 export async function setActiveProject(id: null | string, ownerProfile?: string): Promise<void> {

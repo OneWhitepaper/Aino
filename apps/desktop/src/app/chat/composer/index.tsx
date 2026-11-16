@@ -2,7 +2,9 @@ import { ComposerPrimitive } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
 
+import { useSessionView } from '@/app/chat/session-view'
 import { useTourMarker } from '@/app/chat/tour-marker'
+import { useBotChatPresentation } from '@/app/chat/use-bot-chat-presentation'
 import type { GatewayRequester } from '@/app/contrib/types'
 import { useBusyInputMode } from '@/app/session/hooks/use-busy-input-mode'
 import { composerFloatingStrip, composerInputBacking, composerSurfaceRing } from '@/components/chat/composer-dock'
@@ -36,11 +38,12 @@ import { $autoSpeakReplies } from '@/store/voice-prefs'
 import { ComposerApprovalMode } from './approval-mode-menu'
 import { AttachmentList } from './attachments'
 import { deriveBusySubmitState } from './busy-submit-state'
+import { ComposerEditor } from './chat-bar-editor'
+import { ComposerFooter, ComposerMenu } from './chat-bar-menu'
 import { ComposerDockGlow, ComposerDragRegion, QueuedEditBanner } from './chat-bar-parts'
 import {
   acceptsTriggerCompletion,
   COMPOSER_FADE_BACKGROUND,
-  composerInputWidthClass,
   composerUsesStackedLayout,
   implicitSlashAcceptIndex,
   liveComposerDraft,
@@ -48,10 +51,8 @@ import {
   shouldDisableComposerInput,
   slashArgStage
 } from './composer-utils'
-import { ContextMenu } from './context-menu'
 import { COMPOSER_AREAS } from './contrib'
-import { ComposerControls } from './controls'
-import { ComposerDirectiveActions } from './directive-actions'
+import { ComposerControls, composerControlsPresentation } from './controls'
 import { COMPOSER_DROP_ACTIVE_CLASS, COMPOSER_DROP_FADE_CLASS } from './drop-affordance'
 import { markActiveComposer, onComposerAttachImagesRequest } from './focus'
 import { HelpHint } from './help-hint'
@@ -84,6 +85,7 @@ import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
 import { usePlatformSessionAccess } from './platform-history'
 import { PreparedImageRecovery } from './prepared-image-recovery'
+import { ComposerProjectContext } from './project-context'
 import { $projectBindingSessions } from './project-selection'
 import { renderComposerQueueSlot, useComposerQueueScopeKey } from './queue-slot'
 import { ComposerRecoveryStatus } from './recovery-status'
@@ -93,15 +95,15 @@ import {
   deleteChipBeforeCaret,
   deleteSelectionInEditor,
   insertComposerContentsAtCaret,
-  RICH_INPUT_SLOT
+  textAfterSelection,
+  textBeforeSelection
 } from './rich-editor'
 import { useComposerScope, useComposerSurfaceId } from './scope'
 import { ComposerStatusStack } from './status-stack'
-import { CodingStatusRow } from './status-stack/coding-row'
 import { StatusDrawerContent, StatusDrawerToggle } from './status-stack/drawer'
 import { SuggestionPills } from './suggestion-pills'
 import { extractClipboardImageBlobs, openDirectiveScope } from './text-utils'
-import { composerTextEntryProps, touchTapFocusHandlers } from './touch-text-entry'
+import { touchTapFocusHandlers } from './touch-text-entry'
 import { ComposerTriggerPopover } from './trigger-popover'
 import type { ChatBarProps } from './types'
 import { isRedoShortcut, isUndoShortcut } from './undo-history'
@@ -126,23 +128,6 @@ function controlRowGridClass(singleColumn: boolean, stacked: boolean): string {
   return stacked
     ? 'grid-cols-[auto_1fr] gap-(--composer-row-gap) [grid-template-areas:"input_input"_"menu_controls"]'
     : 'grid-cols-[auto_1fr_auto] items-center gap-(--composer-control-gap) [grid-template-areas:"menu_input_controls"]'
-}
-
-/** Bind assistant-ui state without mounting its hidden autosizing textarea. */
-function ComposerStateInput() {
-  return (
-    <ComposerPrimitive.Input asChild submitMode="ctrlEnter" tabIndex={-1} unstable_focusOnScrollToBottom={false}>
-      <textarea
-        aria-hidden
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        className="sr-only"
-        spellCheck={false}
-        tabIndex={-1}
-      />
-    </ComposerPrimitive.Input>
-  )
 }
 
 export function ChatBar({
@@ -231,6 +216,8 @@ export function ChatBar({
   // The git row (branch / worktree / PR / review) is the coding instrument the
   // guide already hides; Simple mode hides it for the same reason, everywhere.
   const showsAdvancedChrome = useStore($showsAdvancedChrome)
+  const storedSessionId = useStore(useSessionView().$storedId)
+  const { canonical: canonicalBotChat } = useBotChatPresentation(storedSessionId)
   const codingRowShown = !guidedChat && showsAdvancedChrome
 
   const composerTourMarker = useTourMarker('composer')
@@ -411,7 +398,7 @@ export function ChatBar({
     return onCancel()
   }, [activeQueueSessionKeyRef, onCancel])
 
-  const { compactPill, foldVoice, minimal, stacked, singleColumn } = useComposerMetrics({
+  const composerMetrics = useComposerMetrics({
     composerDockRef,
     composerRef,
     composerSurfaceRef,
@@ -419,6 +406,7 @@ export function ChatBar({
     poppedOut
   })
 
+  const { compactPill, minimal, stacked, singleColumn } = composerMetrics
   const stackedLayout = composerUsesStackedLayout({ homeLayout, measuredStacked: stacked })
 
   const hasComposerPayload = hasText || attachments.length > 0
@@ -471,7 +459,14 @@ export function ChatBar({
 
   // Resting / reconnecting / starting placeholder text, re-rolled only on a real
   // conversation change.
-  const placeholder = useComposerPlaceholder({ disabled, homeLayout, reconnecting, sessionId })
+  const placeholder = useComposerPlaceholder({
+    canonicalBotChat,
+    disabled,
+    homeLayout,
+    reconnecting,
+    sessionId,
+    storedSessionId
+  })
 
   // Trigger / completion engine: @// detection, the adapter-driven item list,
   // popover selection, and chip insertion. The keydown nav block below consumes
@@ -587,11 +582,7 @@ export function ChatBar({
       }
     }
 
-    // Trim surrounding whitespace so a copy that dragged along leading/trailing
-    // blank lines (common when selecting from terminals, code blocks, web pages)
-    // doesn't dump multiline padding into the composer. Internal newlines are
-    // preserved — only the edges are cleaned up.
-    const pastedText = sanitizeComposerInput(event.clipboardData.getData('text').trim())
+    const pastedText = sanitizeComposerInput(event.clipboardData.getData('text'))
 
     if (!pastedText) {
       event.preventDefault()
@@ -613,7 +604,7 @@ export function ChatBar({
       return
     }
 
-    if (DATA_IMAGE_URL_RE.test(pastedText)) {
+    if (DATA_IMAGE_URL_RE.test(pastedText.trim())) {
       event.preventDefault()
 
       return
@@ -656,7 +647,13 @@ export function ChatBar({
         }
 
         recordUndoPoint()
-        insertComposerContentsAtCaret(editor, pathifyRefs(linkifyUrls(pastedText)), openDirectiveScope(editor))
+        const before = textBeforeSelection(editor)
+        const after = textAfterSelection(editor)
+        insertComposerContentsAtCaret(
+          editor,
+          pathifyRefs(linkifyUrls(pastedText, before, after), before, after),
+          openDirectiveScope(editor)
+        )
         scheduleFlushEditorToDraft(editor)
       })
 
@@ -672,7 +669,13 @@ export function ChatBar({
     const scope = openDirectiveScope(event.currentTarget)
 
     recordUndoPoint()
-    insertComposerContentsAtCaret(event.currentTarget, pathifyRefs(linkifyUrls(pastedText)), scope)
+    const before = textBeforeSelection(event.currentTarget)
+    const after = textAfterSelection(event.currentTarget)
+    insertComposerContentsAtCaret(
+      event.currentTarget,
+      pathifyRefs(linkifyUrls(pastedText, before, after), before, after),
+      scope
+    )
     scheduleFlushEditorToDraft(event.currentTarget)
   }
 
@@ -1123,15 +1126,51 @@ export function ChatBar({
   // dispatchSubmitRef — no effect needed for a plain mirror.
   voiceStopRef.current = { active: voiceConversationActive, end: endConversation }
 
+  const projectContext = {
+    collapsed: statusDrawerCollapsed,
+    drawerId: codingDrawerId,
+    homeLayout,
+    hudMode,
+    poppedOut,
+    shown: codingRowShown,
+    onBranchOff: handleBranchOff,
+    onConvertBranch: handleConvertBranch,
+    onListBranches: handleListBranches,
+    // Scope the review to this composer's repository, retaining the main fallback.
+    onOpen: () => toggleReview(scope.target === 'main' ? null : (cwd ?? null), scope.target),
+    onOpenWorktree: openInWorktree,
+    onSwitchBranch: handleSwitchBranch,
+    repoPath: botChat ? undefined : cwd
+  }
+
+  const insertCompletionStarter = (text: string) => {
+    recordUndoPoint()
+    insertText(text)
+    // The dropdown first releases its focus trap. Reuse the editor's existing
+    // completion engine after the draft has painted and regained focus.
+    window.setTimeout(() => {
+      focusInput()
+      refreshTrigger()
+    }, 0)
+  }
+
   const contextMenu = (
-    <ContextMenu
+    <ComposerMenu
+      canonicalBotChat={canonicalBotChat}
+      disabled={disabled}
+      guidedChat={guidedChat}
+      insertCompletionStarter={insertCompletionStarter}
       onInsertText={insertText}
       onOpenUrlDialog={openUrlDialog}
       onPasteClipboardImage={onPasteClipboardImage}
       onPickFiles={onPickFiles}
       onPickFolders={onPickFolders}
       onPickImages={onPickImages}
+      projectContext={projectContext}
       state={state}
+      statusDrawerCollapsed={statusDrawerCollapsed}
+      statusStackVisible={statusStackVisible}
+      toggleStatusDrawer={toggleStatusDrawer}
     />
   )
 
@@ -1144,7 +1183,6 @@ export function ChatBar({
       busyAction={busyAction}
       canSubmit={canSubmit}
       cardWaiting={cardWaiting}
-      compactModelPill={poppedOut || compactPill}
       continuation={continuation}
       conversation={{
         active: voiceConversationActive,
@@ -1158,10 +1196,14 @@ export function ChatBar({
       }}
       disabled={disabled}
       editingQueue={Boolean(queueEdit)}
-      foldVoice={foldVoice}
       hasComposerPayload={hasComposerPayload}
-      hideModelPill={guidedChat}
-      minimal={minimal || chatOnboardingSolo}
+      {...composerControlsPresentation({
+        ...composerMetrics,
+        canonicalBotChat,
+        chatOnboardingSolo,
+        guidedChat,
+        poppedOut
+      })}
       onDictate={dictate}
       onQueue={() => {
         // Queueing clears the draft too, so the list over it closes with it.
@@ -1175,31 +1217,14 @@ export function ChatBar({
     />
   )
 
-  const inputWidthClass = composerInputWidthClass(stacked)
-
   const input = (
-    <div className={cn('relative', inputWidthClass)}>
-      <div
-        aria-disabled={inputDisabled ? true : undefined}
-        aria-label={t.composer.message}
-        {...composerTextEntryProps(touchPointer)}
-        {...tapFocus}
-        className={cn(
-          'min-h-[1.625rem] min-h-(--composer-input-min-height) max-h-(--composer-input-max-height) cursor-text overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent pb-1 pr-1 pt-1 leading-normal text-foreground outline-none disabled:cursor-not-allowed',
-          '**:data-ref-text:cursor-default',
-          stacked && 'pl-3',
-          inputWidthClass,
-          // Inside the native Wayland HUD drag region: a drag region swallows
-          // the page's mouse input whole, so the input must opt back out or it
-          // becomes unclickable. Buttons use the global no-drag rule.
-          hudNativeDrag && '[-webkit-app-region:no-drag]'
-        )}
-        contentEditable={!inputDisabled}
-        data-placeholder={placeholder}
-        data-slot={RICH_INPUT_SLOT}
-        dir={textDirection}
-        onBeforeInput={handleEditorBeforeInput}
-        onBlur={() => {
+    <ComposerEditor
+      editorProps={{
+        'aria-label': t.composer.message,
+        ...tapFocus,
+        dir: textDirection,
+        onBeforeInput: handleEditorBeforeInput,
+        onBlur: () => {
           // A composition never survives focus loss (Chromium commits the
           // preedit and fires compositionend on blur) — but if that event is
           // missed, the wedged flag would block the Send button's form-submit
@@ -1215,8 +1240,8 @@ export function ChatBar({
             blurCloseTimer.current = null
             closeTrigger()
           }, 80)
-        }}
-        onCompositionEnd={event => {
+        },
+        onCompositionEnd: event => {
           composingRef.current = false
 
           // The input events fired *during* composition were skipped (they
@@ -1227,46 +1252,32 @@ export function ChatBar({
           // `hasComposerPayload` stays false and the send button stays hidden
           // until an unrelated edit forces a sync (#39614).
           flushEditorToDraft(event.currentTarget)
-        }}
-        onCompositionStart={event => {
+        },
+        onCompositionStart: event => {
           composingRef.current = true
 
           // Input events are skipped for the rest of the composition, so
           // nothing else would clear the empty marker until it ends — and the
           // hint would sit behind the preedit text the whole time (#75960).
           beginComposerComposition(event.currentTarget)
-        }}
-        onCut={handleCut}
-        onDragOver={handleInputDragOver}
-        onDrop={handleInputDrop}
-        onFocus={() => markActiveComposer(scope.target)}
-        onInput={handleEditorInput}
-        onKeyDown={handleEditorKeyDown}
-        onKeyUp={handleEditorKeyUp}
-        onMouseUp={refreshTrigger}
-        onPaste={handlePaste}
-        ref={editorRef}
-        role="textbox"
-        suppressContentEditableWarning
-      />
-      <ComposerDirectiveActions editorRef={editorRef} />
-      {/* assistant-ui requires ComposerPrimitive.Input somewhere in the tree
-        so the composer-state binding (text + IME + paste + form-submit hookup)
-        wires up. We render the real input UI ourselves above via the
-        contentEditable, so the primitive is invisible (sr-only).
-
-        IMPORTANT: don't let it render its default <TextareaAutosize>. That
-        component runs `useLayoutEffect(resizeTextarea)` on every value change
-        and reads `node.scrollHeight` against a hidden measurement textarea,
-        forcing two synchronous layouts per keystroke for an element the
-        user can't see. Profiling 400-char synthetic typing showed >900ms
-        cumulative cost in getHeight2/calculateNodeHeight alone (~2.3ms/key)
-        on top of the per-keystroke React commit.
-
-        `asChild` swaps TextareaAutosize for a Radix Slot wrapping our
-        plain <textarea>, which carries the binding but skips autosize. */}
-      <ComposerStateInput />
-    </div>
+        },
+        onCut: handleCut,
+        onDragOver: handleInputDragOver,
+        onDrop: handleInputDrop,
+        onFocus: () => markActiveComposer(scope.target),
+        onInput: handleEditorInput,
+        onKeyDown: handleEditorKeyDown,
+        onKeyUp: handleEditorKeyUp,
+        onMouseUp: refreshTrigger,
+        onPaste: handlePaste
+      }}
+      editorRef={editorRef}
+      hudNativeDrag={hudNativeDrag}
+      inputDisabled={inputDisabled}
+      placeholder={placeholder}
+      stacked={stacked}
+      touchPointer={touchPointer}
+    />
   )
 
   return (
@@ -1287,6 +1298,7 @@ export function ChatBar({
             'group/composer-dock z-30 flex flex-col',
             poppedOut ? 'fixed max-w-[calc(100vw-1.5rem)]' : 'absolute bottom-0 left-1/2 max-w-full -translate-x-1/2'
           )}
+          data-bot-chat={canonicalBotChat ? 'true' : undefined}
           data-popped-out={poppedOut ? '' : undefined}
           data-slot="composer-dock"
           data-thread-scrolled-up={scrolledUp ? '' : undefined}
@@ -1438,7 +1450,7 @@ export function ChatBar({
               The hatch pattern + opacity ladder live in styles.css. */}
             {popoutAllowed && <ComposerDragRegion dragging={dragging} onToggle={handleComposerToggle} />}
             <div className="relative w-full rounded-[inherit]">
-              {!hudMode && !guidedChat && (
+              {!hudMode && !guidedChat && !canonicalBotChat && (
                 <StatusDrawerToggle
                   collapsed={statusDrawerCollapsed}
                   controls={`${statusDrawerId} ${codingDrawerId}`}
@@ -1463,25 +1475,7 @@ export function ChatBar({
                 ref={composerSurfaceRef}
               >
                 <div aria-hidden className={composerInputBacking} />
-                {codingRowShown && (
-                  <StatusDrawerContent collapsed={statusDrawerCollapsed} id={codingDrawerId}>
-                    <CodingStatusRow
-                      onBranchOff={handleBranchOff}
-                      onConvertBranch={handleConvertBranch}
-                      onListBranches={handleListBranches}
-                      // A tile's rail reviews ITS worktree: pin the pane's scope to
-                      // this surface's cwd. Main keeps the classic follow-the-
-                      // active-session scope (null).
-                      onOpen={() => toggleReview(scope.target === 'main' ? null : (cwd ?? null), scope.target)}
-                      onOpenWorktree={openInWorktree}
-                      onSwitchBranch={handleSwitchBranch}
-                      // Blank in a bot chat: the row hides itself without a repo,
-                      // and stops probing git / GitHub for a surface that has no
-                      // branch to show. Cheaper than a second composer.
-                      repoPath={botChat ? undefined : cwd}
-                    />
-                  </StatusDrawerContent>
-                )}
+                {!canonicalBotChat && <ComposerProjectContext {...projectContext} placement="surface" />}
                 <div
                   className={cn(
                     'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
@@ -1506,6 +1500,7 @@ export function ChatBar({
                   {attachments.length > 0 && <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />}
                   <div
                     className={cn('grid w-full', controlRowGridClass(singleColumn, stackedLayout))}
+                    data-bot-composer-layout={canonicalBotChat ? 'true' : undefined}
                     data-slot="composer-layout"
                   >
                     <div
@@ -1513,7 +1508,9 @@ export function ChatBar({
                       data-slot="composer-leading-controls"
                     >
                       {contextMenu}
-                      {!minimal && <ComposerApprovalMode compact={poppedOut || compactPill} disabled={disabled} />}
+                      {!minimal && !canonicalBotChat && (
+                        <ComposerApprovalMode compact={poppedOut || compactPill} disabled={disabled} />
+                      )}
                       <ContribSlot area={COMPOSER_AREAS.leading} />
                     </div>
                     <div className="min-w-0 [grid-area:input]" data-slot="composer-input-cell">
@@ -1532,6 +1529,12 @@ export function ChatBar({
               </div>
             </div>
           </ComposerPrimitive.Root>
+          <ComposerFooter
+            canonicalBotChat={canonicalBotChat}
+            inputDisabled={inputDisabled}
+            insertCompletionStarter={insertCompletionStarter}
+            projectContext={projectContext}
+          />
           {/* Underside: chrome-free strip BELOW the composer. Outside the root
               for the same reason as the micro actions — it must not fall inside
               the pop-out drag region. Same px as the strip above, so the two

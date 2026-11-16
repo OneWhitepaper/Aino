@@ -36,6 +36,10 @@ export function win32AppInstallerFeedPath(channel: string, light: boolean): stri
   return `win32/${variant}${channel}/`
 }
 
+export function win32AppInstallerFeedUrl(baseUrl: string, channel: string, light: boolean): string {
+  return `${baseUrl.replace(/\/+$/, '')}/${win32AppInstallerFeedPath(channel, light)}${channel}.appinstaller`
+}
+
 // ─── win32 arm (OS App Installer checker + trigger) ────────────────────────
 
 /** The result of an App Installer update check. */
@@ -58,14 +62,14 @@ export interface PayloadPythonRunner {
   /** The checker's module name. */
   module: string
   /** Run the module; resolve with {code, stdout}. */
-  run: (python: string, module: string) => Promise<{ code: number; stdout: string }>
+  run: (python: string, module: string, args?: readonly string[]) => Promise<{ code: number; stdout: string }>
 }
 
 /**
  * win32 arm: ask the OS whether an App Installer update is available, via
  * the bundled payload python's winrt (Package.check_update_availability_async).
  * The OS compares the package's registered .appinstaller source against the
- * installed version; it does NOT download anything.
+ * installed version and may contact that source; it does not install an update.
  */
 export async function checkAppInstallerUpdate(runner: PayloadPythonRunner): Promise<AppInstallerCheck> {
   const { code, stdout } = await runner.run(runner.python, runner.module)
@@ -106,9 +110,7 @@ export async function triggerAppInstallerUpdate(
   beforeInstall?: () => void | Promise<void>,
   sourceUri?: string
 ): Promise<{ ok: true }> {
-  const appinstallerUrl =
-    sourceUri ||
-    `${feedBaseUrl.replace(/\/+$/, '')}/${win32AppInstallerFeedPath(channel, light)}${channel}.appinstaller`
+  const appinstallerUrl = sourceUri || win32AppInstallerFeedUrl(feedBaseUrl, channel, light)
 
   const file = await installer.prepare(appinstallerUrl)
 

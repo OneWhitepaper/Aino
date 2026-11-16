@@ -72,34 +72,32 @@ beforeEach(() => {
 })
 
 describe('gateway project looks', () => {
-  it("keeps a folder's new colour when another folder's write read the owner before it committed", async () => {
-    const lists: ReturnType<typeof deferred<unknown>>[] = []
-    const creates: ReturnType<typeof deferred<unknown>>[] = []
+  it('reads saved colour and icon from the owner without creating or updating a project', async () => {
+    const socket = openSocket(async () => listing({ ...project('p_app', '/code/app', '#aaa'), icon: 'rocket' }))
 
-    request.mockImplementation(((_connection: string, _profile: string, method: string) => {
-      const next = deferred<unknown>()
-
-      ;(method === 'projects.list' ? lists : creates).push(next)
-
-      return next.promise
-    }) as never)
-
-    const a = looks.setGatewayProjectAppearance(STUDIO, '/code/a', { color: '#aaa' })
-    const b = looks.setGatewayProjectAppearance(STUDIO, '/code/b', { color: '#bbb' })
+    looks.loadGatewayProjectLooks([STUDIO])
     await settle()
-    // Both reads answer with the owner's state from before either create.
-    const before = { active_id: null, projects: [] }
-    lists[0].resolve(before)
-    await settle()
-    creates[0].resolve({ project: project('p_a', '/code/a', '#aaa') })
-    await a
-    lists[1].resolve(before)
-    await settle()
-    creates[1].resolve({ project: project('p_b', '/code/b', '#bbb') })
-    await b
 
-    expect(looks.gatewayProjectLook(STUDIO, '/code/a')).toEqual({ color: '#aaa', icon: null, id: 'p_a' })
-    expect(looks.gatewayProjectLook(STUDIO, '/code/b')).toEqual({ color: '#bbb', icon: null, id: 'p_b' })
+    expect(looks.gatewayProjectLook(STUDIO, '/code/app/')).toEqual({ color: '#aaa', icon: 'rocket', id: 'p_app' })
+    expect(socket.request.mock.calls).toEqual([['projects.list', { profile: 'research' }]])
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('keeps identical folder paths isolated by gateway and profile', async () => {
+    for (const [route, color] of [
+      [STUDIO, '#aaa'],
+      [{ connectionId: 'studio', profile: 'default' }, '#bbb'],
+      [{ connectionId: 'local', profile: 'research' }, '#ccc']
+    ] as const) {
+      openSocket(async () => listing(project('p_app', '/code/app', color)))
+      looks.loadGatewayProjectLooks([route])
+      await settle()
+    }
+
+    expect(looks.gatewayProjectLook(STUDIO, '/code/app')?.color).toBe('#aaa')
+    expect(looks.gatewayProjectLook({ connectionId: 'studio', profile: 'default' }, '/code/app')?.color).toBe('#bbb')
+    expect(looks.gatewayProjectLook({ connectionId: 'local', profile: 'research' }, '/code/app')?.color).toBe('#ccc')
+    expect(request).not.toHaveBeenCalled()
   })
 
   it('reads an owner again on a later render after a failed read, a bounded number of times', async () => {
@@ -153,20 +151,5 @@ describe('gateway project looks', () => {
 
     expect(socket.request).toHaveBeenCalledTimes(2)
     expect(looks.gatewayProjectLook(STUDIO, '/code/app')?.color).toBe('#bbb')
-  })
-
-  it("keeps a first colour pick when the sidebar's earlier read lands after it", async () => {
-    const sidebarRead = deferred<unknown>()
-
-    openSocket(() => sidebarRead.promise)
-    request.mockImplementation((async (_connection: string, _profile: string, method: string) =>
-      method === 'projects.list' ? listing() : { project: project('p_app', '/code/app', '#f43f5e') }) as never)
-
-    looks.loadGatewayProjectLooks([STUDIO])
-    await looks.setGatewayProjectAppearance(STUDIO, '/code/app', { color: '#f43f5e' })
-    sidebarRead.resolve(listing())
-    await settle()
-
-    expect(looks.gatewayProjectLook(STUDIO, '/code/app')?.color).toBe('#f43f5e')
   })
 })

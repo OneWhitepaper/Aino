@@ -30,7 +30,7 @@ export const jaProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
   copyPath: 'パスをコピー',
   removeFromSidebar: 'サイドバーから削除',
   createdInPreviousContext:
-    'プロジェクトは以前の接続またはプロファイルで作成されました。そこに戻ってください。IDEA.md は書き込まれていません。',
+    '前の接続またはBotでプロジェクトを作成しました。元に戻すと確認できます。IDEA.mdは書き込まれていません。',
   hiddenFromSidebar: 'サイドバーから非表示にしました',
   undoHide: '元に戻す',
   createFailed: 'プロジェクトを作成できませんでした',
@@ -88,12 +88,11 @@ export const jaProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
 
   keepOneFolder: '少なくとも1つのフォルダを残してください',
 
-  contextChanged: '会話またはワークスペースが変更されました。このダイアログを開き直してください。',
+  contextChanged: '会話またはプロジェクトが変わりました。この画面を開き直してください。',
 
   menuClose: 'プロジェクトを閉じる',
 
-  unavailableAllProfiles:
-    '全プロファイル表示では読み取り専用です。編集するには設定で所属ワークスペースを選択してください。',
+  unavailableAllProfiles: 'この一覧は閲覧専用です。対象のBotを開いてプロジェクトを管理してください。',
 
-  activeProfileChanged: '接続中にアクティブな Hermes プロファイルが変更されました'
+  activeProfileChanged: '接続中に使用中のBotが切り替わりました。'
 }

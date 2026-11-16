@@ -1,5 +1,4 @@
 import { type ProfileScope, profileScopeKey } from '@/hermes'
-import { activeGatewayConnectionId } from '@/store/gateway'
 
 import { CAPABILITIES_ROUTE } from '../../../routes'
 
@@ -47,7 +46,7 @@ export async function resumeAccountConnect(opId: string, navigate: (to: string) 
   return true
 }
 
-/** The scope a link names: the profile, pinned to its connection when that is not the active one. */
+/** The page keeps an explicit connection pin even when that backend is currently active. */
 export function linkedScope(params: URLSearchParams): null | string | { connectionId: string; profile: string } {
   const profile = params.get('profile')?.trim()
 
@@ -57,8 +56,7 @@ export function linkedScope(params: URLSearchParams): null | string | { connecti
 
   const connectionId = params.get('connection')?.trim()
 
-  // The active connection is the ambient route; only another connection needs a pinned scope.
-  return connectionId && connectionId !== (activeGatewayConnectionId() ?? 'local') ? { connectionId, profile } : profile
+  return connectionId ? { connectionId, profile } : profile
 }
 
 const claimedLinks = new Set<string>()

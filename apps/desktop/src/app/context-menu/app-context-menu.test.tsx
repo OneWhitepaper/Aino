@@ -9,6 +9,7 @@ import { ContextMenu, ContextMenuTrigger, HERMES_CONTEXT_MENU_TRIGGER_ATTR } fro
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { $previewTabs, closeRightRail } from '@/store/preview'
 import { $connection } from '@/store/session'
+import { $settingsScopeOverride, $settingsScopeProfile } from '@/store/settings-scope'
 
 import { AppContextMenu } from './app-context-menu'
 import {
@@ -599,6 +600,7 @@ describe('AppContextMenu', () => {
   })
 
   it('offers the window verbs on bare chrome', async () => {
+    $settingsScopeOverride.set('writer')
     installBridge()
     mountMenu()
     const host = attach('<div><p>plain chrome</p></div>')
@@ -606,6 +608,8 @@ describe('AppContextMenu', () => {
     fireEvent.contextMenu(host.querySelector('p')!)
 
     expect(await screen.findByText('Settings')).toBeTruthy()
+    fireEvent.click(screen.getByText('Settings'))
+    expect($settingsScopeProfile.get()).toBe('default')
   })
 
   it('skips plain right-clicks inside a skip-marked surface, but not links in it', async () => {

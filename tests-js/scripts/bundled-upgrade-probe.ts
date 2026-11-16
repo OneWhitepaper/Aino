@@ -34,15 +34,23 @@ export function bundledUpgradeHealth(options: UpgradeGatewayProbe): unknown {
     storePython: z.string(), repoDir: z.string(), sitePackages: z.string()
   }) }).parse(JSON.parse(fs.readFileSync(path.join(root, '..', 'install-stamp.json'), 'utf8')))
 
-  const python = path.join(root, stamp.runtime.storePython)
-  const imports = [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(relative => path.join(root, relative))
+  const installedPython = path.join(root, stamp.runtime.storePython)
+  const repo = path.join(root, stamp.runtime.repoDir)
+  const site = path.join(root, stamp.runtime.sitePackages)
 
-  if (![python, ...imports].every(candidate => within(root, candidate))) {
+  if (![installedPython, repo, site].every(candidate => within(root, candidate))) {
     throw new Error('Bundled gateway observer escapes the verified installation')
   }
 
+  const python = process.platform === 'win32' ? process.env.HERMES_PYTHON : installedPython
+  const imports = process.platform === 'win32' ? [repo] : [repo, site]
+
+  if (!python) { throw new Error('Bundled gateway observer requires the preflighted HERMES_PYTHON') }
+
+  // WindowsApps Python cannot be launched by external Node. Observe through
+  // fixture dependencies while importing the installed gateway's discovery code.
   const output = execFileSync(python, ['-B', path.resolve(import.meta.dirname,
-    '../../tests/install/e2e-assets/bundled-gateway-health.py'), home, commit, base.origin], {
+    '../../tests/install/e2e-assets/bundled-gateway-health.py'), home, commit, base.origin, installedPython], {
     cwd: root, encoding: 'utf8', timeout: 110_000,
     env: { ...process.env, NO_PROXY: '127.0.0.1,localhost,::1', no_proxy: '127.0.0.1,localhost,::1',
       PYTHONPATH: imports.join(path.delimiter) },

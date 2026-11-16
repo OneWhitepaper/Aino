@@ -6,6 +6,7 @@ import { useSessionActions } from '@/app/session/hooks/use-session-actions'
 import type { ClientSessionState } from '@/app/types'
 import * as model from '@/components/pane-shell/tree/model'
 import * as tree from '@/components/pane-shell/tree/store'
+import { setWorkspaceScope } from '@/components/pane-shell/workspace-scope'
 import { registry } from '@/contrib/registry'
 import type { DesktopProfileRoute } from '@/global'
 import { createClientSessionState } from '@/lib/chat-runtime'
@@ -120,6 +121,7 @@ const creates = () => vi.mocked(requestGatewayForAgent).mock.calls.filter(call =
 const flush = () => act(async () => new Promise(resolve => setTimeout(resolve, 0)))
 
 function reset() {
+  setWorkspaceScope('sessions')
   states.$sessionTiles.get().forEach(tile => states.discardSessionTile(tile.storedSessionId))
   states.$sessionStates.set({})
   tree.$layoutTree.set(null)
@@ -158,9 +160,32 @@ afterEach(() => {
 })
 
 describe('the registered New session "+" action (#145594)', () => {
+  it('keeps a Bot-owned new tab on that Bot while ordinary chats use Aino', async () => {
+    const route = { connectionId: 'bot-host', profile: 'writer' }
+    setWorkspaceScope('bots', 'bot:writer', { kind: 'route', route })
+    vi.mocked(requestGatewayForAgent).mockResolvedValueOnce({
+      session_id: 'bot-runtime',
+      stored_session_id: 'bot-side-chat',
+      info: {}
+    })
+    const plus = mountPlus()
+    plus()
+    await flush()
+
+    expect(creates()[0].slice(0, 2)).toEqual(['bot-host', 'writer'])
+    expect(states.$sessionTiles.get()).toEqual([
+      expect.objectContaining({
+        storedSessionId: 'bot-side-chat',
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:writer'
+      })
+    ])
+  })
   it('fronts a blank main instead of creating a session', async () => {
     session.$selectedStoredSessionId.set(null)
     session.setActiveSessionId(null)
+    $newChatProfile.set('default')
+    $newChatRoute.set({ connectionId: 'old-host', profile: 'default' })
     const plus = mountPlus()
 
     plus()
@@ -216,7 +241,7 @@ describe('the registered New session "+" action (#145594)', () => {
 
     plus()
     await flush()
-    expect(creates()[0].slice(0, 2)).toEqual([OLD.connectionId, OLD.profile])
+    expect(creates()[0].slice(0, 2)).toEqual([OLD.connectionId, 'default'])
 
     await act(() => setDefaultProfile(NEW))
     vi.mocked(requestGatewayForAgent).mockResolvedValueOnce({
@@ -228,7 +253,7 @@ describe('the registered New session "+" action (#145594)', () => {
     await flush()
 
     expect(creates()).toHaveLength(2)
-    expect(creates()[1].slice(0, 2)).toEqual([NEW.connectionId, NEW.profile])
+    expect(creates()[1].slice(0, 2)).toEqual([NEW.connectionId, 'default'])
     // The old owner's draft is left intact, not re-homed.
     expect(states.$sessionTiles.get().map(tile => tile.storedSessionId)).toEqual(['old-draft', 'new-draft'])
 

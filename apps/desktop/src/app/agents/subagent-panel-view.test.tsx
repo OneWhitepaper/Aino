@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { $workspaceMode, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
-import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
+import { _resetSessionOwnerHintsForTests, setSessionOwnerHint } from '@/store/session'
+import { $subagentsBySession, reconcileSubagentSnapshot, upsertSubagent } from '@/store/subagents'
 
 import type { SummaryDelegation } from '../right-sidebar/summary/session-activity'
 
@@ -25,11 +26,12 @@ vi.mock('../right-sidebar/summary/use-summary-session', () => ({ useSummarySessi
 vi.mock('../right-sidebar/summary/use-summary-content', () => ({
   useSummaryContent: vi.fn(() => ({ delegations: state.history, loading: false, error: null, refetch: vi.fn() }))
 }))
-vi.mock('./subagent-panel-transcript', () => ({ SubagentPanelTranscript: () => null }))
+vi.mock('./subagent-panel-transcript', () => ({ SubagentPanelTranscript: vi.fn(() => null) }))
 
 import { useSummaryContent } from '../right-sidebar/summary/use-summary-content'
 
 import { $subagentPanelSelection, subagentPanelSourceKey } from './subagent-panel'
+import { SubagentPanelTranscript } from './subagent-panel-transcript'
 import { SubagentPanel } from './subagent-panel-view'
 
 afterEach(() => {
@@ -38,7 +40,40 @@ afterEach(() => {
   $subagentPanelSelection.set(null)
   $workspaceOwnerKey.set(null)
   $workspaceMode.set('sessions')
+  _resetSessionOwnerHintsForTests()
   state.history = []
+})
+
+it('keeps a rebuilt parent child visible while removing controls the current generation cannot use', () => {
+  setSessionOwnerHint('parent', state.session.owner)
+  reconcileSubagentSnapshot('parent', [
+    {
+      subagent_id: 'read-only',
+      display_name: 'Research',
+      goal: 'Keep researching',
+      status: 'running',
+      can_control: true,
+      accepting_steer: true
+    }
+  ])
+  render(<SubagentPanel />)
+  fireEvent.click(screen.getByRole('button', { name: /Research/ }))
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
+  act(() =>
+    reconcileSubagentSnapshot('parent', [
+      {
+        subagent_id: 'read-only',
+        goal: 'Keep researching',
+        status: 'running',
+        can_control: false,
+        accepting_steer: true
+      }
+    ])
+  )
+  expect(screen.getByText('Keep researching')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  expect(screen.queryByRole('textbox')).toBeNull()
+  expect(screen.getByText('This subagent can only be viewed from this conversation')).toBeTruthy()
 })
 
 it('lists names and portraits, then opens the exact full task and returns without replacing the conversation', () => {
@@ -63,7 +98,7 @@ it('lists names and portraits, then opens the exact full task and returns withou
   const avatar = container.querySelector('img')!.getAttribute('src')
   fireEvent.click(screen.getByRole('button', { name: /Source review/ }))
   expect(screen.getByText(goal)).toBeTruthy()
-  expect(screen.getByText('All entry points verified.')).toBeTruthy()
+  expect(vi.mocked(SubagentPanelTranscript).mock.lastCall?.[0].row.activity).toContain('All entry points verified.')
   expect(container.querySelector('img')!.getAttribute('src')).toBe(avatar)
   fireEvent.click(screen.getByRole('button', { name: 'Back' }))
   expect(screen.queryByText(goal)).toBeNull()
@@ -104,7 +139,7 @@ it('keeps a selected native child live before its persisted tool receipt has loa
   act(() =>
     upsertSubagent('parent', { subagent_id: 'child-a', text: 'Reading the latest file' }, false, 'subagent.progress')
   )
-  expect(screen.getByText('Reading the latest file')).toBeTruthy()
+  expect(vi.mocked(SubagentPanelTranscript).mock.lastCall?.[0].row.activity).toContain('Reading the latest file')
   act(() =>
     upsertSubagent(
       'parent',
@@ -113,7 +148,7 @@ it('keeps a selected native child live before its persisted tool receipt has loa
       'subagent.complete'
     )
   )
-  expect(screen.getByText('Review complete')).toBeTruthy()
+  expect(vi.mocked(SubagentPanelTranscript).mock.lastCall?.[0].row.activity).toContain('Review complete')
 })
 
 it.each(['conversation', 'workspace'])(

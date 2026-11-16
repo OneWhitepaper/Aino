@@ -19,6 +19,7 @@ import { saveSelectedRosterBot } from './bot-state'
 import { prepareBotSource, resolveExpectHistory } from './canonical-chat'
 import { openRosterBot } from './roster-actions'
 import { botConnectionRoute, botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
+import { ID } from './shared'
 import type { RosterRow } from './types'
 
 /** The listed session the menu item would open, or null when the profile has
@@ -43,6 +44,7 @@ export async function openBotRecentSession(bot: RosterRow): Promise<boolean> {
   saveSelectedRosterBot(bot)
   const ownerKey = botWorkspaceOwnerKey(bot)
   setBotsWorkspaceOwner(ownerKey, bot)
+  host.revealPane?.(`${ID}:pane`)
 
   try {
     await prepareBotSource(bot)

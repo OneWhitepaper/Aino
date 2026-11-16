@@ -68,13 +68,34 @@ beforeEach(() => {
   getGlobalModelOptions.mockResolvedValue({ providers: MOCK_PROVIDERS })
 })
 
-afterEach(() => {
+async function cleanupModelMenu() {
   cleanup()
+  // Radix queues close autofocus with setTimeout(0); finish it before jsdom restores the Event realm.
+  await act(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+  })
+}
+
+afterEach(async () => {
+  await cleanupModelMenu()
   $sessionStates.set({})
   $currentPlatformOrigin.set('')
   clearGatewayManagedCapabilities()
   Reflect.deleteProperty(window, 'hermesDesktop')
   vi.clearAllMocks()
+})
+
+it('finishes the dropdown close autofocus before releasing the menu fixture', async () => {
+  const onCloseAutoFocus = vi.fn()
+  render(
+    <DropdownMenu open>
+      <DropdownMenuContent onCloseAutoFocus={onCloseAutoFocus}>Model menu</DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  await cleanupModelMenu()
+
+  expect(onCloseAutoFocus).toHaveBeenCalledTimes(1)
 })
 
 it('searches built-in and custom models together while previewing without a switch', async () => {

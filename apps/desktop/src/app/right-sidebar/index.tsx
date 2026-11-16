@@ -122,7 +122,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
   return (
     <aside
       aria-label={r.aria}
-      className="relative flex h-full w-full min-w-0 flex-col overflow-hidden pt-(--titlebar-height)"
+      className="relative flex h-full w-full min-w-0 flex-col overflow-hidden"
       data-file-browser=""
     >
       <FilesystemTab
@@ -205,7 +205,8 @@ function FilesystemTab({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <RightSidebarSectionHeader data-file-browser-header="">
-        <div className="flex min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="folder" size="0.875rem" />
           <Tip label={cwd}>
             <SidebarPanelLabel tone="neutral">{cwdName}</SidebarPanelLabel>
           </Tip>

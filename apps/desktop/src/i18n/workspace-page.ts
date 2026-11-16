@@ -49,7 +49,7 @@ export interface WorkspacePageCopy {
 export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   en: {
     description: 'Manage project discovery, command environments and file reading.',
-    tabsLabel: 'Workspace settings categories',
+    tabsLabel: 'Project and file settings categories',
     tabs: { projects: 'Projects & discovery', shell: 'Terminal environment', files: 'Files & execution' },
     groups: {
       directory: 'Working directory',
@@ -117,7 +117,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   zh: {
     description: '管理项目发现、命令环境与文件读取方式。',
-    tabsLabel: '工作区设置分类',
+    tabsLabel: '项目与文件设置分类',
     tabs: { projects: '项目与发现', shell: '终端环境', files: '文件与执行' },
     groups: {
       directory: '工作目录',
@@ -183,7 +183,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   'zh-hant': {
     description: '管理專案探索、指令環境與檔案讀取方式。',
-    tabsLabel: '工作區設定分類',
+    tabsLabel: '專案與檔案設定分類',
     tabs: { projects: '專案與探索', shell: '終端機環境', files: '檔案與執行' },
     groups: {
       directory: '工作目錄',
@@ -249,7 +249,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   ja: {
     description: 'プロジェクトの検出、コマンド環境、ファイルの読み取り方法を管理します。',
-    tabsLabel: 'ワークスペース設定の分類',
+    tabsLabel: 'プロジェクトとファイルの設定分類',
     tabs: { projects: 'プロジェクトと検出', shell: 'ターミナル環境', files: 'ファイルと実行' },
     groups: {
       directory: '作業ディレクトリ',
@@ -320,7 +320,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   de: {
     description: 'Projekterkennung, Befehlsumgebung und Dateizugriff verwalten.',
-    tabsLabel: 'Kategorien der Arbeitsbereichseinstellungen',
+    tabsLabel: 'Kategorien für Projekt- und Dateieinstellungen',
     tabs: { projects: 'Projekte und Erkennung', shell: 'Terminalumgebung', files: 'Dateien und Ausführung' },
     groups: {
       directory: 'Arbeitsverzeichnis',
@@ -391,7 +391,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   es: {
     description: 'Gestiona la detección de proyectos, los entornos de comandos y la lectura de archivos.',
-    tabsLabel: 'Categorías de ajustes del espacio de trabajo',
+    tabsLabel: 'Categorías de ajustes de proyectos y archivos',
     tabs: { projects: 'Proyectos y detección', shell: 'Entorno de terminal', files: 'Archivos y ejecución' },
     groups: {
       directory: 'Directorio de trabajo',
@@ -461,7 +461,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   fr: {
     description: 'Gérez la découverte de projets, les environnements de commandes et la lecture des fichiers.',
-    tabsLabel: 'Catégories des réglages de l’espace de travail',
+    tabsLabel: 'Catégories des réglages des projets et fichiers',
     tabs: { projects: 'Projets et découverte', shell: 'Environnement du terminal', files: 'Fichiers et exécution' },
     groups: {
       directory: 'Dossier de travail',
@@ -533,7 +533,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   ru: {
     description: 'Управляйте поиском проектов, средой команд и чтением файлов.',
-    tabsLabel: 'Категории настроек рабочего пространства',
+    tabsLabel: 'Категории настроек проектов и файлов',
     tabs: { projects: 'Проекты и поиск', shell: 'Среда терминала', files: 'Файлы и выполнение' },
     groups: {
       directory: 'Рабочая папка',
@@ -604,7 +604,7 @@ export const workspacePage: Record<BundledLocale, WorkspacePageCopy> = {
   },
   ar: {
     description: 'أدر اكتشاف المشاريع وبيئات الأوامر وطريقة قراءة الملفات.',
-    tabsLabel: 'فئات إعدادات مساحة العمل',
+    tabsLabel: 'فئات إعدادات المشاريع والملفات',
     tabs: { projects: 'المشاريع والاكتشاف', shell: 'بيئة الطرفية', files: 'الملفات والتنفيذ' },
     groups: {
       directory: 'مجلد العمل',

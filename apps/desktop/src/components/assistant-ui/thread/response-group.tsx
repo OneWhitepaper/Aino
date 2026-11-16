@@ -1,6 +1,6 @@
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from 'react'
+import { type ComponentProps, createContext, type ReactNode, useContext, useMemo, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { type ToolPart, toolPreviewOutcome } from '@/components/assistant-ui/tool/fallback-model'
@@ -11,6 +11,7 @@ import { isCardTool, isFileEditTool } from '@/lib/tool-render-class'
 import { $toolDisclosureOpen, setToolDisclosureOpen } from '@/store/tool-view'
 
 import { interAgentReplySender } from './agent-delivery'
+import { AssistantIdentity } from './assistant-identity'
 import { contentHasVisibleText, messageContentText, PROCESS_NOTIFICATION_RE } from './content'
 
 interface GroupMessage {
@@ -68,10 +69,57 @@ interface ResponseProcessState {
   enabled: boolean
   open: boolean
   answerMessageId?: string
+  disclosureId?: string
+  duration?: number
   identityMessageId?: string
 }
 
 export const ResponseProcess = createContext<ResponseProcessState>({ enabled: false, open: true })
+
+/** Identity and the process control keep their host when a turn settles or resumes. */
+export function ResponseProcessHeader() {
+  const messageId = useAuiState(s => s.message.id)
+  const { enabled, open, disclosureId, duration, identityMessageId } = useContext(ResponseProcess)
+  const [focused, setFocused] = useState(false)
+  const { t } = useI18n()
+
+  if (identityMessageId && identityMessageId !== messageId) {
+    return null
+  }
+
+  const elapsed = duration !== undefined ? t.assistant.thread.turnDuration(formatElapsed(Math.round(duration))) : null
+  const label = elapsed ?? t.assistant.thread.processTitle
+
+  return (
+    <div data-process-foldable={enabled || undefined} data-slot="aui_response-process-header">
+      <AssistantIdentity />
+      <div
+        data-slot="aui_response-process-control"
+        onBlurCapture={() => setFocused(false)}
+        onFocusCapture={() => setFocused(true)}
+        style={{ display: disclosureId && (enabled || focused) ? undefined : 'none' }}
+      >
+        <ScaffoldRow onToggle={disclosureId ? () => setToolDisclosureOpen(disclosureId, !open) : undefined} open={open}>
+          {elapsed && <span className="sr-only">{t.assistant.thread.processTitle} · </span>}
+          <span className={SCAFFOLD_LABEL_CLASS}>{label}</span>
+        </ScaffoldRow>
+      </div>
+    </div>
+  )
+}
+
+/** The identity row stays visible when its message contributes only process detail. */
+export function ResponseProcessBody({ children }: { children: ReactNode }) {
+  const { enabled, open, answerMessageId } = useContext(ResponseProcess)
+  const messageId = useAuiState(s => s.message.id)
+  const hidden = enabled && !open && messageId !== answerMessageId
+
+  return (
+    <div className="contents" hidden={hidden} style={{ display: hidden ? 'none' : undefined }}>
+      {children}
+    </div>
+  )
+}
 
 /** A stable wrapper keeps tool controls and explicit disclosure choices alive while hidden. */
 export function ResponseProcessParts({ children, final = false }: { children: ReactNode; final?: boolean }) {
@@ -124,7 +172,7 @@ function ResponseSectionView({
   components: ResponseMessagesProps['components']
   section: ResponseSection
 }) {
-  const { t } = useI18n()
+  const [processFocused, setProcessFocused] = useState(false)
   const busy = useStore(useSessionView().$busy)
   const running = section.rows.some(row => row.tail && (row.running || busy))
   const answer = running ? undefined : section.rows.findLast(row => row.role === 'assistant' && row.hasFinal)
@@ -135,23 +183,14 @@ function ResponseSectionView({
   const enabled = Boolean(hasProcess && answer) && !section.rows.some(row => row.needsAttention)
   const disclosureId = `response-process:${section.key}`
   const chosenOpen = useStore($toolDisclosureOpen(disclosureId))
-  const open = chosenOpen ?? running
+  const open = running || (chosenOpen ?? false) || processFocused
   const duration = answer?.duration ?? section.rows.findLast(row => row.duration !== undefined)?.duration
 
-  const label =
-    duration !== undefined
-      ? t.assistant.thread.turnDuration(formatElapsed(Math.round(duration)))
-      : t.assistant.thread.processTitle
-
-  // A continued reply has multiple runtime rows while it streams. Its portrait
-  // belongs to the first visible reply, or the final answer when process is folded.
-  const identityMessageId = section.rows.find(
-    row => row.identityEligible && (!enabled || open || running || row.id === answer?.id)
-  )?.id
+  const identityMessageId = section.rows.find(row => row.identityEligible)?.id
 
   const process = useMemo(
-    () => ({ enabled, open, answerMessageId: answer?.id, identityMessageId }),
-    [enabled, open, answer?.id, identityMessageId]
+    () => ({ enabled, open, answerMessageId: answer?.id, disclosureId, duration, identityMessageId }),
+    [enabled, open, answer?.id, disclosureId, duration, identityMessageId]
   )
 
   const responseIdsKey = section.assistantIds.join('\u0000')
@@ -169,16 +208,26 @@ function ResponseSectionView({
   return (
     <ResponseMessageIds.Provider value={responseIds}>
       <ResponseProcess.Provider value={process}>
-        <div className="group flex min-w-0 flex-col gap-(--scaffold-block-gap)" data-slot="aui_response-group">
-          {enabled && (
-            <div data-slot="aui_response-process-header">
-              <ScaffoldRow onToggle={() => setToolDisclosureOpen(disclosureId, !open)} open={open}>
-                <span className={SCAFFOLD_LABEL_CLASS}>{label}</span>
-              </ScaffoldRow>
-            </div>
-          )}
+        <div
+          className="group flex min-w-0 flex-col gap-(--scaffold-block-gap)"
+          data-slot="aui_response-group"
+          onBlurCapture={event => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setProcessFocused(false)
+            }
+          }}
+          onFocusCapture={event => {
+            // Capture before completion can hide a focused tool control; final-answer
+            // actions do not need to reopen the process to remain usable.
+            setProcessFocused(Boolean(event.target.closest('[data-response-part-kind="process"]')))
+          }}
+        >
           {section.rows.map((row, index) => (
-            <div className="contents" hidden={enabled && !open && !running && row.id !== answer?.id} key={row.index}>
+            <div
+              className="contents"
+              hidden={enabled && !open && row.id !== answer?.id && row.id !== identityMessageId}
+              key={row.index}
+            >
               {messageViews[index]}
             </div>
           ))}
@@ -201,7 +250,9 @@ export function ResponseMessages({ components, indices }: ResponseMessagesProps)
         const phases = parts.map(part => (part as { displayPhase?: string }).displayPhase)
 
         const needsAttention =
-          (message?.role === 'assistant' && message.status?.type === 'incomplete') ||
+          (message?.role === 'assistant' &&
+            (message.status?.type === 'incomplete' || message.status?.type === 'requires-action')) ||
+          (index === s.thread.messages.length - 1 && message?.metadata?.custom?.interrupted === true) ||
           parts.some(part => {
             if (part.type !== 'tool-call') {
               return part.type === 'image' || part.type === 'data'

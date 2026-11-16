@@ -4,13 +4,13 @@ export const enCatalog: CatalogTranslations = {
   startHere: 'Start here',
   featuredHint: 'Learn what a skill does, then add it when needed.',
   browseHint: 'Browse by purpose. Review the details before adding.',
-  installedHint: 'Manage which capabilities are enabled in this workspace. Changes apply to new sessions.',
+  installedHint: 'Manage the capabilities enabled for this assistant. Changes apply to new sessions.',
   installedKind: (kind: string) => `Installed ${kind}`,
   howToUse: 'How to use',
   usageHint: 'Follow the skill instructions or source documentation for usage and steps.',
   capabilityGuide: 'About these capabilities',
   capabilityGuideDescription:
-    'Skills provide task guidance and knowledge. Plugins extend functionality, connectors link external services, and toolsets control the tools available in this workspace.',
+    'Skills provide task guidance and knowledge. Plugins extend functionality, connectors link external services, and toolsets control the tools available to this assistant.',
   contentLabels: {},
   descriptions: {},
   originalDescription: 'Original description and full details',
@@ -100,7 +100,7 @@ export const enCatalog: CatalogTranslations = {
   },
   toolsets: {
     mostUsed: 'Most used',
-    mostUsedBlurb: 'The toolsets Hermes reaches for most on this profile.',
+    mostUsedBlurb: 'Frequently used toolsets for this assistant.',
     essentials: 'Essentials',
     essentialsBlurb: 'What most Hermes work runs on.',
     toolCount: (count: number) => `${count} ${count === 1 ? 'tool' : 'tools'}`,
@@ -122,7 +122,7 @@ export const enCatalog: CatalogTranslations = {
         label: 'Connect and reach out',
         blurb: 'Accounts, other agents, the smart home and search beyond the web.'
       },
-      more: { label: 'More tools', blurb: 'Everything else this profile can switch on.' }
+      more: { label: 'More tools', blurb: 'Other tools available to this assistant.' }
     }
   }
 }

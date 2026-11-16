@@ -65,7 +65,7 @@ export const arCapabilities = {
     failedToUpdate: name => `فشل تحديث ${name}`
   },
   agents: {
-    extendedTranscript: 'سجل موسّع',
+    extendedTranscript: 'سجل التنفيذ',
     transcriptTruncated: 'عرض أحدث 16 KiB',
     transcriptUnavailable: 'السجل المباشر غير متاح',
 
@@ -88,6 +88,9 @@ export const arCapabilities = {
     steerQueued: 'في انتظار نقطة التحقق التالية',
     stopRequested: 'تم طلب الإيقاف',
     requestRejected: 'لم يقبل الوكيل الفرعي الطلب',
+    controlUnavailable: 'يمكن عرض هذا الوكيل الفرعي فقط من هذه المحادثة',
+    requestFinished: 'انتهت المهمة أو يجري إنهاؤها. راجع أحدث النتائج',
+    requestFailed: 'تعذّر إرسال الإجراء. يُرجى المحاولة مرة أخرى',
     delegation: index => `التفويض ${index}`,
     workers: count => `${count} عامل`,
     workersActive: count => `${count} نشط`,

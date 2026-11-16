@@ -43,7 +43,7 @@ describe('routeClipboardToComposer', () => {
     expect(inserts).toEqual(['hello there'])
   })
 
-  it('chips a pasted link the same way a focused paste does', async () => {
+  it('leaves link interpretation to the destination composer context', async () => {
     const inserts: string[] = []
     const off = onComposerInsertRequest(({ text }) => inserts.push(text))
 
@@ -51,7 +51,19 @@ describe('routeClipboardToComposer', () => {
     await flushBus()
     off()
 
-    expect(inserts[0]).toContain('@url:')
+    expect(inserts[0]).toBe('see https://example.com/docs')
+  })
+
+  it('routes clipboard indentation and boundary newlines without introducing separators', async () => {
+    const inserts: { mode: string; text: string }[] = []
+    const off = onComposerInsertRequest(({ mode, text }) => inserts.push({ mode, text }))
+    const text = '\n    first\n\tsecond  \n\n'
+
+    expect(routeClipboardToComposer(clipboard({ text }))).toBe(true)
+    await flushBus()
+    off()
+
+    expect(inserts).toEqual([{ mode: 'verbatim', text }])
   })
 
   it('attaches clipboard images and pulls focus on an image-only paste', async () => {

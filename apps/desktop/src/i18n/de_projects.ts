@@ -36,7 +36,7 @@ export const deProjects: NonNullable<TranslationOverrides['sidebar']>['projects'
   copyPath: 'Pfad kopieren',
   removeFromSidebar: 'Aus der Sidebar ausblenden',
   createdInPreviousContext:
-    'Das Projekt wurde auf der vorherigen Verbindung oder im vorherigen Profil erstellt. Wechsle zurück; IDEA.md wurde nicht geschrieben.',
+    'Das Projekt wurde für die vorherige Verbindung oder den vorherigen Bot erstellt. Wechsle zurück, um es zu finden; IDEA.md wurde nicht geschrieben.',
   hiddenFromSidebar: 'Aus der Sidebar ausgeblendet',
   undoHide: 'Rückgängig',
   createFailed: 'Projekt konnte nicht erstellt werden',

@@ -10,6 +10,11 @@ import { MOCK_REPLY } from './mock-server.ts'
 
 export type ChatPhase = 'old' | 'new' | 'installed'
 
+export const idleComposerControlSelector = [
+  'button[aria-label="Start voice conversation"]', 'button[aria-label="开始语音对话"]',
+  'button[type="submit"][aria-label="Send"]', 'button[type="submit"][aria-label="发送"]',
+].map(selector => `[data-slot="composer-root"] ${selector}`).join(', ')
+
 export interface DesktopChatSmokeOptions {
   mockUrl: string
   phase: ChatPhase
@@ -360,7 +365,7 @@ export async function runDesktopChatSmoke(page: Page, options: DesktopChatSmokeO
       { timeout: 90_000, message: 'A new completed assistant reply must follow the new user message' }).toBe(true)
     // An empty idle composer offers voice chat; older desktops retain Send.
     // Stop and the streaming marker must settle even when all reply text arrived.
-    await expect(page.locator('[data-slot="composer-root"] button[aria-label="Start voice conversation"]:visible, [data-slot="composer-root"] button[type="submit"][aria-label="Send"]:visible')).toBeVisible({ timeout: 90_000 })
+    await expect(page.locator(idleComposerControlSelector).filter({ visible: true })).toBeVisible({ timeout: 90_000 })
     const pair = newCompletedPair(await readTranscript(page), beforeIds, prompt, options.expectedReply)
 
     if (!pair) {

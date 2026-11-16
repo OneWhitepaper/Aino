@@ -23,7 +23,7 @@ export const zhHantAssistant = {
       skill: name => `技能 ${name}`,
       kind: { plugin: '外掛', skill: '技能' },
       tier: { official: '官方', verified: '已驗證', community: '社群' },
-      targetProfile: profile => `安裝到你的 ${profile} 設定檔`,
+      targetProfile: profile => `安裝到你的 ${profile} 機器人`,
       sendFailed: '無法傳送你的回覆，請再試一次。',
       commitLabel: '提交',
       subdirLabel: '資料夾',
@@ -309,6 +309,7 @@ export const zhHantAssistant = {
       processTitle: '執行過程',
 
       replyMetrics: {
+        usageAndCost: '用量與費用',
         duration: '耗時',
         tokens: '消耗',
         context: '上下文',

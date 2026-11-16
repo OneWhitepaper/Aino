@@ -9,6 +9,7 @@ import type { TurnBilling } from '@/lib/turn-billing'
 import type { PlatformAccountBridge, PlatformUsagePage } from '../../../../shared/platform-contract'
 
 import { ReplyCost } from './reply-cost'
+import { ReplyMetrics } from './reply-metrics'
 
 const original = window.hermesDesktop
 afterEach(() => {
@@ -70,6 +71,34 @@ function fixture() {
 
   return { account, billing, page, listUsage, snapshot: platformAccountActions(account).snapshot }
 }
+
+it('keeps usage and ledger details behind one entry while preserving their account ownership', async () => {
+  vi.useFakeTimers()
+  const { account, billing, listUsage, snapshot } = fixture()
+  render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyMetrics metrics={{ total_tokens: 320, input_tokens: 240, output_tokens: 80, billing }} />
+    </I18nProvider>
+  )
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(listUsage).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText(/0.01 USD/)).toBeNull()
+  expect(screen.queryByText(/320 token/)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Usage and cost' }))
+  const details = within(screen.getByRole('dialog'))
+  expect(details.getByText(/Partially settled.*0.01 USD/)).toBeTruthy()
+  expect(details.getByText(/320 token/)).toBeTruthy()
+  expect(details.getByText('fixture')).toBeTruthy()
+
+  act(() => snapshot.set({ ...snapshot.get()!, account: { ...snapshot.get()!.account!, id: '18' } }))
+  expect(screen.queryByText(/0.01 USD/)).toBeNull()
+  expect(screen.queryByText('fixture')).toBeNull()
+  expect(screen.getByText('Sign in to the original account to view charges')).toBeTruthy()
+  act(() => platformAccountActions(account).snapshot.set(null))
+})
 
 it('shows partial ledger costs and stops automatic checks after a bounded number of attempts', async () => {
   vi.useFakeTimers()

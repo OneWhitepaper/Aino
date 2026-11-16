@@ -24,6 +24,12 @@ vi.mock('@/hermes', () => ({
   getHermesConfig: vi.fn(async () => ({ display: { timestamps: false } })),
   getHermesConfigDefaults: vi.fn(async () => ({})),
   getSession: vi.fn(),
+  importProfileArchive: vi.fn(async () => ({
+    desktop: null,
+    name: 'imported-bot',
+    ok: true,
+    path: '/tmp/imported-bot'
+  })),
   PROMPT_SUBMIT_REQUEST_TIMEOUT_MS: 1_800_000,
   setApiRequestProfile: vi.fn(),
   transcribeAudio: vi.fn()
@@ -528,6 +534,49 @@ describe('/export and /import (profile archives)', () => {
   it('route to the desktop profile share flows on a local gateway', () => {
     expect(resolveDesktopCommand('/export')?.surface).toEqual({ kind: 'action', action: 'export' })
     expect(resolveDesktopCommand('/import')?.surface).toEqual({ kind: 'action', action: 'import' })
+  })
+
+  it('imports into Bot management without activating its Profile or replacing the current chat layout', async () => {
+    const { group } = await import('@/components/pane-shell/tree/model')
+    const { $layoutTree } = await import('@/components/pane-shell/tree/store')
+    const { $workspaceIsPage } = await import('@/app/routes')
+    const profile = await import('@/store/profile')
+    const { importProfileArchive } = await import('@/hermes')
+    const selectProfile = vi.spyOn(profile, 'selectProfile').mockImplementation(() => undefined)
+    const selectPaths = vi.fn(async () => ['/tmp/writer.tar.gz'])
+    const previousDesktop = window.hermesDesktop
+    const previousHash = window.location.hash
+    const layout = group(['workspace'], { id: 'existing-layout', active: 'workspace' })
+    const freshRequests = profile.$freshSessionRequest.get()
+    const currentProfile = profile.$activeGatewayProfile.get()
+    Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { selectPaths } })
+    vi.mocked(importProfileArchive).mockResolvedValueOnce({
+      desktop: { version: 1, layoutTree: group(['files'], { id: 'imported-layout' }) },
+      name: 'imported-bot',
+      ok: true,
+      path: '/tmp/imported-bot'
+    })
+    const requestGateway = gateway(() => undefined)
+    const handle = await mount(requestGateway)
+    const messages = handle.state().messages
+    $layoutTree.set(layout)
+
+    try {
+      await handle.submitText('/import')
+
+      expect(importProfileArchive).toHaveBeenCalledWith('/tmp/writer.tar.gz', undefined, { connectionId: 'local' })
+      expect(selectProfile).not.toHaveBeenCalled()
+      expect(profile.$freshSessionRequest.get()).toBe(freshRequests)
+      expect(profile.$activeGatewayProfile.get()).toBe(currentProfile)
+      expect(handle.state().messages).toBe(messages)
+      expect($layoutTree.get()).toBe(layout)
+      expect(window.location.hash).toBe('#/profiles')
+      expect($workspaceIsPage.get()).toBe(true)
+    } finally {
+      Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: previousDesktop })
+      window.location.hash = previousHash
+      $workspaceIsPage.set(false)
+    }
   })
 
   it('refuse by name on a remote gateway, whose filesystem is not this machine', async () => {

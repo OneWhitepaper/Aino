@@ -343,3 +343,10 @@ infografico/
 /pm/.lock.json.lock
 
 apps/desktop/.dist-build*
+
+# Generated image drafts and local design previews are review artifacts.
+# Production assets belong in the application's asset directories. Already
+# tracked design references stay tracked; local original renders stay on disk.
+/output/imagegen/
+/output/playwright/
+/.impeccable/critique/

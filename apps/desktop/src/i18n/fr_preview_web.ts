@@ -43,7 +43,7 @@ export const frPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedMessage: "Hermes n'a pas pu redémarrer le serveur.",
   stillWorking:
     "Hermes travaille toujours, mais aucun résultat de redémarrage n'est arrivé. La commande du serveur peut être en cours d'exécution au premier plan.",
-  workspaceReloading: "Espace de travail modifié, rechargement de l'aperçu",
+  workspaceReloading: 'Le projet a changé, rechargement de l’aperçu',
   fileChanged: url => `Fichier modifié, rechargement de l'aperçu : ${url}`,
   filesChanged: (count, url) => `${count} modifications de fichier, rechargement de l'aperçu : ${url}`,
   watchFailed: message => `Impossible de surveiller le fichier d'aperçu : ${message}`,

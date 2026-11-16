@@ -235,4 +235,29 @@ describe('sidebar swaps preserve the live workspace', () => {
     const tree = $layoutTree.get()
     expect(tree?.type === 'split' && tree.children.map(child => child.id)).toEqual(['chat-zone', 'nav-zone'])
   })
+
+  it('resets the shared tool width including a hidden Files tab without touching the chat', () => {
+    for (const id of ['files', 'preview-tile:page']) {
+      disposers.push(
+        registry.register({
+          area: 'panes',
+          id,
+          title: id,
+          data: { toolPanel: true, placement: 'right' },
+          render: () => <div>{id}</div>
+        })
+      )
+    }
+
+    $layoutTree.set(split('row', [group(['chat']), group(['files', 'preview-tile:page'])], [3, 2], 'workspace'))
+    $hiddenTreePanes.set(new Set(['files']))
+    $paneStates.set({ files: { open: false, widthOverride: 870 } })
+    render(<Workspace />)
+    const draft = screen.getByRole('textbox', { name: 'Draft' })
+
+    fireEvent.doubleClick(screen.getByRole('separator'))
+
+    expect($paneStates.get().files.widthOverride).toBeUndefined()
+    expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft)
+  })
 })

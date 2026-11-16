@@ -132,7 +132,7 @@ describe('Summary Git scope', () => {
     expect(screen.getByText('Summary project')).toBeTruthy()
     expect(git.repoStatus).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Environment · Summary project' }))
     await waitFor(() => expect(git.repoStatus).toHaveBeenCalled())
   })
 
@@ -299,8 +299,8 @@ describe('Summary Git scope', () => {
     })
     renderWithQuery(<GitSection />)
 
-    expect(await screen.findByText('Git is unavailable for this workspace')).toBeTruthy()
-    expect(screen.queryByText('This workspace is not a Git repository')).toBeNull()
+    expect(await screen.findByText('Git is unavailable for this project')).toBeTruthy()
+    expect(screen.queryByText('This project is not a Git repository')).toBeNull()
     fails = false
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('summary-main')).toBeTruthy()
@@ -361,7 +361,7 @@ describe('Summary revert confirmation', () => {
       </>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Environment · Summary project' }))
     fireEvent.click(await screen.findByRole('button', { name: 'View all (1)' }))
     fireEvent.click(screen.getByRole('button', { name: 'Revert file: danger.ts' }))
     expect(screen.getByRole('dialog', { name: 'Revert' })).toBeTruthy()

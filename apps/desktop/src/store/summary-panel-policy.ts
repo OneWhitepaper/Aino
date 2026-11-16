@@ -1,5 +1,6 @@
 import { computed } from 'nanostores'
 
+import { $workspaceIsPage } from '@/app/routes'
 import { $narrowOverlayPaneIds } from '@/components/pane-shell/narrow-overlay-state'
 import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import {
@@ -8,16 +9,17 @@ import {
   $hiddenTreePanes,
   $layoutTree,
   $narrowViewport,
-  isPaneVisible
+  paneRootSide
 } from '@/components/pane-shell/tree/store'
 import { isRestoredToolPanelGroup } from '@/components/pane-shell/tree/tool-panel-policy'
+import { workspaceActivePane } from '@/components/pane-shell/tree/workspace-presentation'
 import { $registryVersion, registry } from '@/contrib/registry'
 
 import { $freshDraftKey } from './composer'
 import { modeLayout } from './interface-mode'
 import { $summaryOpen } from './summary'
 
-/** Read the actual tool host, including mirrored layouts and narrow overlays. */
+/** Read the user's tool host; a management page only covers its saved presentation. */
 export const $toolPanelVisible = computed(
   [
     $layoutTree,
@@ -28,7 +30,7 @@ export const $toolPanelVisible = computed(
     $narrowViewport,
     $narrowOverlayPaneIds
   ],
-  (tree, _collapsed, _dismissed, _hidden, _version, narrow, overlays) => {
+  (tree, collapsed, dismissed, hidden, _version, narrow, overlays) => {
     if (!tree) {
       return false
     }
@@ -39,7 +41,18 @@ export const $toolPanelVisible = computed(
     return allPaneIds(tree).some(id => {
       const group = findGroupOfPane(tree, id)!
 
-      return isRestoredToolPanelGroup(group, paneFor) && (narrow ? overlays.has(id) : isPaneVisible(id))
+      if (!paneFor(id) || dismissed.has(id) || hidden.has(id) || !isRestoredToolPanelGroup(group, paneFor)) {
+        return false
+      }
+
+      // Safe tools share workspace ownership. Explicit candidates preserve the
+      // host's active tab while a route temporarily covers it with headerVeto.
+      const available = group.panes.filter(paneId => paneFor(paneId) && !dismissed.has(paneId) && !hidden.has(paneId))
+      const side = paneRootSide(id)
+
+      return narrow
+        ? overlays.has(id)
+        : !group.minimized && workspaceActivePane(group, available) === id && !(side && collapsed.has(side))
     })
   }
 )
@@ -53,7 +66,7 @@ export function bindSummaryPanelVisibility(): () => void {
 
   const settle = () => {
     // Restoration ends synchronously, before this batch's microtask runs.
-    quietBatch ||= modeLayout.restoring
+    quietBatch ||= modeLayout.restoring || $workspaceIsPage.get()
 
     if (queued) {
       return

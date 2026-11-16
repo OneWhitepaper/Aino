@@ -98,6 +98,14 @@ describe('group mention rendering', () => {
     expect(html).toContain('@u6d4b-u8bd5-extra')
   })
 
+  it('shows a bot name when its mention follows Chinese punctuation without a space', () => {
+    const decorate = addressedGroupMentionText([{ handle: 'u8bfb-u5199-u6d4b-u8bd5', label: '读写测试' }])
+    const html = renderToStaticMarkup(<>{decorate('不是自信地瞎说。@u8bfb-u5199-u6d4b-u8bd5 你会问什么？')}</>)
+
+    expect(html.replace(/<[^>]+>/g, '')).toBe('不是自信地瞎说。@读写测试 你会问什么？')
+    expect(html).toContain('data-ref="agent"')
+  })
+
   it('uses the same readable search projection while preserving fenced code and inline literals', () => {
     const identities = [{ handle: 'u6d4b-u8bd5', label: '测试助手' }]
     const text = '@u6d4b-u8bd5\n\n```text\n@u6d4b-u8bd5\n```\n\n`@u6d4b-u8bd5` [@u6d4b-u8bd5](https://example.com)'

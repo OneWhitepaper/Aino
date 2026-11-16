@@ -174,10 +174,42 @@ afterEach(() => {
 })
 
 describe('generic new session default routing', () => {
+  it.each(['draft', 'tile'])('keeps ordinary %s creation on Aino when a Bot was active', async action => {
+    const { result } = mountActions()
+
+    if (action === 'draft') {
+      act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
+      await act(() => result.current.createBackendSessionForSend())
+    } else {
+      await act(() => result.current.openNewSessionTile('right'))
+    }
+
+    expect(requestGatewayForAgent).toHaveBeenCalledWith(
+      'previous',
+      'default',
+      'session.create',
+      expect.objectContaining({ profile: 'default' }),
+      ...FOREGROUND_CREATE_DIAL
+    )
+  })
+
+  it('keeps an ordinary project conversation on Aino without changing its working folder', async () => {
+    const { result } = mountActions()
+    await act(() => result.current.openNewSessionTile('right', { cwd: '/clicked-project' }))
+
+    expect(requestGatewayForAgent).toHaveBeenCalledWith(
+      'previous',
+      'default',
+      'session.create',
+      expect.objectContaining({ profile: 'default', cwd: '/clicked-project' }),
+      ...FOREGROUND_CREATE_DIAL
+    )
+  })
+
   it('keeps draft model options with the assigned conversation after the first send', async () => {
     const { result } = mountActions()
     act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
-    const owner = platformDefaultScope({ connectionId: 'previous', profile: 'other' }).key
+    const owner = platformDefaultScope({ connectionId: 'previous', profile: 'default' }).key
     setModelPreset('provider', 'model', { effort: 'high' }, modelPresetScope(owner, freshDraftScope()))
     await act(() => result.current.createBackendSessionForSend())
     expect(getModelPreset('provider', 'model', modelPresetScope(owner, 'created-stored'))).toEqual({ effort: 'high' })
@@ -297,7 +329,7 @@ describe('generic new session default routing', () => {
   it('keeps a fresh legacy-profile draft on Settings defaults when its descriptor arrives later', async () => {
     const { result } = mountActions()
     const previous = $connection.get()!
-    const legacy = { ...previous, mode: 'local' as const, profile: 'personal', registryScoped: false }
+    const legacy = { ...previous, mode: 'local' as const, profile: 'default', registryScoped: false }
     setConnection(legacy)
     setCurrentModel('old-local-manual-model')
     setCurrentProvider('old-local-provider')
@@ -327,9 +359,9 @@ describe('generic new session default routing', () => {
     // beforeEach establishes the state after selecting `previous`/`other`.
     // There is no saved app default; launch hints must not repin the draft.
     window.history.replaceState(null, '', query)
-    const selected = { connectionId: 'previous', profile: 'other' }
+    const selected = { connectionId: 'previous', profile: 'default' }
     const { result } = mountActions()
-    expect(resolveNewChatOwnerRoute()).toEqual(selected)
+    expect(resolveNewChatOwnerRoute()).toEqual({ connectionId: 'previous', profile: 'other' })
 
     if (action === 'tile') {
       await act(() => result.current.openNewSessionTile('right'))
@@ -367,23 +399,23 @@ describe('generic new session default routing', () => {
       await act(() => result.current.openNewSessionTile('right'))
     }
 
-    expect(ensureGatewayProfile).toHaveBeenCalledWith('personal', { forceLegacyRoute: true })
-    expect(ensureGatewayAgent).not.toHaveBeenCalledWith('local', 'personal')
-    expect(ensureGatewayAgent).not.toHaveBeenCalledWith('previous', 'personal')
+    expect(ensureGatewayProfile).toHaveBeenCalledWith('default', { forceLegacyRoute: true })
+    expect(ensureGatewayAgent).not.toHaveBeenCalledWith('local', 'default')
+    expect(ensureGatewayAgent).not.toHaveBeenCalledWith('previous', 'default')
     expect(requestGatewayForAgent).not.toHaveBeenCalled()
-    expect(requestGateway).toHaveBeenCalledWith('session.create', expect.objectContaining({ profile: 'personal' }))
+    expect(requestGateway).toHaveBeenCalledWith('session.create', expect.objectContaining({ profile: 'default' }))
   })
 
-  it('keeps a legacy profile peer separate from the app default and the active source', async () => {
+  it('keeps a legacy profile peer on its service while ordinary chats use Aino', async () => {
     window.history.replaceState(null, '', '/?peer=1&profile=peer-agent&profileWindow=1')
     const { result, requestGateway } = mountActions()
     await act(() => setDefaultProfile({ connectionId: 'lab', profile: 'research' }))
     act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
     expect(resolveNewChatOwnerRoute()).toBeNull()
     await act(() => result.current.createBackendSessionForSend())
-    expect(ensureGatewayProfile).toHaveBeenCalledWith('peer-agent', { forceLegacyRoute: true })
+    expect(ensureGatewayProfile).toHaveBeenCalledWith('default', { forceLegacyRoute: true })
     expect(requestGatewayForAgent).not.toHaveBeenCalled()
-    expect(requestGateway).toHaveBeenCalledWith('session.create', expect.objectContaining({ profile: 'peer-agent' }))
+    expect(requestGateway).toHaveBeenCalledWith('session.create', expect.objectContaining({ profile: 'default' }))
   })
 
   it('keeps an explicit legacy-profile tile request ahead of both defaults', async () => {
@@ -399,7 +431,7 @@ describe('generic new session default routing', () => {
     const { result } = mountActions()
     await act(() => setDefaultProfile({ connectionId: 'lab', profile: 'research' }))
     act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
-    expect($newChatRoute.get()).toEqual({ connectionId: 'lab', profile: 'research' })
+    expect($newChatRoute.get()).toEqual({ connectionId: 'lab', profile: 'default' })
     applyConfiguredDefaultProjectDir('')
   })
 
@@ -412,11 +444,11 @@ describe('generic new session default routing', () => {
 
       await act(() => setDefaultProfile({ connectionId: 'lab', profile: 'research' }))
       await act(() => slash.result.current('/new'))
-      expect($newChatRoute.get()).toEqual({ connectionId: 'lab', profile: 'research' })
+      expect($newChatRoute.get()).toEqual({ connectionId: 'lab', profile: 'default' })
     }
   )
 
-  it('prefers a profile peer window over the app default after switching away', async () => {
+  it('preserves a profile peer service but uses Aino for ordinary chats', async () => {
     window.history.replaceState(null, '', '/?peer=1&profile=peer-agent&connectionId=peer-host&profileWindow=1')
     const { result } = mountActions()
     await act(() => setDefaultProfile({ connectionId: 'lab', profile: 'research' }))
@@ -424,22 +456,22 @@ describe('generic new session default routing', () => {
     await act(() => result.current.createBackendSessionForSend())
     expect(requestGatewayForAgent).toHaveBeenCalledWith(
       'peer-host',
-      'peer-agent',
+      'default',
       'session.create',
-      expect.objectContaining({ profile: 'peer-agent' }),
+      expect.objectContaining({ profile: 'default' }),
       ...FOREGROUND_CREATE_DIAL
     )
   })
 
   it.each([
-    { options: undefined, connectionId: 'lab', profile: 'research' },
+    { options: undefined, connectionId: 'lab', profile: 'default' },
     { options: { profile: 'chosen' }, connectionId: 'previous', profile: 'chosen' },
     {
       options: { route: { connectionId: 'chosen-host', profile: 'chosen' } },
       connectionId: 'chosen-host',
       profile: 'chosen'
     },
-    { options: { cwd: '/clicked-project' }, connectionId: 'previous', profile: 'other' }
+    { options: { cwd: '/clicked-project' }, connectionId: 'previous', profile: 'default' }
   ])(
     'routes tiles by explicit intent before the saved default: $profile',
     async ({ options, connectionId, profile }) => {
@@ -460,7 +492,7 @@ describe('generic new session default routing', () => {
   it.each([
     { connectionId: 'lab', profile: 'research' },
     { connectionId: 'local', profile: 'personal' }
-  ])('uses the saved exact owner only for a new draft: $connectionId/$profile', async saved => {
+  ])('uses the saved service with Aino only for a new draft: $connectionId/$profile', async saved => {
     const { result, requestGateway } = mountActions()
     await act(() => setDefaultProfile(saved))
     expect($activeSessionId.get()).toBe('existing-runtime')
@@ -469,7 +501,7 @@ describe('generic new session default routing', () => {
     act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
     await act(() => result.current.createBackendSessionForSend('hello'))
 
-    const expected = saved
+    const expected = { connectionId: saved.connectionId, profile: 'default' }
     expect(requestGatewayForAgent).toHaveBeenCalledWith(
       expected.connectionId,
       expected.profile,

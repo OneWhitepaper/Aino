@@ -13,6 +13,7 @@ export interface SummarySectionProps {
   embedded?: boolean
   emptyMessage?: ReactNode
   error?: string
+  headingHidden?: boolean
   icon?: IconComponent
   onRetry?: () => void
   state?: 'empty' | 'error' | 'loading' | 'ready'
@@ -26,6 +27,7 @@ export function SummarySection({
   embedded = false,
   emptyMessage,
   error,
+  headingHidden = false,
   icon: Icon,
   onRetry,
   state = 'ready',
@@ -36,13 +38,15 @@ export function SummarySection({
 
   return (
     <section
-      className={
-        embedded ? 'py-1' : 'border-t border-(--ui-stroke-tertiary) py-3 first:border-t-0 first:pt-0 last:pb-0'
-      }
+      className={embedded ? 'py-1' : 'py-3 first:pt-0 last:pb-0'}
+      data-embedded={embedded || undefined}
       data-slot="summary-section"
       data-state={state}
     >
-      <div className={embedded ? 'sr-only' : 'mb-2 flex min-w-0 items-center gap-2'} data-slot="summary-section-header">
+      <div
+        className={embedded || headingHidden ? 'sr-only' : 'mb-2 flex min-w-0 items-center gap-2'}
+        data-slot="summary-section-header"
+      >
         {Icon && <Icon className="size-4 shrink-0 text-(--ui-text-tertiary)" />}
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
           {title}
@@ -63,7 +67,10 @@ export function SummarySection({
           )}
         </div>
       ) : state === 'empty' ? (
-        <div className="flex min-w-0 items-center gap-2 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
+        <div
+          className="flex min-w-0 items-center gap-2 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)"
+          data-slot="summary-empty"
+        >
           <p className="min-w-0 flex-1">{emptyMessage ?? copy.state.noData}</p>
           {onRetry && (
             <Button aria-label={copy.state.retry} onClick={onRetry} size="inline" type="button" variant="text">

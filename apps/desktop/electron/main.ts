@@ -57,6 +57,7 @@ import type { Session } from 'electron'
 import { resolvePlatformOrigin } from '../shared/platform-client'
 import type { PlatformAccountWindowOwner } from '../shared/platform-contract'
 import { createPlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
+import { isPreviewPartition, previewPartitionForProfile } from '../shared/preview-partition'
 import { desktopWindowChrome } from '../shared/window-chrome'
 
 import { createAccountWindowController } from './account-window'
@@ -468,7 +469,6 @@ import { registerPreviewGuestIpc } from './preview-guest-ipc'
 import { commandFocusedGuest } from './preview-guest-offscreen'
 import { installPreviewGuestEscapeHatch, installPreviewGuestPreload } from './preview-guest-setup'
 import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
-import { isPreviewPartition, previewPartitionForProfile } from './preview-guest-throttle'
 import { authorizeNativePreviewPopout, registerNativePreviewIpc } from './preview-native'
 import { PreviewReachRegistry } from './preview-reach'
 import { PreviewSigninsRecord, registerPreviewSigninsIpc, runSigninExport } from './preview-signins'
@@ -3486,10 +3486,10 @@ function createNativePackagedStrategy(
 
     const deps: ConstructorParameters<typeof AppInstallerStrategy>[0] = {
       python: payload.storePython,
-      // The checker is bundled core code, run with the payload python.
       module: 'hermes_cli.windows_appinstaller_update',
-      run: (python, module) =>
+      run: (python, module, args) =>
         runAppInstallerChecker(python, module, {
+          args,
           env: { ...process.env, PYTHONPATH: payloadPythonPath(payload) },
           onStderr: stderr => console.error(`[app-installer] checker stderr: ${stderr.slice(0, 400)}`)
         }),
@@ -16901,12 +16901,11 @@ app.whenReady().then(() => {
     rememberLog(nvidiaEglRecovery.startupMessage)
   }
 
-  // Post-update relaunch detection (App Installer arm): when the previous
-  // version wrote the one-shot pending-relaunch marker before quitting into
-  // an OS package swap, consume it here — the renderer toasts "Hermes
-  // updated to vX.Y.Z" once its bridge is up. Same-version markers (update
-  // never landed) are deleted silently.
-  const relaunchInfo: ConsumedRelaunch = consumePendingRelaunch(app, app.getVersion())
+  // Compare the same native version source used by registration so cancellation stays silent.
+  const relaunchInfo: ConsumedRelaunch = consumePendingRelaunch(
+    app,
+    INSTALL_STAMP?.channelBuild?.windowsVersion ?? app.getVersion()
+  )
 
   if (relaunchInfo.wasUpdateRelaunch) {
     rememberLog(`[updates] post-update relaunch detected (from ${relaunchInfo.fromVersion})`)

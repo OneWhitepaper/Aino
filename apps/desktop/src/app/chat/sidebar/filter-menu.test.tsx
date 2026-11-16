@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, expect, it } from 'vitest'
 
 import { I18nProvider, TRANSLATIONS, useI18n } from '@/i18n'
@@ -34,9 +35,11 @@ it('translates the live filter menu while preserving selected values and the cur
   setSidebarOrdering('manual')
   $sidebarListGroupIds.set(['today'])
   render(
-    <I18nProvider configClient={null} initialLocale="zh">
-      <Menu />
-    </I18nProvider>
+    <MemoryRouter>
+      <I18nProvider configClient={null} initialLocale="zh">
+        <Menu />
+      </I18nProvider>
+    </MemoryRouter>
   )
   const zh = TRANSLATIONS.zh.sidebar.filter
   fireEvent.keyDown(screen.getByRole('button', { name: zh.filters }), { key: 'Enter' })
@@ -49,9 +52,9 @@ it('translates the live filter menu while preserving selected values and the cur
   fireEvent.click(screen.getByRole('menuitemcheckbox', { name: zh.needsInput }))
   expect($sidebarStatusFilter.get()).toContain('needs-input')
   await act(() => i18n.setLocale('ja'))
-  expect(screen.getByText(TRANSLATIONS.ja.sidebar.profileRail)).toBeTruthy()
+  expect(screen.getByText(TRANSLATIONS.ja.keybinds.actions['view.toggleProfileRail'])).toBeTruthy()
   expect(screen.getByText(TRANSLATIONS.ja.ui.actions.markAllRead)).toBeTruthy()
-  expect(screen.queryByText(TRANSLATIONS.en.sidebar.profileRail)).toBeNull()
+  expect(screen.queryByText(TRANSLATIONS.zh.keybinds.actions['view.toggleProfileRail'])).toBeNull()
   expect(screen.queryByText(TRANSLATIONS.en.ui.actions.markAllRead)).toBeNull()
   fireEvent.keyDown(screen.getByRole('menuitem', { name: TRANSLATIONS.ja.ui.actions.status }), { key: 'ArrowRight' })
   expect(

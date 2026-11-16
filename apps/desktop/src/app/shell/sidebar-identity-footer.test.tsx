@@ -17,6 +17,8 @@ import {
 } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 import { type AccountAdapter, createAccountActions } from '@/store/account'
+import { $activeGatewayProfile } from '@/store/profile'
+import { $settingsScopeOverride, $settingsScopeProfile } from '@/store/settings-scope'
 import { stubResizeObserver } from '@/test/jsdom'
 
 import { SidebarIdentityFooter } from './sidebar-identity-footer'
@@ -63,6 +65,8 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  $activeGatewayProfile.set('default')
+  $settingsScopeOverride.set(null)
   accountActions.state.set({
     ...accountActions.state.get(),
     authenticated: true,
@@ -120,6 +124,8 @@ function renderNavigation(narrow = false) {
 }
 
 it('keeps one signed-in account footer across navigation tabs and opens account/settings', () => {
+  $activeGatewayProfile.set('writer')
+  $settingsScopeOverride.set('research')
   renderNavigation()
   expect(screen.getAllByRole('button', { name: 'My account · Test User' })).toHaveLength(1)
 
@@ -128,6 +134,7 @@ it('keeps one signed-in account footer across navigation tabs and opens account/
   expect(screen.getAllByRole('button', { name: 'My account · Test User' })).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'My account · Test User' }))
   expect(screen.getByTestId('route').textContent).toBe('/settings?tab=account')
+  expect($settingsScopeProfile.get()).toBe('default')
 
   act(() => {
     accountActions.state.set({
@@ -137,8 +144,10 @@ it('keeps one signed-in account footer across navigation tabs and opens account/
   })
   expect(screen.queryByText('Test User')).toBeNull()
   expect(screen.getByRole('button', { name: 'My account · second@example.test' })).toBeTruthy()
+  act(() => $settingsScopeOverride.set('research'))
   fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
   expect(screen.getByTestId('route').textContent).toBe('/settings')
+  expect($settingsScopeProfile.get()).toBe('default')
 
   act(() => activateTreePane('navigation', 'sessions'))
   expect(screen.getAllByRole('button', { name: 'My account · second@example.test' })).toHaveLength(1)

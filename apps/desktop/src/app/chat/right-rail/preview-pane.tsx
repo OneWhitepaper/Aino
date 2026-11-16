@@ -50,7 +50,7 @@ import { currentSessionId } from '@/store/preview-ownership'
 import { $selectedStoredSessionId, knownSessionProfile, ownerLookupSessionRows } from '@/store/session'
 import { isBrowserWindow } from '@/store/windows'
 
-import { previewPartitionForProfile } from '../../../../electron/preview-guest-throttle'
+import { previewPartitionForProfile } from '../../../../shared/preview-partition'
 
 import { placeAnnotateCard, PreviewAnnotateCard } from './preview-annotate-card'
 import {

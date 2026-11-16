@@ -111,6 +111,9 @@ export interface SessionStatusDotProps {
   /** Applied to the OUTER wrapper (stem + dot) — e.g. hover-fade on the
    *  reorder handle. */
   className?: string
+  /** Sidebar lists keep only actionable/live status marks, without an idle
+   *  or draft bullet. The lead slot and branch stem retain their alignment. */
+  hideInactive?: boolean
 }
 
 /**
@@ -122,7 +125,13 @@ export interface SessionStatusDotProps {
  * An idle session shows its project color; the active states own the dot with
  * their semantic color so an attention cue is never masked by the tint.
  */
-export function SessionStatusDot({ storedSessionId, session, branchStem, className }: SessionStatusDotProps) {
+export function SessionStatusDot({
+  storedSessionId,
+  session,
+  branchStem,
+  className,
+  hideInactive = false
+}: SessionStatusDotProps) {
   const { t } = useI18n()
   const r = t.sidebar.row
 
@@ -138,6 +147,7 @@ export function SessionStatusDot({ storedSessionId, session, branchStem, classNa
   )
 
   const variant = DOT_VARIANTS[dotState]
+  const showDot = !hideInactive || (dotState !== 'idle' && dotState !== 'draft')
 
   return (
     <span className={cn('flex items-center gap-0.5', className)}>
@@ -149,19 +159,24 @@ export function SessionStatusDot({ storedSessionId, session, branchStem, classNa
           {branchStem}
         </span>
       ) : null}
-      {dotState === 'idle' ? (
-        // Rendered even with no color to paint: an empty dot of the same size
-        // keeps every row's title on one left edge, so a session finishing
-        // can't shift the list under the pointer.
-        <span aria-hidden="true" className={variant.className} style={color ? { backgroundColor: color } : undefined} />
-      ) : (
-        <span
-          aria-label={variant.ariaLabel?.(r)}
-          className={variant.className}
-          role={variant.role}
-          title={variant.title?.(r)}
-        />
-      )}
+      {showDot &&
+        (dotState === 'idle' ? (
+          // Rendered even with no color to paint: an empty dot of the same size
+          // keeps every row's title on one left edge, so a session finishing
+          // can't shift the list under the pointer.
+          <span
+            aria-hidden="true"
+            className={variant.className}
+            style={color ? { backgroundColor: color } : undefined}
+          />
+        ) : (
+          <span
+            aria-label={variant.ariaLabel?.(r)}
+            className={variant.className}
+            role={variant.role}
+            title={variant.title?.(r)}
+          />
+        ))}
     </span>
   )
 }

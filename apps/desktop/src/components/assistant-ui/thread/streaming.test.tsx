@@ -585,11 +585,12 @@ describe('assistant-ui streaming renderer', () => {
     const metrics = container.querySelector('[data-slot="aui_reply-metrics"]')
     const actions = container.querySelector('[data-slot="aui_msg-actions"]')
 
-    expect(metrics?.textContent).toContain('1.6k')
+    expect(metrics?.textContent).not.toContain('1.6k')
     expect(metrics?.closest('[data-slot="aui_assistant-footer"]')).toBe(
       actions?.closest('[data-slot="aui_assistant-footer"]')
     )
-    expect(metrics?.querySelector('summary')).toBeTruthy()
+    fireEvent.click(within(metrics as HTMLElement).getByRole('button', { name: 'Usage and cost' }))
+    expect(within(screen.getByRole('dialog')).getByText(/1.6k token/)).toBeTruthy()
   })
 
   it('renders assistant provider errors inline', () => {

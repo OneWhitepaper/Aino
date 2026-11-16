@@ -272,6 +272,7 @@ export function BotsPane() {
   const [collapsedRosterSections, setCollapsedRosterSections] = useState<Set<string>>(() => new Set())
   const hiddenSectionRef = useRef<null | HTMLDivElement>(null)
   const activityToasts = useValue($activityToasts)
+  const paneVisible = useValue($botsPaneVisible)
   const groupChatName = useValue($groupChatWorkspace)
   // Main-tab ownership is a module Map; this rev subscription makes the
   // shouldRenderGroupChatInPane gate below reactive to tab open/close
@@ -524,13 +525,15 @@ export function BotsPane() {
       setSectionDialog,
       renderBotRow,
       renderGroupRow,
-      sortedGroupRows
+      sortedGroupRows,
+      onCreateGroup: () => setGroupCreateOpen(true)
     })
 
   return (
     <div className="aino-bots-rail">
       {renderRosterSearch({
         b,
+        allLabel: t.skills.all,
         activityToasts,
         activeSourceRoster,
         roster,
@@ -554,6 +557,8 @@ export function BotsPane() {
       <div className="aino-roster-scroll">
         {renderRosterToolbar({
           b,
+          listedBotCount: rosterRows.filter(row => row.kind === 'bot').length,
+          projectHeaderActions: paneVisible,
           activityToasts,
           activeSourceRoster,
           roster,

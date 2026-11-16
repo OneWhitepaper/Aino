@@ -15,11 +15,25 @@ const identities = [
 
 describe('readable mention projection', () => {
   it('only projects exact seated addresses and leaves email, unknown and longer handles intact', () => {
-    const raw = 'Contact a@designer or @designer-extra. @missing @u6d4b-u8bd5 和 @designer'
+    const raw =
+      'Contact a@designer https://example.com/#@designer `@designer` or @designer-extra. @missing @u6d4b-u8bd5 和 @designer'
+
     const projection = projectGroupMentions(raw, identities)
-    expect(projection.text).toBe('Contact a@designer or @designer-extra. @missing @测试 和 @Visual Designer')
+    expect(projection.text).toBe(
+      'Contact a@designer https://example.com/#@designer `@designer` or @designer-extra. @missing @测试 和 @Visual Designer'
+    )
     expect(projection.spans.map(span => span.handle)).toEqual(['u6d4b-u8bd5', 'designer'])
     expect(projection.raw).toBe(raw)
+  })
+
+  it('shows names after conversational punctuation and preserves their address while editing nearby text', () => {
+    const raw = '不是自信地瞎说。@u6d4b-u8bd5 你会问什么？（@designer）'
+    const projection = projectGroupMentions(raw, identities)
+
+    expect(projection.text).toBe('不是自信地瞎说。@测试 你会问什么？（@Visual Designer）')
+    expect(editGroupMentions(projection, projection.text + ' 请回答', projection.text.length + 4).raw).toBe(
+      raw + ' 请回答'
+    )
   })
 
   it('keeps duplicated names bound to their respective addresses across edits elsewhere', () => {

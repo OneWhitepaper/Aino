@@ -8,7 +8,6 @@ profile's OWN scope (``.env`` over the env frozen at activation) — not skip bi
 config flag is off, and not rebuild from ``.env`` alone (systemd / ``op run`` injection has no file).
 """
 import asyncio
-from contextlib import nullcontext
 from unittest import mock
 
 import pytest
@@ -65,8 +64,14 @@ def test_standalone_turn_binds_launch_profile_scope_after_hosted_activation(stan
 
 
 def test_standalone_without_hosted_activation_stays_unscoped(standalone):
+    from hermes_constants import get_hermes_home_override
+    from tools.terminal_scope import get_terminal_scope
+
     runner, _secondary = standalone
     source = mock.MagicMock(profile=None)
-    assert isinstance(runner._profile_scope_for_source(source), nullcontext)
+    with runner._profile_scope_for_source(source):
+        assert current_secret_scope() is None
+        assert get_hermes_home_override() is None
+        assert get_terminal_scope() is None
     runner._handle_message = mock.AsyncMock(side_effect=lambda event: current_secret_scope())
     assert asyncio.run(runner._primary_message_handler()(mock.MagicMock(source=source))) is None

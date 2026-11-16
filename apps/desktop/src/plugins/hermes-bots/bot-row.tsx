@@ -103,14 +103,49 @@ interface BotRowProps {
   showHandle?: boolean
 }
 
-function botMessagePreview(preview: string | undefined, fromBot: ReturnType<typeof previewKind>['fromBot']): string {
-  return stripPreviewMarkdown(fromBot ? (preview || '').replace(A2A_PREFIX_RE, '').trim() || '…' : preview || '')
-}
-
 function groupMessagePreview(fromKind: string | undefined, author: string, text: string, you: string): string {
   const speaker = fromKind === 'user' ? you : author
 
   return `${speaker}: ${stripPreviewMarkdown(text) || '…'}`
+}
+
+function botRowStateLabel(
+  source: ReturnType<typeof botSourceStatus>,
+  needsAttention: boolean,
+  mood: ReturnType<typeof botWorkingMood>,
+  labels: ReturnType<typeof useBots>
+): string {
+  if (!source.available) {
+    return source.label
+  }
+
+  if (needsAttention) {
+    return labels.roster.needsAttention
+  }
+
+  return mood !== 'idle' ? labels.tools.working : labels.roster.ready
+}
+
+interface BotRowDetailsProps {
+  description: string
+  handle: string
+  showHandle?: boolean
+}
+
+function BotRowDetails({ description, handle, showHandle }: BotRowDetailsProps) {
+  if (!showHandle && !description) {
+    return null
+  }
+
+  return (
+    <div className="aino-roster-bot-preview">
+      {showHandle ? (
+        <span className="shrink-0 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{`@${handle}`}</span>
+      ) : null}
+      {showHandle && description ? <span className="shrink-0 text-(--ui-text-quaternary)">·</span> : null}
+      {description ? <span className="min-w-0 truncate">{description}</span> : null}
+    </div>
+  )
 }
 
 export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandle }: BotRowProps) {
@@ -189,14 +224,22 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
   // keep last_session semantics: any recent activity means the bot is alive.
   const { fromBot } = previewKind(previewSession?.preview, $lastRoster.get(), bot.connectionId)
 
-  // DM previews read like DMs: strip the delivery prefix, keep the message.
-  const displayPreview = botMessagePreview(previewSession?.preview, fromBot)
+  const messagePreview = stripPreviewMarkdown(
+    fromBot ? (previewSession?.preview || '').replace(A2A_PREFIX_RE, '').trim() : previewSession?.preview || ''
+  )
+
+  const displayPreview = meta?.description?.trim() || bot.description?.trim() || b.navigation.noDescription
+
+  const stateLabel = botRowStateLabel(sourceStatus, Boolean(attention), botMood, b)
 
   const handle = botHandle(bot.name, bot)
   const gatewayLabel = rosterConnectionLabel(bot) || (bot.connectionId === 'local' ? b.bot.thisDevice : '')
-  const showDetailsRow = Boolean(showHandle || displayPreview || fromBot)
 
   const rowTooltip = [displayName(bot, meta), `@${handle}`, gatewayLabel, sourceStatus.label]
+    .filter(Boolean)
+    .join(' · ')
+
+  const historyHint = [messagePreview, rowAgeTs ? rowAge(rowAgeTs * 1000, t.sidebar.row) : '']
     .filter(Boolean)
     .join(' · ')
 
@@ -243,6 +286,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
     <RowButton
       aria-busy={isOpening || undefined}
       aria-current={isActive || undefined}
+      aria-description={historyHint || undefined}
       aria-label={rowTooltip}
       className={cn(
         'aino-roster-bot-row',
@@ -270,7 +314,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
           mood={botMood}
           name={bot.name}
           shape={shape}
-          size={32}
+          size={33}
         />
         <span className="aino-roster-bot-status">
           <SidebarRowLead>
@@ -297,7 +341,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
                 />
               </Tip>
             ) : null}
-            <Tip label={rowTooltip}>
+            <Tip label={[rowTooltip, historyHint].filter(Boolean).join('\n')}>
               <span className="aino-roster-bot-label">{displayName(bot, meta)}</span>
             </Tip>
           </div>
@@ -313,19 +357,9 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
           {isOpening ? (
             <GlyphSpinner ariaLabel={b.bot.openingChat} className="shrink-0 text-xs text-(--ui-text-secondary)" />
           ) : null}
-          {rowAgeTs ? <span className="aino-roster-row-age">{rowAge(rowAgeTs * 1000, t.sidebar.row)}</span> : null}
+          <span className="aino-roster-row-age">{stateLabel}</span>
         </div>
-        {showDetailsRow ? (
-          <div className="aino-roster-bot-preview">
-            {showHandle ? (
-              <span className="shrink-0 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{`@${handle}`}</span>
-            ) : null}
-            {showHandle && displayPreview ? <span className="shrink-0 text-(--ui-text-quaternary)">·</span> : null}
-            {displayPreview ? (
-              <span className={cn('min-w-0 truncate', fromBot && 'italic')}>{displayPreview}</span>
-            ) : null}
-          </div>
-        ) : null}
+        <BotRowDetails description={displayPreview} handle={handle} showHandle={showHandle} />
       </div>
     </RowButton>
   )

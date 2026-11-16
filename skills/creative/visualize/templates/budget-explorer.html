@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Response budget explorer</title>
+<style>
+:root{font-family:system-ui,sans-serif;color-scheme:light dark;--demo-text:#20252d;--demo-muted:#657081;--demo-border:#ccd2da}
+@media(prefers-color-scheme:dark){:root{--demo-text:#eef3f8;--demo-muted:#adbacb;--demo-border:#465164}}
+*{box-sizing:border-box}
+body{margin:0;color:var(--foreground,var(--demo-text));background:transparent;line-height:1.5}
+main{max-width:54rem;margin:auto;padding:clamp(1rem,4vw,2rem)}
+h1{font-size:1.5rem;line-height:1.25;margin:0 0 .4rem}
+p{margin:.4rem 0 1.2rem;color:var(--muted-foreground,var(--demo-muted))}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+label{display:block;font-size:.9rem}
+input{display:block;width:100%;margin:.7rem 0;accent-color:var(--accent,#377bdb)}
+output{font-variant-numeric:tabular-nums}
+figure{margin:1.5rem 0;padding:1rem 0;border-block:1px solid var(--border,var(--demo-border))}
+svg{display:block;width:100%;height:auto;overflow:visible}
+figcaption{margin-top:.6rem;font-size:.85rem;color:var(--muted-foreground,var(--demo-muted))}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:.5rem .2rem;border-bottom:1px solid var(--border,var(--demo-border));text-align:left}
+th:last-child,td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.summary{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:1rem}
+button{font:inherit;color:inherit;border:1px solid var(--border,var(--demo-border));border-radius:.5rem;padding:.4rem .8rem;background:var(--card,transparent);cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent,#377bdb);outline-offset:3px}
+@media(max-width:36rem){.controls{grid-template-columns:1fr}.summary{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+<h1>Response budget explorer</h1>
+<p>Illustrative values, not a measurement. Adjust each stage to see how it contributes to the total response time.</p>
+<div class="controls">
+<label>Network <output id="network-value" for="network">120 ms</output><input id="network" type="range" min="0" max="800" step="10" value="120"></label>
+<label>Processing <output id="processing-value" for="processing">240 ms</output><input id="processing" type="range" min="0" max="800" step="10" value="240"></label>
+<label>Rendering <output id="rendering-value" for="rendering">80 ms</output><input id="rendering" type="range" min="0" max="800" step="10" value="80"></label>
+</div>
+<figure>
+<svg viewBox="0 0 720 100" role="img" aria-labelledby="chart-title chart-desc">
+<title id="chart-title">Contribution to response time</title>
+<desc id="chart-desc">The table below provides the same values.</desc>
+<rect id="network-bar" x="0" y="8" width="0" height="44" rx="2" fill="#377bdb"/>
+<rect id="processing-bar" x="0" y="8" width="0" height="44" rx="2" fill="#7661ba"/>
+<rect id="rendering-bar" x="0" y="8" width="0" height="44" rx="2" fill="#2a8a72"/>
+<text x="0" y="88" fill="currentColor" font-size="16">0 ms</text>
+<text x="720" y="88" text-anchor="end" fill="currentColor" font-size="16">2400 ms maximum</text>
+</svg>
+<figcaption>Common fixed scale: 0–2400 ms. Color is supplementary; the table names every stage.</figcaption>
+</figure>
+<table><caption>Stage contributions</caption><thead><tr><th scope="col">Stage</th><th scope="col">Time</th></tr></thead>
+<tbody><tr><th scope="row">Network</th><td id="network-cell">120 ms</td></tr><tr><th scope="row">Processing</th><td id="processing-cell">240 ms</td></tr><tr><th scope="row">Rendering</th><td id="rendering-cell">80 ms</td></tr></tbody></table>
+<div class="summary"><strong>Total: <output id="total" aria-live="polite">440 ms</output></strong><button id="reset" type="button">Reset example</button></div>
+</main>
+<script>
+'use strict';
+const stages=['network','processing','rendering'];
+const defaults=[120,240,80];
+function update(){
+  let total=0;
+  for(const id of stages){
+    const input=document.getElementById(id);
+    const value=Math.max(0,Math.min(800,Number(input.value)||0));
+    const bar=document.getElementById(id+'-bar');
+    bar.setAttribute('x',String(total/2400*720));
+    bar.setAttribute('width',String(value/2400*720));
+    document.getElementById(id+'-value').textContent=value+' ms';
+    document.getElementById(id+'-cell').textContent=value+' ms';
+    total+=value;
+  }
+  document.getElementById('total').textContent=total+' ms';
+  document.getElementById('chart-desc').textContent='Total '+total+' milliseconds. See the table for individual stages.';
+}
+for(const id of stages)document.getElementById(id).addEventListener('input',update);
+document.getElementById('reset').addEventListener('click',()=>{stages.forEach((id,index)=>{document.getElementById(id).value=String(defaults[index]);});update();});
+update();
+</script>
+</body>
+</html>

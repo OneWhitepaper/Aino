@@ -46,6 +46,7 @@ async def probe():
         live = authority.sessions[sid]
         parent, other_parent = Agent(), Agent()
         parent.session_id, other_parent.session_id = sid, 'foreign-session'
+        parent._session_db = authority.db
         with runner._agent_cache_lock:
             runner._agent_cache[live.route] = (parent, 'fixture')
         children = {}
@@ -55,8 +56,10 @@ async def probe():
                 child._subagent_id = name
                 child._delegate_parent_ref = weakref.ref(ancestor)
                 child._parent_session_id = ancestor.session_id
+                child._session_db = authority.db
                 _register_child(child, ancestor, name + '-goal', owner_session_id=None,
                                 owner_transport=None, owner_session_record=None)
+            receipt['list'] = (await rpc(ws, 'subagent.list', session_id=sid))['result']['subagents']
             # The exact Desktop producer frames (subagent-controls.tsx).
             for name in ('owned', 'sibling'):
                 steer = await rpc(ws, 'subagent.steer', session_id=sid, subagent_id=name, text='check ' + name)
@@ -66,8 +69,16 @@ async def probe():
             receipt['delivered'] = {name: [child.steered, len(child.stopped)] for name, child in children.items()}
             # A child past its final steer drain refuses instead of dropping the text.
             _close_subagent_steering('owned', children['owned'])
+            receipt['closing'] = (await rpc(ws, 'subagent.list', session_id=sid))['result']['subagents']
             late = await rpc(ws, 'subagent.steer', session_id=sid, subagent_id='owned', text='too late')
             receipt['late'] = late.get('result', late.get('error'))
+            replacement = Agent()
+            replacement.session_id, replacement._session_db = sid, authority.db
+            with runner._agent_cache_lock:
+                runner._agent_cache[live.route] = (replacement, 'fixture')
+            receipt['rebuilt'] = (await rpc(ws, 'subagent.list', session_id=sid))['result']['subagents']
+            receipt['rebuilt_stop'] = (await rpc(ws, 'subagent.interrupt', session_id=sid,
+                                               subagent_id='owned'))['result']
         finally:
             for name, child in children.items():
                 _unregister_subagent(name, agent=child)

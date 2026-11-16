@@ -1,3 +1,5 @@
+import './bot-chat.css'
+
 import { type AppendMessage, AssistantRuntimeProvider, type ThreadMessage } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
 import type { ReadableAtom } from 'nanostores'
@@ -6,8 +8,8 @@ import { memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useStat
 import { useLocation } from 'react-router'
 
 import type { SubmitTextOptions } from '@/app/session/hooks/use-prompt-actions/utils'
-import { sessionShouldHaveTranscript } from '@/app/session/hooks/use-session-actions/utils'
 import { SummaryWorkspace } from '@/app/shell/summary-workspace'
+import { ChatEmptySlot } from '@/components/assistant-ui/chat-empty-slot'
 import { Thread } from '@/components/assistant-ui/thread'
 import { TranscriptWindowProvider } from '@/components/assistant-ui/thread/transcript-window'
 import { Backdrop } from '@/components/Backdrop'
@@ -55,11 +57,12 @@ import { $transcriptTailBySessionId, transcriptTailState } from '@/store/transcr
 import { isAuxiliaryWindow, isMainWindow } from '@/store/windows'
 import type { SessionInfo } from '@/types/hermes'
 
-import { appViewForPath, primaryRouteSelectedSessionId, routeSessionId } from '../routes'
+import { appViewForPath, primaryRouteSelectedSessionId } from '../routes'
 import { titlebarHeaderBaseClass, titlebarHeaderShadowClass, titlebarHeaderTitleClass } from '../shell/titlebar'
 
+import { BotConversationHeader } from './bot-conversation-header'
 import { ChatDropOverlay } from './chat-drop-overlay'
-import { dropOverlayKind, useShowChatBar } from './chat-surface-state'
+import { dropOverlayKind } from './chat-surface-state'
 import { ChatSwapOverlay, ChatSyncBadge } from './chat-swap-overlay'
 import { ChatBar, ChatBarFallback } from './composer'
 import { FloatingComposerSurface } from './composer/floating-surface'
@@ -74,23 +77,22 @@ import {
 import { useHistoryWindow } from './history-window'
 import { type DroppedFile, partitionDroppedFiles } from './hooks/use-composer-actions'
 import { useFileDropZone } from './hooks/use-file-drop-zone'
-import { shouldShowIntro } from './intro-visibility'
 import { PrimaryChatPrompts } from './primary-chat-prompts'
 import { ProfileTag } from './profile-tag'
 import { ResumeExhaustedOverlay } from './resume-exhausted-overlay'
-import { isRouteSessionMismatch } from './route-session-state'
 import { useRuntimeMessageRepository } from './runtime-repository'
 import { ScrollToBottomButton } from './scroll-to-bottom-button'
 import { useSessionView } from './session-view'
 import { SessionActionsMenu } from './sidebar/session-actions-menu'
-import { routedSessionIsLoading, threadLoadingState } from './thread-loading'
 import {
   backfillOlderTranscriptPage,
   mergeOlderTranscriptPage,
   transcriptBackfillAvailable
 } from './transcript-backfill'
 import { advanceSessionTranscriptWindow, type SessionWindowMemo } from './transcript-window'
+import { useBotChatPresentation } from './use-bot-chat-presentation'
 import { useChatBarState } from './use-chat-bar-state'
+import { useChatSessionPresentation } from './use-chat-session-presentation'
 import { useTranscriptRetention } from './use-transcript-retention'
 
 interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
@@ -135,6 +137,10 @@ interface ChatHeaderProps {
   selectedSessionId: null | string
 }
 
+function chatHeaderSession(sessions: SessionInfo[], sessionId: string | null): SessionInfo | null {
+  return sessionId ? (sessions.find(session => sessionMatchesStoredId(session, sessionId)) ?? null) : null
+}
+
 function chatHeaderSessionPinned(session: SessionInfo | null, selectedSessionId: string | null, pinnedIds: string[]) {
   return session
     ? pinnedIds.includes(sessionPinId(session))
@@ -153,20 +159,20 @@ function ChatHeader({
   const location = useLocation()
   const paneVisible = usePaneVisible()
   const sessions = useStore($sessions)
+  const { canonical: canonicalBotChat } = useBotChatPresentation(selectedSessionId)
   const pinnedSessionIds = useStore($pinnedSessionIds)
   const profiles = useStore($profiles)
 
-  const activeStoredSession =
-    ((selectedSessionId || activeSessionId) &&
-      sessions.find(session => sessionMatchesStoredId(session, selectedSessionId || activeSessionId || ''))) ||
-    null
+  const activeStoredSession = chatHeaderSession(sessions, selectedSessionId || activeSessionId)
+
+  const { t } = useI18n()
 
   const title = activeStoredSession ? sessionTitle(activeStoredSession) : newSessionTitle()
 
   // Which agent/persona owns this chat — glanceable in the header once a
   // second profile exists, so the open session's ownership is never ambiguous
   // (#66003). Single-profile users see the unchanged header.
-  const showProfileTag = profiles.length > 1 && Boolean(activeStoredSession)
+  const showProfileTag = !canonicalBotChat && profiles.length > 1 && Boolean(activeStoredSession)
 
   // Pins live on the durable lineage-root id, but selectedSessionId is the live
   // (tip) id — resolve through the loaded row so the menu reflects the pin
@@ -195,26 +201,30 @@ function ChatHeader({
         }}
       >
         {showProfileTag && <ProfileTag className="pointer-events-auto mr-1.5" profile={activeStoredSession?.profile} />}
-        <SessionActionsMenu
-          align="start"
-          onDelete={
-            selectedSessionId
-              ? () => {
-                  const delegate = sessionTileDelegate()
+        {canonicalBotChat ? (
+          <span className="px-2 text-sm font-medium text-(--ui-text-secondary)">{t.common.bots}</span>
+        ) : (
+          <SessionActionsMenu
+            align="start"
+            onDelete={
+              selectedSessionId
+                ? () => {
+                    const delegate = sessionTileDelegate()
 
-                  return delegate ? delegate.deleteSession(selectedSessionId) : onDeleteSelectedSession()
-                }
-              : undefined
-          }
-          onPin={selectedSessionId ? onToggleSelectedPin : undefined}
-          pinned={selectedIsPinned}
-          profile={activeStoredSession?.profile}
-          sessionId={selectedSessionId || activeSessionId || ''}
-          sideOffset={8}
-          title={title}
-        >
-          <TitleMenuTrigger>{title}</TitleMenuTrigger>
-        </SessionActionsMenu>
+                    return delegate ? delegate.deleteSession(selectedSessionId) : onDeleteSelectedSession()
+                  }
+                : undefined
+            }
+            onPin={selectedSessionId ? onToggleSelectedPin : undefined}
+            pinned={selectedIsPinned}
+            profile={activeStoredSession?.profile}
+            sessionId={selectedSessionId || activeSessionId || ''}
+            sideOffset={8}
+            title={title}
+          >
+            <TitleMenuTrigger>{title}</TitleMenuTrigger>
+          </SessionActionsMenu>
+        )}
       </div>
     </header>
   )
@@ -570,7 +580,7 @@ const ChatViewContent = memo(function ChatViewContent({
   const composerSurfaceId = useComposerSurfaceId()
   const isPrimary = view.kind === 'primary'
   const introHoldsThread = useStore($introHoldsThread) && isPrimary && isMainWindow()
-  const guideOpening = useStoreSelector($introView, introView => introView === 'starting') && isPrimary
+  const guideStarting = useStoreSelector($introView, introView => introView === 'starting')
   const guideStarted = useStoreSelector($introView, introView => introView === 'intro' || introView === 'ended')
   const activeSessionId = useStore(view.$runtimeId)
 
@@ -579,6 +589,7 @@ const ChatViewContent = memo(function ChatViewContent({
   )
 
   const storedId = useStore(view.$storedId)
+  const { canonical: canonicalBotChat, ownerKey: botOwnerKey } = useBotChatPresentation(storedId)
   const setupChat = useSetupChatView()
   // Multi-pane dimming: only the focused surface paints at full strength, so
   // two sessions side by side read as "this one, and that one over there".
@@ -663,76 +674,35 @@ const ChatViewContent = memo(function ChatViewContent({
     return onCancel()
   }, [activeSessionId, onCancel, queueSessionKey])
 
-  // A tile IS its session — no route involved, never "mismatched".
-  const routedSessionId = isPrimary ? routeSessionId(location.pathname) : selectedSessionId
-  const isRoutedSessionView = Boolean(routedSessionId)
-
-  // The URL points at a session the store hasn't loaded yet (sidebar / cmd-K /
-  // direct nav). Derived in render so the swap reads instantly: the same frame
-  // the id changes we drop the old transcript and show the loader, instead of
-  // waiting for the resume effect (which paints a frame later) to clear them.
-  const routeSessionMismatch = isPrimary
-    ? isRouteSessionMismatch(routedSessionId, selectedSessionId, sessions, {
-        activeRuntimeId: activeSessionId,
-        contextSwitching: Boolean(gatewaySwapTarget),
-        messagesEmpty,
-        transcriptStoredSessionId
-      })
-    : false
-
-  // The compact new-session pop-out skips the wordmark/tagline intro — it's a
-  // scratch window, not the full-height empty state. The Appearance toggle
-  // turns it off everywhere else.
-  const showIntro = shouldShowIntro({
-    activeSessionId,
-    auxiliaryWindow: isAuxiliaryWindow(),
-    enabled: introSplash,
-    freshDraftReady,
-    messagesEmpty,
-    primary: isPrimary,
-    routedSessionView: isRoutedSessionView,
-    selectedSessionId
-  })
-
-  // Session is still loading if the route references a session we haven't
-  // resumed yet. Brand-new routed drafts are empty on purpose once a runtime
-  // is bound. A session the list already knows has history must keep the
-  // loader up until a display-authoritative transcript arrives — including
-  // the unproven warm-cache hold, where the runtime is bound but messages
-  // are still suppressed.
-  //
-  // resumeExhausted: the bounded auto-retry in use-route-resume gave up on this
-  // routed session (gateway RPC + REST fallback failed through every attempt).
-  // Suppress the loader and show an explicit error + manual Retry instead of
-  // spinning forever. Gated on the route matching so a stale latch from another
-  // session can't blank the current one.
-  const resumeExhausted = isPrimary && isRoutedSessionView && resumeExhaustedSessionId === routedSessionId
-
-  const routedHasHistory = Boolean(
-    routedSessionId &&
-    sessions.some(session => sessionMatchesStoredId(session, routedSessionId) && sessionShouldHaveTranscript(session))
-  )
-
-  const loadingSession = routedSessionIsLoading({
-    activeSessionId,
-    knownHistory: routedHasHistory,
-    messagesEmpty,
-    resumeExhausted,
-    routeSessionMismatch,
-    routedSessionView: isRoutedSessionView
-  })
-
-  const threadLoading = threadLoadingState(loadingSession, busy, awaitingResponse, lastVisibleIsUser)
-
-  const showChatBar = useShowChatBar({
+  const {
+    botWelcome,
     guideOpening,
-    loadingSession,
+    isRoutedSessionView,
     resumeExhausted,
     routedSessionId,
-    routedSessionView: isRoutedSessionView
+    routeSessionMismatch,
+    showChatBar,
+    showIntro,
+    threadKey,
+    threadLoading
+  } = useChatSessionPresentation({
+    activeSessionId,
+    awaitingResponse,
+    busy,
+    canonicalBotChat,
+    freshDraftReady,
+    gatewaySwapTarget,
+    guideStarting,
+    introSplash,
+    isPrimary,
+    lastVisibleIsUser,
+    messagesEmpty,
+    pathname: location.pathname,
+    resumeExhaustedSessionId,
+    selectedSessionId,
+    sessions,
+    transcriptStoredSessionId
   })
-
-  const threadKey = selectedSessionId || activeSessionId || (isRoutedSessionView ? location.pathname : 'new')
 
   // Landing actions reuse the existing composer and project flows.
   const onHomeInsertPrompt = useCallback(
@@ -815,6 +785,8 @@ const ChatViewContent = memo(function ChatViewContent({
         'relative isolate flex h-full w-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)',
         className
       )}
+      data-bot-chat={canonicalBotChat ? '' : undefined}
+      data-bot-welcome={botWelcome ? '' : undefined}
       data-chat-surface=""
       data-chat-unfocused={surfaceFocused || surfaceHovered ? undefined : ''}
       data-composer-surface-id={composerSurfaceId}
@@ -824,6 +796,7 @@ const ChatViewContent = memo(function ChatViewContent({
       data-home-layout={showIntro && showChatBar ? '' : undefined}
       data-session-anchor={sessionAnchor}
       data-setup-chat={setupChat ? '' : undefined}
+      data-stored-session-id={storedId ?? undefined}
     >
       <Backdrop />
       {/* Tiles get their chrome from the layout zone (chip strip); the modal
@@ -835,6 +808,15 @@ const ChatViewContent = memo(function ChatViewContent({
           onDeleteSelectedSession={onDeleteSelectedSession}
           onToggleSelectedPin={onToggleSelectedPin}
           selectedSessionId={selectedSessionId}
+        />
+      )}
+
+      {canonicalBotChat && botOwnerKey && storedId && (
+        <BotConversationHeader
+          onDelete={onDeleteSelectedSession}
+          onTogglePin={isPrimary ? onToggleSelectedPin : undefined}
+          ownerKey={botOwnerKey}
+          sessionId={storedId}
         />
       )}
 
@@ -927,6 +909,11 @@ const ChatViewContent = memo(function ChatViewContent({
           </FloatingComposerSurface>
         )}
       </ChatRuntimeBoundary>
+      {botWelcome && activeSessionId && (
+        <div data-slot="bot-composer-suggestions">
+          <ChatEmptySlot placement="composer-footer" sessionId={activeSessionId} />
+        </div>
+      )}
     </div>
   )
 })

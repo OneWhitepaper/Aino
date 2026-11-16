@@ -14,6 +14,9 @@ export const frModelSettings: TranslationOverride<ModelSettingsTranslations> = {
       'Générez des images avec votre compte Aino. Les modèles d’image sont gérés séparément des modèles de texte ; la sélection s’applique aux nouvelles conversations.'
   },
   pages: {
+    preferences: 'Préférences du modèle',
+    moreSettings: 'Autres réglages des modèles',
+    fallbackDescription: 'Choisissez un modèle de secours lorsque le modèle principal est temporairement indisponible.',
     description: 'Gérez le modèle par défaut et les modèles utilisés pour les différentes tâches.',
     auxiliaryTask: 'Tâche',
     auxiliaryPurpose: 'Utilisation',

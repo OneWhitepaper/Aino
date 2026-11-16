@@ -4,9 +4,9 @@ import type { CSSProperties, ReactElement, PointerEvent as ReactPointerEvent } f
 import { useLocation } from 'react-router'
 
 import { SessionDraftTitle } from '@/app/chat/session-draft-title'
-import { SessionStatusDot } from '@/app/chat/session-status-dot'
+import { SessionHeaderLead } from '@/app/chat/session-header-lead'
 import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/command-palette/contrib'
-import { SidebarIdentityFooter } from '@/app/shell/sidebar-identity-footer'
+import { ActivityRail } from '@/app/shell/activity-rail'
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
 import { TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
 import tabSessionsIcon from '@/assets/aino-home/tab-sessions.svg'
@@ -38,7 +38,8 @@ import {
   togglePaneVisible,
   toggleTargetZoneTabStrip
 } from '@/components/pane-shell/tree/store'
-import { $workspaceOwnerLabels, workspaceOwnerTitle } from '@/components/pane-shell/workspace-scope'
+import { TOOL_PANEL_DEFAULT_WIDTH } from '@/components/pane-shell/tree/tool-panel-policy'
+import { $workspaceMode, $workspaceOwnerLabels, workspaceOwnerTitle } from '@/components/pane-shell/workspace-scope'
 import { Codicon } from '@/components/ui/codicon'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { discoverBundledPlugins } from '@/contrib/plugins'
@@ -51,6 +52,7 @@ import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-
 import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
+import { profiles as profileArchives } from '@/sdk/bridge'
 import { $botChatScopes } from '@/store/bot-chat-scope'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { watchDeadSessionPrune } from '@/store/dead-session-prune'
@@ -66,9 +68,10 @@ import {
   SIDEBAR_MIN_WIDTH,
   sidebarSide
 } from '@/store/layout'
+import { notifyError } from '@/store/notifications'
 import { $profiles } from '@/store/profile'
 import { $profileRailVisible } from '@/store/profile-rail-prefs'
-import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
+import { runExportProfileFlow } from '@/store/profile-share'
 import { $reviewOpen, $reviewRepoCwd, closeReview, restoreReview, REVIEW_PANE_ID } from '@/store/review'
 import {
   $cronSessions,
@@ -108,7 +111,7 @@ import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { terminalPaletteToggle } from '../right-sidebar/terminal/reveal-focus'
 import { closeUnifiedFilesTab, migrateToolPanelLayout } from '../right-sidebar/tool-panel-actions'
-import { $workspaceIsPage, appViewForPath, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
+import { $workspaceIsPage, appViewForPath, syncWorkspaceRoute, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
 import { Butterbar } from '../shell/butterbar'
 import { TermsButterbar } from '../shell/terms-butterbar'
 
@@ -201,11 +204,6 @@ registry.registerMany([
     render: () => <SubagentPanel />
   },
   {
-    id: 'sidebar-account',
-    area: 'navigation.footer',
-    render: () => <SidebarIdentityFooter />
-  },
-  {
     id: 'sessions',
     area: 'panes',
     // String fallback only (menus, drag ghosts); the tab itself renders
@@ -288,7 +286,7 @@ registry.registerMany([
       collapsible: true,
       dock: { pane: 'workspace', pos: 'right' },
       revealAliases: ['file-browser'],
-      width: 'clamp(22rem, 38vw, 42rem)',
+      width: TOOL_PANEL_DEFAULT_WIDTH,
       minWidth: '20rem',
       maxWidth: '72vw',
       tabLead: () => <Codicon name="folder-opened" size="0.875rem" />,
@@ -308,7 +306,7 @@ registry.registerMany([
       toolPanel: true,
       collapsible: true,
       revealAliases: [REVIEW_PANE_ID],
-      width: 'clamp(22rem, 38vw, 42rem)',
+      width: TOOL_PANEL_DEFAULT_WIDTH,
       minWidth: '20rem',
       maxWidth: '72vw',
       tabLead: () => <Codicon name="git-pull-request" size="0.875rem" />,
@@ -409,9 +407,8 @@ registry.registerMany([
       run: () => window.dispatchEvent(new CustomEvent('hermes:open-keybinds'))
     } satisfies PaletteContribution
   },
-  // Profile sharing: bundle the active profile (config, skills, theme, layout)
-  // into a portable archive, or adopt someone else's. Both open native dialogs,
-  // so the palette closing on select is correct.
+  // Archive sharing uses native dialogs. Import registers a Bot in management
+  // while preserving the current conversation and window layout.
   {
     id: 'profile.export',
     area: PALETTE_AREA,
@@ -431,7 +428,16 @@ registry.registerMany([
       label: 'Import profile…',
       icon: Download,
       keywords: ['profile', 'import', 'share', 'bundle', 'archive', 'restore'],
-      run: () => void runImportProfileFlow()
+      run: async () => {
+        try {
+          if (await profileArchives.import()) {
+            window.location.hash = '#/profiles'
+            syncWorkspaceRoute('/profiles')
+          }
+        } catch (error) {
+          notifyError(error, translateNow('profiles.failedImport'))
+        }
+      }
     } satisfies PaletteContribution
   }
 ])
@@ -520,11 +526,7 @@ const syncWorkspaceTitle = () => {
 
         return { mode: scope?.workspaceMode ?? 'sessions', ownerKey: scope?.workspaceOwnerKey }
       },
-      // The tab's status dot — the SAME primitive the sidebar row and session
-      // tiles render, so the main tab never disagrees with its sidebar row. A
-      // fresh draft has no session to key by, which IS its status: the dot
-      // resolves to `draft` and marks the tab rather than leaving a hole.
-      tabLead: () => <SessionStatusDot session={stored} storedSessionId={selected} />,
+      tabLead: () => <SessionHeaderLead session={stored} />,
       // A draft's name lives in its composer, not in any session row, so the
       // label subscribes to it directly — typing renames the tab without
       // re-registering the pane.
@@ -846,6 +848,7 @@ export function ContribController() {
   const sidebarOpen = useStore($sidebarOpen)
   const location = useLocation()
   const view = appViewForPath(location.pathname)
+  const workspaceMode = useStore($workspaceMode)
   const settingsPage = view === 'settings'
 
   // HUD mode is the SAME app with its frame removed: the wiring (gateway,
@@ -885,6 +888,7 @@ export function ContribController() {
         <PluginPreviewConsentDialog />
         <div
           className="relative flex h-full min-h-0 w-screen flex-col bg-(--ui-bg-chrome) text-(--ui-text-primary)"
+          data-bot-workspace={workspaceMode === 'bots' && view === 'chat' ? '' : undefined}
           // Window-glass hook: this div and the sidebar-wrapper above it are
           // the app shell's two full-window opaque painters; the
           // [data-hermes-glass] rules in styles.css clear them so the tint
@@ -924,14 +928,18 @@ export function ContribController() {
                   'max(calc(var(--workspace-right, 0px) + 0.5rem), calc(var(--titlebar-tools-right, 0.75rem) + var(--titlebar-tools-width, 8.5rem) + 0.75rem))'
               }}
             >
-              <TitlebarSlot
-                area="titleBar.left"
-                className="absolute inset-y-0 left-0 flex min-w-0 max-w-full items-center gap-2"
-              />
-              <TitlebarSlot
-                area="titleBar.right"
-                className="absolute inset-y-0 right-0 flex min-w-0 max-w-full items-center justify-end gap-2"
-              />
+              {(view === 'chat' || view === 'extension') && (
+                <TitlebarSlot
+                  area="titleBar.left"
+                  className="absolute inset-y-0 left-0 flex min-w-0 max-w-full items-center gap-2"
+                />
+              )}
+              {(view === 'chat' || view === 'extension') && (
+                <TitlebarSlot
+                  area="titleBar.right"
+                  className="absolute inset-y-0 right-0 flex min-w-0 max-w-full items-center justify-end gap-2"
+                />
+              )}
             </div>
             <TitlebarSlot
               area="titleBar.center"
@@ -940,27 +948,35 @@ export function ContribController() {
             />
           </div>
 
-          {/* Keep the tiling tree mounted while Settings owns the foreground.
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            {!isAuxiliaryWindow() && <ActivityRail />}
+            <div
+              className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+              data-aino-workspace-frame={isAuxiliaryWindow() ? undefined : ''}
+            >
+              {/* Keep the tiling tree mounted while Settings owns the foreground.
               Visibility preserves terminal/session lifecycles and restores the
               user's layout instantly when they return to chat. */}
-          <div
-            className={
-              settingsPage
-                ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
-                : 'relative flex min-h-0 min-w-0 flex-1'
-            }
-            inert={settingsPage}
-          >
-            <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
-              <LayoutTreeRoot />
-            </WindowTitlebarContext.Provider>
-          </div>
+              <div
+                className={
+                  settingsPage
+                    ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
+                    : 'relative flex min-h-0 min-w-0 flex-1'
+                }
+                inert={settingsPage}
+              >
+                <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
+                  <LayoutTreeRoot />
+                </WindowTitlebarContext.Provider>
+              </div>
 
-          {settingsPage && (
-            <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-              <WiredPane part="settings" />
+              {settingsPage && (
+                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                  <WiredPane part="settings" />
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
           {!settingsPage && <SessionTileCloseConfirm />}

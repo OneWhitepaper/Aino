@@ -2342,6 +2342,7 @@ dependencies = [
     { name = "winrt-windows-applicationmodel", marker = "sys_platform == 'win32'" },
     { name = "winrt-windows-foundation", marker = "sys_platform == 'win32'" },
     { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-management-deployment", marker = "sys_platform == 'win32'" },
     { name = "winrt-windows-services-store", marker = "sys_platform == 'win32'" },
 ]
 
@@ -2774,6 +2775,7 @@ requires-dist = [
     { name = "winrt-windows-applicationmodel", marker = "python_full_version >= '3.14' and sys_platform == 'win32'", specifier = ">=3.2.1,<4" },
     { name = "winrt-windows-foundation", marker = "python_full_version >= '3.14' and sys_platform == 'win32'", specifier = ">=3.2.1,<4" },
     { name = "winrt-windows-foundation-collections", marker = "python_full_version >= '3.14' and sys_platform == 'win32'", specifier = ">=3.2.1,<4" },
+    { name = "winrt-windows-management-deployment", marker = "python_full_version >= '3.14' and sys_platform == 'win32'", specifier = ">=3.2.1,<4" },
     { name = "winrt-windows-services-store", marker = "python_full_version >= '3.14' and sys_platform == 'win32'", specifier = ">=3.2.1,<4" },
     { name = "youtube-transcript-api", marker = "extra == 'youtube'", specifier = "==1.2.4" },
 ]
@@ -7530,6 +7532,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/47/b3301d964422d4611c181348149a7c5956a2a76e6339de451a000d4ae8e7/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win32.whl", hash = "sha256:33188ed2d63e844c8adfbb82d1d3d461d64aaf78d225ce9c5930421b413c45ab", size = 62211, upload-time = "2025-09-20T07:11:52.411Z" },
     { url = "https://files.pythonhosted.org/packages/20/59/5f2c940ff606297129e93ebd6030c813e6a43a786de7fc33ccb268e0b06b/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:d4cfece7e9c0ead2941e55a1da82f20d2b9c8003bb7a8853bb7f999b539f80a4", size = 70399, upload-time = "2025-09-20T07:11:53.254Z" },
     { url = "https://files.pythonhosted.org/packages/f8/2d/2c8eb89062c71d4be73d618457ed68e7e2ba29a660ac26349d44fc121cbf/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:3884146fea13727510458f6a14040b7632d5d90127028b9bfd503c6c655d0c01", size = 61392, upload-time = "2025-09-20T07:11:53.993Z" },
+]
+
+[[package]]
+name = "winrt-windows-management-deployment"
+version = "3.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4f/74/6000c3e31c80185e18ab590a7f979f61c5c71aaaf61c67f2c37386d25c53/winrt_windows_management_deployment-3.2.1.tar.gz", hash = "sha256:9e2b9e08c55e321a0c31bbce6047f1038b0e1c1ce36204f5fb725778c33f5b81", size = 29650, upload-time = "2025-06-06T14:42:18.882Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/c5/9e4f40b71849abe0cac89f2147db411166046f42509fec6a7d0b5b798fe9/winrt_windows_management_deployment-3.2.1-cp311-cp311-win32.whl", hash = "sha256:df449756ef4331207c93fe9610c3e8d3f726cd1ebb5db26d7eeab5fb24b85e1b", size = 152352, upload-time = "2025-06-06T07:19:21.957Z" },
+    { url = "https://files.pythonhosted.org/packages/db/30/828b88bc1c3b6d66d7a61b572681ecbde9e6aa3d4beee4cbf9aed72db14c/winrt_windows_management_deployment-3.2.1-cp311-cp311-win_amd64.whl", hash = "sha256:a09072a41514667188083e6e3c0b6b6783fba6cad19bd328558e099f4f81b8be", size = 174968, upload-time = "2025-06-06T07:19:22.869Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/92/2f53e42fce868f785a5dde9da627ec5d4eb72c4a2c8f76c565db95864683/winrt_windows_management_deployment-3.2.1-cp311-cp311-win_arm64.whl", hash = "sha256:08e4027eb11815143461603be0442500229d92257a3c4ebb1c064d085cb7e1e7", size = 158337, upload-time = "2025-06-06T07:19:24.029Z" },
+    { url = "https://files.pythonhosted.org/packages/17/d4/8fdb0ae8ef95432c5bac46024ace7c3f0b039ea075899ca876510c0eb940/winrt_windows_management_deployment-3.2.1-cp312-cp312-win32.whl", hash = "sha256:b48ad50ca3da4d7583c32ae209489946d5cc255d6bf59b455bffcd3497c42be6", size = 152727, upload-time = "2025-06-06T07:19:24.975Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/4a/6f84c9f24742a48564a89eda2afdac750db4cffd5ba3f19eab3f8a70a841/winrt_windows_management_deployment-3.2.1-cp312-cp312-win_amd64.whl", hash = "sha256:312d6313c509dfb6285c7d8673409dda7ca0143741e9f8b81c0d08b7b8bbc93d", size = 174190, upload-time = "2025-06-06T07:19:25.929Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/87/06adbb49a919d8367f741589426b7b63473b77e77538521abb3849ead4ca/winrt_windows_management_deployment-3.2.1-cp312-cp312-win_arm64.whl", hash = "sha256:df3c3ff94bf2699741b625b15d8212965ad342b674e8d62950d56659400a15bf", size = 158085, upload-time = "2025-06-06T07:19:26.821Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/5e/c6cedc3372426b39245ba3520b40b69a8c15d8675ece4d5cc86fb1b8d019/winrt_windows_management_deployment-3.2.1-cp313-cp313-win32.whl", hash = "sha256:926a6d5a24600c94975483f5bc992b816dcdf4460c4fb955686e25368c635afc", size = 152745, upload-time = "2025-06-06T07:19:27.698Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/c2/31a38a12a613fa9020c22e4acaec7dbfd232be3f4e9490d15ac930c8ddf6/winrt_windows_management_deployment-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:26cf8df85ba94ff10c771af9c5293696d8e31a87f5bcbb00883afeb2b431efa2", size = 174234, upload-time = "2025-06-06T07:19:29.183Z" },
+    { url = "https://files.pythonhosted.org/packages/26/27/c8b2926d268484c3e749f3e99b89a0ccc03d548c90fce8b388079d098c79/winrt_windows_management_deployment-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:afd9c7c2defecb2f5eb2bfaf6751e5aa80bb96aeb65a81ca3710f91a624c003d", size = 158080, upload-time = "2025-06-06T07:19:30.407Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/33/94a1e5fed09550e1d200e28922c2666501acf4ce715f6ce7d08632375976/winrt_windows_management_deployment-3.2.1-cp314-cp314-win32.whl", hash = "sha256:1b8d50598b0c3fd5580b4bcb9383007a248fc49f6c8863ed2093b0db577574cb", size = 155730, upload-time = "2025-09-20T07:13:26.681Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/34/9a2205298282e4635bf2f065fa39b98fec48ce67c297de8c9b81822d57d1/winrt_windows_management_deployment-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:fbf20fa4becf20edb9980bfb9e4f45dfd323d57e4819c49c40a65fde82a1bb24", size = 176999, upload-time = "2025-09-20T07:13:27.613Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/c4/5bc3d686a3bf831e2ce7dbccf2cd329a46aa7755b37c1a0f71d1b7107be3/winrt_windows_management_deployment-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:ba9477e3b5024e74d60432b488f625628c7c35c2409d10cd9324a5770a4e8a18", size = 166450, upload-time = "2025-09-20T07:13:28.585Z" },
 ]
 
 [[package]]

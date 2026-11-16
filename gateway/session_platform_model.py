@@ -117,20 +117,31 @@ def _owned_state(connection, ref, live, purpose):
     except ManagedBindingError as exc:
         raise RuntimeStoreError(str(exc)) from None
     state["running"] = connection.authority._handle(ref).execution_state == "running"
-    state["_interrupt_managed"] = lambda: _interrupt_active(connection.authority, ref)
+    state["_interrupt_managed"] = lambda generation=None, revision=None: _interrupt_active(
+        connection.authority, ref, generation, revision)
     return live, state
 
 
-def _interrupt_active(authority, ref):
+def _interrupt_active(authority, ref, generation=None, revision=None):
     from agent.interrupt_compat import request_hard_interrupt
-    try:
-        if authority._handle(ref).execution_state != "running":
-            return
-    except RuntimeStoreError:
+    live = authority.sessions.get(ref.session_id)
+    if live is None:
         return
-    agent = authority.agent(ref)
-    if agent is not None:
-        request_hard_interrupt(agent)
+    with live.event_stream.lock:
+        if generation is not None and authority.executing.get(ref.session_id) != generation:
+            return
+        with get_registry()._lock:
+            current = get_registry()._active.get((binding_key(authority, ref.session_id), 'chat'))
+            if revision is not None and current is not None and current.revision != revision:
+                return
+        try:
+            if authority._handle(ref).execution_state != "running":
+                return
+        except RuntimeStoreError:
+            return
+        agent = authority.agent(ref)
+        if agent is not None:
+            request_hard_interrupt(agent, tool_reason='managed_credentials_revoked')
 
 
 def _persist(authority, sid, binding):
@@ -148,7 +159,7 @@ def managed_agent_context(agent, authority, sid):
     if not isinstance(key, ManagedCredential):
         return
     state = managed_state(authority, sid)
-    binding = get_registry().get(binding_key(authority, sid), state)
+    binding = get_registry().get_for_runtime(binding_key(authority, sid), state)
     if binding is None:
         raise RuntimeStoreError("awaiting_managed_credentials")
     agent._managed_model_metadata = persisted_managed_model_metadata(binding)
@@ -165,12 +176,9 @@ async def ticket(connection, ref, params):
         _, state = _owned(connection, ref, issuer=True, purpose=purpose)
         peer = connection.transport
         key = binding_key(connection.authority, ref.session_id)
-        if state.get("transport") not in (None, peer):
-            get_registry().clear_session(key, purpose=purpose)
-        state["transport"] = peer
         try:
             owner, model_id = _managed_owner(params), _managed_text(params, "model_id", 128)
-            value = get_registry().issue(key, state, peer, owner, model_id, purpose=purpose)
+            value = get_registry().issue(key, state, peer, owner, model_id, purpose=purpose, handoff=True)
         except (ManagedBindingError, ValueError, TypeError) as exc:
             raise RuntimeStoreError(str(exc)) from None
     return {"session_ticket": value, "managed_model_binding": 1, 'managed_image_binding': 1, 'managed_device_key': 1}
@@ -220,7 +228,8 @@ async def bind(connection, ref, params):
         _, state = _owned(connection, ref, purpose=purpose)
         try:
             binding = _binding(params, binding_key(connection.authority, ref.session_id))
-            get_registry().bind(binding, state, connection.transport)
+            with live.event_stream.lock:
+                get_registry().bind(binding, state, connection.transport)
         except (ManagedBindingError, ValueError, TypeError, OverflowError) as exc:
             raise RuntimeStoreError(str(exc)) from None
         if purpose == 'image':
@@ -241,7 +250,8 @@ async def renew(connection, ref, params):
         _, state = _owned(connection, ref, purpose=purpose)
         try:
             binding = _binding(params, binding_key(connection.authority, ref.session_id))
-            get_registry().renew(binding, state, connection.transport)
+            with live.event_stream.lock:
+                get_registry().renew(binding, state, connection.transport)
         except (ManagedBindingError, ValueError, TypeError, OverflowError) as exc:
             raise RuntimeStoreError(str(exc)) from None
     return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}

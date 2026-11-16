@@ -42,7 +42,7 @@ export const jaPreviewWeb: TranslationOverride<Translations['preview']['web']> =
   restartFailedMessage: 'Hermes がサーバーを再起動できませんでした。',
   stillWorking:
     'Hermes はまだ作業中ですが、再起動の結果がまだ届いていません。サーバーコマンドがフォアグラウンドで実行されている可能性があります。',
-  workspaceReloading: 'ワークスペースが変更され、プレビューを再読み込み中',
+  workspaceReloading: 'プロジェクトが変わったためプレビューを再読み込み中',
   fileChanged: url => `ファイルが変更され、プレビューを再読み込み中: ${url}`,
   filesChanged: (count, url) => `${count} 件のファイルが変更され、プレビューを再読み込み中: ${url}`,
   watchFailed: message => `プレビューファイルを監視できませんでした: ${message}`,

@@ -217,7 +217,7 @@ def test_gateway_startup_skips_bot_recovery_when_the_mailbox_dir_is_unusable(tmp
     root = _deny_mailbox_lock(monkeypatch, tmp_path)
     db = SessionDB(tmp_path / 'state.db')
     try:
-        runner = SimpleNamespace(session_authority=SimpleNamespace(db=db, waiters={}),
+        runner = SimpleNamespace(session_authority=SimpleNamespace(db=db, waiters={}, profile_id=str(tmp_path)),
                                  session_runtime_descriptor={})
 
         async def api(_runner):

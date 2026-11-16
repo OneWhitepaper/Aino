@@ -681,6 +681,8 @@ class SubagentSnapshot(Result):
     tool_count: int | None = None
     last_tool: str | None = None
     accepting_steer: bool | None = None
+    #: Whether this caller owns the current child generation, independent of roster visibility.
+    can_control: bool = False
     #: The child's own stored session (``session.transcript`` reads it by ``subagent_id``); None until it has one.
     child_session_id: str | None = None
 

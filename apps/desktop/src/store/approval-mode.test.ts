@@ -62,6 +62,39 @@ describe('profile-scoped approval mode cache', () => {
     expect(approvalModeForProfile('default')).toBe('smart')
   })
 
+  it('rolls a failed write back only on its owning connection while another same-named profile saves', async () => {
+    reconcileApprovalModeForProfile('default', 'manual')
+    reconcileApprovalModeForProfile('default', 'smart', 'local')
+    reconcileApprovalModeForProfile('default', 'off', 'studio')
+    const local = deferred<{ value: string }>()
+    const studio = deferred<{ value: string }>()
+    const localRequest = vi.fn(() => local.promise)
+    const studioRequest = vi.fn(() => studio.promise)
+    const localWrite = setApprovalModeForProfile(localRequest, 'default', 'off', 'local')
+    const studioWrite = setApprovalModeForProfile(studioRequest, 'default', 'manual', 'studio')
+
+    expect(approvalModeForProfile('default', 'local')).toBe('off')
+    expect(approvalModeForProfile('default', 'studio')).toBe('manual')
+    studio.resolve({ value: 'manual' })
+    await studioWrite
+    local.reject(new Error('Local write failed'))
+    await expect(localWrite).rejects.toThrow('Local write failed')
+
+    expect(approvalModeForProfile('default', 'local')).toBe('smart')
+    expect(approvalModeForProfile('default', 'studio')).toBe('manual')
+    expect(approvalModeForProfile('default')).toBe('manual')
+    expect(localRequest).toHaveBeenCalledWith('config.set', {
+      key: 'approvals.mode',
+      value: 'off',
+      profile: 'default'
+    })
+    expect(studioRequest).toHaveBeenCalledWith('config.set', {
+      key: 'approvals.mode',
+      value: 'manual',
+      profile: 'default'
+    })
+  })
+
   it('rolls consecutive failed writes back to the last authoritative value', async () => {
     await syncApprovalModeForProfile(
       vi.fn(async () => ({ value: 'smart' })),

@@ -18,16 +18,21 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 |-------|-------------|------|
 | [`apple-notes`](../user-guide/skills/bundled/apple/apple-apple-notes.md) | Manage Apple Notes via memo CLI: create, search, edit. | `apple/apple-notes` |
 | [`apple-reminders`](../user-guide/skills/bundled/apple/apple-apple-reminders.md) | Apple Reminders via remindctl: add, list, complete. | `apple/apple-reminders` |
+| [`build-run-debug`](../user-guide/skills/bundled/apple/apple-build-run-debug.md) | Build and diagnose macOS apps with existing workflows. | `apple/build-run-debug` |
 | [`findmy`](../user-guide/skills/bundled/apple/apple-findmy.md) | Track Apple devices/AirTags via FindMy.app on macOS. | `apple/findmy` |
 | [`imessage`](../user-guide/skills/bundled/apple/apple-imessage.md) | Send and receive iMessages/SMS via the imsg CLI on macOS. | `apple/imessage` |
+| [`packaging-notarization`](../user-guide/skills/bundled/apple/apple-packaging-notarization.md) | Validate macOS distribution bundles and notarization. | `apple/packaging-notarization` |
+| [`signing-entitlements`](../user-guide/skills/bundled/apple/apple-signing-entitlements.md) | Inspect macOS signatures, entitlements, and trust. | `apple/signing-entitlements` |
 
 ## autonomous-ai-agents
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| [`chronicle`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-chronicle.md) | Explain authorized screen context and recent work. | `autonomous-ai-agents/chronicle` |
 | [`claude-code`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-claude-code.md) | Delegate coding to Claude Code CLI (features, PRs). | `autonomous-ai-agents/claude-code` |
 | [`codex`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-codex.md) | Delegate coding to OpenAI Codex CLI (features, PRs). | `autonomous-ai-agents/codex` |
 | [`computer-use`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-computer-use.md) | Drive the desktop background-first; escalate on signal. | `autonomous-ai-agents/computer-use` |
+| [`control-in-app-browser`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-control-in-app-browser.md) | Operate the selected Aino browser tab with observations. | `autonomous-ai-agents/control-in-app-browser` |
 | [`hermes-agent`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-hermes-agent.md) | Use and troubleshoot Aino desktop and runtime. | `autonomous-ai-agents/hermes-agent` |
 
 ## creative
@@ -38,11 +43,27 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | [`ascii-video`](../user-guide/skills/bundled/creative/creative-ascii-video.md) | ASCII video: convert video/audio to colored ASCII MP4/GIF. | `creative/ascii-video` |
 | [`baoyu-infographic`](../user-guide/skills/bundled/creative/creative-baoyu-infographic.md) | Infographics: 21 layouts x 21 styles (信息图, 可视化). | `creative/baoyu-infographic` |
 | [`claude-design`](../user-guide/skills/bundled/creative/creative-claude-design.md) | Design one-off HTML artifacts (landing, deck, prototype). | `creative/claude-design` |
+| [`design-taste-frontend`](../user-guide/skills/bundled/creative/creative-design-taste-frontend.md) | Design distinctive, coherent interfaces with real content. | `creative/design-taste-frontend` |
+| [`figma-design-to-code`](../user-guide/skills/bundled/creative/creative-figma-design-to-code.md) | Implement Figma designs with verified visual fidelity. | `creative/figma-design-to-code` |
+| [`figma-use`](../user-guide/skills/bundled/creative/creative-figma-use.md) | Inspect and use authorized Figma design context. | `creative/figma-use` |
 | [`humanizer`](../user-guide/skills/bundled/creative/creative-humanizer.md) | Humanize text: strip AI-isms and add real voice. | `creative/humanizer` |
+| [`hyperframes`](../user-guide/skills/bundled/creative/creative-hyperframes.md) | Render deterministic HTML animations into video. | `creative/hyperframes` |
+| [`imagegen`](../user-guide/skills/bundled/creative/creative-imagegen.md) | Generate or edit raster assets with configured models. | `creative/imagegen` |
+| [`impeccable`](../user-guide/skills/bundled/creative/creative-impeccable.md) | Refine interface craft, hierarchy, states and motion. | `creative/impeccable` |
 | [`manim-video`](../user-guide/skills/bundled/creative/creative-manim-video.md) | Manim CE animations: 3Blue1Brown math/algo videos. | `creative/manim-video` |
 | [`p5js`](../user-guide/skills/bundled/creative/creative-p5js.md) | p5.js sketches: gen art, shaders, interactive, 3D. | `creative/p5js` |
 | [`popular-web-designs`](../user-guide/skills/bundled/creative/creative-popular-web-designs.md) | 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS. | `creative/popular-web-designs` |
+| [`product-design`](../user-guide/skills/bundled/creative/creative-product-design.md) | Plan coherent product interfaces from real user tasks. | `creative/product-design` |
+| [`product-design-audit`](../user-guide/skills/bundled/creative/creative-product-design-audit.md) | Audit usability, interaction and interface consistency. | `creative/product-design-audit` |
+| [`product-design-design-qa`](../user-guide/skills/bundled/creative/creative-product-design-design-qa.md) | Compare rendered interfaces with approved designs. | `creative/product-design-design-qa` |
+| [`product-design-get-context`](../user-guide/skills/bundled/creative/creative-product-design-get-context.md) | Inspect product code, screens and design constraints. | `creative/product-design-get-context` |
+| [`product-design-ideate`](../user-guide/skills/bundled/creative/creative-product-design-ideate.md) | Explore interactive design alternatives for real tasks. | `creative/product-design-ideate` |
+| [`product-design-image-to-code`](../user-guide/skills/bundled/creative/creative-product-design-image-to-code.md) | Implement interface screenshots in the existing stack. | `creative/product-design-image-to-code` |
+| [`product-design-research`](../user-guide/skills/bundled/creative/creative-product-design-research.md) | Research interface patterns using traceable sources. | `creative/product-design-research` |
+| [`product-design-url-to-code`](../user-guide/skills/bundled/creative/creative-product-design-url-to-code.md) | Recreate observed web interfaces as local frontends. | `creative/product-design-url-to-code` |
+| [`product-design-user-context`](../user-guide/skills/bundled/creative/creative-product-design-user-context.md) | Capture user tasks, constraints and product evidence. | `creative/product-design-user-context` |
 | [`songwriting-and-ai-music`](../user-guide/skills/bundled/creative/creative-songwriting-and-ai-music.md) | Songwriting craft and Suno AI music prompts. | `creative/songwriting-and-ai-music` |
+| [`visualize`](../user-guide/skills/bundled/creative/creative-visualize.md) | Create interactive explanations and local HTML visuals. | `creative/visualize` |
 
 ## devops
 
@@ -74,11 +95,13 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`document-to-action-items`](../user-guide/skills/bundled/productivity/productivity-document-to-action-items.md) | Extract cited obligations, deadlines, tasks from documents. | `productivity/document-to-action-items` |
+| [`documents`](../user-guide/skills/bundled/productivity/productivity-documents.md) | Create and revise Word files with reviewable structure. | `productivity/documents` |
 | [`google-workspace`](../user-guide/skills/bundled/productivity/productivity-google-workspace.md) | Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python. | `productivity/google-workspace` |
 | [`maps`](../user-guide/skills/bundled/productivity/productivity-maps.md) | Geocode, POIs, routes, timezones via OpenStreetMap/OSRM. | `productivity/maps` |
 | [`meeting-action-items`](../user-guide/skills/bundled/productivity/productivity-meeting-action-items.md) | Turn meeting notes into cited decisions, owners, tickets. | `productivity/meeting-action-items` |
 | [`microsoft-office`](../user-guide/skills/bundled/productivity/productivity-microsoft-office.md) | Create, read, and edit Word, PowerPoint, and Excel files. | `productivity/microsoft-office` |
 | [`pdf`](../user-guide/skills/bundled/productivity/productivity-pdf.md) | PDF files: create, read, merge, fill, OCR, edit text. | `productivity/pdf` |
+| [`presentations`](../user-guide/skills/bundled/productivity/productivity-presentations.md) | Build editable slide decks and inspect their layout. | `productivity/presentations` |
 | [`product-price-monitor`](../user-guide/skills/bundled/productivity/productivity-product-price-monitor.md) | Watch product, flight, or listing prices; alert on target. | `productivity/product-price-monitor` |
 | [`teams-meeting-pipeline`](../user-guide/skills/bundled/productivity/productivity-teams-meeting-pipeline.md) | Teams meeting summaries, job replay, Graph subscriptions. | `productivity/teams-meeting-pipeline` |
 | [`weekly-review-planning`](../user-guide/skills/bundled/productivity/productivity-weekly-review-planning.md) | Weekly reset: commitments, stalled work, next-week plan. | `productivity/weekly-review-planning` |
@@ -90,6 +113,14 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | [`arxiv`](../user-guide/skills/bundled/research/research-arxiv.md) | Search arXiv papers by keyword, author, category, or ID. | `research/arxiv` |
 | [`competitor-news-monitor`](../user-guide/skills/bundled/research/research-competitor-news-monitor.md) | Watch named companies for material news; cited digests. | `research/competitor-news-monitor` |
 | [`grounded-citations`](../user-guide/skills/bundled/research/research-grounded-citations.md) | Ground answers and documents in cited, verifiable sources. | `research/grounded-citations` |
+| [`openai-docs`](../user-guide/skills/bundled/research/research-openai-docs.md) | Find current official OpenAI product and API guidance. | `research/openai-docs` |
+
+## security
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`security-scan`](../user-guide/skills/bundled/security/security-security-scan.md) | Review reachable security risks with reproducible evidence. | `security/security-scan` |
+| [`triage-finding`](../user-guide/skills/bundled/security/security-triage-finding.md) | Validate security findings and separate false positives. | `security/triage-finding` |
 
 ## social-media
 
@@ -101,14 +132,32 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| [`brainstorming`](../user-guide/skills/bundled/software-development/software-development-brainstorming.md) | Turn a product idea into a workable, scoped design. | `software-development/brainstorming` |
 | [`codebase-inspection`](../user-guide/skills/bundled/software-development/software-development-codebase-inspection.md) | Inspect codebases w/ pygount: LOC, languages, ratios. | `software-development/codebase-inspection` |
+| [`coderabbit-review`](../user-guide/skills/bundled/software-development/software-development-coderabbit-review.md) | Review a scoped diff with the CodeRabbit CLI. | `software-development/coderabbit-review` |
+| [`dispatching-parallel-agents`](../user-guide/skills/bundled/software-development/software-development-dispatching-parallel-agents.md) | Delegate independent tasks with clear ownership. | `software-development/dispatching-parallel-agents` |
 | [`dogfood`](../user-guide/skills/bundled/software-development/software-development-dogfood.md) | Exploratory QA of web apps: find bugs, evidence, reports. | `software-development/dogfood` |
+| [`executing-plans`](../user-guide/skills/bundled/software-development/software-development-executing-plans.md) | Carry out a plan with checked, traceable progress. | `software-development/executing-plans` |
+| [`finishing-a-development-branch`](../user-guide/skills/bundled/software-development/software-development-finishing-a-development-branch.md) | Integrate verified branch work and preserve user data. | `software-development/finishing-a-development-branch` |
+| [`frontend-app-builder`](../user-guide/skills/bundled/software-development/software-development-frontend-app-builder.md) | Build interactive frontends faithful to approved designs. | `software-development/frontend-app-builder` |
+| [`frontend-testing-debugging`](../user-guide/skills/bundled/software-development/software-development-frontend-testing-debugging.md) | Test rendered UI flows and diagnose visual regressions. | `software-development/frontend-testing-debugging` |
 | [`github`](../user-guide/skills/bundled/software-development/software-development-github.md) | GitHub via gh CLI: PRs, issues, reviews, repos, auth. | `software-development/github` |
-| [`requesting-code-review`](../user-guide/skills/bundled/software-development/software-development-requesting-code-review.md) | Pre-commit review: security scan, quality gates, auto-fix. | `software-development/requesting-code-review` |
+| [`openai-platform-api-key`](../user-guide/skills/bundled/software-development/software-development-openai-platform-api-key.md) | Configure OpenAI credentials without exposing secrets. | `software-development/openai-platform-api-key` |
+| [`playwright`](../user-guide/skills/bundled/software-development/software-development-playwright.md) | Automate browser flows with observed element references. | `software-development/playwright` |
+| [`react-best-practices`](../user-guide/skills/bundled/software-development/software-development-react-best-practices.md) | Improve React rendering, data flow and bundle performance. | `software-development/react-best-practices` |
+| [`receiving-code-review`](../user-guide/skills/bundled/software-development/software-development-receiving-code-review.md) | Evaluate review findings and fix confirmed issues. | `software-development/receiving-code-review` |
+| [`requesting-code-review`](../user-guide/skills/bundled/software-development/software-development-requesting-code-review.md) | Get evidence-based review before integrating changes. | `software-development/requesting-code-review` |
 | [`simplify-code`](../user-guide/skills/bundled/software-development/software-development-simplify-code.md) | Parallel 4-agent cleanup of recent code changes. | `software-development/simplify-code` |
+| [`skill-creator`](../user-guide/skills/bundled/software-development/software-development-skill-creator.md) | Create focused reusable skills with bundled resources. | `software-development/skill-creator` |
+| [`skill-installer`](../user-guide/skills/bundled/software-development/software-development-skill-installer.md) | Install reviewed skills through the existing skill hub. | `software-development/skill-installer` |
 | [`spike`](../user-guide/skills/bundled/software-development/software-development-spike.md) | Throwaway experiments to validate an idea before build. | `software-development/spike` |
-| [`systematic-debugging`](../user-guide/skills/bundled/software-development/software-development-systematic-debugging.md) | 4-phase root cause debugging: understand bugs before fixing. | `software-development/systematic-debugging` |
-| [`test-driven-development`](../user-guide/skills/bundled/software-development/software-development-test-driven-development.md) | TDD: enforce RED-GREEN-REFACTOR, tests before code. | `software-development/test-driven-development` |
+| [`subagent-driven-development`](../user-guide/skills/bundled/software-development/software-development-subagent-driven-development.md) | Execute a plan with scoped agents and checked results. | `software-development/subagent-driven-development` |
+| [`systematic-debugging`](../user-guide/skills/bundled/software-development/software-development-systematic-debugging.md) | Trace failures to their cause and verify the repair. | `software-development/systematic-debugging` |
+| [`test-driven-development`](../user-guide/skills/bundled/software-development/software-development-test-driven-development.md) | Build behavior with a verified red-green-refactor loop. | `software-development/test-driven-development` |
+| [`using-git-worktrees`](../user-guide/skills/bundled/software-development/software-development-using-git-worktrees.md) | Isolate branch work without disturbing existing edits. | `software-development/using-git-worktrees` |
+| [`using-superpowers`](../user-guide/skills/bundled/software-development/software-development-using-superpowers.md) | Select the development workflow that fits the task. | `software-development/using-superpowers` |
+| [`verification-before-completion`](../user-guide/skills/bundled/software-development/software-development-verification-before-completion.md) | Match completion claims to current execution evidence. | `software-development/verification-before-completion` |
+| [`writing-plans`](../user-guide/skills/bundled/software-development/software-development-writing-plans.md) | Map agreed requirements into verifiable implementation. | `software-development/writing-plans` |
 
 ## web
 

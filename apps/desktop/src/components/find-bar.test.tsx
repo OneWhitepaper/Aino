@@ -588,6 +588,24 @@ function renderFindBarWithNavigation(initialPath = '/session/a') {
 }
 
 describe('FindBar', () => {
+  it('retargets a mounted search bar to an explicit sibling chat without a stale input or highlights', async () => {
+    const first = plantSurface('first')
+    const second = plantSurface('second')
+    first.textContent = 'needle'
+    second.textContent = 'needle needle'
+    openFindBar(first)
+    renderFindBar()
+    const input = (await screen.findByRole('searchbox', { name: /find in page/i })) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'needle' } })
+    await waitFor(() => expect($findInPage.get().matchCount).toBe(1))
+    actStore(() => openFindBar(second))
+    await waitFor(() => expect($findInPage.get().matchCount).toBe(2))
+    expect(input.value).toBe('needle')
+    expect(first.querySelector('mark')).toBeNull()
+    expect(second.querySelectorAll('mark').length).toBe(2)
+    expect($findInPage.get().query).toBe(input.value)
+  })
+
   it('renders nothing while closed', () => {
     renderFindBar()
 

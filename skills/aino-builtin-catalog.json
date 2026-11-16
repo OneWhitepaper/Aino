@@ -1,0 +1,535 @@
+{
+  "schema_version": 1,
+  "collection": "aino-builtin-skills",
+  "description": "Bundled Aino workflows mapped to the 49 requested skill identifiers. This inventory is documentation; existing skill discovery and profile sync remain authoritative.",
+  "skills": [
+    {
+      "source": "superpowers:systematic-debugging",
+      "name": "systematic-debugging",
+      "path": "software-development/systematic-debugging",
+      "integration": "reused",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Existing Aino bundled implementation reused; external source identifier is a capability mapping.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:verification-before-completion",
+      "name": "verification-before-completion",
+      "path": "software-development/verification-before-completion",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:test-driven-development",
+      "name": "test-driven-development",
+      "path": "software-development/test-driven-development",
+      "integration": "reused",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Existing Aino bundled implementation reused; external source identifier is a capability mapping.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "build-web-apps:frontend-testing-debugging",
+      "name": "frontend-testing-debugging",
+      "path": "software-development/frontend-testing-debugging",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "Project frontend test/browser toolchain"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "superpowers:using-superpowers",
+      "name": "using-superpowers",
+      "path": "software-development/using-superpowers",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:brainstorming",
+      "name": "brainstorming",
+      "path": "software-development/brainstorming",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "playwright",
+      "name": "playwright",
+      "path": "software-development/playwright",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [
+        "Node.js/npm and installed Playwright CLI/browser"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/microsoft/playwright-cli"
+    },
+    {
+      "source": "impeccable",
+      "name": "impeccable",
+      "path": "creative/impeccable",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/pbakaus/impeccable"
+    },
+    {
+      "source": "superpowers:finishing-a-development-branch",
+      "name": "finishing-a-development-branch",
+      "path": "software-development/finishing-a-development-branch",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "Git repository and project validation commands"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:executing-plans",
+      "name": "executing-plans",
+      "path": "software-development/executing-plans",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "build-web-apps:frontend-app-builder",
+      "name": "frontend-app-builder",
+      "path": "software-development/frontend-app-builder",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "Project frontend toolchain"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "superpowers:subagent-driven-development",
+      "name": "subagent-driven-development",
+      "path": "software-development/subagent-driven-development",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "delegate_task when available; otherwise explicit sequential execution"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:requesting-code-review",
+      "name": "requesting-code-review",
+      "path": "software-development/requesting-code-review",
+      "integration": "reused",
+      "license": "MIT",
+      "requires": [
+        "Git repository",
+        "delegate_task for an independent reviewer when available"
+      ],
+      "provenance": "Existing Aino bundled implementation reused; external source identifier is a capability mapping.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:using-git-worktrees",
+      "name": "using-git-worktrees",
+      "path": "software-development/using-git-worktrees",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "Git repository"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "build-web-apps:react-best-practices",
+      "name": "react-best-practices",
+      "path": "software-development/react-best-practices",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "React/Next.js project for code application"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "product-design:index",
+      "name": "product-design",
+      "path": "creative/product-design",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "superpowers:writing-plans",
+      "name": "writing-plans",
+      "path": "software-development/writing-plans",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "product-design:user-context",
+      "name": "product-design-user-context",
+      "path": "creative/product-design-user-context",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "build-macos-apps:packaging-notarization",
+      "name": "packaging-notarization",
+      "path": "apple/packaging-notarization",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "macOS",
+        "Xcode command-line tools",
+        "distribution identity/keychain profile for an authorized release"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "visualize:visualize",
+      "name": "visualize",
+      "path": "creative/visualize",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Local HTML-capable preview for interactive artifacts"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "product-design:image-to-code",
+      "name": "product-design-image-to-code",
+      "path": "creative/product-design-image-to-code",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "superpowers:dispatching-parallel-agents",
+      "name": "dispatching-parallel-agents",
+      "path": "software-development/dispatching-parallel-agents",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "delegate_task when available"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "superpowers:receiving-code-review",
+      "name": "receiving-code-review",
+      "path": "software-development/receiving-code-review",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/obra/superpowers"
+    },
+    {
+      "source": "documents:documents",
+      "name": "documents",
+      "path": "productivity/documents",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "PM documents environment",
+        "LibreOffice and installed CJK fonts for Chinese layout verification"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "imagegen",
+      "name": "imagegen",
+      "path": "creative/imagegen",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [
+        "Configured image_generate provider"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "openai-docs",
+      "name": "openai-docs",
+      "path": "research/openai-docs",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [
+        "Web search/extraction or official documentation MCP"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "build-macos-apps:build-run-debug",
+      "name": "build-run-debug",
+      "path": "apple/build-run-debug",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "macOS",
+        "Xcode or Swift toolchain"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "design-taste-frontend",
+      "name": "design-taste-frontend",
+      "path": "creative/design-taste-frontend",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/Leonxlnx/taste-skill"
+    },
+    {
+      "source": "product-design:audit",
+      "name": "product-design-audit",
+      "path": "creative/product-design-audit",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "product-design:ideate",
+      "name": "product-design-ideate",
+      "path": "creative/product-design-ideate",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "product-design:get-context",
+      "name": "product-design-get-context",
+      "path": "creative/product-design-get-context",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "chronicle",
+      "name": "chronicle",
+      "path": "autonomous-ai-agents/chronicle",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Authorized current screen observations or user-supplied records; no background screen history"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "figma:figma-use",
+      "name": "figma-use",
+      "path": "creative/figma-use",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Configured Figma MCP or authorized Figma API access"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "product-design:design-qa",
+      "name": "product-design-design-qa",
+      "path": "creative/product-design-design-qa",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "figma:figma-design-to-code",
+      "name": "figma-design-to-code",
+      "path": "creative/figma-design-to-code",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Configured Figma MCP/API or supplied design export",
+        "Project UI/browser tooling"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "coderabbit:coderabbit-review",
+      "name": "coderabbit-review",
+      "path": "software-development/coderabbit-review",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "Installed CodeRabbit CLI",
+        "CodeRabbit authentication/service"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://docs.coderabbit.ai/cli/overview"
+    },
+    {
+      "source": "computer-use:computer-use",
+      "name": "computer-use",
+      "path": "autonomous-ai-agents/computer-use",
+      "integration": "reused",
+      "license": "MIT",
+      "requires": [
+        "Configured cua-driver computer_use backend and host permissions"
+      ],
+      "provenance": "Existing Aino bundled implementation reused; external source identifier is a capability mapping.",
+      "reference_url": "https://github.com/trycua/cua"
+    },
+    {
+      "source": "presentations:presentations",
+      "name": "presentations",
+      "path": "productivity/presentations",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "PM documents environment",
+        "LibreOffice/poppler and installed CJK fonts for Chinese slide verification"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "browser:control-in-app-browser",
+      "name": "control-in-app-browser",
+      "path": "autonomous-ai-agents/control-in-app-browser",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Aino desktop desktop_ui tools and selected tab"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "openai-developers:openai-platform-api-key",
+      "name": "openai-platform-api-key",
+      "path": "software-development/openai-platform-api-key",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "User-owned provider/project credential destination"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "build-macos-apps:signing-entitlements",
+      "name": "signing-entitlements",
+      "path": "apple/signing-entitlements",
+      "integration": "adapted",
+      "license": "MIT",
+      "requires": [
+        "macOS",
+        "Apple code-signing tools"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "skill-creator",
+      "name": "skill-creator",
+      "path": "software-development/skill-creator",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "skill-installer",
+      "name": "skill-installer",
+      "path": "software-development/skill-installer",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package."
+    },
+    {
+      "source": "product-design:research",
+      "name": "product-design-research",
+      "path": "creative/product-design-research",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "codex-security:security-scan",
+      "name": "security-scan",
+      "path": "security/security-scan",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "hyperframes:hyperframes",
+      "name": "hyperframes",
+      "path": "creative/hyperframes",
+      "integration": "adapted",
+      "license": "Apache-2.0",
+      "requires": [
+        "Node.js 22+",
+        "Project-local HyperFrames CLI",
+        "FFmpeg",
+        "Supported rendering browser"
+      ],
+      "provenance": "Redistributable instructions adapted to Aino tools; license and attribution accompany the package.",
+      "reference_url": "https://github.com/heygen-com/hyperframes"
+    },
+    {
+      "source": "pdf:pdf",
+      "name": "pdf",
+      "path": "productivity/pdf",
+      "integration": "reused",
+      "license": "MIT",
+      "requires": [
+        "PM documents environment",
+        "OCR tools only for scanned inputs"
+      ],
+      "provenance": "Existing Aino bundled implementation reused; external source identifier is a capability mapping."
+    },
+    {
+      "source": "codex-security:triage-finding",
+      "name": "triage-finding",
+      "path": "security/triage-finding",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    },
+    {
+      "source": "product-design:url-to-code",
+      "name": "product-design-url-to-code",
+      "path": "creative/product-design-url-to-code",
+      "integration": "native",
+      "license": "MIT",
+      "requires": [
+        "Authorized source URL and web/browser observation tools"
+      ],
+      "provenance": "Independently authored Aino workflow; original host service/resources are not included."
+    }
+  ],
+  "license_scope": "license describes the shipped Aino skill package. Native entries are independently authored workflows; proprietary Codex service implementations and restricted assets are not distributed."
+}

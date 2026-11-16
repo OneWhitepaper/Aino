@@ -57,8 +57,7 @@ it.each(['desktop', 'touch'])(
 
     await waitFor(() => expect(container.textContent).toContain('The deployment is verified.'))
     const actions = container.querySelector('[data-slot="aui_msg-actions"]') as HTMLElement
-    const surfaceActions = actions.querySelector(`.aui-message-actions-${surface}`) as HTMLElement
-    fireEvent.click(within(surfaceActions).getByRole('button', { name: /^copy$/i }))
+    fireEvent.click(within(actions).getByRole('button', { name: /^copy$/i }))
 
     await waitFor(() => expect(clipboard.writeText).toHaveBeenLastCalledWith('The deployment is verified.'))
   }
@@ -69,7 +68,11 @@ it('Copy full response reads every assistant text segment in the group', async (
 
   await waitFor(() => expect(container.textContent).toContain('The deployment is verified.'))
   const actions = container.querySelector('[data-slot="aui_msg-actions"]') as HTMLElement
-  fireEvent.click(within(actions).getByRole('button', { name: /copy full response/i }))
+  fireEvent.pointerDown(within(actions).getByRole('button', { name: 'More actions' }), {
+    button: 0,
+    pointerType: 'mouse'
+  })
+  fireEvent.click(await within(window.document.body).findByRole('menuitem', { name: /copy full response/i }))
 
   await waitFor(() =>
     expect(clipboard.writeText).toHaveBeenLastCalledWith('Checking the deployment.\n\nThe deployment is verified.')
@@ -97,8 +100,7 @@ it.each(['desktop', 'touch'])(
 
     await waitFor(() => expect(container.textContent).toContain('Hello there.'))
     const actions = container.querySelector('[data-slot="aui_msg-actions"]') as HTMLElement
-    const surfaceActions = actions.querySelector(`.aui-message-actions-${surface}`) as HTMLElement
-    fireEvent.click(within(surfaceActions).getByRole('button', { name: /^copy$/i }))
+    fireEvent.click(within(actions).getByRole('button', { name: /^copy$/i }))
     await waitFor(() => expect(clipboard.writeText).toHaveBeenLastCalledWith('Hello there.'))
     // The two scopes are identical on a solo reply, so only the default Copy exists.
     expect(within(actions).queryByRole('button', { name: /copy full response/i })).toBeNull()

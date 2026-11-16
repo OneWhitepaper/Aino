@@ -37,6 +37,9 @@ node scripts/perf/run.mjs live-window --seconds 10 --cpuprofile ~/.hermes/cache/
 `live-window` never opens/closes tabs, seeds messages, moves focus, or forces GC.
 It records frame intervals, long tasks, visible/mounted transcript counts, and
 heap/DOM counters. Keep the same panes and workload for before/after captures.
+Its `readingWidths` detail records visible Summary workspace widths through a
+shared ResizeObserver. During manual Summary/tool toggles, a dock change should
+produce one final width per action, with no intermediate animation widths.
 Record restarts, HMR, and code updates separately: a fresh renderer is not a
 valid after measurement for a long-running renderer. Heap counters alone do not
 prove a leak. Heavy render/atom counters must be stopped before timing.

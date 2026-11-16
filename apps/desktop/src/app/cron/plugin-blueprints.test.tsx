@@ -92,6 +92,7 @@ describe('plugin-registered automation blueprints', () => {
     renderView()
 
     const title = await screen.findByText('Team standup digest')
+    fireEvent.click(screen.getByText('Blueprints', { selector: 'summary span' }))
     const row = title.closest('button') as HTMLElement
     // PanelListRow renders `meta` (the plugin name) beside the row's button.
     expect(within(row.parentElement as HTMLElement).getByText('teamtools')).toBeTruthy()

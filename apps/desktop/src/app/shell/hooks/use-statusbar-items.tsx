@@ -4,7 +4,6 @@ import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router'
 
 import { ConnectionSwitcher } from '@/app/chat/sidebar/connection-switcher'
-import { ProfileSwitcher } from '@/app/chat/sidebar/profile-dropdown-switcher'
 import type { CommandCenterSection } from '@/app/command-center'
 import { summaryContextUsage } from '@/app/right-sidebar/summary/summary-data'
 import { toggleTerminalPane } from '@/app/right-sidebar/terminal/reveal-focus'
@@ -44,17 +43,15 @@ import { formatPercentUsed, formatResetsIn } from '@/lib/usage-percent'
 import { useStoreSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { resolveVersionStatus } from '@/lib/version-status'
-import { requestGatewayForActiveRoute } from '@/store/active-route-request'
 import type { ApprovalModeRequester } from '@/store/approval-mode'
 import { $cloudOwnsUpdates } from '@/store/cloud-updates'
 import { sessionCompacting } from '@/store/compaction'
 import { copyFilePath, revealFile, shouldOfferLocalReveal } from '@/store/file-actions'
 import { $freeTierSignInOpen, $freeTierStatus, FREE_TIER_MODEL } from '@/store/free-tier'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
-import { $gateway } from '@/store/gateway'
+import { $activeGatewayConnectionId, $gateway, requestGatewayForAgent } from '@/store/gateway'
 import { revealFileInTree } from '@/store/layout'
 import { $activeGatewayProfile } from '@/store/profile'
-import { $profileRailVisible } from '@/store/profile-rail-prefs'
 import { $projectTree, projectNameForCwd } from '@/store/projects'
 import {
   $activeSessionId,
@@ -86,7 +83,7 @@ import {
 } from '@/store/updates'
 import type { FreeTierStatus, StatusResponse, UsageStats } from '@/types/hermes'
 
-import { CRON_ROUTE, SETTINGS_ROUTE, WEBHOOKS_ROUTE } from '../../routes'
+import { CRON_ROUTE, PROFILES_ROUTE, SETTINGS_ROUTE, WEBHOOKS_ROUTE } from '../../routes'
 import type { StatusbarItem } from '../statusbar-controls'
 
 const EMPTY_USAGE: UsageStats = { calls: 0, input: 0, output: 0, total: 0 }
@@ -164,7 +161,6 @@ export function useStatusbarItems({
   // minimized zone, which lit the button for a pane the user couldn't see.
   const terminalShowing = useStore($paneVisible('terminal'))
   const sessionsShowing = useStore($paneVisible('sessions'))
-  const profileRailVisible = useStore($profileRailVisible)
   const botsShowing = useStore($paneVisible('hermes-bots:pane'))
   const primaryBusy = useStore($busy)
   // Draft / primary composer atom — used only while the focused surface is the
@@ -371,9 +367,11 @@ export function useStatusbarItems({
   // Dial the viewed route directly: the ambient `requestGateway` is the
   // session-routed dispatcher, which re-scopes `params.profile` to the FOCUSED
   // session's owner — a profile other than the one this menu shows.
+  const approvalConnectionId = useStore($activeGatewayConnectionId)
+
   const requestApprovalModeGateway = useCallback<ApprovalModeRequester>(
-    (method, params) => requestGatewayForActiveRoute(activeGatewayProfile, method, params),
-    [activeGatewayProfile]
+    (method, params) => requestGatewayForAgent(approvalConnectionId, activeGatewayProfile, method, params),
+    [activeGatewayProfile, approvalConnectionId]
   )
 
   // The active socket is part of the route: `default` on Box and `default` on
@@ -384,7 +382,8 @@ export function useStatusbarItems({
     activeGatewayProfile,
     requestApprovalModeGateway,
     gatewayState,
-    activeSocket
+    activeSocket,
+    approvalConnectionId
   )
 
   const systemResourcesItem = useSystemResourcesStatusbarItem()
@@ -526,12 +525,14 @@ export function useStatusbarItems({
         render: () => <StatusbarGatewaySwitcher />
       },
       {
-        // The rail's stand-in: the profile picker moves down here while the
-        // colored strip is hidden, so switching profiles always has a door.
-        hidden: !sessionsShowing || profileRailVisible,
+        hidden: !sessionsShowing,
+        icon: <Codicon name="organization" size="0.75rem" />,
         id: 'profile-switcher',
+        label: t.sidebar.nav.profiles,
         lockedVisible: true,
-        render: () => <ProfileSwitcher compact />
+        title: t.keybinds.actions['view.toggleProfileRail'],
+        to: PROFILES_ROUTE,
+        variant: 'action'
       },
       {
         className: gatewayRestarting ? undefined : gatewayClassName,
@@ -690,11 +691,12 @@ export function useStatusbarItems({
       inferenceReady,
       inferenceStatus?.reason,
       openAgents,
-      profileRailVisible,
       projectName,
       sessionsShowing,
       subagentsFailed,
       subagentsRunning,
+      t.keybinds.actions,
+      t.sidebar.nav.profiles,
       toggleCommandCenter
     ]
   )

@@ -1,17 +1,22 @@
 import { useStore } from '@nanostores/react'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 
-import { $profileCreateRequest, $profiles, refreshActiveProfile, selectProfile } from '@/store/profile'
+import { useContributions } from '@/contrib/react/use-contributions'
+import { $profileCreateRequest, $profiles, refreshActiveProfile } from '@/store/profile'
+
+import { navigateToWorkspacePage, PROFILES_ROUTE } from '../routes'
 
 import { CreateProfileDialog } from './create-profile-dialog'
 
 /**
- * Owns the application-level create-profile dialog requested by surfaces that
- * do not render the Settings profile rail (for example the chat keybind and
- * sidebar filter menu). The request atom is deliberately a one-way signal;
- * the dialog's open state remains local to this host.
+ * Global creation shortcuts use the Bot manager's creator when available.
+ * A runtime without that contribution keeps the basic profile creator, without
+ * changing the owner of an ordinary conversation.
  */
 export function ProfileCreateDialogHost() {
+  const navigate = useNavigate()
+  const managers = useContributions('profiles.manager')
   const profiles = useStore($profiles)
   const createRequest = useStore($profileCreateRequest)
   const [open, setOpen] = useState(false)
@@ -24,15 +29,27 @@ export function ProfileCreateDialogHost() {
     }
 
     lastCreateRef.current = createRequest
+
+    const create = managers
+      .map(manager => (manager.data as { create?: () => void } | undefined)?.create)
+      .find(create => typeof create === 'function')
+
+    if (create) {
+      create()
+      navigateToWorkspacePage(navigate, PROFILES_ROUTE)
+
+      return
+    }
+
     setOpen(true)
-  }, [createRequest])
+  }, [createRequest, managers, navigate])
 
   return (
     <CreateProfileDialog
       onClose={() => setOpen(false)}
-      onCreated={async name => {
+      onCreated={async () => {
         await refreshActiveProfile()
-        selectProfile(name)
+        navigateToWorkspacePage(navigate, PROFILES_ROUTE)
       }}
       open={open}
       profiles={profiles}

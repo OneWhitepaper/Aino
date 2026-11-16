@@ -17,7 +17,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { DiffCount } from '@/components/ui/diff-count'
 import type { HermesGitBranch } from '@/global'
-import { useI18n } from '@/i18n'
+import { type Translations, useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
 import { useStoresSelector } from '@/lib/use-session-slice'
 import { openWorktreeDialog, registerRepoStatusCwd, repoStatusForCwd, repoWorktreesForCwd } from '@/store/coding-status'
@@ -51,6 +51,7 @@ interface CodingStatusRowProps {
   onSwitchBranch?: (branch: string) => Promise<void>
   /** Repo root path for the worktree dialog. */
   repoPath?: null | string
+  presentation?: 'row' | 'menu'
 }
 
 /**
@@ -66,7 +67,8 @@ export const CodingStatusRow = memo(function CodingStatusRow({
   onOpen,
   onOpenWorktree,
   onSwitchBranch,
-  repoPath
+  repoPath,
+  presentation = 'row'
 }: CodingStatusRowProps) {
   const { t } = useI18n()
   const s = t.statusStack.coding
@@ -139,6 +141,10 @@ export const CodingStatusRow = memo(function CodingStatusRow({
     void openWorktreeDialog({ base, repoPath: resolvedRepoPath })
   }
 
+  if (presentation === 'menu') {
+    return <ComposerProjectSelector cwd={menuCwd} label={projectName} presentation="submenu" />
+  }
+
   if (!resolvedRepoPath || !status) {
     return (
       <StatusRow
@@ -156,21 +162,7 @@ export const CodingStatusRow = memo(function CodingStatusRow({
   // current HEAD). We dedupe so "on main" shows a single trunk entry, and fall
   // back to a plain off-HEAD branch when no trunk is detected.
   const current = status.detached ? null : status.branch
-  const branchTargets: { base: string | undefined; label: string }[] = []
-
-  // Current branch first (the 99% "branch off where I am"), then the trunk just
-  // below it ("New branch from main"), deduped when they're the same.
-  if (current) {
-    branchTargets.push({ base: current, label: s.branchOffFrom(current) })
-  }
-
-  if (status.defaultBranch && status.defaultBranch !== current) {
-    branchTargets.push({ base: status.defaultBranch, label: s.branchOffFrom(status.defaultBranch) })
-  }
-
-  if (branchTargets.length === 0) {
-    branchTargets.push({ base: undefined, label: s.newBranch })
-  }
+  const branchTargets = branchTargetsFor(current, status.defaultBranch, s)
 
   const switchTarget =
     onSwitchBranch && current && status.defaultBranch && status.defaultBranch !== current ? status.defaultBranch : null
@@ -379,3 +371,32 @@ export const CodingStatusRow = memo(function CodingStatusRow({
     </>
   )
 })
+
+interface BranchTarget {
+  base: string | undefined
+  label: string
+}
+
+function branchTargetsFor(
+  current: string | null,
+  defaultBranch: string | null | undefined,
+  copy: Translations['statusStack']['coding']
+): BranchTarget[] {
+  const branchTargets: BranchTarget[] = []
+
+  // Current branch first (the 99% "branch off where I am"), then the trunk just
+  // below it ("New branch from main"), deduped when they're the same.
+  if (current) {
+    branchTargets.push({ base: current, label: copy.branchOffFrom(current) })
+  }
+
+  if (defaultBranch && defaultBranch !== current) {
+    branchTargets.push({ base: defaultBranch, label: copy.branchOffFrom(defaultBranch) })
+  }
+
+  if (branchTargets.length === 0) {
+    branchTargets.push({ base: undefined, label: copy.newBranch })
+  }
+
+  return branchTargets
+}

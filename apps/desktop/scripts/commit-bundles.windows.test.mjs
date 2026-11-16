@@ -24,8 +24,11 @@ function fixture(kit) {
   for (const file of ['stage-msixbundle.mjs', 'bundle-store-msixbundle.mjs', 'msix-shared.mjs', 'release-content-types.json']) {
     fs.copyFileSync(path.join(repo, 'scripts', file), path.join(root, 'scripts', file))
   }
-  fs.copyFileSync(path.join(repo, 'apps/desktop/scripts/windows-bundle-tools.mjs'), path.join(desktop, 'scripts/windows-bundle-tools.mjs'))
+  for (const name of ['windows-bundle-tools.mjs', 'prepared-packaging.mjs']) {
+    fs.copyFileSync(path.join(repo, 'apps/desktop/scripts', name), path.join(desktop, 'scripts', name))
+  }
   fs.copyFileSync(path.join(repo, 'apps/desktop/product-identity.cjs'), path.join(desktop, 'product-identity.cjs'))
+  fs.copyFileSync(path.join(repo, 'apps/desktop/brand.json'), path.join(desktop, 'brand.json'))
   fs.writeFileSync(path.join(desktop, 'package.json'), JSON.stringify({ name: 'fixture', version: '0.21.1' }))
   fs.writeFileSync(path.join(desktop, 'electron-builder.config.cjs'), `module.exports=${JSON.stringify({ directories: { buildResources: kit }, toolsets: { winCodeSign: { url: 'file://' + kit } } })}\n`)
   // Assembly does not depend on production artwork or the icon build step.

@@ -416,6 +416,7 @@ function SidebarSessionRowImpl({
           className
         )}
         data-card={card ? 'true' : 'false'}
+        data-density={density}
         data-glass-opaque={dragging ? '' : undefined}
         data-selected={isSelected ? 'true' : 'false'}
         data-sidebar-session-row=""
@@ -477,7 +478,7 @@ function SidebarSessionRowImpl({
             // cursor-pointer: the body is a div now (see #38072 note above);
             // buttons earn this from the base layer's interactive-control
             // rule, a div doesn't.
-            'z-0 w-full cursor-pointer',
+            'aino-session-row-body z-0 w-full cursor-pointer',
             card && 'pr-0',
             branchStem && 'pl-3.5',
             // The card is a grid with ONE spacing knob: --card-gap. Every row
@@ -536,6 +537,7 @@ function SidebarSessionRowImpl({
                   <SessionStatusDot
                     branchStem={branchStem}
                     className="transition-opacity group-hover/handle:opacity-0 group-focus-within/handle:opacity-0"
+                    hideInactive
                     session={session}
                     storedSessionId={session.id}
                   />
@@ -543,7 +545,14 @@ function SidebarSessionRowImpl({
               </SidebarRowGrab>
             ) : (
               <SidebarRowLead className="overflow-hidden" data-sidebar-session-lead="">
-                {lead ?? <SessionStatusDot branchStem={branchStem} session={session} storedSessionId={session.id} />}
+                {lead ?? (
+                  <SessionStatusDot
+                    branchStem={branchStem}
+                    hideInactive
+                    session={session}
+                    storedSessionId={session.id}
+                  />
+                )}
               </SidebarRowLead>
             )
 

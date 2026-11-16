@@ -1,6 +1,26 @@
 /* Presentation of app-owned workbench chrome. Editors, terminal canvases,
    embedded websites and user documents retain their own content styles. */
 
+/* One rounded workspace below native chrome, shared by the live tree and
+   full-page routes. Clip the corners without changing fixed/native hosts'
+   containing block or introducing a second scroll owner. */
+[data-aino-workspace-frame] {
+  overflow: clip;
+  border: 1px solid var(--aino-workbench-divider);
+  border-radius: var(--aino-radius-panel);
+  background: var(--ui-editor-surface-background);
+}
+
+/* The frame owns its outer edges; the tree sash still owns internal
+   divisions. Neither the titlebar nor the activity rail doubles those lines. */
+[data-contrib-shell]:has([data-aino-workspace-frame]) > [data-slot='app-titlebar'] {
+  border-bottom: 0;
+}
+
+.aino-activity-rail:has(+ [data-aino-workspace-frame]) {
+  border-right: 0;
+}
+
 /* Conversation workspaces keep the shared tab operations and scroll owner.
    Inset tabs distinguish the active conversation from its persistent siblings. */
 [data-pane-variant='conversation'] {

@@ -16,18 +16,34 @@ interface OutputsSectionProps {
   onRetry: () => void
   session: SummarySession
   showEmpty: boolean
+  structuredEmpty?: boolean
 }
 
-export function OutputsSection({ error, items, loading, onRetry, session, showEmpty }: OutputsSectionProps) {
+export function OutputsSection({
+  error,
+  items,
+  loading,
+  onRetry,
+  session,
+  showEmpty,
+  structuredEmpty = false
+}: OutputsSectionProps) {
   const { t } = useI18n()
-
-  if (!items.length && !error && !loading && !showEmpty) {
-    return null
-  }
 
   const create = () => {
     requestComposerInsert(t.summary.outputs.prompt, { target: session.target })
     requestComposerFocus(session.target)
+  }
+
+  if (!items.length && !error && !loading && !structuredEmpty) {
+    return showEmpty ? (
+      <div data-slot="summary-empty-actions">
+        <Button onClick={create} size="sm" type="button" variant="ghost">
+          <Codicon name="add" />
+          {t.summary.outputs.create}
+        </Button>
+      </div>
+    ) : null
   }
 
   return (
@@ -46,8 +62,9 @@ export function OutputsSection({ error, items, loading, onRetry, session, showEm
           </Button>
         </Tip>
       }
-      state={loading && !items.length ? 'loading' : 'ready'}
-      title={t.summary.outputs.title}
+      emptyMessage={t.summary.outputs.none}
+      state={loading && !items.length ? 'loading' : !items.length && !error ? 'empty' : 'ready'}
+      title={`${t.summary.outputs.title}${items.length ? ` · ${items.length}` : ''}`}
     >
       {!items.length && !error ? null : (
         <>

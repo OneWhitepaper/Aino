@@ -63,6 +63,7 @@ import {
   releaseActiveComposer
 } from '../focus'
 import { type InlineRefInput, insertInlineRefsIntoEditor } from '../inline-refs'
+import { pathifyRefs } from '../path-refs'
 import {
   caretOffsetInEditor,
   composerPlainText,
@@ -74,6 +75,7 @@ import {
 } from '../rich-editor'
 import { useComposerScope } from '../scope'
 import type { ChatBarProps } from '../types'
+import { linkifyUrls } from '../url-refs'
 import { useComposerVisible } from '../visibility'
 
 const sameDraftScope = (a: string | null | undefined, b: string | null | undefined) =>
@@ -269,6 +271,13 @@ export function useComposerDraft({
 
   const appendExternalText = useCallback(
     (text: string, mode: ComposerInsertMode): boolean => {
+      if (mode === 'verbatim') {
+        const before = draftRef.current
+        paintDraft(`${before}${pathifyRefs(linkifyUrls(text, before), before)}`)
+
+        return Boolean(text)
+      }
+
       const value = text.trim()
 
       if (!value) {

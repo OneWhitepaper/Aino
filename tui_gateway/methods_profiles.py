@@ -4,9 +4,12 @@ server.py's globals (method_ctx.bind_module) and use them bare; module-level nam
 onto server.py, so they must not collide with its globals.
 """
 
+from __future__ import annotations
+
 import contextlib
 import logging
 import sqlite3
+import threading
 
 from .method_ctx import HandlerRegistry, bind_module
 
@@ -18,6 +21,37 @@ _ASSET_EXTS = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
 # ext -> [(start, end, magic bytes)]; format is sniffed, the declared mime is never trusted.
 _ASSET_MAGIC = {"png": [(0, 8, b"\x89PNG\r\n\x1a\n")], "jpg": [(0, 3, b"\xff\xd8\xff")],
                 "webp": [(0, 4, b"RIFF"), (8, 12, b"WEBP")]}
+_profile_hosting_lock = threading.RLock()
+
+
+def _profile_home(profile: str | None) -> Path | None:
+    """Resolve a local Bot home, syncing upgraded built-ins once when this process first serves it."""
+    if not (name := _canonical_profile_request((profile or "").strip())):
+        return None
+    from hermes_cli import profiles as profiles_mod
+    try:
+        home = Path(profiles_mod.get_profile_dir(name))
+    except ValueError:
+        home = None
+    if home is None or not home.is_dir():
+        raise ProfileUnavailableError(f"Profile '{name}' does not exist.")
+    if home.resolve() == Path(_hermes_home).resolve():
+        return None
+    with _profile_hosting_lock:
+        if home not in _served_profile_homes:
+            # Freeze launch credentials before reading anything from a secondary profile.
+            from tui_gateway.launch_profile_policy import activate_multi_profile_hosting
+            activate_multi_profile_hosting()
+            try:
+                from tools.skills_sync import sync_skills
+                with _hermes_home_scope(home):
+                    sync_skills(quiet=True)
+            except Exception:
+                logger.warning("Could not sync bundled skills for served profile %s", name, exc_info=True)
+            # Reuse the watcher roster: repeated RPCs must not hash the bundled library again.
+            # This only updates skill files; existing agents keep their cached prompt untouched.
+            _served_profile_homes.add(home)
+    return home
 
 
 def _profile_handler(name: str, code: int):

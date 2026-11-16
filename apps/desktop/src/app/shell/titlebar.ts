@@ -9,14 +9,14 @@ export const TOUCH_TITLEBAR_HEIGHT = 44
 export const TITLEBAR_DRAG_HANDLE_WIDTH = 48
 export const MACOS_TRAFFIC_LIGHTS_HEIGHT = desktopWindowChrome.trafficLightHeight
 /** Titlebar tool hit target (both axes). */
-export const TITLEBAR_CONTROL_SIZE = 24
+export const TITLEBAR_CONTROL_SIZE = 28
 /** Shared outline glyph box in titlebar clusters. */
 export const TITLEBAR_ICON_SIZE = 18
 export const TITLEBAR_CONTROL_OFFSET_X = 65
 export const TITLEBAR_CONTROL_HEIGHT = TITLEBAR_CONTROL_SIZE
 export const TITLEBAR_CONTROLS_TOP = (TITLEBAR_HEIGHT - TITLEBAR_CONTROL_HEIGHT) / 2
-export const TITLEBAR_TOOL_GAP = 4
-export const TITLEBAR_TOOLS_RIGHT_INSET = 17
+export const TITLEBAR_TOOL_GAP = 6
+export const TITLEBAR_TOOLS_RIGHT_INSET = 12
 
 /** Glyph sizing for titlebar icons, including contributed Codicon fallbacks. */
 export function titlebarIconSizeCss(scale = 1): string {
@@ -24,8 +24,6 @@ export function titlebarIconSizeCss(scale = 1): string {
 }
 
 export const TITLEBAR_FALLBACK_WINDOW_BUTTON_X = desktopWindowChrome.trafficLightPosition.x
-// Preserve other platforms' first paint until native window state arrives.
-const TITLEBAR_NON_MAC_FALLBACK_WINDOW_BUTTON_X = 24
 // Edge inset used when no left-side native controls take up that space —
 // Windows/Linux (native overlay is on the right) and macOS fullscreen
 // (traffic lights are hidden). Matches the right-cluster's 0.75rem padding.
@@ -35,19 +33,26 @@ export interface TitlebarChromeContext {
   darwinMajor?: number
   isFullscreen?: boolean
   windowButtonPosition?: HermesConnection['windowButtonPosition']
+  /** Native DIP width needs conversion; measured/renderer widths pass 1. */
+  zoomFactor?: number
 }
 
-/** Right-cluster inset — WCO width when present; macOS fullscreen matches left edge inset. */
+/** Right-cluster inset in CSS pixels; fullscreen has no caption controls. */
 export function titlebarToolsRightCss(
   nativeOverlayWidth: number,
-  { darwinMajor = 0, isFullscreen = false }: Pick<TitlebarChromeContext, 'darwinMajor' | 'isFullscreen'> = {}
+  {
+    isFullscreen = false,
+    zoomFactor = 1
+  }: Pick<TitlebarChromeContext, 'darwinMajor' | 'isFullscreen' | 'zoomFactor'> = {}
 ): string {
-  if (nativeOverlayWidth > 0) {
-    return `${nativeOverlayWidth}px`
+  if (isFullscreen) {
+    return `${TITLEBAR_EDGE_INSET}px`
   }
 
-  if (isFullscreen && darwinMajor > 0) {
-    return `${TITLEBAR_EDGE_INSET}px`
+  if (nativeOverlayWidth > 0) {
+    const factor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1
+
+    return `${nativeOverlayWidth / factor}px`
   }
 
   return `${TITLEBAR_TOOLS_RIGHT_INSET}px`
@@ -63,7 +68,7 @@ export const titlebarButtonClass =
 export const titlebarToolClusterClass =
   'fixed z-70 flex flex-row items-center pointer-events-auto select-none [-webkit-app-region:no-drag]'
 
-/** Width reserved for N titlebar buttons plus the approved four-pixel visual rhythm. */
+/** Width reserved for N titlebar buttons plus the approved six-pixel visual rhythm. */
 export function titlebarToolsWidthCss(toolCount: number): string {
   return `calc(${toolCount} * var(--titlebar-control-size) + ${Math.max(0, toolCount - 1)} * ${TITLEBAR_TOOL_GAP}px)`
 }
@@ -93,7 +98,6 @@ export function titlebarControlsPosition(
   }
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
-  const fallbackX = isMac ? TITLEBAR_FALLBACK_WINDOW_BUTTON_X : TITLEBAR_NON_MAC_FALLBACK_WINDOW_BUTTON_X
   const nativePosition = windowButtonPosition ?? (isMac ? desktopWindowChrome.trafficLightPosition : undefined)
   const factor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1
 
@@ -107,7 +111,9 @@ export function titlebarControlsPosition(
   }
 
   return {
-    left: fallbackX + TITLEBAR_CONTROL_OFFSET_X,
+    // Right-side caption hosts never reserve macOS traffic-light space,
+    // including the first paint before the native connection is ready.
+    left: TITLEBAR_EDGE_INSET,
     top
   }
 }

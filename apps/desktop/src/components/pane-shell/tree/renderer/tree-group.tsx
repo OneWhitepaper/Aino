@@ -21,6 +21,7 @@ import {
 } from 'react'
 
 import { ShellMenuItems } from '@/app/context-menu/shell-menu-items'
+import { ToolPanelStrip } from '@/app/right-sidebar/tool-panel-strip'
 import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
 import { TITLEBAR_DRAG_HANDLE_WIDTH } from '@/app/shell/titlebar'
 import { ActionsContextMenu, type MenuKit, renderActionItem } from '@/components/ui/actions-menu'
@@ -49,6 +50,7 @@ import { isBrowserOwnedTouch } from '@/lib/touch-interaction'
 import { cn } from '@/lib/utils'
 import { closeAllOpenSessionTiles, setZoneParkedTiles } from '@/store/session-states'
 import { $tabStripDefault } from '@/store/tabstrip-prefs'
+import { isAuxiliaryWindow } from '@/store/windows'
 
 import { useWindowControlsOverlap } from '../../geometry'
 import { emptyPaneLifecycleState, reconcilePaneLifecycle } from '../../pane-lifecycle'
@@ -111,7 +113,7 @@ import { sidebarModePanes } from './sidebar-mode-presentation'
 import { useActiveTabVisible } from './tab-strip-scroll'
 import { ToolPanelControls } from './tool-panel-controls'
 import { acceptsPaneTabDrop, paneChrome, paneTabCanMove } from './track-model'
-import { panelHeaderHeight, useZoneHeaderLayout } from './zone-header-layout'
+import { panelHeaderHeight, panelTabStripLayout, useZoneHeaderLayout } from './zone-header-layout'
 
 interface PanelTitlebarDragSpaceProps {
   headerVisible: boolean
@@ -481,6 +483,125 @@ function CollapsedZoneRail({ activeId, children, menu, railSide }: CollapsedZone
   )
 }
 
+interface GroupPaneBodyProps {
+  activeId: string
+  available: string[]
+  compactSidebar: boolean
+  headerVisible: boolean
+  hostedPanes: string[]
+  inlinePanes: string[]
+  mountedPanes: string[]
+  node: GroupNode
+  paneEpochs: Record<string, number>
+  paneFor: (id: string) => Contribution | undefined
+  paneLifecycle: ReturnType<typeof useGroupPaneLifecycle>['paneLifecycle']
+  tabText: (id: string) => string
+  toolPanel: boolean
+  zoneMenu: Omit<ZoneMenuProps, 'children'>
+}
+
+/** The active pane and bounded hot-hidden cache stay mounted; parked panes unmount.
+ *  Visibility keeps each hidden pane's layout box, preserving scroll positions
+ *  and measurements. Document-wide lookups must filter by visibility because
+ *  a hidden layer has the same rect as the visible layer (pane-visibility.ts).
+ *  The body carries the zone menu so a headerless pane still offers Close. */
+function GroupPaneBody({
+  activeId,
+  available,
+  compactSidebar,
+  headerVisible,
+  hostedPanes,
+  inlinePanes,
+  mountedPanes,
+  node,
+  paneEpochs,
+  paneFor,
+  paneLifecycle,
+  tabText,
+  toolPanel,
+  zoneMenu
+}: GroupPaneBodyProps) {
+  const { t } = useI18n()
+
+  if (node.minimized && mountedPanes.length === 0 && hostedPanes.length === 0) {
+    return null
+  }
+
+  return (
+    <SidebarBrandContext value={compactSidebar}>
+      <PaneBody
+        hidden={Boolean(node.minimized)}
+        wrap={
+          available.length > 0
+            ? body => (
+                <ZoneBodyMenu {...zoneMenu} label={t.zones.zoneMenuLabel(tabText(activeId))}>
+                  {body}
+                </ZoneBodyMenu>
+              )
+            : undefined
+        }
+      >
+        {hostedPanes.map(paneId => (
+          <KeepAlivePaneSlot
+            groupId={node.id}
+            headerVisible={headerVisible}
+            key={paneId}
+            paneId={paneId}
+            visible={paneId === activeId && !node.minimized}
+          />
+        ))}
+        {inlinePanes.length === 0 ? (
+          <div className="grid h-full place-items-center">
+            {/* Same decode primitive as the CONNECTING boot overlay. */}
+            <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="AINO" />
+          </div>
+        ) : (
+          inlinePanes.map(paneId => {
+            const pane = paneFor(paneId)
+            const isActive = paneId === activeId && !node.minimized
+
+            return (
+              <PaneLayer
+                active={isActive}
+                animated={toolPanel}
+                className={cn('absolute inset-0 overflow-auto', !isActive && 'pointer-events-none invisible opacity-0')}
+                key={paneId}
+              >
+                {pane?.render ? (
+                  // Visibility flows to the pane so a kept-alive chat surface
+                  // can gate its hot (per-token) subscriptions while hidden;
+                  // the group id identifies the ZONE it lives in, for state
+                  // that is per-zone rather than per-tab (composer pop-out).
+                  // The reload epoch keys the CONTENT, not this layer: a
+                  // Reload remounts the contribution (effects re-run, state
+                  // resets) while the layer — and every other tab — stays.
+                  <PaneGroupContext.Provider value={node.id}>
+                    <PaneLifecycleContext.Provider
+                      value={node.minimized ? 'hot-hidden' : (paneLifecycle[paneId]?.lifecycle ?? 'visible')}
+                    >
+                      <PaneVisibleContext.Provider value={isActive}>
+                        <ContribBoundary id={pane.id} key={paneEpochs[paneId] ?? 0}>
+                          <ContribRender render={pane.render} />
+                        </ContribBoundary>
+                      </PaneVisibleContext.Provider>
+                    </PaneLifecycleContext.Provider>
+                  </PaneGroupContext.Provider>
+                ) : (
+                  isActive && (
+                    <div className="p-3 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+                      {t.zones.missingPane(paneId)}
+                    </div>
+                  )
+                )}
+              </PaneLayer>
+            )
+          })
+        )}
+      </PaneBody>
+    </SidebarBrandContext>
+  )
+}
+
 export function TreeGroup({
   node,
   parentAxis,
@@ -522,7 +643,7 @@ export function TreeGroup({
   const hiddenPanes = useStore($hiddenTreePanes)
   const workspacePage = useStore($workspaceIsPage)
   const narrow = useStore($narrowViewport)
-  useStore($workspaceMode)
+  const workspaceMode = useStore($workspaceMode)
   useStore($workspaceOwnerKey)
   const newSessionTabAction = useStore($newSessionTabAction)
   const tabStripDefault = useStore($tabStripDefault)
@@ -568,14 +689,8 @@ export function TreeGroup({
     topEdge: panelTopEdge
   })
 
-  const compactTabs = headerLayout.compactTabs && !toolPanel
+  const { compactTabs, stripHeight } = panelTabStripLayout(headerLayout, toolPanel, conversationTabs)
   const { titlebarHeight, tabsBelowControls, tabsInTitlebar } = headerLayout
-
-  const stripHeight = compactTabs
-    ? headerLayout.tabStripHeight
-    : toolPanel || conversationTabs
-      ? 'var(--aino-band-row2)'
-      : headerLayout.tabStripHeight
 
   const pageHeader = activeChrome.headerContent
 
@@ -909,6 +1024,21 @@ export function TreeGroup({
                 tabs={shown.map(id => ({ id, label: tabLabel(id), title: tabText(id) }))}
               />
             </div>
+          ) : headerVisible && !hideSessionTabStrip && toolPanel && workspaceMode === 'bots' && !workspacePage ? (
+            <ZoneMenu {...zoneMenu}>
+              <ToolPanelStrip
+                activate={activatePane}
+                activeId={activeId}
+                className={cn('flex-1', tabsBelowControls && 'absolute inset-x-0 bottom-0')}
+                groupId={node.id}
+                listRef={tabsRef}
+                onClose={closeableTab(activeId) ? () => closeTab(activeId) : undefined}
+                panes={shown}
+                ref={stripRef}
+                style={{ height: tabsBelowControls ? stripHeight : undefined }}
+                title={tabText}
+              />
+            </ZoneMenu>
           ) : headerVisible && !hideSessionTabStrip ? (
             <ZoneMenu {...zoneMenu}>
               <PaneTabStrip
@@ -1113,97 +1243,30 @@ export function TreeGroup({
                 description: paneChrome(pane).sidebarDescription?.()
               }))}
               menuLabel={t.zones.sidebarModeMenu}
+              navigation={isAuxiliaryWindow() ? 'menu' : 'rail'}
               onSelect={activatePane}
             />
           </div>
         </ZoneMenu>
       )}
 
-      {/* Body: the zone's pane content — the active pane and bounded hot-hidden
-          cache stay mounted in absolute layers; parked panes are unmounted.
-          `visibility` (not display) keeps the hidden pane's layout box, so
-          scroll positions and measurements survive the round-trip — which also
-          makes a hidden layer's rect identical to the visible one's, hence the
-          marker document-wide lookups filter on (see pane-visibility.ts).
-          The body carries the zone's right-click menu too: a pane without a
-          header (no strip showing) otherwise has no Close anywhere on screen
-          (#92500) — same ZoneMenu the strip and the edit veil already serve. */}
-      {(!node.minimized || mountedPanes.length > 0 || hostedPanes.length > 0) && (
-        <SidebarBrandContext value={compactSidebar}>
-          <PaneBody
-            hidden={Boolean(node.minimized)}
-            wrap={
-              available.length > 0
-                ? body => (
-                    <ZoneBodyMenu {...zoneMenu} label={t.zones.zoneMenuLabel(tabText(activeId))}>
-                      {body}
-                    </ZoneBodyMenu>
-                  )
-                : undefined
-            }
-          >
-            {hostedPanes.map(paneId => (
-              <KeepAlivePaneSlot
-                groupId={node.id}
-                headerVisible={headerVisible}
-                key={paneId}
-                paneId={paneId}
-                visible={paneId === activeId && !node.minimized}
-              />
-            ))}
-            {inlinePanes.length === 0 ? (
-              <div className="grid h-full place-items-center">
-                {/* Same decode primitive as the CONNECTING boot overlay. */}
-                <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="AINO" />
-              </div>
-            ) : (
-              inlinePanes.map(paneId => {
-                const pane = paneFor(paneId)
-                const isActive = paneId === activeId && !node.minimized
-
-                return (
-                  <PaneLayer
-                    active={isActive}
-                    animated={toolPanel}
-                    className={cn(
-                      'absolute inset-0 overflow-auto',
-                      !isActive && 'pointer-events-none invisible opacity-0'
-                    )}
-                    key={paneId}
-                  >
-                    {pane?.render ? (
-                      // Visibility flows to the pane so a kept-alive chat surface
-                      // can gate its hot (per-token) subscriptions while hidden;
-                      // the group id identifies the ZONE it lives in, for state
-                      // that is per-zone rather than per-tab (composer pop-out).
-                      // The reload epoch keys the CONTENT, not this layer: a
-                      // Reload remounts the contribution (effects re-run, state
-                      // resets) while the layer — and every other tab — stays.
-                      <PaneGroupContext.Provider value={node.id}>
-                        <PaneLifecycleContext.Provider
-                          value={node.minimized ? 'hot-hidden' : (paneLifecycle[paneId]?.lifecycle ?? 'visible')}
-                        >
-                          <PaneVisibleContext.Provider value={isActive}>
-                            <ContribBoundary id={pane.id} key={paneEpochs[paneId] ?? 0}>
-                              <ContribRender render={pane.render} />
-                            </ContribBoundary>
-                          </PaneVisibleContext.Provider>
-                        </PaneLifecycleContext.Provider>
-                      </PaneGroupContext.Provider>
-                    ) : (
-                      isActive && (
-                        <div className="p-3 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
-                          {t.zones.missingPane(paneId)}
-                        </div>
-                      )
-                    )}
-                  </PaneLayer>
-                )
-              })
-            )}
-          </PaneBody>
-        </SidebarBrandContext>
-      )}
+      {/* Body: bounded warm panes keep their layout boxes and visibility scopes. */}
+      <GroupPaneBody
+        activeId={activeId}
+        available={available}
+        compactSidebar={compactSidebar}
+        headerVisible={headerVisible}
+        hostedPanes={hostedPanes}
+        inlinePanes={inlinePanes}
+        mountedPanes={mountedPanes}
+        node={node}
+        paneEpochs={paneEpochs}
+        paneFor={paneFor}
+        paneLifecycle={paneLifecycle}
+        tabText={tabText}
+        toolPanel={toolPanel}
+        zoneMenu={zoneMenu}
+      />
 
       {!node.minimized && node.panes.includes('sessions') && <Slot area="navigation.footer" />}
 

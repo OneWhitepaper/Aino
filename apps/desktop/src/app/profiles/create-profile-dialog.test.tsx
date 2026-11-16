@@ -22,7 +22,7 @@ it.each([true, false])(
     render(<CreateProfileDialog onClose={vi.fn()} onCreated={created} open />)
     fireEvent.change(screen.getByPlaceholderText('my-profile'), { target: { value: 'new-persona' } })
     fireEvent.change(screen.getByRole('textbox', { name: /SOUL.md/ }), { target: { value: 'A new persona' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     await waitFor(() => expect(created).toHaveBeenCalledWith('new-persona'))
     expect(api.createProfile).toHaveBeenCalledWith({
       name: 'new-persona',
@@ -52,7 +52,7 @@ it('does not let a new browser profile inherit the prefs a deleted one left unde
     const created = vi.fn()
     render(<CreateProfileDialog onClose={vi.fn()} onCreated={created} open />)
     fireEvent.change(screen.getByPlaceholderText('my-profile'), { target: { value: 'work' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     await waitFor(() => expect(created).toHaveBeenCalledWith('work'))
 
     expect(localStorage.getItem(folderKey)).toBeNull()

@@ -5,6 +5,8 @@ import { createRef, type ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { stubMenuDomApis } from '@/test/jsdom'
+
 import { ConfigSettings } from './config-settings'
 
 const api = vi.hoisted(() => ({
@@ -59,11 +61,8 @@ function mount(route: string) {
   )
 }
 
-function selectTab(name: string) {
-  fireEvent.mouseDown(screen.getByRole('tab', { name }), { button: 0, ctrlKey: false })
-}
-
 beforeEach(() => {
+  stubMenuDomApis()
   Element.prototype.scrollIntoView = vi.fn()
   api.read.mockResolvedValue({
     fallback_providers: [{ provider: 'openai', model: 'test-fallback' }],
@@ -84,17 +83,17 @@ afterEach(() => {
 })
 
 describe('model settings navigation', () => {
-  it('opens the main model by default and routes other tabs without losing the editing scope', async () => {
+  it('opens the default model without extra tabs and routes preferences without losing the editing scope', async () => {
     const { container } = mount('/settings?tab=config:model&profile=research&owner=connection-a')
 
-    expect((await screen.findByRole('tab', { name: 'Main model' })).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getAllByRole('tab')).toHaveLength(5)
+    expect(await screen.findByRole('heading', { name: 'Model preferences' })).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
     expect(container.querySelector('[id="setting-field-fallback_providers"]')).toBeNull()
 
-    selectTab('Fallback models')
+    fireEvent.click(screen.getByRole('button', { name: 'Fallback models' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Fallback models' }).getAttribute('aria-selected')).toBe('true')
+      expect(screen.getByRole('button', { name: 'Fallback models' })).toBeTruthy()
       expect(container.querySelector('[id="setting-field-fallback_providers"]')).not.toBeNull()
     })
     const route = new URLSearchParams(screen.getByTestId('route').textContent ?? '')
@@ -104,10 +103,10 @@ describe('model settings navigation', () => {
     expect(api.read).toHaveBeenCalledWith('research')
   })
 
-  it('opens a legacy field link on its correct tab and keeps scoped configuration edits available', async () => {
+  it('opens legacy field links and keeps every model category available through the scoped menu', async () => {
     const { container } = mount('/settings?tab=config:model&profile=research&field=delegation.max_iterations')
 
-    expect((await screen.findByRole('tab', { name: 'Subagents' })).getAttribute('aria-selected')).toBe('true')
+    const menu = await screen.findByRole('button', { name: 'Subagents' })
     const field = container.querySelector<HTMLElement>('[id="setting-field-delegation.max_iterations"]')!
     expect(field).not.toBeNull()
     const input = field.querySelector('input')!
@@ -116,10 +115,10 @@ describe('model settings navigation', () => {
 
     await waitFor(() => expect(api.save).toHaveBeenCalledWith({ delegation: { max_iterations: 60 } }, 'research'))
 
-    selectTab('Auxiliary models')
-    await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'Auxiliary models' }).getAttribute('aria-selected')).toBe('true')
-    )
+    fireEvent.pointerDown(menu, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+    expect(screen.getAllByRole('menuitem')).toHaveLength(5)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Auxiliary models' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Auxiliary models' })).toBeTruthy())
     expect(container.querySelector('[id="setting-field-delegation.max_iterations"]')).toBeNull()
     expect(new URLSearchParams(screen.getByTestId('route').textContent ?? '').has('field')).toBe(false)
   })

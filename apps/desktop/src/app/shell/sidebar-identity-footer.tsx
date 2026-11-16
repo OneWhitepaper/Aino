@@ -9,6 +9,7 @@ import { AvatarChip } from '@/components/ui/avatar-chip'
 import { Button } from '@/components/ui/button'
 import { OverflowTip, Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
+import { setSettingsScope } from '@/store/settings-scope'
 
 function identityInitials(label: string): string {
   const parts = label.trim().split(/\s+/).filter(Boolean)
@@ -23,7 +24,7 @@ function identityInitials(label: string): string {
     .toUpperCase()
 }
 
-export function SidebarIdentityFooter() {
+export function SidebarIdentityFooter({ compact = false }: { compact?: boolean }) {
   const { t } = useI18n()
   const navigate = useNavigate()
   const actions = useAccountActions()
@@ -34,13 +35,22 @@ export function SidebarIdentityFooter() {
 
   return (
     <footer
-      className="flex shrink-0 items-center gap-1 border-t border-(--aino-landing-stroke) p-2"
+      className={
+        compact
+          ? 'aino-activity-account'
+          : 'flex shrink-0 items-center gap-1 border-t border-(--aino-landing-stroke) p-2'
+      }
       data-slot="sidebar-identity-footer"
     >
       <Button
         aria-label={`${t.settings.account.title} · ${label}`}
-        className="min-w-0 flex-1 justify-start gap-2.5 text-(--aino-landing-primary)"
-        onClick={() => navigateToWorkspacePage(navigate, `${SETTINGS_ROUTE}?tab=account`)}
+        className={
+          compact ? 'aino-activity-button' : 'min-w-0 flex-1 justify-start gap-2.5 text-(--aino-landing-primary)'
+        }
+        onClick={() => {
+          setSettingsScope('default')
+          navigateToWorkspacePage(navigate, `${SETTINGS_ROUTE}?tab=account`)
+        }}
         size="sm"
         type="button"
         variant="ghost"
@@ -52,22 +62,29 @@ export function SidebarIdentityFooter() {
         >
           {identityInitials(label)}
         </AvatarChip>
-        <OverflowTip label={label}>
-          <span className="min-w-0 truncate">{label}</span>
-        </OverflowTip>
+        {!compact && (
+          <OverflowTip label={label}>
+            <span className="min-w-0 truncate">{label}</span>
+          </OverflowTip>
+        )}
       </Button>
-      <Tip label={t.titlebar.openSettings}>
-        <Button
-          aria-label={t.titlebar.openSettings}
-          className="text-(--aino-landing-muted)"
-          onClick={() => navigateToWorkspacePage(navigate, SETTINGS_ROUTE)}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        >
-          <AinoDesignIcon className="size-3.5" src={sidebarSettingsIcon} />
-        </Button>
-      </Tip>
+      {!compact && (
+        <Tip label={t.titlebar.openSettings}>
+          <Button
+            aria-label={t.titlebar.openSettings}
+            className="text-(--aino-landing-muted)"
+            onClick={() => {
+              setSettingsScope('default')
+              navigateToWorkspacePage(navigate, SETTINGS_ROUTE)
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <AinoDesignIcon className="size-3.5" src={sidebarSettingsIcon} />
+          </Button>
+        </Tip>
+      )}
     </footer>
   )
 }

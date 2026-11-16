@@ -447,7 +447,7 @@ describe('slashStatusText', () => {
 })
 
 describe('appendText', () => {
-  it('concatenates text parts and trims', () => {
+  it('concatenates text parts without changing boundary whitespace', () => {
     const message = {
       content: [
         { type: 'text', text: ' a' },
@@ -455,7 +455,7 @@ describe('appendText', () => {
       ]
     } as unknown as AppendMessage
 
-    expect(appendText(message)).toBe('ab')
+    expect(appendText(message)).toBe(' ab ')
   })
 })
 

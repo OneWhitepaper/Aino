@@ -5210,8 +5210,8 @@ describe('openNewSessionTile workspace target', () => {
     )
   })
 
-  it('records the draft profile owner when tab-strip create omits profile', async () => {
-    const storedSessionId = 'stored-unlisted-draft-omar'
+  it('uses ordinary default ownership when tab-strip create omits an explicit Bot profile', async () => {
+    const storedSessionId = 'stored-unlisted-draft-default'
     setConnection({ mode: 'local' } as never)
     $profiles.set([{ name: 'default' }, { name: 'omar' }] as never)
     $newChatProfile.set('omar')
@@ -5239,8 +5239,9 @@ describe('openNewSessionTile workspace target', () => {
       await handle!.openNewSessionTile('center', { listed: false })
     })
 
-    expect($sessionTiles.get()).toContainEqual(expect.objectContaining({ ownerProfile: 'omar', storedSessionId }))
-    expect(knownOwnerForSession(storedSessionId)).toBe('omar')
+    expect(requestGateway).toHaveBeenCalledWith('session.create', expect.objectContaining({ profile: 'default' }))
+    expect($sessionTiles.get()).toContainEqual(expect.objectContaining({ ownerProfile: undefined, storedSessionId }))
+    expect(knownOwnerForSession(storedSessionId)).toBe('default')
 
     await expect(
       requestForOwnedSession(storedSessionId, requestGateway, 'session.control.read', {
@@ -5248,7 +5249,7 @@ describe('openNewSessionTile workspace target', () => {
       })
     ).resolves.toEqual({ control: {} })
     expect(requestGatewayForProfile).toHaveBeenCalledWith(
-      'omar',
+      'default',
       'session.control.read',
       { session_id: RUNTIME_SESSION_ID },
       undefined,
@@ -5256,16 +5257,16 @@ describe('openNewSessionTile workspace target', () => {
     )
   })
 
-  // #124265: the project "+" while a chat is occupied (and project-row drags)
-  // stack a tile with the project's cwd instead of running the fresh-draft
-  // pin. The tile must still be owned by the profile the project tree is
-  // rendered under, not by a stale new-chat pin left from a profile pick.
-  it('owns a project-cwd tile by the project profile over a stale new-chat pin', async () => {
+  // #124265: project tiles inherit cwd while ordinary ownership stays default.
+  it('owns an ordinary project-cwd tile by default despite an active Bot profile', async () => {
     const storedSessionId = 'stored-project-tile-work'
     setConnection({ mode: 'local' } as never)
     $profiles.set([{ name: 'default' }, { name: 'work' }] as never)
     $activeGatewayProfile.set('work')
     $newChatProfile.set('default')
+    vi.mocked(ensureGatewayProfile).mockImplementationOnce(async owner => {
+      $activeGatewayProfile.set(owner || 'default')
+    })
 
     let createParams: Record<string, unknown> | undefined
 
@@ -5291,16 +5292,14 @@ describe('openNewSessionTile workspace target', () => {
       await handle!.openNewSessionTile('center', { cwd: '/repo/work', listed: false })
     })
 
-    expect(createParams).toMatchObject({ cwd: '/repo/work', profile: 'work' })
-    expect($sessionTiles.get()).toContainEqual(expect.objectContaining({ ownerProfile: 'work', storedSessionId }))
-    expect(knownOwnerForSession(storedSessionId)).toBe('work')
+    expect(createParams).toMatchObject({ cwd: '/repo/work', profile: 'default' })
+    expect(ensureGatewayProfile).toHaveBeenCalledWith('default')
+    expect($sessionTiles.get()).toContainEqual(expect.objectContaining({ ownerProfile: undefined, storedSessionId }))
+    expect(knownOwnerForSession(storedSessionId)).toBe('default')
   })
 
-  // Review of #124265: the stale pin may also have captured ANOTHER connection
-  // ($newChatConnectionId). The project tree is rendered by the active source,
-  // so the tile must pair the project profile with that source — not with the
-  // pin's host (right profile, wrong host).
-  it('pairs the project profile with the active source, not a stale pin captured on another connection', async () => {
+  // #124265: a stale Bot pin must not redirect the project's active service.
+  it('pairs ordinary default with the project active source despite a stale Bot pin on another connection', async () => {
     const storedSessionId = 'stored-project-tile-remote-work'
     setConnection({ mode: 'remote' } as never)
     $profiles.set([{ name: 'default' }, { name: 'work' }] as never)
@@ -5310,7 +5309,7 @@ describe('openNewSessionTile workspace target', () => {
     vi.mocked(activeGatewayConnectionId).mockReturnValue('ssh-vps')
 
     vi.mocked(requestGatewayForAgent).mockImplementation(async (connectionId, profile, method) => {
-      if (connectionId === 'ssh-vps' && profile === 'work' && method === 'session.create') {
+      if (connectionId === 'ssh-vps' && profile === 'default' && method === 'session.create') {
         return {
           info: { cwd: '/repo/work', model: 'test-model', tools: {}, skills: {} },
           session_id: RUNTIME_SESSION_ID,
@@ -5335,14 +5334,14 @@ describe('openNewSessionTile workspace target', () => {
 
     expect(requestGatewayForAgent).toHaveBeenCalledWith(
       'ssh-vps',
-      'work',
+      'default',
       'session.create',
       expect.objectContaining({ cwd: '/repo/work' }),
       undefined,
       undefined,
       expect.anything()
     )
-    expect(getSessionOwnerHint(storedSessionId)).toMatchObject({ connectionId: 'ssh-vps', profile: 'work' })
+    expect(getSessionOwnerHint(storedSessionId)).toMatchObject({ connectionId: 'ssh-vps', profile: 'default' })
   })
 })
 

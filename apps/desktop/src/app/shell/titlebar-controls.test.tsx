@@ -22,6 +22,7 @@ import { registry } from '@/contrib/registry'
 import { I18nProvider } from '@/i18n'
 import { $fileBrowserOpen, $leftSideOpen, CHAT_SIDEBAR_PANE_ID, FILE_BROWSER_PANE_ID } from '@/store/layout'
 import { REVIEW_PANE_ID } from '@/store/review'
+import { $selectedStoredSessionId, $sessionPickerOpen, setSessionPickerOpen } from '@/store/session'
 import { $summaryOpen } from '@/store/summary'
 import { stubResizeObserver } from '@/test/jsdom'
 
@@ -46,6 +47,7 @@ afterEach(() => {
   $terminals.set([])
   $activeTerminalId.set(null)
   $summaryOpen.set(false)
+  setSessionPickerOpen(false)
 })
 
 describe('titlebar terminal toggle', () => {
@@ -154,7 +156,7 @@ describe('titlebar summary toggle', () => {
       </I18nProvider>
     )
 
-    const button = screen.getByRole('button', { name: '会话资源' })
+    const button = screen.getByRole('button', { name: '会话摘要' })
     expect(button.getAttribute('aria-pressed')).toBe('false')
     await act(async () => fireEvent.click(button))
     expect($summaryOpen.get()).toBe(true)
@@ -190,14 +192,14 @@ describe('titlebar summary toggle', () => {
 
     const view = render(toolbar)
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话资源' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话摘要' })))
     view.unmount()
     render(toolbar)
 
     expect($summaryOpen.get()).toBe(true)
-    expect(screen.getByRole('button', { name: '会话资源' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: '会话摘要' }).getAttribute('aria-expanded')).toBe('true')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话资源' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话摘要' })))
     expect($summaryOpen.get()).toBe(false)
   })
 })
@@ -261,10 +263,11 @@ describe('TitlebarControls fixed clusters', () => {
   })
 
   it('hides the app clusters on an overlay', () => {
-    renderControls('/settings')
+    const { container } = renderControls('/settings')
 
     expect(windowControls()).toBeNull()
     expect(appControls()).toBeNull()
+    expect(container.querySelector('[data-titlebar-page-identity]')?.textContent).toBe('Settings')
   })
 
   it('a titleBar.tools item alone does not claim the band', () => {
@@ -303,11 +306,15 @@ describe('TitlebarControls fixed clusters', () => {
 
       act(() => navigateTo(CAPABILITIES_ROUTE))
       expect(screen.queryByText('plugin-center')).toBeNull()
-      expect(windowControls()).not.toBeNull()
-      expect(appControls()).not.toBeNull()
+      expect(windowControls()).toBeNull()
+      expect(appControls()).toBeNull()
+      expect(screen.getByRole('button', { name: 'Notifications and status' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy()
 
       act(() => navigateTo('/'))
       expect(life).toEqual({ cleanups: 0, mounts: 0 })
+      expect(windowControls()).not.toBeNull()
+      expect(appControls()).not.toBeNull()
     } finally {
       act(disposeTitle)
     }
@@ -486,7 +493,7 @@ describe('titlebar app-action cluster', () => {
     expect(screen.queryByLabelText('Unmute haptics')).toBeNull()
     expect(screen.queryByLabelText('Layout editor')).toBeNull()
     expect(screen.queryByLabelText('Swap sidebar sides')).toBeNull()
-    expect(within(right).getByLabelText('HUD mode')).toBeTruthy()
+    expect(within(right).getByLabelText('Find conversations across Bots')).toBeTruthy()
 
     expect(within(left).queryByLabelText('Mute haptics')).toBeNull()
     expect(within(left).queryByLabelText('Layout editor')).toBeNull()
@@ -503,7 +510,7 @@ describe('titlebar app-action cluster', () => {
 
     expect(within(left).getAllByRole('button')).toHaveLength(3)
     expect(within(right).queryByLabelText('Mute haptics')).toBeNull()
-    expect(within(right).getByLabelText('HUD mode')).toBeTruthy()
+    expect(within(right).getByLabelText('Find conversations across Bots')).toBeTruthy()
     window.localStorage.removeItem('hermes.desktop.titlebarAppActions')
   })
 
@@ -514,5 +521,13 @@ describe('titlebar app-action cluster', () => {
     expect(screen.queryByLabelText('HUD mode')).toBeNull()
     expect(screen.queryByLabelText('Layout editor')).toBeNull()
     expect(within(screen.getByLabelText('Window controls')).getAllByRole('button')).toHaveLength(3)
+  })
+
+  it('opens global session search without changing the selected conversation', () => {
+    $selectedStoredSessionId.set('current-conversation')
+    renderControls('/')
+    fireEvent.click(screen.getByRole('button', { name: 'Find conversations across Bots' }))
+    expect($sessionPickerOpen.get()).toBe(true)
+    expect($selectedStoredSessionId.get()).toBe('current-conversation')
   })
 })

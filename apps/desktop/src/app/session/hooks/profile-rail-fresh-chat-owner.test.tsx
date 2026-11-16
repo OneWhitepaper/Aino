@@ -121,6 +121,7 @@ let runtimeOwner: MockGateway | null = null
 let registryOnEvent!: Mock<(event: GatewayEvent) => void>
 /** The port of the ONE socket allowed to mint (and then own) the runtime. */
 let ownerPort = OMAR_PORT
+let ownerProfile = 'omar'
 /** The ids the owner socket mints — per case, so one case's owner records
  *  (the hint map is module state) can never satisfy another's assertions. */
 let mintedRuntimeId = RUNTIME_ID
@@ -231,13 +232,13 @@ function installDesktop(): void {
   ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = {
     api: vi.fn(async ({ connectionId, profile, path, method = 'GET' }: HermesApiRequest) => {
       const expectedConnectionId =
-        ownerPort === V1_PORT ? undefined : resolveNewChatOwnerRoute()?.connectionId || SOURCE_ID
+        ownerPort === V1_PORT || ownerPort === 4242 ? undefined : resolveNewChatOwnerRoute()?.connectionId || SOURCE_ID
 
       if (
         path !== '/api/model/info' ||
         method !== 'GET' ||
-        profile !== 'omar' ||
-        (connectionId !== expectedConnectionId && !(ownerPort === V1_PORT && connectionId === 'local'))
+        profile !== ownerProfile ||
+        (connectionId !== expectedConnectionId && !([V1_PORT, 4242].includes(ownerPort) && connectionId === 'local'))
       ) {
         throw new Error(`Unexpected model default read: ${method} ${path} (${connectionId}::${profile})`)
       }
@@ -247,7 +248,7 @@ function installDesktop(): void {
     // v1 profile path (requestGatewayForProfile / ensureGatewayProfile): a
     // per-profile local backend that is NOT the registry entry.
     getConnection: vi.fn(async (profile: null | string) => {
-      const port = profile ? V1_PORT : 4242
+      const port = profile && profile !== 'default' ? V1_PORT : 4242
 
       return { port, profile, token: profile ? 'v1-token' : 'primary-token', wsUrl: `ws://127.0.0.1:${port}/ws` }
     }),
@@ -415,6 +416,7 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     sockets.length = 0
     runtimeOwner = null
     ownerPort = OMAR_PORT
+    ownerProfile = 'omar'
     mintedRuntimeId = RUNTIME_ID
     mintedStoredId = STORED_ID
     clearSingleFlightSessionResumeState()
@@ -550,12 +552,13 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     { connectionId: 'local', activeProfile: 'default' },
     { connectionId: null, activeProfile: 'omar' }
   ])(
-    'captures the saved $connectionId default before activation from remote $activeProfile',
+    'keeps saved $connectionId transport while targeting ordinary default from remote $activeProfile',
     async ({ connectionId, activeProfile }) => {
       const primary = makePrimary()
       setPrimaryGateway(primary as never, 'default')
       await ensureGatewayAgent(SOURCE_ID, activeProfile)
-      ownerPort = connectionId === null ? V1_PORT : OMAR_PORT
+      ownerPort = connectionId === null ? 4242 : SOURCE_DEFAULT_PORT
+      ownerProfile = 'default'
       const activation = deferred<void>()
       const desktop = window.hermesDesktop!
       vi.mocked(desktop.getConnectionFor!).mockClear()
@@ -586,7 +589,7 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
       try {
         act(() => prepareDefaultNewSession())
         expect(activeGatewayConnectionId()).toBe(SOURCE_ID)
-        expect(resolveNewChatOwnerRoute()).toEqual(connectionId === null ? null : { connectionId, profile: 'omar' })
+        expect(resolveNewChatOwnerRoute()).toEqual(connectionId === null ? null : { connectionId, profile: 'default' })
         creating = handle!.createSession()
         expect(runtimeOwner).toBeNull()
       } finally {
@@ -597,21 +600,22 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
       await expect(handle!.submitText('first prompt')).resolves.toBe(true)
       await settleTurn(handle!)
       await expect(handle!.submitText('second prompt')).resolves.toBe(true)
-      const owner = sockets.find(socket => socket.connectUrl?.includes(`:${ownerPort}`))!
+      const owner = connectionId === null ? primary : sockets.find(socket => calls(socket).includes('session.create'))!
+      expect(owner.connectUrl).toContain(`:${ownerPort}`)
       expect(runtimeOwner).toBe(owner)
       expect(calls(owner).filter(method => method === 'session.create')).toHaveLength(1)
       expect(calls(owner).filter(method => method === 'prompt.submit')).toHaveLength(2)
       expect(desktop.getConnectionFor).not.toHaveBeenCalledWith({ connectionId: SOURCE_ID, profile: 'omar' })
 
       if (connectionId === null) {
-        expect(desktop.getConnection).toHaveBeenCalledWith('omar')
-        expect(desktop.getConnectionFor).not.toHaveBeenCalledWith({ connectionId: 'local', profile: 'omar' })
+        expect(desktop.getConnection).toHaveBeenCalledWith('default')
+        expect(desktop.getConnectionFor).not.toHaveBeenCalledWith({ connectionId: 'local', profile: 'default' })
         expect($connection.get()?.mode).toBe('remote')
         expect(getSessionOwnerHint(mintedStoredId)).toBeUndefined()
       } else {
-        expect(desktop.getConnectionFor).toHaveBeenCalledWith({ connectionId: 'local', profile: 'omar' })
+        expect(desktop.getConnectionFor).toHaveBeenCalledWith({ connectionId: 'local', profile: 'default' })
         expect(desktop.getConnection).not.toHaveBeenCalledWith('omar')
-        expect(getSessionOwnerHint(mintedStoredId)).toEqual({ connectionId, profile: 'omar' })
+        expect(getSessionOwnerHint(mintedStoredId)).toEqual({ connectionId, profile: 'default' })
       }
 
       for (const socket of [primary, ...sockets]) {

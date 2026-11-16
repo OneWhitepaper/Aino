@@ -55,7 +55,7 @@ it('opens the clicked canonical route without selecting it and saves only that r
   expect(notify).toHaveBeenCalledWith(expect.objectContaining({ kind: 'success' }))
 
   fireEvent.contextMenu(screen.getByRole('button', { name: 'Design studio' }))
-  expect(screen.getByRole('menuitem', { name: 'Default profile' }).getAttribute('aria-disabled')).toBe('true')
+  expect(screen.getByRole('menuitem', { name: 'Default Bot' }).getAttribute('aria-disabled')).toBe('true')
 })
 
 it('distinguishes the same profile on another source and reports a rejected default write without success', async () => {

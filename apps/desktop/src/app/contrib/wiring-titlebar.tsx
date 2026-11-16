@@ -71,17 +71,20 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const measuredOverlayWidth = useWindowControlsOverlayWidth()
   const nativeOverlayWidth = measuredOverlayWidth ?? connection?.nativeOverlayWidth ?? 0
 
-  const titlebarChrome = {
-    darwinMajor: connection?.darwinMajor ?? 0,
-    isFullscreen: Boolean(connection?.isFullscreen),
-    windowButtonPosition: connection?.windowButtonPosition
-  }
-
-  const titlebarToolsRight = titlebarToolsRightCss(nativeOverlayWidth, titlebarChrome)
-
   // WSLg: Electron's native overlay drifts its hit-region under RAIL, so the
   // renderer paints its own min/max/close (main decides via customWindowControls).
   const customWindowControls = connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
+
+  const titlebarChrome = {
+    darwinMajor: connection?.darwinMajor ?? 0,
+    isFullscreen: Boolean(connection?.isFullscreen),
+    windowButtonPosition: connection?.windowButtonPosition,
+    // WCO measurements and custom captions already use renderer CSS pixels.
+    // Only the native fallback arrives in unscaled DIP coordinates.
+    zoomFactor: measuredOverlayWidth === null && !customWindowControls ? zoomFactor : 1
+  }
+
+  const titlebarToolsRight = titlebarToolsRightCss(nativeOverlayWidth, titlebarChrome)
 
   const interfaceMode = useStore($interfaceMode)
   const shownTool = shownInMode(interfaceMode)

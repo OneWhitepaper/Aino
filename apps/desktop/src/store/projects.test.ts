@@ -3,6 +3,7 @@ import { atom } from 'nanostores'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NO_PROJECT_ID, type SidebarProjectTree } from '@/app/chat/sidebar/projects/workspace-groups'
+import { readJson } from '@/lib/storage'
 import { $sidebarAgentsGrouped, $sidebarWorkspaceNodeOpen, setSidebarAgentsGrouped } from '@/store/layout'
 import { $openProjectsByProfile } from '@/store/open-projects'
 import {
@@ -1015,6 +1016,114 @@ describe('project writes while viewing all profiles', () => {
 
     await expect(deleteProject(project.id)).rejects.toThrow()
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('does not reopen a deleted project through discovery (all profiles: %s)', async all => {
+    const discovered = {
+      id: '/srv/ws',
+      label: 'ws',
+      path: '/srv/ws',
+      isAuto: true,
+      repos: [],
+      sessionCount: 1
+    }
+
+    const request = vi.fn(async (method: string) =>
+      method === 'projects.tree'
+        ? { active_id: null, projects: [discovered], scoped_session_ids: ['history'] }
+        : { active_id: null, projects: [] }
+    )
+
+    activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
+    $activeGatewayProfile.set('coder')
+    $openProjectsByProfile.set({
+      coder: [{ id: project.id, path: '/srv/ws' }],
+      default: [{ id: 'p_other_owner', path: '/srv/ws' }]
+    })
+    $projectScope.set(project.id)
+    setShowAllProfiles(all)
+
+    await deleteProject(project.id, 'coder')
+    setShowAllProfiles(false)
+    await refreshProjectTree()
+
+    expect($openedProjectTree.get()).toEqual([])
+    expect($openProjectsByProfile.get()).toEqual({
+      coder: [],
+      default: [{ id: 'p_other_owner', path: '/srv/ws' }]
+    })
+    expect(readJson('hermes.desktop.openProjectsByProfile')).toEqual({
+      coder: [],
+      default: [{ id: 'p_other_owner', path: '/srv/ws' }]
+    })
+    expect($projectScope.get()).toBe(ALL_PROJECTS)
+    // Discovery/history remain available; only the deleted project's open intent is gone.
+    expect($projectTree.get()).toEqual([discovered])
+
+    enterProject(discovered.id)
+    expect($openedProjectTree.get()).toEqual([discovered])
+  })
+
+  it('keeps a failed deletion open and preserves its registration', async () => {
+    activeGateway.mockReturnValue({
+      connectionState: 'open',
+      request: vi.fn().mockRejectedValue(new Error('delete failed'))
+    } as never)
+    $openProjectsByProfile.set({ default: [{ id: project.id, path: '/srv/ws' }] })
+    $projectScope.set(project.id)
+
+    await expect(deleteProject(project.id)).rejects.toThrow('delete failed')
+
+    expect($projects.get()).toEqual([project])
+    expect($openedProjectTree.get().map(row => row.id)).toEqual([project.id])
+    expect($projectScope.get()).toBe(project.id)
+  })
+
+  it.each(['success', 'failure'])('ignores a late deletion %s after switching source', async result => {
+    const response = deferred<unknown>()
+    const request = vi.fn(() => response.promise)
+    activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
+    const deleting = deleteProject(project.id)
+    const completion = result === 'failure' ? expect(deleting).rejects.toThrow('delete failed') : deleting
+    await waitFor(() => expect(request).toHaveBeenCalled())
+
+    const newProject = { ...project, name: 'Another source', primary_path: '/new-source' }
+    activeGateway.mockReturnValue({ connectionState: 'open', request: vi.fn() } as never)
+    $projects.set([newProject])
+    $projectTree.set([{ id: project.id, label: newProject.name, path: '/new-source', repos: [], sessionCount: 0 }])
+    $openProjectsByProfile.set({ default: [{ id: project.id, path: '/new-source' }] })
+
+    if (result === 'failure') {
+      response.reject(new Error('delete failed'))
+    } else {
+      response.resolve({ active_id: null, projects: [] })
+    }
+
+    await completion
+
+    expect($projects.get()).toEqual([newProject])
+    expect($openedProjectTree.get().map(row => row.path)).toEqual(['/new-source'])
+    expect($openProjectsByProfile.get()).toEqual({ default: [{ id: project.id, path: '/new-source' }] })
+  })
+
+  it('finishes deleting the original profile project after switching profiles on the same connection', async () => {
+    const response = deferred<unknown>()
+    const request = vi.fn(() => response.promise)
+    activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
+    $openProjectsByProfile.set({
+      default: [{ id: project.id, path: '/srv/ws' }],
+      coder: [{ id: project.id, path: '/coder/ws' }]
+    })
+    const deleting = deleteProject(project.id)
+    await waitFor(() => expect(request).toHaveBeenCalled())
+
+    $activeGatewayProfile.set('coder')
+    $projectScope.set(project.id)
+    response.resolve({ active_id: null, projects: [] })
+    await deleting
+
+    expect($openProjectsByProfile.get()).toEqual({ default: [], coder: [{ id: project.id, path: '/coder/ws' }] })
+    expect($projectScope.get()).toBe(project.id)
   })
 })
 

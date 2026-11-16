@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as HermesApi from '@/hermes'
@@ -60,6 +60,7 @@ async function renderCron() {
 async function renderLoadedCron() {
   const result = await renderCron()
 
+  fireEvent.click(await screen.findByRole('button', { name: /Status report/ }))
   await screen.findByText('No runs yet')
 
   return result
@@ -90,6 +91,28 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+it('opens run controls only after a task is selected and can return to the task list', async () => {
+  await renderCron()
+
+  expect(screen.queryByRole('button', { name: 'Trigger now' })).toBeNull()
+  const row = await screen.findByRole('button', { name: /Status report/ })
+  fireEvent.click(row)
+  expect(await screen.findByRole('button', { name: 'Trigger now' })).toBeTruthy()
+  fireEvent.click(row)
+  expect(screen.queryByRole('button', { name: 'Trigger now' })).toBeNull()
+})
+
+it('keeps a failed initial load distinct from an empty job list and retries the same scope', async () => {
+  setCronJobs([])
+  getCronJobs.mockRejectedValueOnce(new Error('scheduler unavailable'))
+  await renderCron()
+
+  expect((await screen.findByRole('alert')).textContent).toContain('Failed to load cron jobs')
+  expect(screen.queryByText('No scheduled jobs yet')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(await screen.findByRole('button', { name: /Status report/ })).toBeTruthy()
+})
+
 describe('CronView queued trigger feedback (#70826)', () => {
   it('paints the queued run row immediately and settles it when the run appears', async () => {
     const { container } = await renderLoadedCron()
@@ -109,6 +132,10 @@ describe('CronView queued trigger feedback (#70826)', () => {
     expect(triggerButton.getAttribute('aria-busy')).toBe('true')
     expect(getCronJobRuns).toHaveBeenCalled()
 
+    // Closing the details is presentation only: its queued run must still settle.
+    fireEvent.click(screen.getByRole('button', { expanded: true, name: /Status report/ }))
+    expect(screen.queryByRole('button', { name: 'Trigger now' })).toBeNull()
+
     // The backend materializes the run the trigger produced.
     const observedAt = Date.now() / 1000
     getCronJobRuns.mockResolvedValue([
@@ -125,6 +152,7 @@ describe('CronView queued trigger feedback (#70826)', () => {
 
     await screen.findByText('Status report run')
     await waitFor(() => expect(queuedRow()).toBeNull())
+    fireEvent.click(screen.getByRole('button', { expanded: false, name: /Status report/ }))
     expect((triggerButton as HTMLButtonElement).disabled).toBe(false)
     expect(container.querySelector('.codicon-zap')).toBeTruthy()
   })

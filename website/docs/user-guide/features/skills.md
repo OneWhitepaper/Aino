@@ -14,6 +14,7 @@ You can also point Hermes at **external skill directories** — additional folde
 
 See also:
 
+- [Aino Built-in Workflow Skills](aino-builtin-skills.md)
 - [Bundled Skills Catalog](../../reference/skills-catalog.md)
 - [Official Optional Skills Catalog](../../reference/optional-skills-catalog.md)
 

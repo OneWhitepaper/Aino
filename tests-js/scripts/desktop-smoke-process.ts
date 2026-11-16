@@ -120,7 +120,7 @@ const processSnapshotSchema = z.object({
   listeners: z.array(z.number().int().positive()),
 })
 
-/** Read OS process facts with the installed psutil; Windows CIM startup can stall on ARM. */
+/** Read OS process facts with psutil; Windows CIM startup can stall on ARM. */
 export function readProcessSnapshot(port: number, payloadRoot?: string): z.infer<typeof processSnapshotSchema> {
   let python = process.env.HERMES_PYTHON
   let site = ''
@@ -129,10 +129,14 @@ export function readProcessSnapshot(port: number, payloadRoot?: string): z.infer
     const runtime = z.object({ runtime: z.object({ storePython: z.string(), sitePackages: z.string() }) }).parse(
       JSON.parse(fs.readFileSync(path.join(payloadRoot, 'manifest.json'), 'utf8'))).runtime
 
-    python = path.resolve(payloadRoot, runtime.storePython)
-    site = path.resolve(payloadRoot, runtime.sitePackages)
+    const installedPython = path.resolve(payloadRoot, runtime.storePython)
+    const installedSite = path.resolve(payloadRoot, runtime.sitePackages)
 
-    if (!within(payloadRoot, python) || !within(payloadRoot, site)) { throw new Error('Process observer escapes the installed payload') }
+    if (!within(payloadRoot, installedPython) || !within(payloadRoot, installedSite)) { throw new Error('Process observer escapes the installed payload') }
+
+    // External Node processes cannot launch a WindowsApps interpreter. The
+    // preflighted fixture supplies Windows OS facts and its own native psutil.
+    if (process.platform !== 'win32') { python = installedPython; site = installedSite }
   }
 
   if (!python) { throw new Error('OS process snapshot requires the installed HERMES_PYTHON') }

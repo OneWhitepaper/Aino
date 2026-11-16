@@ -1,7 +1,9 @@
 export interface SummaryTranslations {
   aria: string
   title: string
+  description: string
   close: string
+  currentSession: string
   environment: {
     title: string
     local: string
@@ -45,6 +47,7 @@ export interface SummaryTranslations {
     noRepository: string
   }
   agents: {
+    history: (count: number) => string
     title: string
     dispatched: (count: number) => string
     finished: string
@@ -61,10 +64,12 @@ export interface SummaryTranslations {
   }
   outputs: {
     title: string
+    none: string
     create: string
     prompt: string
   }
   plan: {
+    history: (count: number) => string
     title: string
     progress: (done: number, total: number) => string
     recorded: string

@@ -66,7 +66,7 @@ it('hydrates an empty owner and exposes its transcript through the capsule witho
   expect(request).toHaveBeenCalledWith('remote-owner', 'research', 'subagent.list', { session_id: 'parent' })
   expect($subagentsBySession.get().parent[0].startedAt).toBe(1000000)
   fireEvent.click(worker)
-  fireEvent.click(screen.getByText('Extended transcript'))
+  fireEvent.click(screen.getByText('Execution log'))
   await waitFor(() =>
     expect(view.container.querySelector('[data-slot="subagent-transcript"]')?.textContent).toContain(text)
   )

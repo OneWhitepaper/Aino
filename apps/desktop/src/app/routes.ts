@@ -157,10 +157,8 @@ export interface ProfileGroupHeaderContribution {
   render: (route: ProfileGroupRoute) => ReactNode
 }
 
-// Views that render as a full-screen modal card (OverlayView) over the shell.
-// Settings is intentionally not in this set: it is a durable workspace page
-// rendered below the native titlebar, while the remaining route overlays keep
-// their modal-card behavior.
+// Legacy route-owned views retain their return/close routing. Their real
+// content now shares the full-page app frame through RoutePageSurface.
 export const OVERLAY_VIEWS: ReadonlySet<AppView> = new Set([
   'session-import',
   'agents',
@@ -184,14 +182,13 @@ export function isRouteBlockingSurface(view: AppView): boolean {
   return view === 'settings' || isOverlayView(view)
 }
 
-/** True when TitlebarControls may hide the app's fixed tool clusters.
- *  Overlays already own the window (clusters AND titleBar slots unmount).
+/** True when TitlebarControls may hide chat's fixed tool clusters.
  *  Contributed full pages (`extension`) hide the app clusters only while the
  *  page actually mounts `titleBar.*` chrome — those slots are mount-scoped, so
  *  a plugin page with no titlebar contribution keeps the app controls.
- *  First-party workspace pages (capabilities/messaging/artifacts) keep the clusters. */
+ *  First-party pages keep history and global notifications. */
 export function hidesFixedTitlebarClusters(view: AppView): boolean {
-  return isRouteBlockingSurface(view) || view === 'extension'
+  return view !== 'chat'
 }
 
 /** The pathname of a router target. Every classifier below reasons about a
@@ -257,26 +254,23 @@ export function appViewForPath(pathname: string): AppView {
   return APP_VIEW_BY_PATH.get(path) ?? 'chat'
 }
 
-/** Does `to` land on a full page rendered by the workspace shell
- *  (settings/skills/messaging/artifacts/contributed routes)? Modal overlays
- *  don't count — they float over whatever the workspace is already showing. */
+/** Every non-conversation route owns the full surface beside the activity rail. */
 export function isWorkspacePageRoute(to: string): boolean {
   const view = appViewForPath(to)
 
-  return view !== 'chat' && !isOverlayView(view)
+  return view !== 'chat'
 }
 
 /** True while the workspace pane shows a FULL PAGE (settings/skills/messaging/
  *  artifacts/plugin routes) instead of the chat. Published by the wiring
  *  (which owns the router location); the workspace pane contribution mirrors
- *  it as `headerVeto` so the zone tab bar stands down on pages. Modal overlays
- *  don't count — they float above the workspace. */
+ *  it as `headerVeto` so the zone tab bar stands down on pages. */
 export const $workspaceIsPage = atom(false)
 
 /** Durable pages use the full work area; navigation stays available. This is
  * presentation only: other pane instances and the saved tiling tree survive. */
 export const workspacePageKeepsPane = (paneId: string): boolean =>
-  paneId === 'workspace' || paneId === 'sessions' || paneId === 'hermes-bots:pane'
+  paneId === 'workspace'
 
 /** Page-owned controls (kanban's board switcher) projected into the workspace
  *  panel's tab-header space while `$workspaceIsPage` holds — the page's title

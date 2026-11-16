@@ -231,24 +231,24 @@ describe('age label reflects the last worker run, not only the last conversation
     // A specialist driven only via delegate_task: its newest human conversation is 11 days old,
     // but it ran a `tool`/`kanban` worker 2h ago (well past the 150s liveness window). The label
     // must read "2h", not "11d" — the busiest bot in the system used to read as the most idle.
-    renderRow({
+    const row = renderRow({
       name: 'auswerter',
       last_session: { last_active: nowSec() - 11 * 86400 },
       worker_session: { last_active: nowSec() - 2 * 3600 }
     } as RosterRow)
 
-    expect(screen.getByText('2h')).toBeTruthy()
+    expect(row.getAttribute('aria-description')).toContain('2h')
     expect(screen.queryByText('11d')).toBeNull()
   })
 
   it('falls back to conversation age when there is no worker session', () => {
     // worker_session can be absent (None past the 20-row window); the max degrades to the chat age.
-    renderRow({
+    const row = renderRow({
       name: 'chatty',
       last_session: { last_active: nowSec() - 3 * 86400 }
     } as RosterRow)
 
-    expect(screen.getByText('3d')).toBeTruthy()
+    expect(row.getAttribute('aria-description')).toContain('3d')
   })
 })
 
@@ -269,4 +269,22 @@ it('offers Disband for a Desktop-run group chat, matching its header action', as
   fireEvent.contextMenu(screen.getByRole('button', { name: /Local team,/ }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Disband' }))
   expect(onDisband).toHaveBeenCalledExactlyOnceWith({ name: 'Local team', members })
+})
+
+describe('readable roster descriptions', () => {
+  it('shows the actual bot description before a canonical conversation has a preview', () => {
+    renderRow({ name: 'new-researcher', description: 'Research and organize source material' })
+    expect(screen.getByText('Research and organize source material')).toBeTruthy()
+  })
+
+  it('shows the bot description while preserving its real canonical message in the history hint', () => {
+    const row = renderRow({
+      name: 'active-researcher',
+      description: 'Research and organize source material',
+      canonical_session: { id: 'canonical-researcher', preview: 'The source review is complete' }
+    })
+
+    expect(row.getAttribute('aria-description')).toContain('The source review is complete')
+    expect(screen.getByText('Research and organize source material')).toBeTruthy()
+  })
 })

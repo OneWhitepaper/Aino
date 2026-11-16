@@ -35,7 +35,7 @@ export const enProjects: Translations['sidebar']['projects'] = {
   copyPath: 'Copy path',
   removeFromSidebar: 'Hide from sidebar',
   createdInPreviousContext:
-    "Project created on the previous connection or profile. Switch back to find it; IDEA.md wasn't written.",
+    'Project created for the previous connection or Bot. Switch back to find it; IDEA.md was not written.',
   hiddenFromSidebar: 'Hidden from sidebar',
   undoHide: 'Undo',
   createFailed: 'Could not create project',
@@ -97,11 +97,11 @@ export const enProjects: Translations['sidebar']['projects'] = {
 
   keepOneFolder: 'Keep at least one folder',
 
-  contextChanged: 'The conversation or workspace changed. Reopen this dialog to continue.',
+  contextChanged: 'The conversation or project changed. Reopen this dialog to continue.',
 
   menuClose: 'Close project',
 
-  unavailableAllProfiles: 'Project settings are read-only in All profiles. Select a workspace in Settings to edit.',
+  unavailableAllProfiles: 'This view is read-only. Open the relevant Bot to manage its projects.',
 
-  activeProfileChanged: 'Active Hermes profile changed while connecting'
+  activeProfileChanged: 'The active Bot changed while connecting.'
 }

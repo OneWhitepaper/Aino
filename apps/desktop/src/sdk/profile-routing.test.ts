@@ -533,7 +533,7 @@ describe('connection-aware plugin host APIs', () => {
         profile: 'worker',
         targetProfile: 'default'
       })
-    ).rejects.toThrow(/default profile cannot be deleted/i)
+    ).rejects.toThrow('The built-in Aino assistant cannot be deleted.')
 
     expect(deleteProfile).not.toHaveBeenCalled()
   })
@@ -548,7 +548,7 @@ describe('connection-aware plugin host APIs', () => {
         profile: 'worker',
         targetProfile: 'default'
       })
-    ).rejects.toThrow('无法删除默认工作区。')
+    ).rejects.toThrow('无法删除内置 Aino 主助手。')
 
     expect(deleteProfile).not.toHaveBeenCalled()
   })

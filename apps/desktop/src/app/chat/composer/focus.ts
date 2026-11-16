@@ -22,7 +22,7 @@ import { RICH_INPUT_SLOT } from './rich-editor'
 /** Composer routing key. The main chat is `'main'`, the edit composer
  *  `'edit'`; scoped composers (session tiles) use `'tile:<id>'`. */
 export type ComposerTarget = 'edit' | 'main' | (string & {})
-export type ComposerInsertMode = 'block' | 'inline' | 'prefix'
+export type ComposerInsertMode = 'block' | 'inline' | 'prefix' | 'verbatim'
 
 export interface FocusDetail {
   target: ComposerTarget
@@ -286,20 +286,20 @@ export const requestComposerInsert = (
   text: string,
   { mode = 'block', target = 'active' }: { mode?: ComposerInsertMode; target?: ComposerTarget | 'active' } = {}
 ) => {
-  const trimmed = text.trim()
+  const value = mode === 'verbatim' ? text : text.trim()
 
-  if (!trimmed) {
+  if (!value) {
     return
   }
 
-  dispatch<InsertDetail>(INSERT_EVENT, { mode, target: resolve(target), text: trimmed })
+  dispatch<InsertDetail>(INSERT_EVENT, { mode, target: resolve(target), text: value })
 }
 
 /** Acked insert for the plugin SDK (`host.composer.insertText`).
  *
- *  Same trim + deferred dispatch as {@link requestComposerInsert}, plus a
- *  token the claiming surface echoes on {@link INSERT_REPLY_EVENT}. Resolves
- *  false when the text trims to nothing, when no mounted surface claims the
+ *  Same whitespace handling and deferred dispatch as {@link requestComposerInsert},
+ *  plus a token the claiming surface echoes on {@link INSERT_REPLY_EVENT}. Resolves
+ *  false when the selected mode leaves no text, when no mounted surface claims the
  *  address, or when none answers within the settle window — so a plugin gets
  *  the same fail-closed success signal as `setDraft`/`submit` instead of a
  *  silent no-op. Internal callers keep the fire-and-forget form above. */
@@ -311,10 +311,10 @@ export const requestComposerInsertAcked = (
     target = 'active'
   }: { mode?: ComposerInsertMode; stillCurrent?: () => boolean; target?: ComposerTarget | 'active' } = {}
 ): Promise<boolean> => {
-  const trimmed = text.trim()
+  const value = mode === 'verbatim' ? text : text.trim()
   const pending = insertReplies
 
-  if (!trimmed || !pending) {
+  if (!value || !pending) {
     return Promise.resolve(false)
   }
 
@@ -332,7 +332,7 @@ export const requestComposerInsertAcked = (
         return
       }
 
-      dispatchNow<InsertDetail>(INSERT_EVENT, { mode, target: resolvedTarget, text: trimmed, token })
+      dispatchNow<InsertDetail>(INSERT_EVENT, { mode, target: resolvedTarget, text: value, token })
     }, 0)
 
     // No claimant (unmounted address, input disabled, mid-teardown) must not
