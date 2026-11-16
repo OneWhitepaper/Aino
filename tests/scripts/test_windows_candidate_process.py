@@ -95,3 +95,36 @@ def test_running_tool_heartbeat_exposes_activity_before_completion_without_priva
     proof = json.loads(log.with_suffix(".progress.json").read_text())
     assert proof["status"] == "completed"
     assert proof["returncode"] == 0
+
+
+def test_progress_includes_worker_activity_while_its_launcher_waits(tmp_path, monkeypatch):
+    ready = tmp_path / "worker-ready"
+    release = tmp_path / "private-worker-release"
+    activity = []
+
+    def console(message, **_options):
+        if not str(message).startswith("[candidate-progress] ") or not ready.exists() or activity:
+            return
+        value = json.loads(message.removeprefix("[candidate-progress] "))
+        assert value.get("treeProcessCount", 0) >= 2, "idle launcher must not hide its actual worker"
+        assert value["treeRssBytes"] > value["rssBytes"]
+        assert value["treeCpuSeconds"] >= value["cpuSeconds"]
+        assert value["treeQueryStatus"] == "ok"
+        assert "private-worker-release" not in message
+        activity.append(value)
+        release.touch()
+
+    worker = (
+        "import sys; from pathlib import Path; from tests.waiting import wait_until; "
+        "memory=bytearray(8*1024*1024); Path(sys.argv[1]).touch(); "
+        "wait_until(Path(sys.argv[2]).exists, timeout=8, what='tree activity observation')"
+    )
+    launcher = (
+        "import subprocess,sys; "
+        "subprocess.run([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]],check=True,timeout=10)"
+    )
+    monkeypatch.setattr(candidate, "print", console, raising=False)
+    monkeypatch.setattr(candidate, "CHILD_HEARTBEAT_SECONDS", 0.2)
+    candidate.run([sys.executable, "-c", launcher, worker, str(ready), str(release)], os.environ,
+                  log=tmp_path / "nested-build.log", timeout=12)
+    assert activity

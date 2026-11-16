@@ -107,6 +107,30 @@ def _emit_log_tail(reader: BinaryIO, decoder: io.IncrementalNewlineDecoder, *, f
             print(text, end="", flush=True)
 
 
+def _owned_tree_activity(owner) -> dict:
+    members = [owner, *owner.children(recursive=True)]
+    result = {"treeProcessCount": len(members), "treeSampledProcessCount": 0,
+              "treeCpuSeconds": 0.0, "treeRssBytes": 0}
+    for member in members:
+        try:
+            if not member.is_running():
+                continue
+            with member.oneshot():
+                cpu = member.cpu_times()
+                result["treeCpuSeconds"] += cpu.user + cpu.system
+                result["treeRssBytes"] += member.memory_info().rss
+                if counters := getattr(member, "io_counters", None):
+                    io_stats = counters()
+                    result["treeReadBytes"] = result.get("treeReadBytes", 0) + io_stats.read_bytes
+                    result["treeWriteBytes"] = result.get("treeWriteBytes", 0) + io_stats.write_bytes
+                result["treeSampledProcessCount"] += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    result["treeCpuSeconds"] = round(result["treeCpuSeconds"], 3)
+    result["treeQueryStatus"] = "ok" if result["treeSampledProcessCount"] == len(members) else "partial"
+    return result
+
+
 def _child_progress(process, owner, log: Path, started: float, status: str, *, emit: bool = True) -> None:
     value = {"operation": log.stem, "pid": process.pid, "status": status,
              "elapsedSeconds": round(time.monotonic() - started, 3), "outputBytes": log.stat().st_size,
@@ -120,6 +144,9 @@ def _child_progress(process, owner, log: Path, started: float, status: str, *, e
                 if counters := getattr(owner, "io_counters", None):
                     io_stats = counters()
                     value.update(readBytes=io_stats.read_bytes, writeBytes=io_stats.write_bytes)
+            # Python/PowerShell launchers wait while descendants do the actual
+            # packing/signing work; launcher-only counters looked falsely idle.
+            value.update(_owned_tree_activity(owner))
     except psutil.NoSuchProcess:
         value["queryStatus"] = "gone"
     except psutil.AccessDenied:
