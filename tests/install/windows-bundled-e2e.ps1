@@ -264,34 +264,18 @@ try {
     $newProcess.CreationDate = [DateTime]::Parse($newProcess.CreationDate)
     if ($newProcess.CreationDate -le $oldProcess.CreationDate) { throw 'New process was not created after OLD' }
     if ($observed.oldPayloadCount) { throw 'Old payload processes remain alive' }
-    $healthy = $false
-    $deadline = (Get-Date).AddMinutes(3)
-    do {
-        $payloadRoot = Join-Path $new.package.InstallLocation 'app\resources\agent-payload'
-        $payloadProcesses = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($payloadRoot + '\', [StringComparison]::OrdinalIgnoreCase) })
-        foreach ($proc in $payloadProcesses) {
-            foreach ($connection in @(Get-NetTCPConnection -State Listen -OwningProcess $proc.ProcessId -ErrorAction SilentlyContinue)) {
-                try {
-                    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$($connection.LocalPort)/api/health" -TimeoutSec 2
-                    if ($response.StatusCode -eq 200) { $healthy=$true; $response.Content | Set-Content (Join-Path $Proof 'backend-health.json'); break }
-                } catch { }
-            }
-            if ($healthy) { break }
-        }
-        if (-not $healthy) { Start-Sleep -Seconds 2 }
-    } while (-not $healthy -and (Get-Date) -lt $deadline)
-    if (-not $healthy) { throw 'New packaged backend never returned HTTP 200 health' }
-    Write-AcceptanceStage 'Automatic NEW launch and packaged backend health verified'
+    $payloadRoot = Join-Path $new.package.InstallLocation 'app\resources\agent-payload'
     & $python $verifier verify --home $env:HERMES_HOME --snapshot (Join-Path $Work 'plugins-before.json') --report (Join-Path $Proof 'plugin-preservation.json')
     if ($LASTEXITCODE -ne 0) { throw 'Plugin preservation failed' }
     if ((Get-Content -Raw $marker).Trim() -cne $witness) { throw 'User-state witness changed' }
     # Observe the actual OS-owned window before any close or driver-owned launch.
     # The inspector uses the existing local DevTools and IPC; it cannot select a data root.
-    Write-AcceptanceStage 'Observing the automatic NEW retained account and history in its actual window'
+    Write-AcceptanceStage 'Observing automatic NEW account, history and selected gateway health with bounded probes'
     Run-Node @((Join-Path $Assets 'observe-native-new.ts'), '--exe', $new.exe, '--pid', ([string]$newProcess.ProcessId),
         '--started-at', ([string]([DateTimeOffset]$newProcess.CreationDate).ToUnixTimeMilliseconds()),
         '--root', $payloadRoot, '--out', $Proof, '--old-ready', $oldChatReady,
         '--snapshot', $StateSnapshot, '--expect-commit', $m.new.commit)
+    Write-AcceptanceStage 'Automatic NEW retained workspace and selected packaged backend health verified'
     # Record automatic relaunch before ANY driver-owned NEW launch.
     @{ oldPid=$oldProcess.ProcessId; oldBirth=$oldProcess.CreationDate; newPid=$newProcess.ProcessId; newBirth=$newProcess.CreationDate; newPath=$newProcess.ExecutablePath; automaticRelaunch=$true } |
         ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Proof 'relaunch-proof.json')
@@ -337,7 +321,7 @@ try {
 }
 
 if ($acceptance) {
-    if (Get-AppxPackage -Name $m.old.identity) { throw 'Uninstall did not remove the candidate package registration' }
+    # Both native cleanup calls already verify package removal inside their bounded child.
     Verify-UserState uninstall
     $acceptance.uninstallPreservedUserState = $true
     $acceptance.recovery = $recovery

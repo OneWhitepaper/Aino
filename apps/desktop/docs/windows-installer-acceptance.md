@@ -214,6 +214,16 @@ final uninstall/reinstall preservation are still not accepted. Distribution and
 `main` remain unchanged, and the other chat's worktree and desktop process remain
 untouched.
 
+A subsequent harness correction removes the second, unbounded CIM/port scan
+after NEW starts. The existing automatic-window observer already verifies the
+retained account and history, then checks its selected local gateway's exact
+installed Python, package stamp and `/api/health` commit with bounded probes.
+Cleanup likewise relies on the existing bounded removal verification instead
+of repeating `Get-AppxPackage` in the parent. The selected-gateway and native
+handoff contracts passed locally (eight JavaScript and 17 Python tests; one
+Windows-only Python skip), as did PowerShell parsing. These follow-up changes
+are not included in frozen run `43846856927` and need native reacceptance.
+
 ## Remaining native receipts
 
 The required end-to-end receipt is `proof/acceptance.json` with status `accepted`.

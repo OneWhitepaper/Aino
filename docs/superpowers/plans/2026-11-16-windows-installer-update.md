@@ -51,6 +51,12 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
 
 ## Current progress as of 2026-11-16
 
+- Removed the redundant unbounded post-NEW CIM/port scan and final parent
+  package query. Existing bounded automatic-window/selected-gateway health and
+  disposable-removal checks retain those invariants. Local selected-gateway and
+  handoff verification passed eight JavaScript and 17 Python tests (one Windows
+  skip), and PowerShell parsing passed. This follow-up is outside frozen run
+  `43846856927` and does not claim native acceptance.
 - Diagnostic commit `c0ff3179dc` passed local 81 Python tests, five Node tests,
   five PowerShell parser checks and all 15 repository checks. Public standard-runner
   run [`43846856927`](https://github.com/OneWhitepaper/Aino/actions/runs/43846856927)
