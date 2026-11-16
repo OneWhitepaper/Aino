@@ -14,6 +14,32 @@ import pytest
 from tests.waiting import async_wait_until
 
 
+@pytest.fixture(autouse=True)
+def _desktop_boot_lifecycle(monkeypatch):
+    """Boot's setup record can finish before its due worker: join both before undoing home patches."""
+    from agent import memory_provider
+    from hermes_cli import free_tier_bootstrap
+    from tui_gateway import server
+
+    spawn = memory_provider.spawn_context_thread
+    workers = []
+
+    def track(target, *, name, **kwargs):
+        thread = spawn(target, name=name, **kwargs)
+        if name in {"free-tier-bootstrap", "free-tier-resettle", "onboarding-due"}:
+            workers.append(thread)
+        return thread
+
+    monkeypatch.setattr(memory_provider, "spawn_context_thread", track)
+    monkeypatch.setattr(server, "_local_desktop_boot_started", False)
+    free_tier_bootstrap.reset_for_tests()
+    yield
+    for worker in workers:
+        worker.join(20)
+        assert not worker.is_alive(), f"desktop boot worker did not finish: {worker.name}"
+    free_tier_bootstrap.reset_for_tests()
+
+
 class _Transport:
     def __init__(self, identity):
         self.frames = []
@@ -195,7 +221,6 @@ async def test_the_first_local_desktop_connection_runs_the_desktop_boot_work(tmp
     seen = []
     monkeypatch.setattr(onboarding_run, "latch_first_install", lambda: seen.append(anon_auth.on_local_desktop_backend()))
     monkeypatch.setattr(server, "_local_desktop_boot_started", False)
-    free_tier_bootstrap.reset_for_tests()
     conn = await _connect(tmp_path, monkeypatch)
     try:
         await _request(conn, 1, "client.capabilities", {"desktop_local": True})
@@ -204,7 +229,6 @@ async def test_the_first_local_desktop_connection_runs_the_desktop_boot_work(tmp
         assert seen == [True]
     finally:
         await conn.connection.close()
-        free_tier_bootstrap.reset_for_tests()
 
 
 def test_the_desktop_boot_work_runs_for_the_launch_profile_whichever_profile_connects_first(tmp_path, monkeypatch):
@@ -222,7 +246,6 @@ def test_the_desktop_boot_work_runs_for_the_launch_profile_whichever_profile_con
     monkeypatch.setattr(onboarding_run, "latch_first_install", lambda: seen.append(get_hermes_home()))
     monkeypatch.setattr(server, "_local_desktop_boot_started", False)
     monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", True)
-    free_tier_bootstrap.reset_for_tests()
     token = set_hermes_home_override(secondary)
     try:
         server.begin_local_desktop_boot()
@@ -230,7 +253,6 @@ def test_the_desktop_boot_work_runs_for_the_launch_profile_whichever_profile_con
     finally:
         from hermes_constants import reset_hermes_home_override
         reset_hermes_home_override(token)
-        free_tier_bootstrap.reset_for_tests()
     assert seen == [launch]
 
 

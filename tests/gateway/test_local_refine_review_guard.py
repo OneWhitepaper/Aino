@@ -97,11 +97,14 @@ async def test_new_turn_cancels_the_cold_refine_review(monkeypatch):
     try:
         await refine.refine_local_session(object(), live.source, None)
         wait_until(lambda: started, what='the review started')
-        owner = SimpleNamespace(executing={})
-        result = await SessionAuthority._execute_claimed(owner, SessionRef('p', sid), live, {'admission_id': 'a'})
+        ref = SessionRef('p', sid)
+        owner = SimpleNamespace(profile_id=ref.profile_id, executing={sid: 7})
+        result = await SessionAuthority._execute_claimed(
+            owner, ref, live, {'admission_id': 'a', 'generation': 7})
     finally:
         for thread in threads:
             thread.join(10)
     assert result == ('ok', 'completed'), result
     assert outcome.get('cancelled') is True, 'the new turn left the cold /refine review running'
     assert outcome['turn_saw_review_done'], 'the turn started before the review acknowledged'
+    assert sid not in owner.executing, 'the completed turn retained its executing stamp'

@@ -217,20 +217,20 @@ def launch_profile_runtime_scope(launch_home: str | Path) -> Iterator[None]:
 
 
 def launch_profile_scope_if_multiplexed():
-    """The launch profile's own runtime scope once this process multiplexes; ``nullcontext``
-    before.
+    """The launch profile's runtime scope after activation, or its body marker before.
 
     The single seam for "no routed profile here": under the one-process-per-host ruling the launch
     profile is a tenant like any other, so a body that used to run with NO scope at all (ambient
     ``os.environ`` + the process home) must bind the launch profile explicitly — otherwise a
     secondary's context can have poisoned the ambient state, and a fail-closed ``get_secret`` raises
-    on a perfectly legitimate launch-profile read. Before activation the process env IS the launch
-    profile's, so binding nothing is still correct (and keeps single-profile hosts byte-identical —
-    callers assert the returned object is literally a ``nullcontext``).
+    on a perfectly legitimate launch-profile read. Before activation, mark the body's owner without
+    binding home/secrets/terminal or reading profile files. If another body activates multiplexing
+    while this one is in flight, its later reads resolve the launch profile's frozen sources through
+    ``launch_body`` rather than raising or borrowing another profile's credentials.
     """
     from agent.secret_scope import is_multiplex_active
     if not is_multiplex_active():
-        return contextlib.nullcontext()
+        return launch_body()
     from hermes_constants import get_process_hermes_home
     return launch_profile_runtime_scope(get_process_hermes_home())
 
