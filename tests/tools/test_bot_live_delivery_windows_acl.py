@@ -126,7 +126,7 @@ _UNUSABLE_CHILD = _DROP_PRIVILEGES + textwrap.dedent(r"""
     run_api.start_gateway_api = api
     db = SessionDB(home / "state.db")
     try:
-        runner = SimpleNamespace(session_authority=SimpleNamespace(db=db, waiters={}),
+        runner = SimpleNamespace(session_authority=SimpleNamespace(db=db, waiters={}, profile_id=str(home)),
                                  session_runtime_descriptor={})
         # The step start_gateway runs per authority; on main it raised and aborted the gateway.
         asyncio.run(run_runtime.start_gateway_runtime_api(runner))
