@@ -1,15 +1,18 @@
 # Windows installation and update acceptance
 
-Status: diagnostic public run `43846856927` at `c0ff3179dc` failed both
-x64 and ARM64 native legs before package replacement. Windows contracts passed.
-Both observers confirmed unchanged OLD registration throughout their budgets;
-automatic NEW has not been accepted. Fresh run `43866276951` at `385b1b3453`
-is still building/running, with no accepted native receipt. Earlier run
-`43819576334` failed/stalled at that stage and was cancelled. Neither architecture has a complete accepted
-native lifecycle. Distribution is held; this document does not
-authorize installer, release, feed or website publication, or a merge to `main`. The user
-authorized test-signing acceptance first; production signing and ordinary
-production trust remain deferred to release preparation.
+Status: complete native installation/update acceptance is still open. Full run
+`43866276951` at `385b1b3453` finished x64 with unchanged OLD registration,
+no automatic NEW and a waiter package timeout (artifact `14232870888`,
+`unaccepted`). Its ARM64 leg is still running. A focused real App Installer
+probe in run `43883021594` proved that the system UI is hosted: one verified
+installer-owned surface, one hosted frame, zero windows from the former
+PID-only discovery. The shared discovery now binds frames through their
+verified installer-owned subtree; focused run `43883727629` passed that native regression and all existing suites.
+The extended real cancellation regression passed its Windows step in
+`43884580723`; the remaining suites in that run are in progress.
+Distribution is held; this document does not authorize installer, release,
+feed or website publication, or a merge to `main`. Only temporary test signing
+is authorized; production signing and ordinary production trust are deferred.
 
 ## Scope
 
@@ -308,8 +311,8 @@ selected-gateway/handoff tests and PowerShell parsing.
 Run [`43866276951`](https://github.com/OneWhitepaper/Aino/actions/runs/43866276951)
 freezes `385b1b3453` on
 `validation/windows-installer-public/20261116-installer-window/reaped-launchers`.
-It starts full fresh x64/ARM64 candidates as well as contracts; neither package
-leg has a final receipt yet. Native Python contracts passed 158 tests (four
+It starts full fresh x64/ARM64 candidates as well as contracts. Its x64 leg
+failed at package replacement; the ARM64 leg is still running. Native Python contracts passed 158 tests (four
 host skips), including all four real timeout/tree-ownership regressions. The
 next JS step hit an existing native listener test's 5-second default while it
 performs three 30-second-bounded OS scans; 73 other JS tests passed. The follow-up
@@ -369,6 +372,57 @@ A public opt-in ref ending in `/contracts-only` runs the standard Windows
 contracts without the two large candidate builds. Use that focused native
 verification before another full package run. Ordinary and frozen refs stay
 separate; no prior run is silently replaced.
+
+### Native cold start and real hosted installer discovery
+
+The earlier UIA fixture read `FromHandle` before registering providers. That
+prewarmed UIA and did not prove fresh-process initialization. Run `43880076923`
+exposed a .NET Framework provider-loader `NullReferenceException` when shared
+initialization was the first UIA call. The loader walks CLR stack frames;
+PowerShell dynamic frames can have no `ReflectedType`. A small, non-inlined
+compiled CLR initializer now registers the signed framework provider through a
+concrete assembly frame. The cold fixture has no preliminary UIA read.
+
+Run `43881625247` at `b1d6a82502` passed the actual cold initializer and native
+button/window contracts. Its following real-installer probe stopped on CIM's
+UInt32 PID being passed to UIA's Int32 property; `58204318c4` corrected that test
+input. Run `43883021594`, job `133353618546`, then reproduced the actual missing
+window: `observedWindowCount=1`, `hostedWindowCount=1`,
+`verifiedInstallerProcessCount=1`, `directWindowCount=0`. It failed the explicit
+assertion that verified discovery must include the real shell-activated surface.
+
+The shared discovery now checks visible native frames for a subtree belonging
+to an executable inside the one registered `Microsoft.DesktopAppInstaller`
+package. It keeps that executable's PID and birth time as identity, and the
+frame's HWND as window identity. Product matching, new-window exclusion,
+ambiguity rejection and enabled-button checks still apply. Cancellation checks
+the same verified frame rather than assuming its top-level PID is AppInstaller.
+The probe opens a controlled local descriptor with a missing local payload;
+it performs no installation, remote download, trust change or Install click.
+Focused run `43883727629` at `b7f4afdf1a`, job `133356136833`, passed the
+actual hosted-surface regression and all existing suites (159 Python, four
+skips; 74 JS, nine skips; eight extractor; eight SDK; 113 updater/state; nine
+observer plus driver/environment/descriptor groups). The Python process-cleanup
+file passed on retry after one transient bare-PID assertion. Its follow-up uses
+the existing native liveness probe and a bounded three-second exit wait, retaining
+failure on a surviving worker. Local process tests passed all five cases.
+
+The extended regression at `fe97651544` also requires the observed frame to be
+open before cancellation, cancels it through the shared native helper, and waits
+for the same verified frame to disappear. Its real hosting/cancellation step
+passed in `43884580723`, job `133359149290`; the remaining suites are running.
+This explains a confirmed gap in the driver; it does not yet prove full Aino
+package replacement or rule out further deployment blockers.
+
+The completed x64 leg of full run `43866276951` retained 292 complete samples
+with unchanged OLD `2026.7668.1442.0`, target `2026.7668.1502.0`, no OLD main or
+NEW main, and one OLD Python (zero OLD Node/other). The installer was running,
+but the older discovery reported no visible window; the waiter reached
+`package-timeout`. Its suppressed-error event probe cannot distinguish an empty
+log from a failed read. Migration, all 25 data checks and preparation HTTP404
+recovery passed; owned-package cleanup and disposable-trust removal succeeded.
+Artifact `14232870888` remains `unaccepted`. Do not infer that the surviving
+canonical gateway is the deployment cause, or stop unrelated gateways.
 
 ## Remaining native receipts
 

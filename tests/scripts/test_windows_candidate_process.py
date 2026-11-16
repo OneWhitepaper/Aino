@@ -26,13 +26,16 @@ def test_silent_owned_tool_times_out_with_activity_evidence_and_is_reaped(tmp_pa
     with pytest.raises(subprocess.TimeoutExpired):
         candidate.run([sys.executable, "-c", script, str(pid_file)], os.environ, log=log, timeout=2)
     assert time.monotonic() - started < 8
-    assert not psutil.pid_exists(int(pid_file.read_text()))
+    # Termination is asynchronous on Windows; a retained process object can
+    # still appear in PID enumeration after its execution has ended.
+    worker_pid = int(pid_file.read_text())
+    wait_until(lambda: not pid_exists_stdlib(worker_pid), timeout=3, what="timed-out native worker exit")
     proof = json.loads(log.with_suffix(".progress.json").read_text())
     assert proof["status"] == "timed-out"
     assert proof["operation"] == "bundle-sign"
     assert proof["elapsedSeconds"] >= 2
     # Windows venv python.exe is a launcher; its actual worker has another PID.
-    assert not psutil.pid_exists(proof["pid"])
+    assert not pid_exists_stdlib(proof["pid"])
     assert proof["outputBytes"] == 0
 
 

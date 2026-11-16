@@ -51,6 +51,33 @@ python scripts/check
 
 Private CI may retain its existing access-controlled package/input artifacts. Explicit public receipts-only CI builds fresh ephemeral candidates and uploads only `aino-windows-public-receipts/receipts.json`; its fixed-field projection excludes binaries, keys/certificate state, raw logs, environment/account/history payloads and full workspaces. Candidate/native/cleanup status remain separate; acceptance requires all 13 complete and consistent evidence gates, and absent native proof is unaccepted. Any failed or skipped acceptance remains visible; no green shortcut or success based only on mock tests. Public x64/ARM64 native jobs in run `43801657955` completed with failures. Follow-up `43819576334` also has no accepted receipt: x64 failed and the stalled ARM64 job was cancelled.
 
+## Latest native findings
+
+- Complete installation/update acceptance remains open. Full run `43866276951`
+  at `385b1b3453` failed x64 at unchanged OLD registration after 292 samples;
+  ARM64 is still running. x64 artifact `14232870888` is unaccepted; migration,
+  25 data checks, preparation HTTP404 recovery and owned-package/trust cleanup
+  passed. There is still no accepted automatic NEW or final cancellation/
+  uninstall lifecycle receipt.
+- The previous provider fixture inadvertently prewarmed UIA. Actual cold start
+  failed in `43880076923`; a concrete CLR initialization frame fixes the .NET
+  stack-walker failure. Cold initialization passed natively in `43881625247`.
+- Real App Installer observation failed as intended in `43883021594`: its
+  verified package-owned UI sits beneath a host frame (one owned window, one
+  hosted window, zero PID-only top-level matches). Shared discovery at
+  `b7f4afdf1a` now follows the verified process-owned subtree and cancellation
+  checks the same frame. Native verification `43883727629` passed all suites; its native process
+  cleanup file passed on retry after one transient bare-PID assertion. The test
+  now uses the existing native liveness check and a bounded three-second exit
+  wait; five local process tests passed. The extended actual frame-cancellation
+  step passed in `43884580723`; the rest of that run remains in progress.
+- Preserve all system-package/product/new-window/ambiguity/control checks.
+  This is a proven driver gap, not yet proof that package replacement works.
+  No product-wide gateway stop is justified by the surviving OLD Python alone.
+- Do not publish packages, feeds or website updates, merge main, or touch the
+  other conversation's worktree. Run complete candidates only after focused
+  checks and the already-running full pair have finished.
+
 ## Current progress as of 2026-11-16
 
 - Focused `43873843738` at `6bd68031f5` succeeded. The owned Win32 Update
@@ -79,7 +106,7 @@ Private CI may retain its existing access-controlled package/input artifacts. Ex
   `5b48381c8c`, job `133331017203`: native empty-event selection and all
   existing Windows suites succeeded (159 Python, four skips; 74 JS, nine skips;
   eight extractor, eight SDK, 113 updater/state and nine observer tests).
-- Full fresh run `43866276951` at `385b1b3453` is in progress for x64/ARM64.
+- Full fresh run `43866276951` at `385b1b3453` failed x64; ARM64 is still in progress.
   Its Windows Python contracts passed 158 tests (four skips), including the four
   actual worker/tree cleanup tests. Contracts then stopped at a preexisting
   native listener test's 5-second unit-test default (three independently
