@@ -96,6 +96,9 @@ def test_connect_failure_keeps_proxy_secret_out_of_fatal_status_and_retry(
     from gateway.status import read_runtime_status
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    # Exercise the proxy even when the host fixture bypasses loopback by default.
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
     proxy = shape.format(pw=PASSWORD)
     built = []
 

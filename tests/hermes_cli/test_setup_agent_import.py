@@ -9,6 +9,7 @@ and the child `hermes import-agent` process are stand-ins that record what the s
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,14 @@ def homes(tmp_path, monkeypatch):
         monkeypatch.setenv(var, str(user_home))
     monkeypatch.setenv("HERMES_HOME", str(hermes_home))
     monkeypatch.delenv("HERMES_NONINTERACTIVE", raising=False)
+    # Absolute app candidates bypass HOME; keep their discovery inside the fixture too.
+    def fixture_dir(directory):
+        path = Path(directory)
+        return str(tmp_path / "system" / path.relative_to(path.anchor)) if path.anchor else directory
+
+    monkeypatch.setattr(step, "IMPORT_SOURCES", tuple(
+        source._replace(dirs=tuple(fixture_dir(directory) for directory in source.dirs))
+        for source in step.IMPORT_SOURCES))
     calls: list = []
     answers = {"yes": True, "unpick": set()}
 
@@ -156,6 +165,15 @@ def test_grok_bot_export_in_downloads_is_offered_like_the_other_agents(homes):
     user_home, hermes_home, calls, _answers = homes
     (user_home / "Downloads").mkdir()
     (user_home / "Downloads" / "grok-bot-export.json").write_text("{}", encoding="utf-8")
+
+    assert step.offer_agent_import(hermes_home) == "Grok Bot"
+    assert calls[-1] == ("import", ["--profile", "default", "import-agent", "grok-bot", "--from-setup"],
+                         str(hermes_home))
+
+
+def test_grok_bot_app_in_system_applications_is_offered_like_the_other_agents(homes):
+    user_home, hermes_home, calls, _answers = homes
+    (user_home.parent / "system" / "Applications" / "Grok Bot.app").mkdir(parents=True)
 
     assert step.offer_agent_import(hermes_home) == "Grok Bot"
     assert calls[-1] == ("import", ["--profile", "default", "import-agent", "grok-bot", "--from-setup"],
