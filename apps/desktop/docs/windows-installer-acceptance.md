@@ -170,8 +170,9 @@ Windows contracts passed in job `133139302779`.
   though the earlier console stage had passed. Console progress is not promoted
   into a complete accepted receipt.
 - Safe receipt artifact IDs are x64 `14208288195` and ARM64 `14213375765`. Full
-  job logs were downloaded locally to `/tmp/aino-public-43819576334-x64.log` and
-  `/tmp/aino-public-43819576334-arm64.log`; only curated receipts are public
+  job logs were downloaded to task-local scratch files
+  `aino-public-43819576334-x64.log` and `aino-public-43819576334-arm64.log`;
+  only curated receipts are public
   artifacts. Raw waiter and deployment failure evidence is not present in those
   public receipts, so no production fix is inferred from this combined timeout.
 
