@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T06:22:55.936901+00:00",
+  "title": "Design System: Aino Group Conversations",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "shared-popover",
+        "value": "var(--shadow-nous)",
+        "purpose": "Existing portal Popover; no group-specific elevation scale."
+      }
+    ],
+    "motion": [
+      {
+        "name": "message-action-reveal",
+        "value": "opacity 100ms",
+        "purpose": "Existing action visibility; reduced-motion removes transition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "chat-wide-container-min",
+        "value": "1400px"
+      },
+      {
+        "name": "chat-compact-container-max",
+        "value": "960px"
+      },
+      {
+        "name": "chat-small-container-max",
+        "value": "480px"
+      },
+      {
+        "name": "information-adjacent-workspace-min",
+        "value": "1100px"
+      },
+      {
+        "name": "participants-two-workspace-max",
+        "value": "820px"
+      },
+      {
+        "name": "participants-one-workspace-max",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Shared primary action",
+      "kind": "button",
+      "description": "Existing SDK Button default variant; group Save and confirmation actions reuse it.",
+      "html": "<button class=\"ds-primary\">Save</button>",
+      "css": ".ds-primary{background:var(--aino-action-bg);color:var(--aino-action-fg);border:0;border-radius:var(--aino-radius-control);min-height:32px;padding:6px 12px;font:500 var(--aino-text-ui)/16px var(--dt-font-sans);cursor:pointer}.ds-primary:hover{background:var(--aino-action-hover)}.ds-primary:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}.ds-primary:disabled{opacity:.5;pointer-events:none}"
+    },
+    {
+      "name": "Participant action",
+      "kind": "button",
+      "description": "Existing portrait/name participant button; sample omits portrait assets rather than fabricating them.",
+      "html": "<button class=\"ds-participant\">Visual Designer</button>",
+      "css": ".ds-participant{display:inline-flex;align-items:center;gap:7px;max-width:190px;min-width:0;min-height:28px;padding:4px 7px;border:0;border-radius:var(--aino-radius-control);background:transparent;color:var(--ui-text-secondary);font:500 var(--aino-text-ui)/16px var(--dt-font-sans);cursor:pointer}.ds-participant:hover{background:var(--chrome-action-hover);color:var(--ui-text-primary)}.ds-participant:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}"
+    },
+    {
+      "name": "Member message bubble",
+      "kind": "custom",
+      "refersTo": "message-bubble",
+      "description": "Readable member content inside the existing left-side transcript row.",
+      "html": "<div class=\"ds-bubble\">I will review the draft and share the next steps.</div>",
+      "css": ".ds-bubble{max-width:66ch;padding:12px 16px;border-radius:12px;background:var(--ui-bg-secondary);color:var(--ui-text-primary);font:var(--aino-text-body)/1.75 var(--dt-font-sans);overflow-wrap:anywhere}"
+    },
+    {
+      "name": "Group composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "The existing native textarea inside the group composer surface.",
+      "html": "<div class=\"ds-composer\"><textarea aria-label=\"Group message\" placeholder=\"Message the group, or type @ to mention a member\"></textarea></div>",
+      "css": ".ds-composer{padding:16px 18px 12px;border:1px solid var(--ui-stroke-secondary);border-radius:16px;background:var(--ui-bg-elevated)}.ds-composer:focus-within{border-color:var(--ui-text-secondary)}.ds-composer textarea{width:100%;border:0;outline:0;resize:none;background:transparent;color:var(--ui-text-primary);caret-color:var(--ui-text-primary);font:var(--aino-text-body)/1.75 var(--dt-font-sans)}.ds-composer textarea::placeholder{color:var(--ui-text-secondary)}"
+    },
+    {
+      "name": "Mention choice",
+      "kind": "custom",
+      "refersTo": "mention-option",
+      "description": "Readable recipient row; selected state uses the shared hover surface.",
+      "html": "<button class=\"ds-mention\" role=\"option\" aria-selected=\"true\"><span>Visual Designer</span><small>Work computer</small></button>",
+      "css": ".ds-mention{display:grid;gap:3px;min-height:54px;width:100%;padding:9px 10px;border:0;border-radius:8px;text-align:start;background:transparent;color:var(--ui-text-primary);font:500 var(--aino-text-label)/1.5 var(--dt-font-sans);cursor:pointer}.ds-mention[aria-selected=true],.ds-mention:hover{background:var(--ui-control-hover-background)}.ds-mention small{color:var(--ui-text-secondary);font-size:var(--aino-text-caption);font-weight:400}.ds-mention:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}"
+    },
+    {
+      "name": "Information tabs",
+      "kind": "nav",
+      "description": "Members, Files and Manage are tabs of the existing information panel. Uses the shared navigation Tabs primitive in production.",
+      "html": "<div class=\"ds-info-tabs\" role=\"tablist\" aria-label=\"Group information\"><button role=\"tab\" aria-selected=\"true\">Members</button><button role=\"tab\" aria-selected=\"false\">Files</button><button role=\"tab\" aria-selected=\"false\">Manage</button></div>",
+      "css": ".ds-info-tabs{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--ui-stroke-tertiary)}.ds-info-tabs button{border:0;background:transparent;color:var(--ui-text-secondary);padding:8px 0;font:500 var(--aino-text-label)/1.5 var(--dt-font-sans);cursor:pointer}.ds-info-tabs button[aria-selected=true]{color:var(--ui-text-primary)}.ds-info-tabs button:hover{color:var(--ui-text-primary)}.ds-info-tabs button:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A conversation among named agents",
+    "overview": "This contract covers group conversation, mentions, information, creation and legacy group siblings. It replaces the former group layout without changing the rest of the desktop system. A reader identifies a person by portrait and name, understands who will receive a message, and finds optional management without leaving the conversation.",
+    "keyCharacteristics": [
+      "One shell title and a compact participant toolbar.",
+      "A centered reading column shared with the composer.",
+      "Familiar message bubbles, existing portraits and restrained semantic color.",
+      "Readable names backed by exact, source-bound delivery identities."
+    ],
+    "rules": [
+      {
+        "name": "The Identity Rule",
+        "body": "Names and existing portraits identify people; background color does not encode a new member identity or delivery route.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do show the person before a protocol address.",
+      "Do preserve exact source, room and recipient authority behind readable names.",
+      "Do keep transcript and composer on the same content axis at every container width.",
+      "Do keep states, counts and historical attribution grounded in recorded facts."
+    ],
+    "donts": [
+      "Don't repeat the main group title or restore a horizontal row of conversations.",
+      "Don't guess a recipient from a display name, including after paste or rename.",
+      "Don't label missing activity as successful completion or invent streamed text.",
+      "Don't replace journal, attachment, approval or retry owners during UI work."
+    ]
+  }
+}
