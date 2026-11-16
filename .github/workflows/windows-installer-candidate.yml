@@ -93,6 +93,13 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-native-events.test.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify real App Installer window hosting
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/install/e2e-assets/windows-appinstaller-hosting.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Install locked contract dependencies
         shell: bash
         run: pnpm install --frozen-lockfile --filter "{./apps/desktop}..." --filter "{./tests-js}..." --ignore-scripts
