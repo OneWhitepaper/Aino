@@ -194,7 +194,7 @@ def test_compression_stall_pin_cannot_switch_billing_source(managed_gateway):
     assert srv._sessions[sid]["agent_ready"].wait(20)
     compressor = srv._sessions[sid]["agent"].context_compressor
     with pin_summary_route({"provider": "custom:fixture-byok"}):
-        assert compressor._call_summary_llm("Summarize fixture", time.monotonic())
+        assert compressor._call_summary_llm([{"role": "user", "content": "Summarize fixture"}], time.monotonic())
     assert {r[1] for r in f.requests} == {"Bearer fixture-secret-one"}
 
 
@@ -226,6 +226,6 @@ def test_byok_chat_and_compression_ignore_another_live_platform_session(managed_
     result(f.call("config.set", session_id=sid, key="model",
                   value="fixture-byok-model --provider custom:fixture-byok --session"))
     f.submit(sid, "Read the fixture file")
-    assert srv._sessions[sid]["agent"].context_compressor._call_summary_llm("Summarize", time.monotonic())
+    assert srv._sessions[sid]["agent"].context_compressor._call_summary_llm([{"role": "user", "content": "Summarize"}], time.monotonic())
     assert {r[1] for r in f.requests} == {"Bearer byok-fixture-key"}
     assert all(not any(k.lower().startswith("x-aino-") for k in h) for h in f.request_headers)

@@ -35,6 +35,14 @@ const waitFor = async (predicate, description) => {
   throw new Error('Timed out: ' + description)
 }
 
+function assertRetainedPageState(actual, expected) {
+  const { scrollY: actualScroll, ...actualState } = actual
+  const { scrollY: expectedScroll, ...expectedState } = expected
+  assert.deepEqual(actualState, expectedState)
+  // Chromium can quantize a fractional CSS scroll offset when a native view moves.
+  assert.ok(Math.abs(actualScroll - expectedScroll) < 1, 'scroll position survives within one CSS pixel')
+}
+
 async function run() {
   const bundle = join(runtime, 'service.mjs')
   await build({ stdin: { contents: `export * from './preview-native.ts'; export * from './preview-guest-owner.ts'; export * from './preview-guest-throttle.ts';
@@ -105,14 +113,15 @@ async function run() {
     endPreviewGuestActivity(owner.webContents, activity)
     await one.executeJavaScript(`draft.value='Unsaved';history.pushState({saved:false},'', '#local');scrollTo(0,400);true`)
     await invoke('command', owner, first.token, 'setPageZoom', [0.8])
-    const retained = await one.executeJavaScript('JSON.stringify({nonce,draft:draft.value,url:location.href,scrollY,state:history.state})')
+    const readRetainedPageState = () => one.executeJavaScript('({nonce,draft:draft.value,url:location.href,scrollY,state:history.state})')
+    const retained = await readRetainedPageState()
     authorizeNativePreviewPopout(owner.webContents, popup, 'fit-one')
     invoke('release', owner, first.token)
     const moved = invoke('mount', popup, { ...request('fit-one'), bounds: { ...bounds, width: 1000 } })
     assert.equal(moved.webContentsId, one.id)
     assert.equal(moved.zoomMode, 'manual')
     assert.equal(moved.zoom, 0.8)
-    assert.equal(await one.executeJavaScript('JSON.stringify({nonce,draft:draft.value,url:location.href,scrollY,state:history.state})'), retained)
+    assertRetainedPageState(await readRetainedPageState(), retained)
     const closed = once(popup, 'closed')
     popup.close()
     await closed
@@ -120,7 +129,7 @@ async function run() {
     assert.equal(first.webContentsId, one.id)
     assert.equal(first.zoom, 0.8)
     assert.equal(first.zoomMode, 'manual')
-    assert.equal(await one.executeJavaScript('JSON.stringify({nonce,draft:draft.value,url:location.href,scrollY,state:history.state})'), retained)
+    assertRetainedPageState(await readRetainedPageState(), retained)
     assert.equal(showed, false)
     assert.equal(messageBoxes, 0)
     const receipt = { passed: true, isolatedSameOrigin: true, firstFactor, secondFactor: two.getZoomFactor(),

@@ -25,14 +25,14 @@ def _git(root, *args):
 
 
 def _assert_plugin_boundary():
-    assert plugins_manifest.running_hermes_version() == "0.23.0"
+    assert plugins_manifest.running_hermes_version() == "0.23.2"
     # Existing plugins such as OMH read the public runtime API directly.
-    assert version_info.get_version_info().base_version == "0.23.0"
-    for requirement in (">=0.21.1", ">=0.23.0", "<=0.23.0", ">=0.21.1,<=0.23.0"):
+    assert version_info.get_version_info().base_version == "0.23.2"
+    for requirement in (">=0.21.1", ">=0.23.2", "<=0.23.2", ">=0.21.1,<=0.23.2"):
         assert plugins_manifest.requires_hermes_error({"requires_hermes": requirement}) is None
-    for requirement in (">0.23.0", ">=0.24.0", "<0.23.0"):
+    for requirement in (">0.23.2", ">=0.24.0", "<0.23.2"):
         reason = plugins_manifest.requires_hermes_error({"requires_hermes": requirement})
-        assert reason == f"requires hermes {requirement}, running 0.23.0"
+        assert reason == f"requires hermes {requirement}, running 0.23.2"
 
 
 @pytest.mark.parametrize("legacy_tag", [False, True])
@@ -86,18 +86,18 @@ def test_packaged_tree_without_git_uses_compatibility_without_rewriting_stamp(tm
 
 
 @pytest.mark.parametrize("requirement, allowed", [("hermes-agent>=0.21.1", True),
-                                                  ("hermes-agent<=0.23.0", True),
-                                                  ("hermes-agent>0.23.0", False)])
+                                                  ("hermes-agent<=0.23.2", True),
+                                                  ("hermes-agent>0.23.2", False)])
 def test_pm_core_requirements_share_the_plugin_compatibility_boundary(requirement, allowed):
     from pm.workspace import core_requirement_error
     declaration = SimpleNamespace(external=False, requirements=[requirement], pyproject=None)
     reason = core_requirement_error(declaration)
     assert (reason is None) is allowed
     if not allowed:
-        assert "running 0.23.0" in reason
+        assert "running 0.23.2" in reason
 
 
-@pytest.mark.parametrize("required, accepted", [(">=0.21.1", True), (">=0.23.0", True), (">0.23.0", False)])
+@pytest.mark.parametrize("required, accepted", [(">=0.21.1", True), (">=0.23.2", True), (">0.23.2", False)])
 def test_profile_distribution_admission_uses_the_same_core_version(tmp_path, monkeypatch, required, accepted):
     from hermes_cli.profile_distribution import DistributionError, DistributionManifest, plan_install, write_manifest
     stamp = tmp_path / "install-stamp.json"
@@ -109,7 +109,7 @@ def test_profile_distribution_admission_uses_the_same_core_version(tmp_path, mon
     if accepted:
         assert plan_install(str(package), tmp_path / "staging").manifest.hermes_requires == required
     else:
-        with pytest.raises(DistributionError, match="but you have 0.23.0"):
+        with pytest.raises(DistributionError, match="but you have 0.23.2"):
             plan_install(str(package), tmp_path / "staging")
 
 
@@ -120,6 +120,6 @@ def test_declared_upstream_baseline_is_an_ancestor_in_complete_source_history():
         pytest.skip("packaged source has no history; compatibility is carried by the Python module")
     if _git(root, "rev-parse", "--is-shallow-repository") == "true":
         pytest.skip("shallow checkout omits ancestry; the full-history lane verifies the baseline")
-    assert UPSTREAM_VERSION == "0.23.0"
+    assert UPSTREAM_VERSION == "0.23.2"
     _git(root, "merge-base", "--is-ancestor", UPSTREAM_COMMIT, "HEAD")
     assert _git(root, "show", f"{UPSTREAM_COMMIT}:hermes_cli/version_info.py")

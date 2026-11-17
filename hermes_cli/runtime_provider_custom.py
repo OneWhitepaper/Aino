@@ -121,6 +121,8 @@ def _lift_common_custom_fields(entry: dict[str, Any], result: dict[str, Any], *,
     _lift_extra_headers(entry, result)
     if api_mode:
         result["api_mode"] = api_mode
+    if isinstance(entry.get("responses_replay_item_ids"), bool):
+        result["responses_replay_item_ids"] = entry["responses_replay_item_ids"]
 
     _lift_model_capabilities(entry, None, result)
 
@@ -143,6 +145,23 @@ def _shadowed_by_builtin(requested_norm: str) -> bool:
     except rp.AuthError:
         return False
     return (canonical or "").strip().lower() == requested_norm
+
+
+def builtin_named_entries(requested_norm: str, providers: dict[str, Any]) -> dict[str, Any]:
+    """The ``providers:`` entries whose KEY spells ``requested_norm`` in any case: the only entries a
+    bare built-in name may mean (a display ``name:`` never claims a built-in)."""
+    return {k: v for k, v in providers.items() if isinstance(k, str) and _normalize_custom_provider_name(k) == requested_norm}
+
+
+def builtin_name_user_entry(name: str, providers: Any) -> Optional[str]:
+    """Config key of an enabled saved endpoint whose name collides with a built-in.
+    Aino's doctor uses this to explain the explicit custom:<id> selection."""
+    from hermes_cli.config import is_provider_enabled
+    wanted = _normalize_custom_provider_name(str(name or ""))
+    if not wanted or wanted == "auto" or not isinstance(providers, dict) or not _shadowed_by_builtin(wanted):
+        return None
+    return next((k for k, v in builtin_named_entries(wanted, providers).items()
+                 if isinstance(v, dict) and is_provider_enabled(v) and _entry_url(v)), None)
 
 
 def _match_new_style_provider(
@@ -506,7 +525,8 @@ def _owning_entry(rp, base_url: str, provider_name: Optional[str] = None) -> Opt
 
 
 def _owning_entry_credential(rp, base_url: str) -> tuple[bool, Any]:
-    """``(declared, key)`` for a bare ``provider: custom`` route whose URL a ``providers:`` entry owns.
+    """``(declared, key)`` for a route whose URL a ``providers:`` entry owns (a bare ``custom``
+    route, or a built-in route whose URL came from ``model.base_url``).
     ``declared`` is False when no entry owns the URL or it names no credential; the caller then keeps
     its implicit env fallbacks. Otherwise ``key`` is the entry's own (key_cmd first, as on the named
     path), or "" when it resolves to nothing: no other account's env key may stand in for it."""
@@ -514,6 +534,16 @@ def _owning_entry_credential(rp, base_url: str) -> tuple[bool, Any]:
     if entry is None or not entry_declares_credential(entry):
         return False, ""
     return True, _entry_credential(rp, entry, str(entry.get("name") or "custom"))
+
+
+def owned_config_url_credential(base_url: str, model_cfg: dict[str, Any], provider: str) -> tuple[bool, Any]:
+    """:func:`_owning_entry_credential` for a built-in route running on ``model.base_url``: an entry
+    that owns that URL and declares a credential supplies it, never the built-in's env/pool key."""
+    rp = _rp()
+    cfg_url = rp._config_base_url_for_provider(model_cfg, provider)
+    if not cfg_url or cfg_url != _clean(base_url).rstrip("/"):
+        return False, ""
+    return _owning_entry_credential(rp, base_url)
 
 
 def _entry_credential(rp, entry: dict[str, Any], name: str) -> Any:
@@ -533,7 +563,8 @@ def _try_resolve_from_custom_pool(
     base_url: str, provider_label: str, api_mode_override: Optional[str] = None, provider_name: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Runtime dict from the first credential pool that owns this custom endpoint, else None. A pool
-    the owning entry shares with a same-named built-in yields only the entry's rows (entry_scoped_pool)."""
+    the owning entry shares with a same-named built-in yields only the entry's rows, and only those
+    bound to this endpoint's origin (entry_scoped_pool)."""
     rp = _rp()
     try:
         # A frozen route's entry owns the pool, never the live one (a live URL edit would drop it).
@@ -547,7 +578,7 @@ def _try_resolve_from_custom_pool(
     candidates = list(dict.fromkeys(k for k in (str(key or "").strip().lower() for key in raw_keys) if k))
     for pool_key in candidates:
         try:
-            if (pool := entry_scoped_pool(rp.load_pool(pool_key), pool_key, owner)) is None:
+            if (pool := entry_scoped_pool(rp.load_pool(pool_key), pool_key, owner, base_url)) is None:
                 continue
             entry = pool.select() if pool.has_credentials() else None
             pool_api_key = rp._pool_entry_api_key(entry) if entry is not None else ""
@@ -585,6 +616,8 @@ def _apply_custom_provider_extras(custom_provider: dict[str, Any], target_model:
     if model_name:
         result["model"] = model_name
     _lift_model_capabilities(custom_provider, model_name, result)
+    if isinstance(custom_provider.get("responses_replay_item_ids"), bool):
+        result["responses_replay_item_ids"] = custom_provider["responses_replay_item_ids"]
 
     if custom_provider.get("extra_headers"):
         result["extra_headers"] = dict(custom_provider["extra_headers"])

@@ -76,12 +76,12 @@ def test_setup_consent_lock_does_not_print_success_or_mutate_the_wizard(plane, m
     assert successes == [] and caller == caller_before and _windows(plane.home) == []
 
 
-def _endpoint(plane, monkeypatch):
+def _endpoint(plane, monkeypatch, slot=None):
     from hermes_cli.config import custom_endpoint_key_env, save_env_value
     from hermes_cli.model_switch import ModelSwitchResult
     from hermes_cli.web_routers import config_env
 
-    slot = custom_endpoint_key_env("probe")
+    slot = slot or custom_endpoint_key_env("probe")
     original = {"providers": {"probe": {"name": "probe", "base_url": "https://old.example/v1",
         "model": "old-model", "key_env": slot}},
         "model": {"provider": "probe", "default": "old-model", "base_url": "https://old.example/v1", "key_env": slot}}
@@ -137,6 +137,32 @@ def test_rejected_endpoint_edit_retains_definition_and_original_secret(
     assert (plane.home / ".env").read_bytes() == before
     assert get_env_value(slot) == "original-endpoint-secret"
     assert not (plane.home / "config.yaml").exists()
+
+
+@pytest.mark.parametrize("schedule", ["locked", "late-poll", "late-retry"])
+@pytest.mark.parametrize("key", ["replacement-endpoint-secret", ""])
+def test_rejected_hashed_endpoint_key_edit_restores_each_publication(plane, monkeypatch, schedule, key):
+    from fastapi import HTTPException
+
+    from hermes_cli.config_env_publication import env_publication_targets
+    from hermes_cli.config_secret_refs import provider_name_key_env
+    from hermes_cli.web_models import CustomEndpointUpdate
+
+    slot = provider_name_key_env("probe")
+    config_env, _, original = _endpoint(plane, monkeypatch, slot)
+    before = (plane.home / ".env").read_bytes()
+    publications = [(target, target.get(slot)) for target in env_publication_targets()]
+    _lock_on_save(plane, monkeypatch, config_env, schedule, "providers")
+
+    with pytest.raises(HTTPException) as error:
+        config_env.upsert_custom_endpoint(CustomEndpointUpdate(
+            id="probe", name="probe", base_url="https://new.example/v1", model="new-model",
+            api_key=key, make_default=True))
+
+    assert error.value.status_code == 403
+    assert plane.profile("default")["values"] == original
+    assert (plane.home / ".env").read_bytes() == before
+    assert all(target.get(slot) == value for target, value in publications)
 
 
 @pytest.mark.parametrize("schedule", ["locked", "late-poll", "late-retry"])

@@ -6,7 +6,8 @@ import {
   CanonicalGroupNotices,
   CanonicalGroupWorkingLine,
   canonicalMemberPhases,
-  useCanonicalRoomLive
+  useCanonicalRoomLive,
+  useSameValue
 } from './canonical-group-activity'
 import { CanonicalGroupAttachments, type CanonicalGroupUploader } from './canonical-group-attachments'
 import { offersGroupMethod, offersGroupSafetyMethod } from './canonical-group-capabilities'
@@ -144,7 +145,7 @@ function CanonicalComposerNotices(props: CanonicalGroupComposerProps) {
 function CanonicalComposerStatus(props: CanonicalGroupComposerProps) {
   const { binding, busy, onAction, onRefresh, state, visible, events, onStop, restoredPending } = props
   const labels = useCanonicalGroupLabels()
-  const members = state?.room.members ?? []
+  const members = useSameValue(state?.room.members ?? [])
   const phases = canonicalMemberPhases(state?.driver_status)
   const live = useCanonicalRoomLive(events, state?.driver_status, members)
 
@@ -245,7 +246,7 @@ export function CanonicalGroupComposer(props: CanonicalGroupComposerProps) {
   const { nameFor } = useCanonicalMembers(binding)
   const uploader = useRef<CanonicalGroupUploader>(null)
   const [invalidPaste, setInvalidPaste] = useState(false)
-  const members = state?.room.members ?? []
+  const members = useSameValue(state?.room.members ?? [])
 
   const { unresolved, recipientSummary, mentionWarning } = composerRecipients(
     draft,

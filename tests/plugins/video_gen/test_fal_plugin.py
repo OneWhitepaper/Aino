@@ -203,7 +203,7 @@ class TestFamilyRouting:
 
     @pytest.fixture
     def with_fake_fal(self, monkeypatch):
-        """Stub fal_client.submit to capture which endpoint we hit."""
+        """Stub fal_client.SyncClient(key=...).submit to capture which endpoint we hit."""
         import sys
         import types
 
@@ -221,7 +221,7 @@ class TestFamilyRouting:
             captured["endpoint"] = endpoint
             captured["arguments"] = arguments
             return FakeHandle()
-        fake.submit = _submit  # type: ignore
+        fake.SyncClient = lambda key=None: types.SimpleNamespace(submit=_submit)  # type: ignore
         monkeypatch.setitem(sys.modules, "fal_client", fake)
         monkeypatch.setattr("tools.lazy_deps.ensure", lambda *_args, **_kwargs: None)
 
@@ -549,7 +549,7 @@ class TestUpscalePass:
 
     @pytest.fixture
     def with_fake_fal(self, monkeypatch):
-        """Stub fal_client.submit, capturing every endpoint hit in order."""
+        """Stub fal_client.SyncClient(key=...).submit, capturing every endpoint hit in order."""
         import sys
         import types
 
@@ -571,7 +571,7 @@ class TestUpscalePass:
         def _submit(endpoint, arguments=None, headers=None):
             captured["calls"].append((endpoint, arguments))
             return FakeHandle(endpoint)
-        fake.submit = _submit  # type: ignore
+        fake.SyncClient = lambda key=None: types.SimpleNamespace(submit=_submit)  # type: ignore
         monkeypatch.setitem(sys.modules, "fal_client", fake)
         monkeypatch.setattr("tools.lazy_deps.ensure", lambda *_args, **_kwargs: None)
 

@@ -10,6 +10,7 @@ import type { NotificationCenterTranslations } from './notification-center'
 import type { ToolPanelCopy } from './tool-panel'
 import type { AccountLoginCopy, AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
+import type { BackupTransferTranslations } from './types_backup_transfer'
 import type { BillingTranslations } from './types_billing'
 import type { BillingSurfaceTranslations } from './types_billing_surface'
 import type { BootTranslations } from './types_boot'
@@ -38,6 +39,7 @@ import type { ReplyMetricsTranslations } from './types_reply_metrics'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
 import type { SummaryTranslations } from './types_summary_surface'
 import type { ThemePickerCopy } from './types_theme_picker'
+import type { ToolTitleCopy, ToolTitleKey } from './types_tool_titles'
 import type { UninstallSectionTranslations } from './types_uninstall_section'
 import type { UpdateChannelCopy } from './types_update_channel'
 import type { WorkspacePageCopy } from './workspace-page'
@@ -59,37 +61,6 @@ export interface ErrorCardCopy {
   /** Body when the failure says a retry will not help (`retryable: false`), for a code whose body
    *  otherwise tells the user to retry. */
   bodyNoRetry?: string | ((provider: string, model: string) => string)
-}
-
-export type ToolTitleKey =
-  | 'browser_click'
-  | 'browser_fill'
-  | 'browser_navigate'
-  | 'browser_snapshot'
-  | 'browser_take_screenshot'
-  | 'browser_type'
-  | 'clarify'
-  | 'cronjob'
-  | 'edit_file'
-  | 'execute_code'
-  | 'image_generate'
-  | 'list_files'
-  | 'memory'
-  | 'patch'
-  | 'read_file'
-  | 'search_files'
-  | 'session_search_recall'
-  | 'terminal'
-  | 'todo'
-  | 'vision_analyze'
-  | 'web_extract'
-  | 'web_search'
-  | 'write_file'
-
-interface ToolTitleCopy {
-  done: string
-  pending: string
-  pendingAction: string
 }
 
 interface ModeOptionCopy {
@@ -658,6 +629,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
       mcp: string
       archivedChats: string
       sessions: string
+      backup: string
+      backupOnly: string
       about: string
       billing: string
       notifications: string
@@ -994,6 +967,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
     fieldLabels: Record<string, string>
     fieldDescriptions: Record<string, string>
     uninstallSection: UninstallSectionTranslations
+    backup: BackupTransferTranslations
     memoryLayers: MemoryLayersTranslations
     customEndpoints: {
       active: string
@@ -1155,6 +1129,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
       attachmentSizeLabel: string
       voiceShortcutHintTitle: string
       voiceShortcutHintDesc: string
+      desktopReadAloudTitle: string
+      desktopReadAloudDesc: string
       showOptions: string
 
       attachmentSizeSaveFailed: string
@@ -1578,6 +1554,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
       activePill: string
       updateTitle: string
       updateDetail: (next: string, current: string) => string
+      updateSameBuildDetail: (tag: string) => string
       updateAction: string
       updating: string
       upToDateTitle: string
@@ -2641,6 +2618,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
       backupDesc: string
       debugShare: string
       debugShareDesc: string
+      debugShareConfirm: string
+      debugShareConfirmDesc: string
       debugShareRunning: string
       debugShareLinks: string
       debugShareFailed: string
@@ -2743,6 +2722,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
     fieldSkillsPlaceholder: string
     fieldDeliver: string
     fieldDeliverOnly: string
+    fieldSignature: string
+    fieldSignatureHint: string
+    signatureOptions: Record<string, string>
     fieldPrompt: string
     fieldPromptPlaceholder: string
     nameRequired: string

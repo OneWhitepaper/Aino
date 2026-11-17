@@ -27,8 +27,9 @@ def test_refused_notification_retains_result_without_spending_attempts(tmp_path,
     registry = SimpleNamespace(completion_queue=events, is_completion_consumed=lambda _: False)
 
     def dispatch():
-        session['running'] = kind == 'async_delegation'
+        session['running'] = False
         if kind == 'async_delegation':
+            assert server._notif_claim_turn(session)
             if not server._notif_dispatch_event('live', session, event, 'nonhuman summary'):
                 events.put(event)
         else:

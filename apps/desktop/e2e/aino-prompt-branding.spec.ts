@@ -144,13 +144,12 @@ test('ordinary, Bot, group and real delegated children preserve Aino identity an
     `E2E_CALL(delegate_task)[${JSON.stringify({ goal: ordinaryGoal, context: 'Check the delegated identity using local inference only.' })}]`
   )
   await editor.press('Enter')
-  const ordinaryChild = () => mainRequest(text => text === ordinaryGoal)
+  const ordinaryChild = () => mainRequest(text => text.endsWith(`TASK:\n${ordinaryGoal}`))
   await expect.poll(() => Boolean(ordinaryChild()), { timeout: 90_000 }).toBe(true)
   assertAinoIdentity(ordinaryChild()!)
   assertNonDesktopSurface(ordinaryChild()!, 'subagent')
 
-  await page.locator('[data-sidebar-mode-header] button').click()
-  await page.getByRole('menuitemradio', { name: /^Bot(?:\s|$)/ }).click()
+  await page.locator('[data-aino-activity-rail]').getByRole('button', { name: 'Bot', exact: true }).click()
   await expect(page.getByRole('button', { name: /@hermes/ }).first()).toBeVisible({ timeout: 30_000 })
   const botPrompt = 'Aino Bot conversation identity witness'
   await editor.fill(botPrompt)
@@ -163,6 +162,7 @@ test('ordinary, Bot, group and real delegated children preserve Aino identity an
   await page.getByRole('menuitem', { name: /新建机器人/ }).click()
   const bot = page.getByRole('dialog', { name: '新建机器人', exact: true })
   await bot.getByPlaceholder('起个不重复的名字，用来区分不同机器人').fill('identity-reviewer')
+  await bot.locator('.aino-create-bot-appearance > summary').click()
   await bot.getByPlaceholder('界面上显示的称呼，不填就用上面的名字').fill('Identity Reviewer')
   await bot.getByRole('button', { name: '创建机器人', exact: true }).click()
   await expect(bot).toBeHidden({ timeout: 60_000 })
@@ -188,7 +188,7 @@ test('ordinary, Bot, group and real delegated children preserve Aino identity an
   await page.locator('.aino-group-composer').getByRole('button', { name: '发送', exact: true }).click()
   await expect(roomComposer).toHaveValue('')
   const groupRequest = () => mainRequest(text => text.includes('E2E_CALL(delegate_task)') && text.includes(goal))
-  const childRequest = () => mainRequest(text => text === goal)
+  const childRequest = () => mainRequest(text => text.endsWith(`TASK:\n${goal}`))
   await expect.poll(() => Boolean(groupRequest()), { timeout: 90_000 }).toBe(true)
   assertAinoIdentity(groupRequest()!)
   assertNonDesktopSurface(groupRequest()!, 'bot_room')

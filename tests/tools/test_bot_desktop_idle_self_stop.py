@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -101,6 +102,9 @@ def test_a_screen_started_before_an_update_still_stops_itself(abandoned_screen, 
     --run-module`` launcher, which loads the current generation at every run) with its own pid appended."""
     install = tmp_path / "an install's root"  # quoting: the command crosses the env as a shell-quoted string
     used = tmp_path / "launcher-used"
+    brand = install / "apps" / "desktop" / "brand.json"
+    brand.parent.mkdir(parents=True)
+    shutil.copyfile(_REPO / "apps" / "desktop" / "brand.json", brand)
     hermes = install / ".hermes" / "bin" / "hermes"
     hermes.parent.mkdir(parents=True)
     hermes.write_text(
@@ -113,7 +117,7 @@ def test_a_screen_started_before_an_update_still_stops_itself(abandoned_screen, 
     prelude = (
         "from hermes_cli import _launchers\n"
         f"_launchers.resolve_store_python = lambda root, **_: Path({str(tmp_path / 'store/bin/python3')!r})\n"
-        f"runtime.__file__ = {str(install / 'tools/bot_desktop/runtime.py')!r}\n"
+        f"import hermes_cli._startup_fast as _sf; _sf.project_root_str = lambda: {str(install)!r}\n"
         f"sys.executable = {str(tmp_path / 'old-env/bin/python')!r}  # removed by the update\n"
         f"import os; os.environ['PYTHONPATH'] = {str(tmp_path / 'collected-generation')!r}")
     sd, launcher = abandoned_screen(idle_stop_minutes=0.02, prelude=prelude)

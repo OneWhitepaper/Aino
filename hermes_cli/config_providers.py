@@ -110,6 +110,10 @@ _CAMEL_ALIASES: dict[str, str] = {
     "rateLimitDelay": "rate_limit_delay",
     "sessionAffinityHeader": "session_affinity_header"}
 
+# Every field a provider entry may store its address under (v12 migrations write ``api``).
+ENDPOINT_ADDRESS_FIELDS = ("base_url", "url", "api",
+                           *(camel for camel, snake in _CAMEL_ALIASES.items() if snake == "base_url"))
+
 
 _KNOWN_PROVIDER_KEYS = {
     # ``provider`` duplicates the ``providers.<name>`` mapping key and is unused here, but Hermes'
@@ -119,7 +123,8 @@ _KNOWN_PROVIDER_KEYS = {
     "api_mode", "transport", "model", "default_model", "models", "models_discovered",
     "context_length", "rate_limit_delay", "request_timeout_seconds", "stale_timeout_seconds",
     "discover_models", "extra_body", "extra_headers", "capabilities", "ssl_ca_cert", "ssl_verify",
-    "catalog_provider", "session_affinity_header"}
+    "catalog_provider", "session_affinity_header", "responses_replay_item_ids",
+    "gemini_api"}  # read by the gemini provider plugin (which Gemini API a model's calls use)
 
 
 def _pick_provider_base_url(entry: dict[str, Any], provider_key: str) -> str:
@@ -262,6 +267,7 @@ def _normalize_custom_provider_entry(
         ("context_length", lambda v: isinstance(v, int) and v > 0),
         ("rate_limit_delay", lambda v: isinstance(v, (int, float)) and v >= 0),
         ("discover_models", lambda v: isinstance(v, (bool, str))),
+        ("responses_replay_item_ids", lambda v: isinstance(v, bool)),
     ):
         if ok(entry.get(field)):
             normalized[field] = entry[field]
@@ -293,7 +299,7 @@ def _custom_provider_entry_to_provider_config(
     for field in (
         "name", "api_key", "key_env", "key_cmd", "models", "models_discovered", "context_length",
         "rate_limit_delay", "discover_models", "extra_body", "extra_headers",
-        "session_affinity_header", "ssl_ca_cert", "ssl_verify", "catalog_provider"):
+        "session_affinity_header", "ssl_ca_cert", "ssl_verify", "catalog_provider", "responses_replay_item_ids"):
         if field in normalized:
             provider_entry[field] = normalized[field]
     if "model" in normalized:

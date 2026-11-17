@@ -1,6 +1,10 @@
 import type { HermesConnection } from '@/global'
 import { connectionScopeSuffix } from '@/lib/connection-scoped'
 
+export const COMPOSER_MODEL_KEY = 'hermes.desktop.composer.model'
+export const COMPOSER_PROVIDER_KEY = 'hermes.desktop.composer.provider'
+export const COMPOSER_MODEL_SOURCE_KEY = 'hermes.desktop.composer.model-source'
+
 const WORKSPACE_CWD_KEY = 'hermes.desktop.workspace-cwd'
 
 export function composerScopeForConnection(connection: HermesConnection | null): string | null {

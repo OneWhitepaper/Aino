@@ -13,7 +13,7 @@ import {
 import type { GroupConversationModelRequest } from '@hermes/plugin-sdk'
 import { useCallback, useId, useRef, useState } from 'react'
 
-import { type CanonicalDriverStatus, canonicalMemberPhases } from './canonical-group-activity'
+import { type CanonicalDriverStatus, canonicalMemberPhases, useSameValue } from './canonical-group-activity'
 import { type CanonicalGroupAttachment, CanonicalGroupAttachments } from './canonical-group-attachments'
 import { type GroupMethods, offersGroupMethod, offersGroupSafetyMethod } from './canonical-group-capabilities'
 import { CanonicalGroupComposer } from './canonical-group-composer'
@@ -113,7 +113,9 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   const [query, setQuery] = useState('')
   const mentionAfterClose = useRef<string | null>(null)
   const infoId = useId()
-  const { members, phases, working, locked } = surfacePresentation(state, restored, busy, pending)
+  const presentation = surfacePresentation(state, restored, busy, pending)
+  const { phases, working, locked } = presentation
+  const members = useSameValue(presentation.members)
 
   const resize = useCallback((entries: readonly ResizeObserverEntry[]) => {
     if (entries[0]) {

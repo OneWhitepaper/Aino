@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 
-import type { Page } from '@playwright/test'
+import type { ElectronApplication, Page } from '@playwright/test'
 
 const { PNG } = createRequire(import.meta.url)('pngjs') as {
   PNG: { sync: { read(buffer: Buffer): { width: number; height: number; data: Buffer } } }
@@ -70,24 +70,96 @@ export function sampleNativePaint(
   }
 }
 
-/** CDP captures the presented composition including the native guest surface. */
-export async function subscribeNativePaint(page: Page, region: PaintRegion, chrome: PaintRegion) {
-  const session = await page.context().newCDPSession(page)
-  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-  const raw: { at: number; png: string }[] = []
-  const acknowledgements: Promise<unknown>[] = []
-  session.on('Page.screencastFrame', event => {
-    // Events can deliver cached pre-action frames after the click. The
-    // compositor timestamp, rather than IPC arrival time, identifies them.
-    raw.push({ at: event.metadata.timestamp! * 1000, png: event.data })
-    acknowledgements.push(session.send('Page.screencastFrameAck', { sessionId: event.sessionId }))
-  })
-  await session.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 })
+/** Capture this fixture window's OS composition, including its native child Browser view. */
+export async function captureNativeWindow(app: ElectronApplication, viewport: ViewportSize): Promise<Buffer> {
+  const png = await app.evaluate(async ({ BrowserWindow, desktopCapturer }, size) => {
+    const id = BrowserWindow.getAllWindows()[0].getMediaSourceId()
+    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: size })
+    const source = sources.find(item => item.id === id)
+
+    if (!source || source.thumbnail.isEmpty()) {
+      throw new Error('Native window capture is unavailable; verify screen-recording permission')
+    }
+
+    return source.thumbnail.toPNG().toString('base64')
+  }, viewport)
+
+  return Buffer.from(png, 'base64')
+}
+
+/** CDP excludes WebContentsView children; record the fixture window's native media stream. */
+export async function subscribeNativePaint(
+  app: ElectronApplication,
+  page: Page,
+  region: PaintRegion,
+  chrome: PaintRegion
+) {
+  const id = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getMediaSourceId())
+
+  const viewport = await page.evaluate(async sourceId => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: sourceId,
+          minFrameRate: 60,
+          maxFrameRate: 60
+        }
+      }
+    } as unknown as MediaStreamConstraints)
+
+    const video = document.createElement('video')
+    const canvas = document.createElement('canvas')
+    const frames: { at: number; png: string }[] = []
+    const owner = window as Window & { stopNativePaintCapture?: () => typeof frames }
+    let callback = 0
+
+    const stop = () => {
+      video.cancelVideoFrameCallback(callback)
+      stream.getTracks().forEach(track => track.stop())
+      video.srcObject = null
+      delete owner.stopNativePaintCapture
+
+      return frames
+    }
+
+    try {
+      video.muted = true
+      video.srcObject = stream
+      await video.play()
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const context = canvas.getContext('2d')!
+
+      await new Promise<void>(resolve => {
+        const record: VideoFrameRequestCallback = (_now, metadata) => {
+          context.drawImage(video, 0, 0)
+          frames.push({
+            at: performance.timeOrigin + metadata.presentationTime,
+            png: canvas.toDataURL('image/png').split(',')[1]
+          })
+          callback = video.requestVideoFrameCallback(record)
+          resolve()
+        }
+
+        callback = video.requestVideoFrameCallback(record)
+      })
+      owner.stopNativePaintCapture = stop
+    } catch (error) {
+      stop()
+      throw error
+    }
+
+    return { width: innerWidth, height: innerHeight }
+  }, id)
 
   return async () => {
-    await session.send('Page.stopScreencast')
-    await Promise.all(acknowledgements)
-    await session.detach()
+    const raw = await page.evaluate(() => {
+      const owner = window as unknown as Window & { stopNativePaintCapture: () => { at: number; png: string }[] }
+
+      return owner.stopNativePaintCapture()
+    })
 
     return raw.map(frame => {
       const png = Buffer.from(frame.png, 'base64')

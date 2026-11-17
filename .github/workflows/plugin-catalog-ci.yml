@@ -43,10 +43,14 @@ jobs:
           # the invariant that EVERYTHING in plugin-catalog/ stays valid.
           python3 scripts/validate_plugin_catalog.py plugin-catalog/
 
-  pinned-source-validate:
+  catalog-plan:
     runs-on: ubuntu-latest
-    # Release imports validate hundreds of pinned entries through the same gates.
-    timeout-minutes: 60
+    timeout-minutes: 10
+    outputs:
+      files: ${{ steps.changed.outputs.files }}
+      validation_ref: ${{ steps.changed.outputs.validation_ref }}
+      validation_catalog_tree: ${{ steps.changed.outputs.validation_catalog_tree }}
+      matrix: ${{ steps.partition.outputs.matrix }}
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
@@ -72,29 +76,23 @@ jobs:
             exit 1
           fi
 
-          # A v0.23.1 upstream import is the one reviewed exception to the
+          # A v0.23.2 upstream import is the one reviewed exception to the
           # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
           # its second parent is the proposed PR head and its first parent is
           # the target branch.  The release must be present in the PR head but
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
-          UPSTREAM=3b421578588243f920886e6fe79a6faa87ea026e
-          CATALOG_TREE=5302bba64a72ff88ef0724065a62cd57cb7c37dc
+          UPSTREAM=ae2a81ccc00e9b7c06301523e5bb09608397149c
+          CATALOG_TREE=69c547eddebf432b73fb58a4c3351c7c038e3869
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # Pin the reviewed import's exact catalog tree. It retains Aino's
-            # existing Experiential Labs entry and excludes AtmoRouter because
-            # its pinned repository could not be cloned during review. Other
-            # imported entries continue through the pinned-source gate below.
-            # AI SENSE, Toll and Hermes Android use reachable replacement commits with plugin
-            # subtrees identical to their original pins (recorded in each entry).
-            # Limbic uses its official v0.9.5 commit: only a removed evaluation
-            # fixture differs; runtime, manifest and assets remain identical.
-            # Any unreviewed catalog edit is rejected.
+            # Pin the final reviewed v0.23.2 catalog, including retained Aino entries.
+            # Every changed entry still passes the exact release scanner and
+            # pinned-source validation below; unrelated catalog edits are rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
-              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.1"
+              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.2"
               exit 1
             fi
             # The import must use the release's reviewed enforcement inputs.
@@ -105,6 +103,7 @@ jobs:
                 scripts/ci/catalog_changed_entries.py \
                 scripts/ci/catalog_entry_fields.py \
                 scripts/ci/catalog_validate_pinned_entries.py \
+                scripts/ci/catalog_self_updater_allowlist.json \
                 scripts/scan_plugin_payloads.py \
                 scripts/validate_plugin_catalog.py \
                 .github/actions/setup-pm/action.yml; then
@@ -151,11 +150,40 @@ jobs:
             echo '__EOF__'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Check out reviewed upstream validation tree
-        if: steps.changed.outputs.files != '' && steps.changed.outputs.validation_ref != ''
+      - name: Partition the full admitted catalog list
+        id: partition
         env:
-          VALIDATION_REF: ${{ steps.changed.outputs.validation_ref }}
-          VALIDATION_CATALOG_TREE: ${{ steps.changed.outputs.validation_catalog_tree }}
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: python3 scripts/ci/catalog_validation_shards.py --count 8 >> "$GITHUB_OUTPUT"
+
+  pinned-source-shard:
+    needs: catalog-plan
+    if: needs.catalog-plan.outputs.files != ''
+    name: pinned-source-shard (${{ matrix.index }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.catalog-plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          # Full commit graph + tags, blobs on demand: the diff below needs the
+          # merge commit's first parent, and Hermes resolves its own version
+          # from the release tags merged into HEAD. A shallow checkout reports
+          # "unknown", which plugins checking the host version reject (omh).
+          fetch-depth: 0
+          filter: blob:none
+          # `hermes plugins validate` below runs pinned-repo code; keep the
+          # job's token out of .git/config where that code could read it.
+          persist-credentials: false
+
+      - name: Check out reviewed upstream validation tree
+        if: needs.catalog-plan.outputs.validation_ref != ''
+        env:
+          VALIDATION_REF: ${{ needs.catalog-plan.outputs.validation_ref }}
+          VALIDATION_CATALOG_TREE: ${{ needs.catalog-plan.outputs.validation_catalog_tree }}
         run: |
           set -euo pipefail
           # Keep the original PR's changed-entry output, but load the complete
@@ -167,8 +195,8 @@ jobs:
           # upstream runtime version. Fetch the reviewed official tag locally
           # and verify both its immutable tag object and peeled release commit
           # before setup or plugin code can consume its version identity.
-          REVIEWED_TAG=v0.23.1
-          REVIEWED_TAG_OBJECT=b65acf3fdc1d43bd889211ea8e37032974b395a5
+          REVIEWED_TAG=v0.23.2
+          REVIEWED_TAG_OBJECT=28f57ed8e3dba4eceb67dfd3e3abda1a7604452d
           git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "refs/tags/$REVIEWED_TAG"
           if [ "$(git rev-parse FETCH_HEAD)" != "$REVIEWED_TAG_OBJECT" ] \
               || [ "$(git rev-parse 'FETCH_HEAD^{commit}')" != "$VALIDATION_REF" ]; then
@@ -189,16 +217,14 @@ jobs:
           fi
 
       - name: Prepare Hermes from the validation checkout
-        if: steps.changed.outputs.files != ''
         uses: ./.github/actions/setup-pm
         with:
           toolchain: python
           extras: '[]'
 
       - name: Clone each entry at its pinned sha and validate
-        if: steps.changed.outputs.files != ''
         env:
-          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          CHANGED_FILES: ${{ matrix.files }}
           # A hostile repo URL must never block the job on a credential prompt.
           GIT_TERMINAL_PROMPT: "0"
           # `gh attestation verify` (README rule 17) reads the attestation from
@@ -206,3 +232,22 @@ jobs:
           # pinned-repo code, so nothing broader is exposed here.
           GH_TOKEN: ${{ github.token }}
         run: python3 -I "$GITHUB_WORKSPACE/scripts/ci/catalog_validate_pinned_entries.py"
+
+  pinned-source-validate:
+    needs: [catalog-plan, pinned-source-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require admission and every pinned-source shard
+        env:
+          PLAN_RESULT: ${{ needs.catalog-plan.result }}
+          SHARD_RESULT: ${{ needs.pinned-source-shard.result }}
+          CHANGED_FILES: ${{ needs.catalog-plan.outputs.files }}
+        run: |
+          set -euo pipefail
+          test "$PLAN_RESULT" = success
+          if [ -n "$CHANGED_FILES" ]; then
+            test "$SHARD_RESULT" = success
+          else
+            test "$SHARD_RESULT" = skipped
+          fi

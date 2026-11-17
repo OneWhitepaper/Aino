@@ -6,6 +6,7 @@ import { readClipboardImagePng } from './clipboard-image'
 import { registerClipboardTextIpc } from './clipboard-ipc'
 import { saveImageFromUrl, writeComposerImage } from './composer-image-files'
 import { writeComposerPaste } from './composer-paste'
+import { composerImageBufferFromIpc, composerPasteTextFromIpc } from './hardening'
 import { captureOwnedPreviewContents } from './preview-capture'
 import { createPreviewTargetResolver } from './preview-file-target'
 import { stopPreviewFileWatch, watchDirectory, watchPreviewFile } from './preview-file-watch'
@@ -125,25 +126,13 @@ export function registerRendererContentIpc(
   })
 
   ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
-    const data = payload?.data
-
-    if (!data) {
-      throw new Error('saveImageBuffer: missing data')
-    }
-
-    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
+    const buffer = composerImageBufferFromIpc(payload?.data)
 
     return writeComposerImage(buffer, payload?.ext || '.png', payload?.name, getAccountUiRoot())
   })
 
   ipcMain.handle('hermes:savePastedText', async (_event, payload) => {
-    const text = typeof payload?.text === 'string' ? payload.text : ''
-
-    if (!text) {
-      throw new Error('savePastedText: missing text')
-    }
-
-    return writeComposerPaste(getHermesHome(), text)
+    return writeComposerPaste(getHermesHome(), composerPasteTextFromIpc(payload?.text))
   })
 
   ipcMain.handle('hermes:saveClipboardImage', async () => {

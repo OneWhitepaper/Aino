@@ -23,6 +23,9 @@ interface CatalogFilterBarProps {
   onCategory: (value: string | null) => void
   onTag: (value: string | null) => void
   onInstalled: () => void
+  onUpdates: () => void
+  /** Installed entries with an upstream update; the chip shows only when > 0. */
+  updateCount: number
   onClear: () => void
   sortControl: ReactNode
   actions: ReactNode
@@ -98,6 +101,16 @@ export function CatalogFilterBar(props: CatalogFilterBarProps) {
           </Button>
         ))}
       </div>
+      {(props.updateCount > 0 || props.facets.updatesOnly) && (
+        <Button
+          aria-pressed={props.facets.updatesOnly}
+          onClick={props.onUpdates}
+          size="sm"
+          variant={props.facets.updatesOnly ? 'secondary' : 'ghost'}
+        >
+          {c.updatesAvailable(props.updateCount)}
+        </Button>
+      )}
       <p className="catalog-rail-hint">{c.installHint}</p>
     </aside>
   )
@@ -109,7 +122,12 @@ export function CatalogFilterMenu(props: CatalogFilterBarProps) {
   const c = t.catalog
   const panelId = useId()
   const [expanded, setExpanded] = useState(false)
-  const activeCount = props.facets.categories.length + props.facets.sources.length + props.facets.tags.length
+
+  const activeCount =
+    props.facets.categories.length +
+    props.facets.sources.length +
+    props.facets.tags.length +
+    Number(props.facets.updatesOnly)
 
   return (
     <div className="catalog-filter-trigger">

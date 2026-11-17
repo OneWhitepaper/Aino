@@ -35,6 +35,7 @@ import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { repoDiscoveryPolicyFromConfig, repoDiscoveryPolicySignature, scanAndRecordRepos } from '@/store/projects'
 import { $settingsRequestProfile } from '@/store/settings-scope'
+import { $autoSpeakReplies, setAutoSpeakReplies } from '@/store/voice-prefs'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
 import { hermesConfigCacheWriter, useHermesConfigRecord } from '../hooks/use-config-record'
@@ -447,6 +448,20 @@ function useConfigFieldDeepLink({ activeSectionId, config, schema, subpage }: Co
   }, [activeSectionId, config, schema, searchParams, setSearchParams, subpage, targetField, unifiedPage])
 }
 
+function DesktopReadAloudSetting() {
+  const { t } = useI18n()
+  const checked = useStore($autoSpeakReplies)
+
+  return (
+    <ToggleRow
+      checked={checked}
+      description={t.settings.config.desktopReadAloudDesc}
+      label={t.settings.config.desktopReadAloudTitle}
+      onChange={on => void setAutoSpeakReplies(on)}
+    />
+  )
+}
+
 interface ConfigPagePresentationProps {
   activeSectionId: string
   afterContent?: ReactNode
@@ -516,7 +531,10 @@ function useConfigPagePresentation({
     metrics: showSharedMetrics ? <SharedMetricsSettings /> : undefined,
     voiceHint:
       activeSectionId === 'voice' ? (
-        <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+        <>
+          <DesktopReadAloudSetting />
+          <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+        </>
       ) : undefined
   }
 
@@ -1004,7 +1022,10 @@ function ConfigSettingsInner({
         {showSharedMetrics && <SharedMetricsSettings />}
         {showDesktopSettings && <OnboardingSettings />}
         {activeSectionId === 'voice' && (
-          <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+          <>
+            <DesktopReadAloudSetting />
+            <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+          </>
         )}
         {activeSectionId === 'model' && (
           <div className={showModelSettings ? 'mb-6' : undefined}>

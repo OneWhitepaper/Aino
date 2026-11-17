@@ -51,8 +51,7 @@ function canonical(home: string): StagedSession | undefined {
 }
 
 async function botMode(page: Page) {
-  await page.locator('[data-sidebar-mode-header] button').click()
-  await page.getByRole('menuitemradio', { name: /^Bot(?:\s|$)/ }).click()
+  await page.locator('[data-aino-activity-rail]').getByRole('button', { name: 'Bot', exact: true }).click()
   await expect(page.locator('[data-sidebar-mode-header]')).toContainText('Bot')
 }
 

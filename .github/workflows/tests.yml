@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           # Freeze discovery once; each file belongs to exactly one job.
-          unit=$(python3 scripts/run_tests_parallel.py --generate-slices 4)
+          unit=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
           # Paid live canaries belong to live-providers.yml; pytest's default
           # 'not live' filter leaves that file with no runnable tests here.
           core_files=()
@@ -72,7 +72,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   test:
-    name: Run tests (slice ${{ matrix.slice.index }}/4)
+    name: Run tests (slice ${{ matrix.slice.index }}/8)
     needs: test-matrix
     strategy:
       fail-fast: false
@@ -118,7 +118,7 @@ jobs:
         # select it explicitly (journal_mode config, a pinned vulnerable
         # version), so they run on any interpreter.
         run: |
-          "$HERMES_PYTHON" -c "import sqlite3, sys, hermes_state_wal as w; v = w.is_sqlite_wal_reset_vulnerable(); print(f'Python {sys.version.split()[0]}, SQLite {sqlite3.sqlite_version}, WAL-reset vulnerable: {v}'); sys.exit(1 if v else 0)"
+          "$HERMES_PYTHON" -c "import sqlite3, sys, hermes_agent.compat as compat; compat.install(); import hermes_state_wal as w; v = w.is_sqlite_wal_reset_vulnerable(); print(f'Python {sys.version.split()[0]}, SQLite {sqlite3.sqlite_version}, WAL-reset vulnerable: {v}'); sys.exit(1 if v else 0)"
 
       - name: Restore per-file duration cache
         # scripts/run_tests_parallel.py raises a file's timeout to
@@ -233,7 +233,7 @@ jobs:
         # The state.db suites skip on a WAL-reset-vulnerable SQLite; fail
         # instead of reporting green over zero coverage.
         run: |
-          "$HERMES_PYTHON" -c "import sqlite3, hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
+          "$HERMES_PYTHON" -c "import sqlite3, hermes_agent.compat as compat; compat.install(); import hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
 
       - name: Run messaging-gated gateway cases
         # These gateway files drive the REAL Discord/Telegram SDKs and skip when the
@@ -244,9 +244,11 @@ jobs:
           set -o pipefail
           log="$RUNNER_TEMP/messaging-gateway.log"
           scripts/run_tests.sh -rs \
+            tests/gateway/test_session_terminal_cwd_restart.py \
             tests/gateway/test_native_role_reauthorization.py \
             tests/gateway/test_native_telegram_startup_recovery.py \
             tests/gateway/test_native_pause_notice.py \
+            tests/gateway/test_reset_paused_queue_notice.py \
             tests/gateway/test_native_reply_crash_recovery.py | tee "$log"
           summary=$(grep '^=== Summary:' "$log")
           case "$summary" in
@@ -429,7 +431,7 @@ jobs:
         # instead of reporting green over zero coverage.
         run: |
           source .venv/bin/activate
-          python -c "import sqlite3, hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
+          python -c "import sqlite3, hermes_agent.compat as compat; compat.install(); import hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
 
       - name: Run upgrade e2e tests (${{ matrix.shard }})
         run: |

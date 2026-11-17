@@ -1,5 +1,6 @@
 import './create-agent-dialog.css'
 
+import type { ProfilesCreateResult } from '@hermes/plugin-sdk'
 import {
   Button,
   Checkbox,
@@ -47,6 +48,15 @@ import type { CanonicalGroupOrigin } from './canonical-group-registry'
 import { canonicalGroupCreateError, canonicalGroupCreateNotice, createCanonicalGroup } from './canonical-groups'
 import type { GroupCreationIntent } from './canonical-groups'
 import { CreateAgentModelSummary } from './create-agent-model-summary'
+import {
+  adoptCreationReceipt,
+  creationWarningTitle,
+  type DraftReceipt,
+  liveRosterRow,
+  notifyCreatedBot,
+  publishCreationWarning,
+  type RuntimeReadiness
+} from './create-agent-notices'
 import { CreateAgentCatalogStatus, creationModelSummaryProps } from './create-dialog-presentation'
 import {
   type CapabilityCatalog,
@@ -306,44 +316,6 @@ function createdBotRow(
   }
 }
 
-type RuntimeReadiness = { error?: string; ok?: boolean; provider?: string } | null
-
-/** Report creation separately from whether its first model turn is ready. */
-function notifyCreatedBot(
-  readiness: RuntimeReadiness,
-  {
-    bot,
-    createdMessage,
-    editor,
-    onConfigureModel,
-    remoteTarget
-  }: {
-    bot: RosterRow
-    createdMessage: string
-    editor: ReturnType<typeof useBots>['editor']
-    onConfigureModel: CreateAgentDialogProps['onConfigureModel']
-    remoteTarget: boolean
-  }
-): boolean {
-  const needsModel = readiness?.ok === false
-  const platformUnavailable = needsModel && readiness?.provider === 'aino'
-  host.notify(
-    needsModel
-      ? {
-          kind: 'warning',
-          title: createdMessage,
-          message: platformUnavailable ? readiness.error || editor.modelSwitchFailed : editor.needsModel,
-          ...(!platformUnavailable ? { detail: readiness?.error } : {}),
-          ...(!platformUnavailable && !remoteTarget && onConfigureModel
-            ? { action: { label: editor.configureModel, onClick: () => onConfigureModel(bot) } }
-            : {})
-        }
-      : { kind: 'success', message: createdMessage }
-  )
-
-  return needsModel
-}
-
 function creationTabs(b: ReturnType<typeof useBots>, showCapabilities: boolean) {
   return showCapabilities
     ? [
@@ -507,7 +479,10 @@ function slugTaken(roster: RosterRow[], slug: string, target: string, draft: nul
  *  (`draftTargetRef`, recorded with it): the "Create on" picker may point
  *  elsewhere by then, and a same-named bot there is not the draft. Each discard,
  *  and the dialog unmounting, bumps `draftGenRef` so an in-flight create
- *  deletes its own draft and configures nothing. */
+ *  deletes its own draft and configures nothing. `draftReceiptRef` is what
+ *  the flight that recorded the draft learned: the connection it was created
+ *  on and its creation warnings. Every discard drops it, and a submit
+ *  publishes the warnings only while the receipt is still the recorded one. */
 function useDraftProfile(
   createdRef: { current: null | string },
   flightRef: { current: Promise<null | string> | null }
@@ -516,10 +491,12 @@ function useDraftProfile(
   const draftGenRef = useRef(0)
   const draftTargetRef = useRef('')
   const draftSourceRef = useRef<null | { identity: string; connectionId: string }>(null)
+  const draftReceiptRef = useRef<DraftReceipt | null>(null)
 
   const discardDraft = () => {
     const draft = createdRef.current
     draftGenRef.current += 1
+    draftReceiptRef.current = null
     createdRef.current = flightRef.current = null
 
     if (draft && (draftTargetRef.current || draftSourceRef.current?.identity === activeCreationSource())) {
@@ -564,6 +541,7 @@ function useDraftProfile(
         }
 
         draftGenRef.current += 1
+        draftReceiptRef.current = null
         createdRef.current = flightRef.current = null
       }
     }
@@ -576,7 +554,7 @@ function useDraftProfile(
     []
   )
 
-  return { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef }
+  return { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef, draftReceiptRef }
 }
 
 export function CreateAgentDialog({
@@ -600,7 +578,7 @@ export function CreateAgentDialog({
   // createdRef must stay a slug string for its sibling consumers.
   const flightRef = useRef<Promise<null | string> | null>(null)
 
-  const { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef } = useDraftProfile(
+  const { discardDraft, captureReset, draftGenRef, draftTargetRef, draftSourceRef, draftReceiptRef } = useDraftProfile(
     createdRef,
     flightRef
   )
@@ -719,8 +697,7 @@ export function CreateAgentDialog({
     setTargetConnection('')
     setBusy(false)
     setError(null)
-    createdRef.current = null
-    flightRef.current = null
+    createdRef.current = flightRef.current = draftReceiptRef.current = null
   }
 
   // Capability catalog for the tabs: the profile doesn't exist yet, so show
@@ -843,7 +820,8 @@ export function CreateAgentDialog({
     const flight = singleFlight(flightRef, async () => {
       draftTargetRef.current = target
       draftSourceRef.current = { identity: source, connectionId: target || sourceConnection }
-      await requestForTarget('profiles.create', {
+
+      const created = await requestForTarget<ProfilesCreateResult>('profiles.create', {
         name: slug,
         description: descriptionText,
         // Clone sources are profiles of the TARGET backend. The picker's
@@ -852,9 +830,10 @@ export function CreateAgentDialog({
         // the remote box doesn't have.
         clone_from: cloneFrom === '__none__' ? null : remoteTarget ? 'default' : cloneFrom,
         no_skills: noSkills,
-        // Shared (not copied) auth keeps ONE OAuth/token pool with the main
-        // profile, so refreshes can't invalidate each other. Older gateways
-        // ignore the param and copy — still functional, just forked.
+        // Shared (not copied) auth keeps ONE OAuth/token pool with the default
+        // profile, so refreshes can't invalidate each other. From a named launch
+        // profile the gateway copies its logins instead (single-use OAuth still
+        // read from the default profile). Older gateways ignore the param and copy.
         share_auth: shareAuth,
         soul: composeSoul({
           name: slug,
@@ -887,6 +866,14 @@ export function CreateAgentDialog({
       }
 
       createdRef.current = slug
+      draftTargetRef.current = target
+      const owner = target || sourceConnection
+      draftReceiptRef.current = {
+        owner,
+        warning: created?.warnings?.length
+          ? { title: creationWarningTitle(slug, owner, connections), message: created.warnings.join('\n') }
+          : null
+      }
 
       // Apply capability picks from the Advanced tabs (best-effort; the
       // profile exists either way and Edit Profile can finish the job).
@@ -1007,6 +994,7 @@ export function CreateAgentDialog({
         return
       }
 
+      const { receipt, createdOn } = adoptCreationReceipt(draftReceiptRef, openingConnection)
       const who = displayName({ name: slug, title: botTitle })
       const createdMessage = remoteTarget ? b.editor.createdOn(who, targetLabel) : b.editor.created(who)
 
@@ -1043,11 +1031,25 @@ export function CreateAgentDialog({
       const needsModel = await readCreatedModelReadiness(
         () => requestForTarget<RuntimeReadiness>('setup.runtime_check', { profile: slugCreated }),
         () => draftGeneration === draftGenRef.current,
-        readiness =>
-          notifyCreatedBot(readiness, { bot, createdMessage, editor: b.editor, onConfigureModel, remoteTarget })
+        readiness => {
+          publishCreationWarning(receipt, draftReceiptRef.current)
+
+          return notifyCreatedBot(readiness, {
+            bot,
+            resolveBot: () => liveRosterRow(slugCreated, createdOn, bot),
+            createdMessage,
+            editor: b.editor,
+            onConfigureModel,
+            remoteTarget
+          })
+        }
       )
 
       if (needsModel === null) {
+        // An adopted create can outlive its dialog; only its warning survives,
+        // while a stale completion cannot finish or reopen another dialog.
+        publishCreationWarning(receipt, draftReceiptRef.current)
+
         return
       }
 

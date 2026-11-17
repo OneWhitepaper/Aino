@@ -307,7 +307,10 @@ export function assistantTextPart(
   timestamp?: number,
   displayPhase?: ChatMessagePart['displayPhase']
 ): ChatMessagePart {
-  return { ...textPart(renderMediaTags(text), timestamp), ...(displayPhase ? { displayPhase } : {}) }
+  const rendered = renderMediaTags(text)
+  const part = rendered === text ? textPart(text, timestamp) : { ...textPart(rendered, timestamp), mediaSource: text }
+
+  return { ...part, ...(displayPhase ? { displayPhase } : {}) }
 }
 
 export function partsText(parts: ChatMessagePart[]): string {
@@ -636,11 +639,59 @@ export function appendReasoningPart(parts: ChatMessagePart[], delta: string, tim
   return appendStreamPart(parts, 'reasoning', delta, timestamp).parts
 }
 
-export function appendAssistantTextPart(
+/**
+ * `delta` less what the tail part's adopted stored reply already shows, and the
+ * parts after that. A stamped delta is placed by its segment `offset`, so a
+ * chunk past one the reconnect lost is still recognised as covered; an
+ * unstamped one is matched against the covered raw text.
+ */
+function consumeStoredTail(
   parts: ChatMessagePart[],
   delta: string,
-  timestamp?: number
+  offset?: number
+): { delta: string; parts: ChatMessagePart[] } {
+  const tail = parts.at(-1)
+
+  if (tail?.type !== 'text' || !tail.storedTail) {
+    return { delta, parts }
+  }
+
+  const { storedTail: covered, ...plain } = tail
+  const keep = (text: string) => [...parts.slice(0, -1), text ? { ...tail, storedTail: { ...covered, text } } : plain]
+
+  if (offset !== undefined) {
+    const left = covered.end - (offset + delta.length)
+
+    return {
+      delta: delta.slice(Math.max(0, covered.end - offset)),
+      parts: keep(left > 0 ? covered.text.slice(-left) : '')
+    }
+  }
+
+  const rest = covered.text.startsWith(delta) ? covered.text.slice(delta.length) : ''
+
+  // A delta that diverges from the stored reply is new text: it applies whole.
+  const unseen = covered.text.startsWith(delta)
+    ? ''
+    : delta.startsWith(covered.text)
+      ? delta.slice(covered.text.length)
+      : delta
+
+  return { delta: unseen, parts: keep(rest) }
+}
+
+export function appendAssistantTextPart(
+  streamParts: ChatMessagePart[],
+  streamDelta: string,
+  timestamp?: number,
+  offset?: number
 ): ChatMessagePart[] {
+  const { delta, parts } = consumeStoredTail(streamParts, streamDelta, offset)
+
+  if (!delta) {
+    return parts
+  }
+
   const { index, parts: next } = appendStreamPart(parts, 'text', delta, timestamp)
   const part = next[index]
 

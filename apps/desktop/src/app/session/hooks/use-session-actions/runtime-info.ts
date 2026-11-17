@@ -8,11 +8,9 @@ import {
   setCurrentBranch,
   setCurrentCwdTransient,
   setCurrentFastMode,
-  setCurrentModel,
   setCurrentModelTransient,
   setCurrentPersonality,
   setCurrentPlatformOwner,
-  setCurrentProvider,
   setCurrentProviderTransient,
   setCurrentReasoningEffort,
   setCurrentReasoningEffortWire,
@@ -74,11 +72,11 @@ export function publishRuntimeToComposer(state: SessionRuntimeStatePatch): void 
   }
 
   if (state.model !== undefined) {
-    setCurrentModel(state.model)
+    setCurrentModelTransient(state.model)
   }
 
   if (state.provider !== undefined) {
-    setCurrentProvider(state.provider)
+    setCurrentProviderTransient(state.provider)
   }
 
   if (state.cwd !== undefined) {

@@ -111,7 +111,7 @@ MANAGE_CONNECTIONS_SCHEMA = {
                 "type": "string",
                 "enum": list(ALL_ACTIONS),
                 "description": (
-                    "Defaults to status. connect, reconnect and rename take hosted connector slugs only. "
+                    "Defaults to status. connect, reconnect and rename take hosted connector slugs only; "
                     "install, enable and authorize take mcp:true targets only."
                 ),
             },
@@ -153,8 +153,10 @@ MANAGE_CONNECTIONS_SCHEMA = {
                                     "type": "string",
                                     "description": (
                                         "Hosted only: the account's name. connect: a new name adds another "
-                                        "account; reconnect: repairs that account; rename: its current name "
-                                        "(or its label when unnamed). One aliased target per call."
+                                        "account of the app (pick a short lowercase name from the user's "
+                                        "words, e.g. 'work'; ask the user if unsure); reconnect: repairs "
+                                        "that account; rename: its current name (or its label when "
+                                        "unnamed). One aliased target per call."
                                     ),
                                 },
                                 "to": {
@@ -171,8 +173,7 @@ MANAGE_CONNECTIONS_SCHEMA = {
                 "description": (
                     "Targets. REQUIRED for every action but status and display "
                     "(e.g. [\"gmail\", {\"name\": \"linear\", \"mcp\": true}]); optional filter for "
-                    "status. A bare slug is a hosted connector, so an MCP server needs the object "
-                    "form with \"mcp\": true."
+                    "status."
                 ),
             },
             "force": {

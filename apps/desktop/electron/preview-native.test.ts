@@ -184,6 +184,34 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('keeps the retained native guest viewport steady while its origin slides across the host edge', () => {
+  const first = mount(source)
+  const guest = created[0].webContents
+  const document = guest.state
+
+  for (const x of [1199, 1050, 900, 600]) {
+    send('layout', source, first.token, { ...bounds, x }, true)
+    expect(created[0].bounds).toEqual({ ...bounds, x })
+    expect(guest.viewportWidth).toBe(600)
+    expect(guest.state).toBe(document)
+    expect(guest.id).toBe(first.webContentsId)
+  }
+
+  expect(created).toHaveLength(1)
+  expect(guest.loadURL).toHaveBeenCalledOnce()
+})
+
+it('caps native guest allocation to its owning window while retaining finite coordinate validation', () => {
+  const first = mount(source)
+  send('layout', source, first.token, { x: 1199, y: 799, width: 12_000, height: 8000 }, true)
+  expect(created[0].bounds).toEqual({ x: 1199, y: 799, width: 1200, height: 800 })
+  expect(() => send('layout', source, first.token, { ...bounds, width: Infinity }, true)).toThrow(
+    'Invalid native Browser bounds'
+  )
+  send('layout', source, first.token, { ...bounds, width: -1, height: -1 }, true)
+  expect(created[0].visible).toBe(false)
+})
+
 it('keeps a pending website dialog and its page attached when pop-out is requested', () => {
   const first = mount(source)
   websiteDialog.pending = true

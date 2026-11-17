@@ -7,6 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type * as ConfigApi from '@/api/config'
 import { $settingsRequestProfile } from '@/store/settings-scope'
+import { $autoSpeakReplies, setAutoSpeakReplies } from '@/store/voice-prefs'
 import { stubMenuDomApis } from '@/test/jsdom'
 
 import type { ConfigSettings as ConfigSettingsType } from './config-settings'
@@ -242,5 +243,27 @@ describe('ConfigSettings autosave', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("Settings → Voice shows and drives Desktop read-aloud, apart from the profile's voice.auto_tts", async () => {
+    await setAutoSpeakReplies(true)
+    getHermesConfigRecord.mockResolvedValue({ voice: { auto_tts: false } })
+    getHermesConfigSchema.mockResolvedValue({ fields: { 'voice.auto_tts': { type: 'boolean' } } })
+
+    renderConfigSettings('voice')
+
+    const desktop = await screen.findByRole('switch', { name: 'Read replies aloud in this app' })
+    // Desktop is reading aloud even though this profile's messaging setting is off: show that.
+    expect(desktop.getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.click(desktop)
+    await vi.waitFor(() => expect($autoSpeakReplies.get()).toBe(false))
+
+    // The profile setting lives on Aino's existing speech tab and never moves the Desktop switch.
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Text to speech' }), { key: 'Enter' })
+    const profile = within(window.document.getElementById('setting-field-voice.auto_tts')!).getByRole('switch')
+    fireEvent.click(profile)
+    await vi.waitFor(() => expect(saveHermesConfig).toHaveBeenCalled())
+    expect($autoSpeakReplies.get()).toBe(false)
   })
 })

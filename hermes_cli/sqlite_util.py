@@ -45,7 +45,9 @@ def open_db(
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         initializing = path.stat().st_size == 0
-    except FileNotFoundError:
+    except OSError:
+        # An unavailable identity probe cannot prove the database was initialized.
+        # Take the creation lock and let the guarded SQLite open decide access.
         initializing = True
     # Coordinate first creation with SessionDB's invalid-header quarantine.
     startup = quarantine_cross_process_lock(path) if initializing else contextlib.nullcontext(True)

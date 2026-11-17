@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import { type MockBackendFixture, setupMockBackend, waitForAppReady } from './fixtures'
-import { sampleNativePaint, subscribeNativePaint } from './native-paint-frames'
+import { captureNativeWindow, type PaintFrame, sampleNativePaint, subscribeNativePaint } from './native-paint-frames'
 import { expect, test } from './test'
 
 let fixture: MockBackendFixture | null = null
@@ -29,11 +29,13 @@ test('reopening a native browser preserves its viewport and never paints a white
     extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true'
   })
   const { app, page } = fixture
-  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('13800000119')
-  await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
-  await page.getByRole('button', { name: 'Send code', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('textbox', { name: /^(?:手机号|Phone number)$/ }).fill('13800000119')
+  await page
+    .getByRole('checkbox', { name: /^(?:同意用户协议和隐私政策|Agree to the user agreement and privacy policy)$/ })
+    .check()
+  await page.getByRole('button', { name: /^(?:发送验证码|Send code)$/ }).click()
+  await page.getByRole('textbox', { name: /^(?:验证码|Verification code)$/ }).fill('1234')
+  await page.getByRole('button', { name: /^(?:登录|Sign in)$/ }).click()
   await waitForAppReady(fixture, 120_000)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1000, false))
   await page.emulateMedia({ reducedMotion: 'no-preference' })
@@ -61,7 +63,7 @@ test('reopening a native browser preserves its viewport and never paints a white
   const address = page.getByRole('textbox', { name: 'Address', exact: true })
   await address.fill(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`)
   await address.press('Enter')
-  const guest = page.locator('webview:visible')
+  const guest = page.locator('[data-native-preview]:visible')
   await expect(guest).toBeVisible()
 
   const guestId = await guest.evaluate(element =>
@@ -83,13 +85,10 @@ test('reopening a native browser preserves its viewport and never paints a white
     .poll(() => app.evaluate(({ webContents }, id) => webContents.fromId(id)!.executeJavaScript('innerWidth'), guestId))
     .toBeGreaterThan(640)
 
-  const flex = await panel.locator('..').evaluate(element => ({
-    basis: getComputedStyle(element).flexBasis,
-    grow: Number.parseFloat(getComputedStyle(element).flexGrow)
-  }))
+  const resizedPanel = await panel.boundingBox()
 
-  expect(flex.basis).toBe('0px')
-  expect(flex.grow).toBeGreaterThan(0)
+  expect(resizedPanel).not.toBeNull()
+  expect(resizedPanel!.width).toBeGreaterThan(640)
 
   const baseline = (await app.evaluate(
     ({ webContents }, id) => webContents.fromId(id)!.executeJavaScript('({marker:paintMarker,width:innerWidth})'),
@@ -106,8 +105,8 @@ test('reopening a native browser preserves its viewport and never paints a white
     const marker = element.ownerDocument.createElement('span')
     Object.assign(marker.style, {
       position: 'absolute',
-      right: '2px',
-      top: '2px',
+      right: '16px',
+      top: '16px',
       width: '8px',
       height: '8px',
       background: 'rgb(227,18,123)',
@@ -121,7 +120,7 @@ test('reopening a native browser preserves its viewport and never paints a white
   })
 
   const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-  const baselinePng = await page.screenshot()
+  const baselinePng = await captureNativeWindow(app, viewport)
   await info.attach('native-paint-baseline', { body: baselinePng, contentType: 'image/png' })
   expect(sampleNativePaint(baselinePng, region, viewport).matchingRatio).toBeGreaterThan(0.95)
   expect(sampleNativePaint(baselinePng, chrome, viewport, Date.now(), [227, 18, 123]).matchingRatio).toBeGreaterThan(
@@ -132,7 +131,8 @@ test('reopening a native browser preserves its viewport and never paints a white
     await page.getByRole('button', { name: 'Hide right sidebar', exact: true }).click()
     await expect(page.locator('[data-tool-track-motion]')).toHaveCount(0)
     await app.evaluate(({ webContents }, id) => webContents.fromId(id)!.executeJavaScript('paintWidths=[]'), guestId)
-    const stop = await subscribeNativePaint(page, region, chrome)
+    const stop = await subscribeNativePaint(app, page, region, chrome)
+    let frames: PaintFrame[] = []
 
     const geometry = await page
       .getByRole('button', { name: 'Show right sidebar', exact: true })
@@ -146,7 +146,7 @@ test('reopening a native browser preserves its viewport and never paints a white
         // Include the native viewport handoff after the 220ms track animation.
         while (Date.now() - started < 700) {
           await new Promise(requestAnimationFrame)
-          const host = document.querySelector('webview')!
+          const host = document.querySelector('[data-native-preview]')!
           const track = document.querySelector<HTMLElement>('[data-tree-track]:has(> [data-tool-panel])')!
           const bounds = track.getBoundingClientRect()
           samples.push({
@@ -159,8 +159,10 @@ test('reopening a native browser preserves its viewport and never paints a white
 
         return samples
       })
+      .finally(async () => {
+        frames = await stop()
+      })
 
-    const frames = await stop()
     const started = geometry[0].at
 
     const painted = frames.filter(frame => {

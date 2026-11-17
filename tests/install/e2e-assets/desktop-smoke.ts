@@ -95,17 +95,30 @@ export function predictSmokeHermesHome(
   return resolveDesktopHermesHome({ home, env: effective, platform, directoryExists: (): boolean => false, readWindowsHome: (): null => null })
 }
 
-/** Fresh installs require an empty home. Only an upgrade may reuse the exact
- * isolated home supplied by its caller; never seed another existing profile. */
-function assertSmokeHermesHome(home: string, options: SmokeOptions): void {
-  const ownUpgrade = options.phase === 'new' && path.resolve(home) === path.resolve(options.home)
-
-  if (ownUpgrade || !fs.existsSync(home)) {
-    return
-  }
+/** Fresh installs require an empty home; upgrades may reuse only their caller-owned home. */
+function requireEmptyHermesHome(home: string): void {
+  if (!fs.existsSync(home)) { return }
   const entries = fs.readdirSync(home)
   if (entries.length > 0) {
     throw new Error(`Predicted Hermes home ${home} is not empty (${entries.length} entries); refusing to seed an existing profile`)
+  }
+}
+
+function assertSmokeHermesHome(home: string, options: SmokeOptions): void {
+  const ownUpgrade = options.phase === 'new' && path.resolve(home) === path.resolve(options.home)
+  if (!ownUpgrade) { requireEmptyHermesHome(home) }
+}
+
+/** After an update the app reopens the profile the OLD phase left, so the post-update
+ * smoke expects state there. Reseeding it is safe only when the prediction is one of
+ * this run's own homes, never a real profile the resolver fell through to. */
+export function admitPredictedHermesHome(home: string, phase: SmokeOptions['phase'], runHomes: readonly string[]): void {
+  if (phase !== 'new') {
+    requireEmptyHermesHome(home)
+    return
+  }
+  if (!runHomes.some((runHome: string): boolean => path.relative(runHome, home) === '')) {
+    throw new Error(`Predicted Hermes home ${home} is not one of this run's homes (${runHomes.join(', ')}); refusing to seed it after the update`)
   }
 }
 
@@ -612,7 +625,10 @@ async function prepareAccountLaunch(options: SmokeOptions, launch: Launch) {
     const bundleEnv = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
     const predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
     // Check before the driver creates its sandbox folders inside this home.
-    if (predictedHome && !(preserved && options.phase !== 'installed')) { assertSmokeHermesHome(predictedHome, options) }
+    if (predictedHome) {
+      const admissionPhase = preserved && options.phase !== 'installed' ? 'new' : options.phase
+      admitPredictedHermesHome(predictedHome, admissionPhase, candidateSmokeHermesHomes(options.home, options['user-data']))
+    }
     return { account, preserved, predictedHome }
   } catch (error) {
     await account?.close()

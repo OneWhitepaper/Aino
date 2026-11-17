@@ -23,11 +23,11 @@ class _Clock:
 
 @pytest.fixture
 def image_profiles(tmp_path, monkeypatch):
-    import utils
+    from utils import files
     from hermes_cli.config import atomic_config_replace
 
     # Test config edits, not the unchanged file's racy digest settling after 2 s.
-    monkeypatch.setattr(utils, 'time', _Clock(time.time_ns()))
+    monkeypatch.setattr(files, 'time', _Clock(time.time_ns()))
     launch = tmp_path / '.hermes'
     work = launch / 'profiles' / 'work'
     work.mkdir(parents=True)

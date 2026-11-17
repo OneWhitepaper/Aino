@@ -24,7 +24,13 @@ import type { SessionInfo, UsageStats } from '@/types/hermes'
 
 import { $removedSessionIds, isSessionRemovalPending, tombstoneRowIds } from './session-removal'
 import type { SessionOwnerRoute, SessionOwnerScope } from './session-request-router'
-import { composerScopeForConnection, workspaceCwdKey } from './session-storage-scope'
+import {
+  COMPOSER_MODEL_KEY,
+  COMPOSER_MODEL_SOURCE_KEY,
+  COMPOSER_PROVIDER_KEY,
+  composerScopeForConnection,
+  workspaceCwdKey
+} from './session-storage-scope'
 import { clearUnreadOnOpen } from './session-unread-remote'
 
 type Updater<T> = T | ((current: T) => T)
@@ -36,9 +42,6 @@ export type ComposerModelSource = '' | 'default' | 'manual'
 // Model/provider/source are scoped to the remote (connection, profile) owner so
 // a provider authenticated on one profile cannot contaminate another profile's
 // session.create. Local/single-backend users retain the historical bare keys.
-const COMPOSER_MODEL_KEY = 'hermes.desktop.composer.model'
-const COMPOSER_PROVIDER_KEY = 'hermes.desktop.composer.provider'
-const COMPOSER_MODEL_SOURCE_KEY = 'hermes.desktop.composer.model-source'
 const COMPOSER_PLATFORM_OWNER_KEY = 'aino.desktop.composer.platform-owner'
 const COMPOSER_PLATFORM_ORIGIN_KEY = 'aino.desktop.composer.platform-origin'
 const COMPOSER_EFFORT_KEY = 'hermes.desktop.composer.reasoning-effort'
@@ -1532,10 +1535,12 @@ function rescopeComposerSelection(nextScope: string | null, preserveLegacyLocalS
 /** Publish an exact registry route before active-profile effects can persist a
  * forced default. A registry id is authority even while its descriptive
  * HermesConnection lookup is unavailable. */
+/** The composer storage scope of the (connection, profile) owner. */
+export const composerScopeForOwner = (connectionId: string, profile: string): string =>
+  `.registry.${encodeURIComponent(connectionId)}.${encodeURIComponent(profile.trim() || 'default')}`
+
 export function setComposerSelectionOwner(connectionId: string, profile: string): void {
-  rescopeComposerSelection(
-    `.registry.${encodeURIComponent(connectionId)}.${encodeURIComponent(profile.trim() || 'default')}`
-  )
+  rescopeComposerSelection(composerScopeForOwner(connectionId, profile))
 }
 
 /** Fail closed while a successful legacy profile activation has no descriptor. */
@@ -1778,16 +1783,8 @@ export const setCurrentProvider = (next: Updater<string>) => {
   }
 }
 
-/** Move the visible model/provider without claiming it as the composer's sticky
- *  selection.
- *
- *  For values that come from the RUNTIME rather than the user: the periodic
- *  `session.info` heartbeat's resolved model/provider (e.g. the generic `custom`
- *  billing class a named provider resolves to). Persisting those through
- *  `setCurrentModel`/`setCurrentProvider` overwrote the user's actual composer
- *  pick in localStorage on every heartbeat, so a later new chat followed the
- *  last-seen runtime class instead of the selection or the Settings default.
- */
+/** Runtime/fallback paint keeps the saved composer route intact: a named custom provider's
+ *  runtime reports its generic class, which cannot safely launch another session. */
 export const setCurrentModelTransient = (next: Updater<string>) => updateAtom($currentModel, next)
 export const setCurrentProviderTransient = (next: Updater<string>) => updateAtom($currentProvider, next)
 
@@ -1796,6 +1793,9 @@ export const getCurrentModelSource = (): ComposerModelSource => {
 
   return source === 'default' || source === 'manual' ? source : ''
 }
+
+/** Which owner's saved pick the composer reads now; fences a write that outlives an await. */
+export const getComposerSelectionScope = (): null | string => composerSelectionScope
 
 // Reactive mirror of the persisted source so UI (the composer pill's
 // override badge) can subscribe. The getter above stays storage-backed —

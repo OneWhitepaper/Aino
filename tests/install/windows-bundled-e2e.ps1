@@ -1,4 +1,4 @@
-# Native package replacement acceptance. Never run on a developer desktop.
+﻿# Native package replacement acceptance. Never run on a developer desktop.
 param(
     [string]$ManifestUrl,
     [string]$CandidateManifest,
@@ -15,6 +15,7 @@ if ($CandidateManifest -and $env:AINO_PRIVATE_CANDIDATE -cne 'true') { throw 'Lo
 $Work = Join-Path $env:RUNNER_TEMP 'hermes-bundled-update'
 if (Test-Path $Work) { throw "Refusing to reuse $Work" }
 $Proof = Join-Path $Work 'proof'
+$LegStart = Get-Date
 New-Item -ItemType Directory -Path $Proof -Force | Out-Null
 function Write-AcceptanceStage([string]$Stage) {
     Write-Host "[native-e2e] $([DateTime]::UtcNow.ToString('o')) $Stage"
@@ -126,8 +127,11 @@ $acceptance = $null
 $nativeEnvironment = @{}
 $recovery = @{ preparation=@{ ok=$false; status='not-run' }; cancellation=@{ ok=$false; status='not-run' } }
 $recoverySettings = $null
+$passed = $false
+$loopbackExempted = $false
 $publishedZipMigration = @{ tested=$false; status='not-run'; release='v0.1.5' }
 try {
+    $loopbackExempted = & (Join-Path $Assets 'windows-appinstaller-loopback.ps1') -Action Add
     Write-AcceptanceStage 'Starting the account data fixture and released ZIP chat'
     $mock = Start-DesktopJourneyMock $Node $Assets $Work $env:HERMES_HOME $Proof
     Run-Node @($StateHelper, 'seed', '--root', $env:HERMES_DESKTOP_USER_DATA_DIR, '--python', $fixturePython,
@@ -323,15 +327,25 @@ try {
     $recovery.cancellation = Invoke-NativeCancelRecovery $recoverySettings `
         { Descriptor $m.old 'old.msixbundle' } { Descriptor $m.new 'new.msixbundle' } `
         { Installed $m.old | Out-Null } { param($phase) Verify-UserState $phase }
+    $passed = $recovery.preparation.ok -and $recovery.cancellation.ok
     Write-AcceptanceStage "Cancellation and reopen finished: ok=$($recovery.cancellation.ok)"
 } catch {
     if (-not $publishedZipMigration.tested) { $publishedZipMigration.status='failed'; $publishedZipMigration.error=$_.Exception.Message }
     throw
 } finally {
+    if (-not $passed) {
+        try { & (Join-Path $Assets 'windows-update-evidence.ps1') -OutDir (Join-Path $Proof 'update-evidence') -Since $LegStart -Identity $m.old.identity }
+        catch { Write-Host "  [evidence] collection failed: $($_.Exception.Message)" }
+    }
     Restore-NativeRelaunchEnvironment $nativeEnvironment
     if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -ErrorAction SilentlyContinue }
     if ($oldDriver) { Stop-OutsideRunnerJob $oldDriver }
     if (-not $server.HasExited) { Stop-Process -Id $server.Id -ErrorAction SilentlyContinue }
+    if ($loopbackExempted) {
+        # A teardown error must not replace the leg's own or skip the package removal below.
+        try { & (Join-Path $Assets 'windows-appinstaller-loopback.ps1') -Action Remove }
+        catch { Write-Host "::warning::$($_.Exception.Message)" }
+    }
     # Disposable runner teardown only, scoped to the package installed by this leg.
     if ($installed) { Remove-DesktopJourneyPackage $m.old.identity }
     $recovery | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Proof 'recovery-coverage.json')

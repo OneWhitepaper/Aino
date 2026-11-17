@@ -19,11 +19,11 @@ def _open_during_sidecar_retirement(tmp_path, monkeypatch):
     assert sidecar.exists()
     chmod = os.chmod
 
-    def retire_before_chmod(target, mode):
+    def retire_before_chmod(target, mode, **kwargs):
         if target == sidecar:
             previous.close()
             assert not sidecar.exists()
-        return chmod(target, mode)
+        return chmod(target, mode, **kwargs)
 
     monkeypatch.setattr(os, "chmod", retire_before_chmod)
     try:

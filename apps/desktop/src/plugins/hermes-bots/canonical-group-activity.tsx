@@ -1,5 +1,5 @@
 import { Button, Codicon, GlyphSpinner } from '@hermes/plugin-sdk'
-import { Fragment, type MouseEvent, type ReactNode, useEffect, useState } from 'react'
+import { Fragment, type MouseEvent, type ReactNode, useMemo, useRef } from 'react'
 
 import type { CanonicalGroupEvent } from './canonical-group-history'
 import { CanonicalMemberAvatar, useCanonicalMembers } from './canonical-group-members'
@@ -271,37 +271,12 @@ export interface CanonicalActivityLabels extends RoomStatusLabels {
   memberWorking: string
 }
 
-type BusyStatus = Extract<MemberStatus, { kind: 'stalled' | 'working' }>
-
 export const canonicalMemberName = (member: CanonicalRoomMember) =>
   member.display_name || member.handle || member.member_id
 const avatarName = (member: CanonicalRoomMember) => member.profile || member.handle || member.member_id
 
-/** Seconds since the epoch, ticking once a second while `live` (elapsed times in the chips). */
-export function useNowSeconds(live: boolean): number {
-  const [now, setNow] = useState(() => Date.now() / 1000)
-
-  useEffect(() => {
-    setNow(Date.now() / 1000)
-
-    if (!live) {
-      return
-    }
-
-    const timer = setInterval(() => setNow(Date.now() / 1000), 1000)
-
-    return () => clearInterval(timer)
-  }, [live])
-
-  return now
-}
-
 /** The coarse phase the roster has always exposed (`data-phase`); outcomes read as idle. */
-const PHASE: Partial<Record<MemberStatus['kind'], string>> = {
-  working: 'working',
-  stalled: 'working',
-  queued: 'queued'
-}
+const PHASE: Partial<Record<MemberStatus['kind'], string>> = { working: 'working', queued: 'queued' }
 
 const statusOf = (statuses: Map<string, MemberStatus>, member: CanonicalRoomMember): MemberStatus =>
   statuses.get(member.member_id) ?? { kind: 'idle' }
@@ -369,7 +344,7 @@ export function CanonicalGroupTyping({
             key={member.member_id}
             labels={labels}
             name={canonicalMemberName(member)}
-            status={status as BusyStatus}
+            status={status}
           />
         ) : null
       })}
@@ -420,20 +395,34 @@ export function CanonicalGroupCycle({
   )
 }
 
+/** `value`, or the last one while equal by content. Each read builds new objects; the room's memos key on
+ *  identity. Compares only when `value` itself is new (a read), never on a re-render that reuses it. */
+export function useSameValue<T>(value: T): T {
+  const kept = useRef({ given: value, shown: value })
+
+  if (kept.current.given !== value) {
+    kept.current = {
+      given: value,
+      shown: JSON.stringify(value) === JSON.stringify(kept.current.shown) ? kept.current.shown : value
+    }
+  }
+
+  return kept.current.shown
+}
+
 /** Every member's status, the room's cycle and whether it works, from one poll's state + log. Outcomes are
- *  read per thread; the round comes from the live tasks' own thread (`replyThread`'s when it has work). */
+ *  read per thread; the round comes from the live tasks' own thread (`replyThread`'s when it has work).
+ *  Clock-free: it re-derives when the log or the live rows change, never as time passes. */
 export function useCanonicalRoomLive(
   events: CanonicalGroupEvent[],
   driver: CanonicalDriverStatus | undefined,
   members: CanonicalRoomMember[],
   replyThread?: string
 ) {
-  const activity = driver?.member_activity
-  const anyLive = !!activity?.some(row => row.status !== 'queued')
-  const now = useNowSeconds(anyLive)
+  const activity = useSameValue(driver?.member_activity)
   const log = events as RoomLogEvent[]
-  const focus = focusThread(log, replyThread)
-  const outcomes = memberOutcomes(log)
+  const focus = useMemo(() => focusThread(log, replyThread), [log, replyThread])
+  const outcomes = useMemo(() => memberOutcomes(log), [log])
 
   const stopConfirmed =
     !!driver?.counts &&
@@ -444,14 +433,20 @@ export function useCanonicalRoomLive(
       ([status, count]) => count === 0 || ['settled', 'cancelled', 'failed'].includes(status)
     )
 
-  const cycle = roomCycle(log, activity, driver?.max_rounds, focus, stopConfirmed)
+  const cycle = useMemo(
+    () => roomCycle(log, activity, driver?.max_rounds, focus, stopConfirmed),
+    [log, activity, driver?.max_rounds, focus, stopConfirmed]
+  )
+
+  const statuses = useMemo(
+    () => new Map(members.map(member => [member.member_id, memberStatus(member.member_id, activity, outcomes)])),
+    [members, activity, outcomes]
+  )
 
   return {
     // "Settled" isn't true while a turn waits on a person: its Retry and Discard say what's next.
     cycle: cycle?.kind === 'settled' && driver?.pending_actions?.length ? null : cycle,
-    statuses: new Map(
-      members.map(member => [member.member_id, memberStatus(member.member_id, activity, outcomes, now)])
-    ),
+    statuses,
     working: !!driver?.working || !!activity?.length
   }
 }

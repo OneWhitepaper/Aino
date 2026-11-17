@@ -514,7 +514,9 @@ Supported models: `MiniMax-M2.7` (main) and `MiniMax-M2.7-highspeed` (wired as t
 
 Use the NVIDIA NIM provider to access Nemotron and other open-source models through NVIDIA’s hosted service or a local NIM endpoint. Model identifiers for hosted endpoints and instructions for local deployment are available at [build.nvidia.com/models](https://build.nvidia.com/models).
 
-:::note The examples below use Nemotron 3.5 Super VL, which supports text and image inputs, reasoning, and tool calls.
+:::note Nemotron 3.5 Super VL
+The examples below use Nemotron 3.5 Super VL, which supports text and image inputs, reasoning, and tool calls.
+:::
 
 #### Cloud (build.nvidia.com)
 
@@ -530,7 +532,9 @@ Then start a chat:
 hermes chat --provider nvidia --model nvidia/nemotron-3.5-super-vl-120b-a12b
 ```
 
-:::note Hermes automatically includes the NIM billing-origin header in requests to `build.nvidia.com`, ensuring consumption is attributed to the correct origin in NVIDIA’s billing dashboard. No additional configuration is required.
+:::info BILLING
+Hermes automatically includes the NIM billing-origin header in requests to `build.nvidia.com`, ensuring consumption is attributed to the correct origin in NVIDIA’s billing dashboard. No additional configuration is required.
+:::
 
 #### Local NIM
 
@@ -541,7 +545,7 @@ NVIDIA_API_KEY=local-no-auth
 NVIDIA_BASE_URL=http://localhost:8000/v1
 ```
 
-:::note Use `local-no-auth` as a placeholder if your endpoint does not require authentication. Otherwise, provide its API key.
+Use `local-no-auth` as a placeholder if your endpoint does not require authentication. Otherwise, provide its API key.
 
 Then start a chat using the model served by your endpoint:
 
@@ -550,6 +554,10 @@ hermes chat --provider nvidia --model nvidia/nemotron-3.5-super-vl-120b-a12b
 ```
 
 Local NIM endpoints expose the same OpenAI-compatible chat completions API as NVIDIA’s hosted service. To switch endpoints, update `NVIDIA_BASE_URL` and adjust the API key and model name as needed.
+
+:::info VISION
+If your local NIM model isn't in models.dev catalog and supports vision, set `model.supports_vision: true` for native image support — see [Native vision for custom-provider models](#named-custom-providers).
+:::
 
 #### Set the default model
 
@@ -560,6 +568,10 @@ model:
   provider: "nvidia"
   default: "nvidia/nemotron-3.5-super-vl-120b-a12b"
 ```
+
+:::info CONTACT
+For issues with the Nemotron models themselves, see the [NVIDIA Nemotron developer forum](https://forums.developer.nvidia.com/c/ai-data-science/nvidia-nemotron/669).
+:::
 
 ### GMI Cloud
 
@@ -1329,6 +1341,25 @@ When a saved endpoint uses a built-in provider's exact id, select it with the ex
 `custom:` namespace: `custom:deepseek` selects `providers.deepseek`, while `deepseek` selects
 the official DeepSeek API and its own credential. The model picker lists both independently.
 A provider block without an endpoint remains metadata for the built-in provider.
+
+**Responses message IDs on proxies.** Some relays bind returned assistant message IDs to one
+upstream connection or account, so replaying them on a later tool round fails even though the
+message content is valid. Set `responses_replay_item_ids: false` on that provider entry to omit
+only the replayed message IDs. Text, message phase/status, encrypted reasoning and tool-call
+pairing are preserved. The same setting works on legacy `custom_providers:` entries. It accepts
+YAML booleans only (`false` / `true`, without quotes); omitting it preserves the endpoint's default.
+It is a local transport setting, so put it beside `transport`, never inside `extra_body`.
+
+```yaml
+providers:
+  my-relay:
+    api: https://relay.example/v1
+    transport: codex_responses
+    responses_replay_item_ids: false
+```
+
+Existing desktop conversations keep their frozen provider configuration. Explicitly reselect the
+provider/model in that conversation after changing this setting; new conversations use it directly.
 
 #### Command-minted credentials (`key_cmd`)
 

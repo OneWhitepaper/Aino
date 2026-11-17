@@ -48,14 +48,17 @@ test('opens summary outputs in separate tabs and returns to an existing output t
   const { page, app } = fixture
   const rendererErrors: string[] = []
   page.on('pageerror', error => rendererErrors.push(error.message))
-  const agreement = page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true })
+
+  const agreement = page.getByRole('checkbox', {
+    name: /^(?:同意用户协议和隐私政策|Agree to the user agreement and privacy policy)$/
+  })
 
   await expect(agreement).toBeVisible({ timeout: 120_000 })
-  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('13800000102')
+  await page.getByRole('textbox', { name: /^(?:手机号|Phone number)$/ }).fill('13800000102')
   await agreement.check()
-  await page.getByRole('button', { name: 'Send code', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('button', { name: /^(?:发送验证码|Send code)$/ }).click()
+  await page.getByRole('textbox', { name: /^(?:验证码|Verification code)$/ }).fill('1234')
+  await page.getByRole('button', { name: /^(?:登录|Sign in)$/ }).click()
   await waitForAppReady(fixture, 120_000)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1000, false))
   const composer = page.locator('[data-slot="composer-rich-input"]:visible')
@@ -63,7 +66,7 @@ test('opens summary outputs in separate tabs and returns to an existing output t
   await composer.fill('Create two output pages for this test.')
   await composer.press('Enter')
   await expect(page.getByText('Prepared two output pages.', { exact: true })).toBeVisible({ timeout: 60_000 })
-  await page.getByRole('button', { name: 'Session resources', exact: true }).click()
+  await page.getByRole('button', { name: 'Session summary', exact: true }).click()
   const summary = page.locator('[data-slot="summary-pane"]:visible')
 
   await summary.getByRole('button', { name: 'Open source: first.html', exact: true }).click()
@@ -78,6 +81,9 @@ test('opens summary outputs in separate tabs and returns to an existing output t
   await profileConsent.getByRole('button', { name: 'Not now', exact: true }).click()
   await expect(profileConsent).toBeHidden()
 
+  await expect(summary).toBeHidden()
+  await page.getByRole('button', { name: 'Session summary', exact: true }).click()
+  await expect(summary).toBeVisible()
   await summary.getByRole('button', { name: 'Open source: second.html', exact: true }).click()
   const secondTab = panel.locator('[data-tree-tab]').filter({ hasText: 'Second output' })
 

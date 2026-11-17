@@ -110,7 +110,7 @@ def run(repo: Path, base: str, head: str | None, as_json: bool = False,
     measurer = Measurer(repo, ruff, known_env=gitio.known_env_names(repo, base))
     base_m = measurer.measure(base, base_paths)
     head_m = measurer.measure(head, head_paths)
-    findings = compare(base_m, head_m, changes)
+    findings = compare(base_m, head_m, changes, gitio.tree_moves(repo, head))
     if accepted_upstream:
         _classify_inherited(repo, base, head, accepted_upstream, measurer, findings)
     apply_allows(findings, head_m)
@@ -153,7 +153,7 @@ def _classify_inherited(repo, base, head, upstream, measurer, findings):
     changes = gitio.changed_files(repo, upstream, head)
     old = measurer.measure(upstream, sorted({c.old for c in changes if c.old and in_scope(c.old)}))
     new = measurer.measure(head, sorted({c.new for c in changes if c.new and in_scope(c.new)}))
-    regressions = compare(old, new, changes)
+    regressions = compare(old, new, changes, gitio.tree_moves(repo, head))
     keys = {(f.path, f.rule, f.scope, f.line) for f in regressions}
     for finding in findings:
         if finding.rule != "MEASURE" and (finding.path, finding.rule, finding.scope, finding.line) not in keys:
