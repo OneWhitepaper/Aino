@@ -96,4 +96,14 @@ assertions remain exact; scroll retention is compared within one CSS pixel.
 The payload-bundle fixture now includes the existing `BuildRequest.windows_zip`
 default introduced upstream, with 15 relevant packaging contracts passing.
 
+The original serial catalog run passed 362 entries before its 60-minute limit.
+The import is therefore validated in deterministic parallel shards using the
+same exact-release validator and scanners, with complete coverage required.
+The newly imported optional `calm-mode` discovery entry is not listed: its own
+safety-detection regular expression contains a filesystem-format command name
+that the upstream scanner rejects. The official repository's only later
+revision adds artwork and leaves that runtime unchanged. This is a lexical
+false positive, but the scanner is retained without a bypass. Existing Aino
+catalog entries, installed plugins and plugin installation remain unchanged.
+
 No production deployment or installer publication is part of this upgrade.
