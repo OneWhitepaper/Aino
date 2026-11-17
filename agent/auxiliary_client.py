@@ -1419,14 +1419,14 @@ class _CodexCompletionsAdapter:
             _responses_tools,
             _role_message_item,
             _wire_model_identity,
-            classify_responses_route,
+            auxiliary_responses_route,
         )
         from agent.transports.codex import _alias_wire_tools
         model = kwargs.get("model", self._model)
         wire_model = _wire_model_identity(model)
         host = str(getattr(self._client, "base_url", "") or "")
         # Same route classifier as the main transport, so the issuer stamp matches what it minted.
-        route = classify_responses_route(SimpleNamespace(provider=None, base_url=host))
+        route = auxiliary_responses_route(self._client)
         is_xai = route.is_xai_responses
         tools = kwargs.get("tools")
         if tools:
@@ -1473,12 +1473,8 @@ class _CodexCompletionsAdapter:
                     for tc in msg["tool_calls"]
                 ]}
             replay_messages.append(msg)
-        # Endpoints that bind replayed codex_message_items ids to a backend connection 401 on a stale id
-        # (``replay_item_ids=False``) — same guard as build_kwargs. Aux calls
-        # never send ``context_management`` (main-turn feature): no compaction checkpoint.
-        # Auxiliary calls (context compression, flush_memories, MoA aggregation) go through this adapter
-        # instead of agent/transports/codex.py's build_kwargs, so they need the same guard applied
-        # independently. See #32716.
+        # Main and auxiliary requests share the relay's message-ID replay policy (#32716).
+        # Aux never sends context_management, so it cannot replay a compaction checkpoint.
         # Aux requests run their own model; stamp/filter reasoning provenance against it, not the main agent's.
         issuer_kind = _classify_responses_issuer(base_url=host, **route._asdict())
         input_items = _chat_messages_to_responses_input(
@@ -5091,6 +5087,7 @@ def _resolve_named_custom_branch(req: _ResolveRequest) -> Optional[_ResolveResul
             req, AnthropicAuxiliaryClient(real_client, final_model, custom_key, custom_base,
                                           is_oauth=anthropic_route_is_oauth(custom_base, custom_key)), final_model)
     client = _named_custom_openai_wire_client(custom_base, custom_key, entry_headers)
+    client._hermes_aux_effective_provider = req.original_provider or provider
     # codex_responses, or auto-detect via _wrap_transport (which reads the task-level api_mode).
     if entry_api_mode == "codex_responses":
         client = CodexAuxiliaryClient(client, final_model)

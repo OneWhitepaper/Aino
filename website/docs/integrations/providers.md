@@ -1330,6 +1330,25 @@ When a saved endpoint uses a built-in provider's exact id, select it with the ex
 the official DeepSeek API and its own credential. The model picker lists both independently.
 A provider block without an endpoint remains metadata for the built-in provider.
 
+**Responses message IDs on proxies.** Some relays bind returned assistant message IDs to one
+upstream connection or account, so replaying them on a later tool round fails even though the
+message content is valid. Set `responses_replay_item_ids: false` on that provider entry to omit
+only the replayed message IDs. Text, message phase/status, encrypted reasoning and tool-call
+pairing are preserved. The same setting works on legacy `custom_providers:` entries. It accepts
+YAML booleans only (`false` / `true`, without quotes); omitting it preserves the endpoint's default.
+It is a local transport setting, so put it beside `transport`, never inside `extra_body`.
+
+```yaml
+providers:
+  my-relay:
+    api: https://relay.example/v1
+    transport: codex_responses
+    responses_replay_item_ids: false
+```
+
+Existing desktop conversations keep their frozen provider configuration. Explicitly reselect the
+provider/model in that conversation after changing this setting; new conversations use it directly.
+
 #### Command-minted credentials (`key_cmd`)
 
 Vision, thinking, and native local-model capability probes materialize the same

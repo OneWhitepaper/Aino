@@ -121,6 +121,8 @@ def _lift_common_custom_fields(entry: dict[str, Any], result: dict[str, Any], *,
     _lift_extra_headers(entry, result)
     if api_mode:
         result["api_mode"] = api_mode
+    if isinstance(entry.get("responses_replay_item_ids"), bool):
+        result["responses_replay_item_ids"] = entry["responses_replay_item_ids"]
 
     _lift_model_capabilities(entry, None, result)
 
@@ -585,6 +587,8 @@ def _apply_custom_provider_extras(custom_provider: dict[str, Any], target_model:
     if model_name:
         result["model"] = model_name
     _lift_model_capabilities(custom_provider, model_name, result)
+    if isinstance(custom_provider.get("responses_replay_item_ids"), bool):
+        result["responses_replay_item_ids"] = custom_provider["responses_replay_item_ids"]
 
     if custom_provider.get("extra_headers"):
         result["extra_headers"] = dict(custom_provider["extra_headers"])

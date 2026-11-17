@@ -33,24 +33,56 @@ class ResponsesEndpointQuirks(NamedTuple):
 _GENERIC_ENDPOINT = ResponsesEndpointQuirks()
 
 
-def responses_endpoint_quirks(base_url: Any) -> ResponsesEndpointQuirks:
-    """Quirks for *base_url*; the generic wire when no registered profile claims it (or none is installed).
-    Pure function of the URL and the registry, so every turn replays the same bytes for the same history."""
+def responses_endpoint_quirks(base_url: Any, *, replay_item_ids: Optional[bool] = None) -> ResponsesEndpointQuirks:
+    """Profile quirks for *base_url*, with an optional frozen named-provider replay override.
+
+    An absent override preserves the profile/default wire. This never reads live configuration,
+    so an existing session's endpoint options remain stable until an explicit model selection.
+    """
     from providers import profile_for_host
 
     profile = profile_for_host(str(base_url or ""))
-    if profile is None:
-        return _GENERIC_ENDPOINT
-    return ResponsesEndpointQuirks(
+    endpoint = _GENERIC_ENDPOINT if profile is None else ResponsesEndpointQuirks(
         replay_item_ids=profile.responses_replay_item_ids, prompt_cache_key=profile.responses_prompt_cache_key,
         issuer_kind=profile.responses_issuer_kind, native_compaction=profile.responses_native_compaction,
         profile_reasoning=profile.responses_profile_reasoning,
     )
+    return endpoint._replace(replay_item_ids=replay_item_ids) if isinstance(replay_item_ids, bool) else endpoint
 
 
-def drops_replay_item_ids(base_url: Any) -> bool:
-    """Preflight flag: True when *base_url*'s endpoint binds replayed message-item ids to a connection."""
-    return not responses_endpoint_quirks(base_url).replay_item_ids
+def _configured_replay_item_ids(agent: Any, base_url: str) -> Optional[bool]:
+    """Read the owning named declaration, never a different account sharing its URL."""
+    from hermes_cli.providers import custom_provider_aliases
+    from hermes_cli.runtime_provider_custom import _shadowed_by_builtin
+
+    provider = getattr(agent, "requested_provider", None) or getattr(agent, "provider", None)
+    if not isinstance(provider, str) or not provider:
+        return None
+    provider = provider.strip().lower()
+    if provider == "custom" or _shadowed_by_builtin(provider):
+        return None
+    target = normalize_route_base_url(base_url)
+    for entry in getattr(agent, "_custom_providers", None) or ():
+        if not isinstance(entry, dict) or normalize_route_base_url(entry.get("base_url")) != target:
+            continue
+        aliases = custom_provider_aliases(str(entry.get("name") or ""), str(entry.get("provider_key") or ""))
+        if provider not in aliases:
+            continue
+        value = entry.get("responses_replay_item_ids")
+        return value if isinstance(value, bool) else None
+    return None
+
+
+def auxiliary_responses_route(client: Any) -> ResponsesRouteFlags:
+    """Auxiliary routes read their profile's declaration, as their other provider options do."""
+    from hermes_cli.config import get_compatible_custom_providers
+
+    provider = getattr(client, "_hermes_aux_effective_provider", None)
+    return classify_responses_route(SimpleNamespace(
+        provider=provider if isinstance(provider, str) and provider else "custom",
+        base_url=str(getattr(client, "base_url", "") or ""),
+        _custom_providers=get_compatible_custom_providers(),
+    ))
 
 
 def _classify_responses_issuer(
@@ -824,7 +856,7 @@ def classify_responses_route(agent: Any) -> ResponsesRouteFlags:
     return ResponsesRouteFlags(
         is_codex_backend=provider == "openai-codex" or (_host_is("chatgpt.com") and "/backend-api/codex" in lower),
         is_xai_responses=provider in {"xai", "xai-oauth"} or hostname == "api.x.ai",
-        endpoint=responses_endpoint_quirks(base_url),
+        endpoint=responses_endpoint_quirks(base_url, replay_item_ids=_configured_replay_item_ids(agent, base_url)),
     )
 
 

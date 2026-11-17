@@ -1091,6 +1091,24 @@ custom_providers:
 
 ### 命名自定义提供商
 
+**Responses 代理的消息 ID。** 部分代理把返回的助手消息 ID 绑定到一次上游连接或账号，
+后续工具轮次重放这些 ID 时可能被拒绝。可在对应提供商条目中设置
+`responses_replay_item_ids: false`，仅省略重放消息的 ID，继续保留正文、消息阶段和状态、
+加密推理以及工具调用与结果的配对。该字段也适用于旧版 `custom_providers:`，只接受不带
+引号的 YAML 布尔值 `false` / `true`；不填写时保持端点默认行为。它是本地传输设置，
+应与 `transport` 同级，不能放进发送给服务器的 `extra_body`。
+
+```yaml
+providers:
+  my-relay:
+    api: https://relay.example/v1
+    transport: codex_responses
+    responses_replay_item_ids: false
+```
+
+桌面端已有会话保留创建时冻结的提供商配置。修改后，请在该会话中明确重新选择对应
+提供商和模型；新会话直接使用新配置。
+
 如果你使用多个自定义端点（例如本地开发服务器和远程 GPU 服务器），可以在 `config.yaml` 中将它们定义为命名自定义提供商：
 
 ```yaml

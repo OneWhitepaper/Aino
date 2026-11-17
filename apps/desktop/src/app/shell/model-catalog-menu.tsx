@@ -237,6 +237,14 @@ type KbRow =
   | { family: ModelFamily; key: string; kind: 'family'; provider: ModelOptionProvider }
   | { key: string; kind: 'moa'; preset: string }
 
+function isCurrentCustomFamily(current: ModelChoice, family: ModelFamily, provider: ModelOptionProvider): boolean {
+  return (
+    isCustomModelProvider(provider) &&
+    catalogProviderMatches(provider, current.provider) &&
+    (current.model === family.id || current.model === family.fastId)
+  )
+}
+
 function queryErrorMessage(error: unknown): null | string {
   return error ? (error instanceof Error ? error.message : String(error)) : null
 }
@@ -533,7 +541,15 @@ export function ModelCatalogMenu({
       // id, so honor the remembered preset by selecting that sibling. Param-fast
       // is applied through setOptions below instead.
       const variantFast = !(caps?.fast ?? false) && !!family.fastId
-      const targetId = variantFast && preset.fast === true ? family.fastId! : family.id
+      // Re-picking a custom route adopts its updated connection without changing
+      // this chat's live variant or options to an older remembered preset.
+      const reselectCurrent = isCurrentCustomFamily(current, family, provider)
+
+      const targetId = reselectCurrent
+        ? current.model
+        : variantFast && preset.fast === true
+          ? family.fastId!
+          : family.id
 
       if (
         (await controller.select(targetId, provider.slug)) === false ||
@@ -544,14 +560,17 @@ export function ModelCatalogMenu({
         return false
       }
 
-      const tier = supportedPresetTier(preset, caps)
-      controller.applyPreset(
-        {
-          effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
-          ...(controller.allowSpeed !== false ? { serviceTier: tier, fast: tier !== 'normal' } : {})
-        },
-        { model: family.id, provider: provider.slug }
-      )
+      if (!reselectCurrent) {
+        const tier = supportedPresetTier(preset, caps)
+        controller.applyPreset(
+          {
+            effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
+            ...(controller.allowSpeed !== false ? { serviceTier: tier, fast: tier !== 'normal' } : {})
+          },
+          { model: family.id, provider: provider.slug }
+        )
+      }
+
       closeMenu()
 
       return true
@@ -733,7 +752,7 @@ export function ModelCatalogMenu({
       return
     }
 
-    if (!rowIsCurrent(row)) {
+    if (!rowIsCurrent(row) || isCustomModelProvider(row.provider)) {
       void selectFamily(row.family, row.provider)
     } else {
       closeMenu()
@@ -1372,7 +1391,7 @@ function ModelFamilyRow({
       return
     }
 
-    if (isCurrent) {
+    if (isCurrent && !isCustomModelProvider(provider)) {
       closeMenu()
     } else {
       void onSelect(family, provider)

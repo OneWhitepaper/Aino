@@ -751,7 +751,7 @@ class ResponsesApiTransport(ProviderTransport):
 
         from agent.codex_responses_adapter import responses_endpoint_quirks
 
-        endpoint = responses_endpoint_quirks(params.get("base_url"))
+        endpoint = params.get("endpoint") or responses_endpoint_quirks(params.get("base_url"))
         is_codex_backend = params.get("is_codex_backend") is True
         is_xai_responses = params.get("is_xai_responses") is True
         # Foundry 400s on encrypted-reasoning replay only in the post-tool follow-up turn.

@@ -1426,7 +1426,7 @@ def _build_codex_kwargs(agent, api_messages, tools_for_api, reasoning_config, re
     return agent._get_transport().build_kwargs(model=agent.model,
         messages=agent._prepare_messages_for_non_vision_model(api_messages), tools=tools_for_api,
         reasoning_config=reasoning_config, session_id=getattr(agent, "session_id", None),
-        cache_scope_id=cache_scope_id, base_url=agent.base_url,
+        cache_scope_id=cache_scope_id, base_url=agent.base_url, endpoint=endpoint,
         max_tokens=ephemeral_out if ephemeral_out is not None else agent.max_tokens,
         timeout=agent._resolved_api_call_timeout(), request_overrides=request_overrides,
         provider=getattr(agent, "provider", None),

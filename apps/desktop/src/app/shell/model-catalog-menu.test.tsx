@@ -373,6 +373,42 @@ function renderMenu(current: Partial<ModelMenuController['current']> = {}, host:
   return select
 }
 
+it.each(['click', 'Enter'])(
+  'reselects a current custom catalog row without resetting live options on %s',
+  async gesture => {
+    const provider = {
+      is_user_defined: true,
+      models: ['gpt-6.1-sol', 'gpt-6.1-sol-fast'],
+      name: 'Custom relay',
+      slug: 'zorvcc-gpt'
+    }
+
+    getGlobalModelOptions.mockResolvedValue({ providers: [provider] })
+    const applyPreset = vi.fn()
+
+    const select = renderMenu(
+      { effort: 'high', fast: true, model: 'gpt-6.1-sol-fast', provider: provider.slug },
+      { applyPreset, presetFor: () => ({ effort: 'low', fast: false }) }
+    )
+
+    const row = (await screen.findByText('GPT-6.1-sol')).closest('[role="menuitem"]')!
+
+    expect(row.querySelector('.codicon-check')).toBeTruthy()
+    expect(select).not.toHaveBeenCalled()
+
+    if (gesture === 'click') {
+      fireEvent.click(row)
+    } else {
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Search models' }), { key: 'Enter' })
+    }
+
+    await vi.waitFor(() => expect(select).toHaveBeenCalledExactlyOnceWith('gpt-6.1-sol-fast', provider.slug))
+    await vi.waitFor(() => expect(closeMenu).toHaveBeenCalledOnce())
+    expect(applyPreset).not.toHaveBeenCalled()
+    expect(row.querySelector('.codicon-check')).toBeTruthy()
+  }
+)
+
 // Curation is ONE global preference, so it belongs to the catalog rather than
 // to whichever surface mounted it. If a host had to opt in, the composer and
 // the kanban board would end up disagreeing about what "my models" means —

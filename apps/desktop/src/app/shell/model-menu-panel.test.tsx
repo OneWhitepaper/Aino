@@ -487,6 +487,42 @@ it('awaits custom dropdown picks, rejects duplicates and keeps a failed pick ope
   expect(close).not.toHaveBeenCalled()
 })
 
+it.each(['click', 'Enter'])('reselects the active custom model through the session controller on %s', async gesture => {
+  const provider = {
+    is_user_defined: true,
+    models: ['gpt-6.1-sol', 'gpt-6.1-sol-fast'],
+    name: 'Custom relay',
+    slug: 'zorvcc-gpt'
+  }
+
+  $currentProvider.set(provider.slug)
+  $currentModel.set('gpt-6.1-sol-fast')
+  getGlobalModelOptions.mockResolvedValue({ providers: [provider] })
+  const close = vi.fn()
+  const { content, onSelectModel, requestGateway } = renderPanel(vi.fn(), close)
+  const row = (await content.findByText('GPT-6.1-sol')).closest('[role="menuitem"]')!
+
+  expect(row.querySelector('.codicon-check')).toBeTruthy()
+  expect(onSelectModel).not.toHaveBeenCalled()
+
+  if (gesture === 'click') {
+    fireEvent.click(row)
+  } else {
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Search models' }), { key: 'Enter' })
+  }
+
+  await vi.waitFor(() =>
+    expect(onSelectModel).toHaveBeenCalledExactlyOnceWith({
+      model: 'gpt-6.1-sol-fast',
+      provider: provider.slug,
+      sessionId: 'runtime-1'
+    })
+  )
+  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+  expect(requestGateway).not.toHaveBeenCalledWith('config.set', expect.anything())
+  expect(row.querySelector('.codicon-check')).toBeTruthy()
+})
+
 it('explains and blocks the same managed-to-custom busy rule in the dropdown', async () => {
   $currentProvider.set('aino')
   $currentModel.set('catalog-a')
