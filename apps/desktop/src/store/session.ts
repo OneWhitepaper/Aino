@@ -1783,16 +1783,8 @@ export const setCurrentProvider = (next: Updater<string>) => {
   }
 }
 
-/** Move the visible model/provider without claiming it as the composer's sticky
- *  selection.
- *
- *  For values that come from the RUNTIME rather than the user: the periodic
- *  `session.info` heartbeat's resolved model/provider (e.g. the generic `custom`
- *  billing class a named provider resolves to). Persisting those through
- *  `setCurrentModel`/`setCurrentProvider` overwrote the user's actual composer
- *  pick in localStorage on every heartbeat, so a later new chat followed the
- *  last-seen runtime class instead of the selection or the Settings default.
- */
+/** Runtime/fallback paint keeps the saved composer route intact: a named custom provider's
+ *  runtime reports its generic class, which cannot safely launch another session. */
 export const setCurrentModelTransient = (next: Updater<string>) => updateAtom($currentModel, next)
 export const setCurrentProviderTransient = (next: Updater<string>) => updateAtom($currentProvider, next)
 

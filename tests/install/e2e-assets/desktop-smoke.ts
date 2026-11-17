@@ -625,8 +625,9 @@ async function prepareAccountLaunch(options: SmokeOptions, launch: Launch) {
     const bundleEnv = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
     const predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
     // Check before the driver creates its sandbox folders inside this home.
-    if (predictedHome && !(preserved && options.phase !== 'installed')) {
-      admitPredictedHermesHome(predictedHome, options.phase, candidateSmokeHermesHomes(options.home, options['user-data']))
+    if (predictedHome) {
+      const admissionPhase = preserved && options.phase !== 'installed' ? 'new' : options.phase
+      admitPredictedHermesHome(predictedHome, admissionPhase, candidateSmokeHermesHomes(options.home, options['user-data']))
     }
     return { account, preserved, predictedHome }
   } catch (error) {

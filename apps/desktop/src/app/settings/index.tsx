@@ -65,6 +65,21 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'about'
 ]
 
+function renderConfigSectionExtras(
+  view: SettingsViewId,
+  connectionId: null | string,
+  profile: string,
+  vaultExpanded: boolean
+) {
+  if (view === 'config:advanced') {
+    return <KeysSettings embedded view="all" />
+  }
+
+  if (view === 'config:safety') {
+    return <VaultSettings defaultExpanded={vaultExpanded} embedded key={vaultOwnerKey(connectionId, profile)} />
+  }
+}
+
 export function SettingsView({
   onClose,
   onConfigSaved,
@@ -407,17 +422,7 @@ export function SettingsView({
     ) : activeView.startsWith('config:') ? (
       <ConfigSettings
         activeSectionId={activeView.slice('config:'.length)}
-        afterContent={
-          activeView === 'config:advanced' ? (
-            <KeysSettings embedded view="all" />
-          ) : activeView === 'config:safety' ? (
-            <VaultSettings
-              defaultExpanded={vaultDefaultExpanded}
-              embedded
-              key={vaultOwnerKey(activeConnectionId, scopeProfile)}
-            />
-          ) : undefined
-        }
+        afterContent={renderConfigSectionExtras(activeView, activeConnectionId, scopeProfile, vaultDefaultExpanded)}
         importFile={
           activeView === 'config:advanced' && pendingImport?.owner === importOwner ? pendingImport.file : undefined
         }

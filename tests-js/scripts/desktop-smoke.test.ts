@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import yaml from 'js-yaml'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 
 import brand from '../../apps/desktop/brand.json' with { type: 'json' }
 import { resolveDesktopHermesHome } from '../../apps/desktop/electron/data-paths.mjs'
@@ -841,6 +841,55 @@ test('the post-update smoke reseeds the profile the update kept, but no home out
       JSON.stringify({ payload: 'bundled', bundleEnv: { HERMES_HOME: null, HERMES_DESKTOP_USER_DATA_DIR: null } }))
     await expect(runInstalledDesktopSmoke({ ...options, phase: 'new' }, refuseLaunch)).rejects.toThrow("is not one of this run's homes")
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a preserved account never authorizes seeding a predicted home outside this run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-preserved-boundary-'))
+  const home = path.join(root, 'home')
+  const userData = path.join(root, 'user-data')
+  const fakeHome = path.join(root, 'unrelated-home')
+  const homedir = vi.spyOn(os, 'homedir').mockReturnValue(fakeHome)
+  const exe = path.join(root, 'app', 'fake-desktop')
+  const bundleEnv = { HERMES_HOME: null, HERMES_DESKTOP_USER_DATA_DIR: null }
+  fs.mkdirSync(path.dirname(exe), { recursive: true })
+  fs.writeFileSync(exe, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(root, 'install-stamp.json'), JSON.stringify({ payload: 'bundled', bundleEnv }))
+
+  const accountHome = resolveDesktopHermesHome({ home, accountWorkspace: {
+    userData, origin: 'https://api.agentera.com.cn', userId: '17'
+  } })
+
+  const relativeHome = path.relative(userData, accountHome).split(path.sep).join('/')
+  const profile = 'fixture-bot'
+  fs.mkdirSync(path.join(accountHome, 'profiles', profile), { recursive: true })
+
+  for (const file of ['config.yaml', 'state.db', `profiles/${profile}/profile.yaml`]) {
+    fs.writeFileSync(path.join(accountHome, file), 'retained fixture')
+  }
+
+  fs.writeFileSync(path.join(userData, '.aino-windows-user-state-fixture.json'), JSON.stringify({
+    formatVersion: 2, purpose: 'aino-disposable-windows-installer-preservation', files: ['config.yaml'],
+    accounts: [{ home: relativeHome, origin: 'https://api.agentera.com.cn', userId: '17', profile }]
+  }))
+
+  const options = { exe, root: path.dirname(exe), origin: 'bundled' as const, home, 'user-data': userData,
+    out: path.join(root, 'proof'), phase: 'new' as const, 'expect-commit': 'a'.repeat(40), 'platform-account': true }
+
+  const predicted = predictSmokeHermesHome(resolveSmokeLaunch(options).env, bundleEnv)
+  fs.mkdirSync(predicted, { recursive: true })
+  const protectedConfig = path.join(predicted, 'config.yaml')
+  fs.writeFileSync(protectedConfig, 'unrelated profile must stay intact\n')
+
+  try {
+    await expect(runInstalledDesktopSmoke(options, async () => {
+      throw new Error('unsafe prediction reached launch')
+    })).rejects.toThrow("is not one of this run's homes")
+    expect(fs.readFileSync(protectedConfig, 'utf8')).toBe('unrelated profile must stay intact\n')
+    expect(fs.readdirSync(predicted)).toEqual(['config.yaml'])
+  } finally {
+    homedir.mockRestore()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('writeEnvFile without a URL keeps the journey provider endpoint', (): void => {

@@ -16,7 +16,7 @@ async function bundledPayloadFixture() {
   const resources = await shortSocketTmpDir('gw-bundled-res-')
   const userHome = await shortSocketTmpDir('gw-bundled-user-')
   const repo = path.resolve('../..')
-  const python = process.env.HERMES_TEST_PYTHON || 'python3'
+  const python = process.env.HERMES_TEST_PYTHON || process.env.HERMES_PYTHON || 'python3'
   const root = path.join(resources, 'agent-payload')
   await fs.mkdir(path.join(root, 'bin'), { recursive: true })
   await fs.mkdir(path.join(root, 'tools', 'python', 'bin'), { recursive: true })

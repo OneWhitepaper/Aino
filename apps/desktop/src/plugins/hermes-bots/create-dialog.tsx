@@ -49,6 +49,7 @@ import { canonicalGroupCreateError, canonicalGroupCreateNotice, createCanonicalG
 import type { GroupCreationIntent } from './canonical-groups'
 import { CreateAgentModelSummary } from './create-agent-model-summary'
 import {
+  adoptCreationReceipt,
   creationWarningTitle,
   type DraftReceipt,
   liveRosterRow,
@@ -64,7 +65,7 @@ import {
   useDraftCapabilities
 } from './create-draft-change'
 import { applyCreatedModelChoice, readCreatedModelReadiness } from './create-model-choice'
-import { $botMeta, botRosterKey, filterBots, ROSTER_KEY, saveBotMeta } from './data'
+import { $botMeta, $lastRoster, botRosterKey, filterBots, ROSTER_KEY, saveBotMeta } from './data'
 import { labeled, ResizableFrame } from './dialog-parts'
 import { updateGroupChat } from './group-chat'
 import { GROUP_CHAT_MAX_MEMBERS, uniqueGroupChatName } from './group-chat'
