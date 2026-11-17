@@ -85,11 +85,13 @@ function validBounds(value: NativePreviewBounds, window: BrowserWindow): NativeP
   const x = Math.max(0, Math.min(width, Math.round(value.x)))
   const y = Math.max(0, Math.min(height, Math.round(value.y)))
 
+  // The owning window clips native children. Shrinking their viewport at a sliding
+  // origin would undo the pane's fixed viewport and repeatedly reflow the website.
   return {
     x,
     y,
-    width: Math.max(0, Math.min(width - x, Math.round(value.width))),
-    height: Math.max(0, Math.min(height - y, Math.round(value.height)))
+    width: Math.max(0, Math.min(width, Math.round(value.width))),
+    height: Math.max(0, Math.min(height, Math.round(value.height)))
   }
 }
 

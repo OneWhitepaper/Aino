@@ -56,7 +56,9 @@ they are not counted as successful verification.
   findings beyond the exact upstream baseline; inherited findings remain
   visible with their provenance.
 - The complete Electron suite passed on Electron 44.10.2: 495 files and
-  4,714 cases; 11 files and 68 cases retained their existing conditional skips.
+  4,716 cases; 11 files and 68 cases retained their existing conditional skips.
+  This final run includes the fresh-cache network bootstrap test and both new
+  native viewport contracts, with no test-file exclusions.
 - The complete renderer suite passed in one final eight-worker run: all
   2,035 files and 17,042 cases. The existing summary-layout test also passed
   alone after a cold full-renderer import exceeded its deadline under load;
@@ -76,5 +78,22 @@ they are not counted as successful verification.
 - The native installed-desktop smoke rejects a predicted home outside its own
   disposable run even when it finds a retained account fixture; its regression
   asserts that unrelated profile bytes remain unchanged.
+
+Native browser regression testing also found an older viewport clamp that
+resized the page on every frame while its panel slid into the window. Requested
+viewport dimensions are now capped by the host window independently of the
+animated origin; the native parent clips the off-window region. Bounds and
+owner validation remain enforced. The new IPC contracts failed before this
+fix and passed afterward. A continuous capture of the exact fixture window
+verified three reopening cycles with unchanged guest identity and viewport,
+no white frames, and the existing page-color thresholds. The test now records
+the native window's media stream because renderer-only CDP screenshots cannot
+observe WebContentsView children.
+
+The Linux zoom-retention fixture separately exposed Chromium scroll-offset
+quantization (`399.9999694824219` to `400`). Its identity, URL, draft and history
+assertions remain exact; scroll retention is compared within one CSS pixel.
+The payload-bundle fixture now includes the existing `BuildRequest.windows_zip`
+default introduced upstream, with 15 relevant packaging contracts passing.
 
 No production deployment or installer publication is part of this upgrade.
