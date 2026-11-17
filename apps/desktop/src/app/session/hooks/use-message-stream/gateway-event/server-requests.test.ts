@@ -56,6 +56,7 @@ function deliver(method: string, params: Record<string, unknown>, activeSessionI
 
   // The stream dispatches the current ref value and keeps that ref live for cancellation.
   deps.activeSessionIdRef.current = activeSessionId
+
   const handled = handleServerRequest(
     { decline, fail, id: 'srq-1', method, params, profile: 'default', replayed, respond },
     deps,
