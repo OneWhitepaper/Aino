@@ -307,6 +307,7 @@ declare global {
       cloud: {
         status: () => Promise<DesktopCloudStatus>
         login: () => Promise<DesktopCloudStatus & { ok: boolean }>
+        discover?: (org?: string) => Promise<DesktopCloudDiscoverResult>
         agentSignIn: (dashboardUrl: string) => Promise<DesktopCloudAgentSignInResult>
       }
       profile: {
@@ -379,6 +380,9 @@ declare global {
       readClipboard: () => Promise<string>
       saveGatewayFile?: (payload: {
         connectionId?: null | string
+        /** A route that serves this file from the host that wrote it (an allow-listed
+         *  `/api/ops/...` download), read instead of the workspace's `/api/fs/download`. */
+        downloadPath?: string
         path: string
         profile?: null | string
         sessionId?: string
@@ -740,7 +744,12 @@ declare global {
         callback: (payload: { kind: string; name: string; params: Record<string, string> }) => void
       ) => () => void
       signalDeepLinkReady?: () => Promise<{ ok: boolean }>
-      probePluginRepo?: (payload: { identifier?: string; repo?: string }) => Promise<{
+      probePluginRepo?: (payload: {
+        identifier?: string
+        repo?: string
+        /** A catalog pick's pin: the repository is read at that commit, not its default branch. */
+        ref?: string
+      }) => Promise<{
         ok: boolean
         agent: boolean
         desktop: boolean
@@ -1588,11 +1597,44 @@ export interface DesktopCloudStatus {
   signedIn: boolean
 }
 
+// A discovered Hermes Cloud agent — the trimmed DTO from NAS GET /api/agents.
+export interface DesktopCloudAgent {
+  id: string
+  name: string
+  status: string
+  // null until the agent has a provisioned dashboard (show "provisioning…").
+  dashboardUrl: string | null
+  // "active" | "degraded" | "down" | "unknown".
+  dashboardGatewayState: string
+}
+
+// An org the signed-in user belongs to — for the org picker shown when a
+// multi-org user's discovery call needs disambiguation (NAS 409).
+export interface DesktopCloudOrg {
+  id: string
+  slug: string | null
+  name: string
+  isPersonal: boolean
+  // "OWNER" | "MEMBER".
+  role: string
+}
+
+// Discovery result: either the agent list, OR a request to pick an org first
+// (multi-org user, no org chosen yet). The renderer shows a picker on the
+// latter and re-calls discover(org). On the agents branch, `org` echoes the
+// authoritatively-resolved org the list was scoped to (from NAS), so the
+// desktop persists it without relying on transient picker state.
+export type DesktopCloudDiscoverResult =
+  | { agents: DesktopCloudAgent[]; org?: DesktopCloudOrg | null; needsOrgSelection?: false }
+  | { needsOrgSelection: true; orgs: DesktopCloudOrg[] }
+
 export interface DesktopCloudAgentSignInResult {
   // The agent gateway base URL the silent sign-in targeted.
   baseUrl: string
   // Whether the agent's gateway session cookie landed (silent cascade done).
   connected: boolean
+  // The saved connection the sign-in authenticated, when the sign-in itself saved one (Webapp).
+  connectionId?: string
 }
 
 export interface DesktopBootProgress {

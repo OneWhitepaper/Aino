@@ -23,6 +23,7 @@ from utils import base_url_host_matches, base_url_hostname, base_url_origin
 # Re-exported: callers/tests patch hermes_cli.model_switch.<name>.
 from hermes_cli.model_switch_providers import list_authenticated_providers
 from hermes_cli.model_switch_credentials import _extra_headers_from_config, _scoped_key_env
+from hermes_cli.model_switch_providers import _saved_entry_on_other_origin
 
 
 logger = logging.getLogger(__name__)
@@ -1038,13 +1039,11 @@ def _current_provider_match(st: _Switch, cfg_matches: dict[str, str]) -> Optiona
 
 
 def _durable_configured_provider_identity(slug: str, user_providers: Optional[dict]) -> str:
-    """Keep a configured endpoint distinct from a built-in with the same id.
-
-    ``providers.deepseek`` wins while model-switch resolves the live endpoint, but a persisted bare
-    ``deepseek`` is later interpreted as the built-in route.  Only colliding config keys need the
-    explicit custom namespace; ordinary keys retain their existing public identity.
-    """
+    """Namespace endpoint keys that collide with built-in routes so persisted selection stays custom."""
     if not isinstance(user_providers, dict) or slug not in user_providers:
+        return slug
+    entry = user_providers[slug]
+    if not isinstance(entry, dict) or not any(entry.get(key) for key in ("api", "url", "base_url")):
         return slug
     try:
         from hermes_cli.providers import get_provider
@@ -1409,8 +1408,7 @@ def _route_configured_provider(st: _Switch) -> Optional[ModelSwitchResult] | boo
     st.target_provider = _durable_configured_provider_identity(matched_slug, st.user_providers)
     st.new_model = cfg_matches[matched_slug]
     logger.debug("Configured-provider detection routed '%s' to %s", st.new_model, st.target_provider)
-    # providers.<slug> endpoints resolve in the credential block via resolve_user_provider(),
-    # which is gated on explicit_provider; custom:* slugs resolve at runtime directly.
+    # A tuning-only block keeps its official provider during credential resolution.
     if isinstance(st.user_providers, dict) and st.target_provider in st.user_providers:
         st.explicit_provider = st.target_provider
     return True
@@ -1504,16 +1502,22 @@ def _creds_for_switched_provider(st: _Switch) -> Optional[ModelSwitchResult]:
         user_pdef = (resolve_user_provider(explicit_norm, st.user_providers)
                      or resolve_user_provider(st.target_provider, st.user_providers))
     if user_pdef is not None and user_pdef.base_url:
-        ucfg = st.user_providers.get(explicit_norm) or st.user_providers.get(st.target_provider) or {}
+        entry_name = explicit_norm if st.user_providers.get(explicit_norm) else st.target_provider
+        ucfg = st.user_providers.get(entry_name) or {}
         # Key reads go through the per-profile secret scope (multiplexed gateway).
         ukey = _entry_configured_key(ucfg, _scoped_key_env)
-        st.validation_headers = _extra_headers_from_config(ucfg)
         try:
             st.resolve_runtime(
                 requested=st.target_provider, explicit_api_key=ukey or None, explicit_base_url=user_pdef.base_url)
-            st.api_key, st.base_url = st.api_key or ukey, st.base_url or user_pdef.base_url
+            # A keyless entry whose saved copy is for another origin (an unsaved edit moved it): the key
+            # the resolver read from disk belongs to the previous host, so this one is probed keyless.
+            moved = not ukey and _saved_entry_on_other_origin(entry_name, user_pdef.base_url)
+            st.api_key, st.base_url = "" if moved else st.api_key or ukey, st.base_url or user_pdef.base_url
         except Exception:
             st.api_key, st.base_url, st.api_mode = ukey, user_pdef.base_url, ""
+        # The entry's own headers, not the resolver's: it reads the on-disk copy, which an unsaved
+        # edit may have moved to a new host (those headers belong to the previous one).
+        st.validation_headers = _extra_headers_from_config(ucfg)
     elif st.target_provider == "custom" and st.current_base_url:
         # A bare-custom session switching models stays on its endpoint (#45597). Arriving from
         # ANOTHER provider (the per-turn config sync adopting ``provider: custom``) the configured
@@ -1859,23 +1863,23 @@ def model_selection_config_updates(result: ModelSwitchResult, current_model_cfg:
     route changed: left behind it routes the NEW provider's requests to the OLD endpoint's env
     var, but a same-provider same-base_url model re-pick keeps it whatever the provider is. The
     dashboard re-adds an explicitly submitted key / the target provider's own pointer after this
-    (``_apply_main_model_assignment`` / ``_resolve_assignment_credentials``)."""
+    (``model_assignment.apply_main_model_assignment`` / ``_resolve_assignment_credentials``)."""
+    from hermes_cli.route_identity import ENDPOINT_CREDENTIAL_KEYS, ENDPOINT_KEY_POINTER_KEYS, should_clear_context_pin
     model_cfg = current_model_cfg if isinstance(current_model_cfg, dict) else {}
     updates: dict[str, Any] = {
         "default": result.new_model, "provider": result.target_provider,
         "base_url": result.base_url or None, "api_mode": result.api_mode or None,
     }
     if "context_length" in model_cfg:
-        from hermes_cli.route_identity import should_clear_context_pin
         if should_clear_context_pin(
                 model_cfg.get("default") or model_cfg.get("model"), result.new_model,
                 model_cfg.get("base_url"), result.base_url, model_cfg.get("provider"), result.target_provider):
             updates["context_length"] = None
     target = str(result.target_provider or "").strip().lower()
     route_changed = selection_route_changed(model_cfg, result)
-    stale = ["api_key", "api"] if (not target.startswith("custom") or route_changed) else []
+    stale = list(ENDPOINT_CREDENTIAL_KEYS) if (not target.startswith("custom") or route_changed) else []
     if route_changed:
-        stale += ["key_env", "api_key_env"]
+        stale += ENDPOINT_KEY_POINTER_KEYS
     for key in stale:
         if key in model_cfg:
             updates[key] = None

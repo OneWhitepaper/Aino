@@ -23,6 +23,7 @@ vi.mock('electron', () => ({
 }))
 
 import { createAccountWorkspaceIpc } from './account-workspace'
+import { COMPOSER_IMAGE_MAX_BYTES, COMPOSER_PASTE_MAX_BYTES } from './hardening'
 import { applyPreviewGuestAttachPrefs } from './preview-guest-throttle'
 import { registerRendererContentIpc } from './renderer-content-ipc'
 
@@ -148,4 +149,19 @@ test('screenshot IPC only captures admitted preview guests owned by the sender',
   const otherWindow = { ...sender }
   await expect(ipc.invoke('hermes:capturePreview', otherWindow, { webContentsId: 71 })).rejects.toThrow(/belong/)
   expect(guest.capturePage).not.toHaveBeenCalled()
+})
+
+test('composer IPC refuses invalid or oversized payloads before writing account files', async () => {
+  const { root, ipc } = setup()
+  const sender = { id: 1 }
+  await expect(ipc.invoke('hermes:saveImageBuffer', sender, { data: 'not image bytes' })).rejects.toMatchObject({
+    code: 'invalid-image-data'
+  })
+  await expect(
+    ipc.invoke('hermes:saveImageBuffer', sender, { data: new Uint8Array(COMPOSER_IMAGE_MAX_BYTES + 1) })
+  ).rejects.toMatchObject({ code: 'EFBIG' })
+  await expect(
+    ipc.invoke('hermes:savePastedText', sender, { text: 'a'.repeat(COMPOSER_PASTE_MAX_BYTES + 1) })
+  ).rejects.toMatchObject({ code: 'EFBIG' })
+  expect(fs.readdirSync(root)).toEqual([])
 })

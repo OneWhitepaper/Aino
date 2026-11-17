@@ -81,6 +81,7 @@ WORK_ROOT="${HERMES_E2E_WORKROOT:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/hermes-bundled
 LOG_DIR="${HERMES_E2E_LOG_DIR:-$WORK_ROOT/logs}"
 HOME_SANDBOX="$WORK_ROOT/home"
 export HOME_SANDBOX
+RUNNER_HOME="$HOME"
 export HERMES_HOME="$HOME_SANDBOX/.hermes"
 export HOME="$HOME_SANDBOX"   # the app must see the ISOLATED home, not the runner's
 export HERMES_DESKTOP_USER_DATA_DIR="$WORK_ROOT/electron-user-data"
@@ -112,12 +113,21 @@ export E2E_ARCH="$ARCH"
 # scope, on success AND on failure paths (no watcher/server leak).
 SERVE_PID=""
 WATCHER_PID=""
+UPDATE_APP=""
 cleanup() {
+  local rc=$?
   if [ -n "$WATCHER_PID" ]; then kill "$WATCHER_PID" 2>/dev/null || true; fi
   if [ -n "$SERVE_PID" ]; then kill "$SERVE_PID" 2>/dev/null || true; fi
   if declare -F mock_stop >/dev/null 2>&1; then mock_stop 2>/dev/null || true; fi
   if [ -f "$WORK_ROOT/native-launch-env.json" ]; then
     "$NODE_BIN" "$ASSETS/mac-native-launch-env.mjs" restore "$WORK_ROOT/native-launch-env.json"
+  fi
+  if [ "$rc" -ne 0 ] && [ -n "$UPDATE_APP" ]; then
+    step "collecting update evidence after exit $rc"
+    bash "$ASSETS/mac-update-evidence.sh" --out "$LOG_DIR/update-evidence" \
+      --since "$LOG_DIR/update-started" --app "$UPDATE_APP" \
+      --home "$HOME_SANDBOX" --home "$RUNNER_HOME" \
+      --hermes-home "$HERMES_HOME" --user-data "$HERMES_DESKTOP_USER_DATA_DIR" 2>&1 | ts_prefix || true
   fi
 }
 trap cleanup EXIT
@@ -243,6 +253,8 @@ phase_update() {
   [ -d "$old_app" ] || fail "installed app $old_app (from the install receipt) is gone"
   [ -x "$old_app_bin" ] || fail "installed executable $old_app_bin (from the install receipt) is gone"
   ok "update phase using the receipt's installed executable: $old_app_bin"
+  touch "$LOG_DIR/update-started"
+  UPDATE_APP="$old_app"
 
   local new_tag new_version new_commit new_identity new_team new_zip
   new_tag="$(manifest_side new tag)"; new_version="$(manifest_side new version)"
@@ -365,9 +377,11 @@ phase_update() {
     --out "$LOG_DIR/new-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/new-bundle-verify.log"
   ok "NEW bundle: codesign, identity ($new_identity), team ($new_team), version $new_version, stamp commit $new_commit"
 
-  # The fixture used session-only sign-in. NEW therefore relaunches at login;
-  # its authenticated gateway belongs to the account home reached below, not
-  # OLD's installation home. Observe that selected gateway after real sign-in.
+  if pgrep -f "$old_app_bin" | grep -qvw "$new_pid"; then
+    fail "old bundle processes still running after the update"
+  fi
+  ok "no stale bundle processes"
+  # The relaunched account gateway is verified after sign-in below.
   # ── user state survived ───────────────────────────────────────────────
   preserve_after_upgrade
   grep -qF "user_state_marker=$(manifest_side old commit)" "$HERMES_HOME/desktop-bundled-marker.txt" \
@@ -400,6 +414,12 @@ phase_update() {
   "$(_preserve_python)" "$ASSETS/bundled-chat-preservation.py" verify \
     "$LOG_DIR/legacy-chat-snapshot.json" "$LOG_DIR/legacy-chat-preservation.json"
   ok "OLD real chat remains intact in its original isolated home without adopting it into the new account"
+
+  # The check right after relaunch can win the race against the app's first payload-Python spawn.
+  step "re-verifying the NEW bundle's signature after it ran a chat"
+  codesign --verify --deep --strict --verbose=2 "$old_app" 2>&1 | ts_prefix | tee "$LOG_DIR/new-bundle-seal-after-chat.log" \
+    || fail "the NEW bundle modified its own signed files while it ran (new-bundle-seal-after-chat.log)"
+  ok "NEW bundle still satisfies its code signature after the chat"
 
   step "PASS: packaged $(manifest_side old tag) -> $new_tag via the real About -> Update now route"
 }

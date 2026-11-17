@@ -325,8 +325,9 @@ def test_context_excerpts_use_live_turn_and_preserve_parent_and_child_scope(dele
         parent, {"tasks": tasks}, InlineToolContext(effective_task_id="parent-effort", messages=live),
     ))
     assert all(entry["status"] == "completed" for entry in result["results"])
-    by_goal = {request["messages"][-1]["content"]: request for request in requests[1:]}
-    contexts = [by_goal[task["goal"]]["messages"][0]["content"] for task in tasks]
+    by_goal = {task["goal"]: request for task in tasks for request in requests[1:]
+               if request["messages"][-1]["content"].endswith(task["goal"])}
+    contexts = [by_goal[task["goal"]]["messages"][-1]["content"] for task in tasks]
     assert "Keep the public interface" in contexts[0] and "answer in Chinese" in contexts[0]
     assert "Approved the module boundary" in contexts[0] and "Only inspect auth.py" in contexts[0]
     assert "User correction: no new dependencies" in contexts[0] and "Retained visible requirement" in contexts[0]
@@ -347,8 +348,8 @@ def test_context_excerpts_use_live_turn_and_preserve_parent_and_child_scope(dele
     wire = requests[start:]
     assert "private-current-envelope-sentinel" in str(wire[0]["messages"][-1]["content"])
     child_request = next(request for request in wire
-                         if request["messages"][-1]["content"] == "Inspect only the pagination boundary")
-    child_context = child_request["messages"][0]["content"]
+                         if request["messages"][-1]["content"].endswith("Inspect only the pagination boundary"))
+    child_context = child_request["messages"][-1]["content"]
     assert "Visible requirement: preserve pagination." in child_context
     assert "private-current-envelope-sentinel" not in child_context
 
@@ -393,5 +394,5 @@ def test_context_selection_validates_batch_before_spawn_and_keeps_isolated_defau
         {"goal": "Inspect only the assigned boundary", "context": "Read the specification."},
     ]}, parent_agent=parent))
     assert result["results"][0]["status"] == "completed"
-    assert "Do not expose this by default" not in requests[0]["messages"][0]["content"]
-    assert "Read the specification" in requests[0]["messages"][0]["content"]
+    assert "Do not expose this by default" not in requests[0]["messages"][-1]["content"]
+    assert "Read the specification" in requests[0]["messages"][-1]["content"]

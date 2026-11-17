@@ -3,6 +3,7 @@ import { translateNow } from '@/i18n'
 import { resolveModelDefault } from '@/lib/model-default'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { platformCreateOverrides } from '@/lib/platform-session-model'
+import { getComposerModelSelection } from '@/store/composer-model-selection'
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { verifiedPlatformModel } from '@/store/platform-model-capability'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
@@ -17,14 +18,11 @@ import {
 import {
   $currentCwdExplicit,
   $currentFastMode,
-  $currentModel,
   $currentPlatformOrigin,
   $currentPlatformOwner,
-  $currentProvider,
   $currentReasoningEffort,
   $currentServiceTier,
-  getComposerSelectionGeneration,
-  getCurrentModelSource
+  getComposerSelectionGeneration
 } from '@/store/session'
 
 // `session.create` params from the current draft's owner and model/effort/fast,
@@ -85,7 +83,8 @@ export async function desktopSessionCreateParams(
   // Send captures user intent before any I/O. Manual selections never join
   // default resolution; their provider, owner, effort and fast mode travel
   // together even if another pick arrives during profile readiness.
-  const selectionSource = getCurrentModelSource()
+  const picked = getComposerModelSelection()
+  const selectionSource = picked.source
   const generation = getComposerSelectionGeneration()
   let platformOwner = $currentPlatformOwner.get()
   let platformOrigin = $currentPlatformOrigin.get()
@@ -95,8 +94,8 @@ export async function desktopSessionCreateParams(
     effort: includeComposerSelection === true ? $currentReasoningEffort.get().trim() : '',
     fast: $currentFastMode.get(),
     serviceTier: $currentServiceTier.get().trim(),
-    model: $currentModel.get().trim(),
-    provider: $currentProvider.get().trim()
+    model: picked.model.trim(),
+    provider: picked.provider.trim()
   }
 
   const profile = resolveCreateProfile(capturedRoute, requestedProfile)

@@ -60,10 +60,10 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/native-mcp.md",
-      "sourceSha256": "123740d7628f0a1de139d70cfc6f1ebbe8d4f3f6078aaa0a3c099b679ac4d42e",
-      "sourceLines": 371,
+      "sourceSha256": "dd01d1c30bcc7269fd43d6907a59da10183caf98f612ab84b58b8ef220161e93",
+      "sourceLines": 374,
       "destination": "references/native-mcp.md",
-      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained. Updated source body to upstream v0.23.2; Aino applicability preserved."
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/petdex.md",
@@ -109,10 +109,10 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/slash-commands.md",
-      "sourceSha256": "690dc6c2543dfa028bbf2918c229f27f4962e9d897fce25ebb1de67d56f3b822",
+      "sourceSha256": "4876dbd236bddf41e74cbf50ba88efe25d12f5be94310e46da346af9e99f42f0",
       "sourceLines": 112,
       "destination": "references/slash-commands.md",
-      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained. Updated source body to upstream v0.23.2; Aino applicability preserved."
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/themes.md",
@@ -144,10 +144,10 @@
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/webhooks.md",
-      "sourceSha256": "f668c57d1900e249cb4b54e5d624e9aacb399ecf1452f9b258a1bf857ffa8a42",
-      "sourceLines": 216,
+      "sourceSha256": "f8da7ad37718aabca0415cd6f0d96d180a7682f59921dc271adb5b07f0c45b6f",
+      "sourceLines": 222,
       "destination": "references/webhooks.md",
-      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained."
+      "adaptation": "Added Aino chapter heading and applicability note; original chapter body retained. Updated source body to upstream v0.23.2; Aino applicability preserved."
     },
     {
       "source": "skills/autonomous-ai-agents/hermes-agent/references/windows-quirks.md",

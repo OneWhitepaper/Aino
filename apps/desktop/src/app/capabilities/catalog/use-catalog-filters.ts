@@ -33,6 +33,7 @@ export function useCatalogFilters(kind: CatalogKind, onChange: () => void, initi
     toggleSource: toggle('sources'),
     toggleTag: toggle('tags'),
     toggleInstalled: () => update(current => ({ ...current, installedOnly: !current.installedOnly })),
+    toggleUpdates: () => update(current => ({ ...current, updatesOnly: !current.updatesOnly })),
     // Category navigation replaces the previous choice and drops unrelated tags.
     chooseCategory: (value: string | null) =>
       update(current => ({ ...current, categories: value === null ? [] : [value], tags: [] })),

@@ -33,7 +33,7 @@ import { execFileSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
 // The checkout's tests-js declares the driver's Playwright.
 const { _electron } = createRequire(new URL('../../../tests-js/package.json', import.meta.url))('@playwright/test');
-const { observeProcessClose } = require('./process-close.cjs');
+const { observeProcessClose, recordProcessOutput } = require('./process-close.cjs');
 const { prepareWindowForInput } = require('./window-input.cjs');
 const { openAbout, waitForUpdate, waitForMacUpdateClose } = require('./update-ui.cjs');
 
@@ -90,6 +90,7 @@ const app = await _electron.launch({
   timeout: 120_000,
 });
 const child = app.process();
+recordProcessOutput(child, path.join(values['chat-out'], 'old-app-output.log'));
 const waitForProcessClose = observeProcessClose(child);
 const oldPid = await app.evaluate(() => process.pid);
 log(`launched Electron pid=${oldPid}`);

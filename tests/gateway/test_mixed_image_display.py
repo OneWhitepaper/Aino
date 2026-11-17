@@ -29,22 +29,27 @@ def _runner(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('queued', [False, True])
-async def test_image_and_voice_display_keep_stt_once_including_pretranscribed_queue(tmp_path, monkeypatch, queued):
+@pytest.mark.parametrize('with_image', [False, True])
+async def test_image_and_voice_display_keep_stt_once_including_pretranscribed_queue(tmp_path, monkeypatch, queued, with_image):
     runner, adapter, transcribe = _runner(monkeypatch)
     image, voice = tmp_path / 'image.png', tmp_path / 'voice.ogg'
     image.write_bytes(_ONE_PX_PNG)
     voice.write_bytes(b'voice')
     source = SessionSource(platform=Platform.LOCAL, chat_id='mixed')
     event = MessageEvent(text='caption', source=source, message_type=MessageType.VOICE,
-                         media_urls=[str(image), str(voice)], media_types=['image/png', 'audio/ogg'])
+                         media_urls=([str(image)] if with_image else []) + [str(voice)],
+                         media_types=(['image/png'] if with_image else []) + ['audio/ogg'])
     if queued:
         await runner._transcribe_and_echo_pending_voice(event, adapter, source, event.text, log_context='queued')
     message = await runner._prepare_inbound_message_text(event=event, source=source, history=[], session_key='key')
     display = persist_inbound_user_message(event, message)
 
-    assert display == f'"voice words"\n\ncaption\n@image:{image}'
-    assert message == ('VISION-CONTEXT\n\n"voice words"\n\ncaption' if queued
-                       else '"voice words"\n\nVISION-CONTEXT\n\ncaption')
+    expected_display = '"voice words"\n\ncaption' + (f'\n@image:{image}' if with_image else '')
+    assert display == expected_display
+    model_voice = f'"voice words"\n[User sent audio: {voice}]'
+    expected_model = (f'VISION-CONTEXT\n\n{model_voice}\n\ncaption' if queued
+                      else f'{model_voice}\n\nVISION-CONTEXT\n\ncaption') if with_image else f'{model_voice}\n\ncaption'
+    assert message == expected_model
     transcribe.assert_called_once_with(str(voice), None, 'gateway')
     assert adapter.send.await_count == 1
 

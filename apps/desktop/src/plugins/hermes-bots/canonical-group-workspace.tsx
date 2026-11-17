@@ -1,7 +1,7 @@
-import { host, randomUuid, respondPluginGroupModelRequests, useValue } from '@hermes/plugin-sdk'
-import { useEffect, useRef, useState } from 'react'
+import { host, LruCache, randomUuid, respondPluginGroupModelRequests, useValue } from '@hermes/plugin-sdk'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { useCanonicalRoomLive } from './canonical-group-activity'
+import { useCanonicalRoomLive, useSameValue } from './canonical-group-activity'
 import { useGroupMethods } from './canonical-group-capabilities'
 import { holdCanonicalRoomLive, publishCanonicalRoomLive } from './canonical-group-details'
 import type { CanonicalGroupEvent } from './canonical-group-history'
@@ -21,7 +21,12 @@ import {
 import type { PreparedCanonicalGroupSend } from './canonical-group-send'
 import { useCanonicalGroupSendRecovery } from './canonical-group-send-recovery'
 import { CanonicalGroupSurface, type CanonicalGroupSurfaceState } from './canonical-group-surface'
-import { actCanonicalGroup, canonicalGroupRequest, disbandCanonicalGroup } from './canonical-groups'
+import {
+  actCanonicalGroup,
+  canonicalGroupProfileRoute,
+  canonicalGroupRequest,
+  disbandCanonicalGroup
+} from './canonical-groups'
 import type {
   CanonicalGroupBinding,
   CanonicalPendingAction,
@@ -34,6 +39,7 @@ import {
   groupComposerDraftSnapshot,
   updateGroupComposerDraft
 } from './group-panes'
+import { retainRouteSocket } from './route-lease'
 
 type RoomEvent = CanonicalGroupEvent
 interface Attachment {
@@ -59,7 +65,7 @@ interface SendRun {
   posted: boolean
   settled: Promise<boolean>
 }
-type RoomState = CanonicalGroupSurfaceState
+type RoomState = CanonicalGroupSurfaceState & { change_events?: boolean }
 
 const sameGroupPayload = (payload: Record<string, unknown>, text: string, attachments: Attachment[], thread?: string) =>
   payload.text === text &&
@@ -67,10 +73,23 @@ const sameGroupPayload = (payload: Record<string, unknown>, text: string, attach
   // Preparing mints a thread for a new conversation, so only a reply's thread must match.
   (thread === undefined || payload.thread_id === thread)
 
-/** The durable log only grows: an unchanged length and last seq is the same log, so keep its identity
- *  and the derived history (handoffs, outcomes) is not recomputed on every poll. */
-const sameLog = (current: readonly { seq: number }[], next: readonly { seq: number }[]) =>
-  current.length === next.length && current.at(-1)?.seq === next.at(-1)?.seq
+// A backend that broadcasts groups.changed (groups.state says change_events) moves the view on push; the
+// poll is then only a backstop for a lost signal. Older backends keep the 2 s poll.
+const ROOM_POLL_MS = 2000
+const ROOM_BACKSTOP_MS = 15_000
+
+/** One room read: `current` settles when it ends, `next` is the one read queued behind it, `answered` once its
+ *  groups.state reply is in. */
+type RoomRead = { current: Promise<void>; next?: Promise<void>; answered?: boolean }
+
+/** The events of one groups.log page read after `cursor`, or null when the page would leave a hole. The log
+ *  is append-only with one seq per event, so a page applies only from cursor+1 on: an event the view already
+ *  holds is skipped, and a gap is refused, so the view is always a prefix of the room log. */
+export function roomLogPageAfter<T extends { seq: number }>(cursor: number, page: readonly T[]): null | T[] {
+  const fresh = page.filter(event => event.seq > cursor)
+
+  return fresh.every((event, index) => event.seq === cursor + index + 1) ? fresh : null
+}
 
 const canSendNow = (gate: {
   restored: boolean
@@ -134,6 +153,8 @@ function confirmSend(result: unknown, eventId: string, unconfirmed: string) {
     throw new Error(unconfirmed)
   }
 }
+
+const NO_MEMBERS: CanonicalRoomMember[] = []
 
 export function CanonicalGroupWorkspace({
   binding,
@@ -218,8 +239,6 @@ function CanonicalRoomView({
   const delivered = useRef<string | null>(null)
   // The Send in progress, which a Stop pressed now must cover; `settled` says whether it may have posted.
   const sending = useRef<SendRun | null>(null)
-  // The log is append-only within one authority epoch: each poll reads only what is new.
-  const seen = useRef<{ epoch?: number; seq: number }>({ seq: 0 })
 
   const draft = pending ? String(pending.params.payload.text ?? '') : composerDraft.main
 
@@ -337,21 +356,105 @@ function CanonicalRoomView({
         : labels.groupsUnreachable
   }
 
-  const publishRoomSnapshot = (snapshot: RoomState) => {
-    syncCanonicalGroupName(binding, snapshot.room.name)
-    setState(snapshot)
-    const driver = snapshot.driver_status
+  // The applied log and its authority epoch, read only after its last seq (the cursor): a refresh asks for what
+  // is new, not the whole room.
+  const applied = useRef<{ epoch?: number; log: RoomEvent[] }>({ log: [] })
+  const changeEvents = useRef(false)
+  const latestDriver = useRef<RoomState['driver_status']>(undefined)
 
-    if (driver && !driver.working && !driver.counts?.stopping && !driver.pending_actions?.length) {
-      setNotice(current => (current === 'stopped' ? '' : current))
+  // One room read at a time for every caller (poll, push, a mutation's settle, Refresh, settings saved). A call
+  // during a read queues ONE read after it (shared by every caller that lands meanwhile) and resolves when that
+  // read ends, so a caller never waits for a busy room to fall quiet and no two reads overlap. A mutation's
+  // settle drops the read in flight (refreshAfterChange).
+  // `answered`: its groups.state reply is in, so a reconnect from here on may have lost pushes it did not see.
+  const reading = useRef<RoomRead | null>(null)
+  // The shown view's poll timer: every read clears it when it starts and re-arms it when it ends.
+  const pollTimer = useRef<{ started: () => void; ended: (failed: boolean) => void } | null>(null)
+
+  const refresh = (): Promise<void> => {
+    const flight = reading.current
+
+    if (flight) {
+      flight.next ??= flight.current.catch(() => undefined).then(() => (alive.current ? refresh() : undefined))
+
+      return flight.next
     }
 
-    setReadError('')
+    // Published before its first request goes out, so an event that request causes (its own dial's
+    // gateway.ready) already sees it in flight; `current` settles as the read does.
+    let settle!: (outcome: Promise<void>) => void
+
+    const read: RoomRead = {
+      current: new Promise<void>(resolve => {
+        settle = resolve
+      })
+    }
+
+    reading.current = read
+    pollTimer.current?.started()
+    settle(
+      readRoom(read)
+        .then(
+          () => {
+            pollTimer.current?.ended(false)
+          },
+          error => {
+            pollTimer.current?.ended(true)
+
+            throw new Error(readFailure(error), { cause: error })
+          }
+        )
+        .finally(() => {
+          if (reading.current === read) {
+            reading.current = null
+          }
+        })
+    )
+
+    return read.current
   }
 
-  const refresh = async (includeHistory = true) => {
+  // After a mutation: a read in flight started before it, so its answer is dropped and one more read follows.
+  const refreshAfterChange = () => {
+    revision.current++
+
+    return refresh()
+  }
+
+  // The log pages after `cursor`, each validated to start right after the last: collected, then joined onto
+  // the applied prefix once instead of recopied per page.
+  const readLogAfter = async (cursor: number) => {
+    const pages: RoomEvent[][] = []
+
+    for (;;) {
+      const page = await canonicalGroupRequest<{ events: RoomEvent[]; has_more?: boolean }>(binding, 'groups.log', {
+        room_id: binding.roomId,
+        since_seq: cursor,
+        limit: 100
+      })
+
+      const fresh = roomLogPageAfter(cursor, page.events)
+
+      // A hole, or a page that says there is more but brings nothing: the cursor cannot move.
+      if (!fresh || (page.has_more && !fresh.length)) {
+        throw new Error(labels.invalidLogCursor)
+      }
+
+      if (fresh.length) {
+        pages.push(fresh)
+        cursor = fresh[fresh.length - 1].seq
+      }
+
+      if (!page.has_more) {
+        return pages
+      }
+    }
+  }
+
+  const readRoom = async (read: RoomRead) => {
     const version = ++revision.current
     const snapshot = await canonicalGroupRequest<RoomState>(binding, 'groups.state', { room_id: binding.roomId })
+    read.answered = true
 
     if (snapshot.model_requests?.length) {
       await respondPluginGroupModelRequests(
@@ -363,99 +466,170 @@ function CanonicalRoomView({
       )
     }
 
-    if (
-      !includeHistory ||
-      (snapshot.room.latest_seq !== undefined &&
-        seen.current.epoch === snapshot.room.authority_epoch &&
-        seen.current.seq === snapshot.room.latest_seq)
-    ) {
-      if (alive.current && version === revision.current) {
-        publishRoomSnapshot(snapshot)
-      }
-
-      return snapshot
-    }
-
     const { authority_epoch: epoch, latest_seq: latest } = snapshot.room ?? {}
-    // A new authority epoch (or a log behind what was read) starts the log again.
-    const fresh = epoch !== seen.current.epoch || (typeof latest === 'number' && latest < seen.current.seq)
-    const since = fresh ? 0 : seen.current.seq
-    const log: RoomEvent[] = []
-    let cursor = since
+    const base = applied.current
+    // The log only grows within one authority epoch. A new epoch (the room re-hosted) or a log behind the view
+    // starts it again, even when the new log is as long as the old.
+    let log = epoch !== base.epoch || (latest ?? Infinity) < (base.log.at(-1)?.seq ?? 0) ? [] : base.log
 
-    for (;;) {
-      const page = await canonicalGroupRequest<{ events: RoomEvent[]; has_more?: boolean; next_seq?: number }>(
-        binding,
-        'groups.log',
-        { room_id: binding.roomId, since_seq: cursor, limit: 100 }
-      )
+    // A state that names no event past the cursor (a status-only push, an idle backstop) reads no log page.
+    // An append after the state read moves next_seq, so its own push (or the backstop) brings it.
+    const cursor = log.at(-1)?.seq ?? 0
+    const pages = !visible || latest === cursor ? [] : await readLogAfter(cursor)
 
-      log.push(...page.events)
-
-      if (!page.has_more) {
-        break
-      }
-
-      const next = page.events.at(-1)?.seq
-
-      if (!next || next <= cursor) {
-        throw new Error(labels.invalidLogCursor)
-      }
-
-      cursor = next
-    }
+    // Nothing new keeps the same array: status-only pushes and backstop polls allocate nothing per event.
+    log = pages.length ? log.concat(...pages) : log
 
     if (alive.current && version === revision.current) {
-      seen.current = { epoch, seq: log.at(-1)?.seq ?? cursor }
-      publishRoomSnapshot(snapshot)
+      // An unchanged log keeps its identity, so the derived history (handoffs, outcomes) is not recomputed.
+      applied.current = { epoch, log }
+      changeEvents.current = snapshot.change_events === true
+      latestDriver.current = snapshot.driver_status
+      syncCanonicalGroupName(binding, snapshot.room.name)
+      setState(snapshot)
 
-      setEvents(current => {
-        const next = fresh ? log : [...current, ...log.filter(event => event.seq > since)]
+      // The stop notice tells people to use Retry or Discard on kept turns: it stays while any wait.
+      if (
+        snapshot.driver_status &&
+        !snapshot.driver_status.working &&
+        !snapshot.driver_status.counts?.stopping &&
+        !snapshot.driver_status.pending_actions?.length
+      ) {
+        setNotice(current => (current === 'stopped' ? '' : current))
+      }
 
-        return !fresh && sameLog(current, next) ? current : next
-      })
+      setEvents(log)
       setReadError('')
     }
-
-    return snapshot
   }
 
+  // eslint-disable-next-line no-restricted-syntax -- the shown view's poll timer, socket lease and push listeners
   useEffect(() => {
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let release: (() => void) | null = null
 
-    const poll = async () => {
-      let active = false
-
-      try {
-        // Hidden rooms retain a cheap control poll so a running member can
-        // discover models after navigation; only visible rooms reload history.
-        const snapshot = await refresh(visible)
-        active = !!snapshot.driver_status?.working
-      } catch (e) {
+    const poll = () => {
+      void refresh().catch(e => {
         if (!cancelled) {
           setReadError(readFailure(e))
         }
-      }
+      })
+    }
 
-      if (!cancelled) {
-        timer = setTimeout(() => void poll(), visible && active ? 750 : 2000)
+    // A read that ends re-arms the one timer, so a push mid-wait restarts the wait. The slow backstop needs
+    // pushes that can arrive: a backend that sends them, and the route's socket held open (the lease, below).
+    // A failed read (the route may be down, so its pushes are lost too) retries on the fast poll, whoever
+    // started it; each fast read dials the route, and that ready asks for a missing lease again.
+    pollTimer.current = {
+      started: () => clearTimeout(timer),
+      ended: failed => {
+        clearTimeout(timer)
+        timer = setTimeout(
+          poll,
+          visible && changeEvents.current && release && !failed
+            ? ROOM_BACKSTOP_MS
+            : visible && latestDriver.current?.working
+              ? 750
+              : ROOM_POLL_MS
+        )
       }
     }
 
-    void poll()
+    // groups.changed only reaches this window over an open socket to the room's backend; a secondary
+    // route's socket (a local room under a remote primary, too) otherwise closes between reads, and the
+    // slow backstop would then be the only update. A lease that lands after the view closed is let go; one
+    // that failed is asked for again when the route reconnects.
+    let leasing = false
+
+    const lease = () => {
+      if (release || leasing) {
+        return
+      }
+
+      leasing = true
+      void retainRouteSocket(canonicalGroupProfileRoute(binding)).then(granted => {
+        leasing = false
+
+        if (cancelled) {
+          granted?.()
+        } else {
+          release = granted
+        }
+      })
+    }
+
+    // An untagged event comes from the local/legacy primary socket, which may carry this room's route too.
+    const fromThisRoute = (event: unknown) => {
+      const source = String((event as { connectionId?: string }).connectionId || '').trim()
+
+      return !source || source === binding.connectionId
+    }
+
+    // One naming rooms refreshes only their views (no list: something process-wide moved). The same broadcast
+    // reaches this window once per socket open to its backend: a broadcast_id this view already read for is a
+    // copy, and queues no second read. A push without one (an older backend) always reads.
+    const seenBroadcasts = new LruCache<string, true>(64) // copies land ms apart: a short memory is enough
+
+    const unsubscribe =
+      typeof host.onEvent === 'function'
+        ? host.onEvent('groups.changed', event => {
+            const { room_ids: rooms, broadcast_id: id } =
+              (event as { payload?: { room_ids?: unknown; broadcast_id?: unknown } }).payload ?? {}
+
+            if (cancelled || !fromThisRoute(event) || (Array.isArray(rooms) && !rooms.includes(binding.roomId))) {
+              return
+            }
+
+            if (typeof id === 'string' && id) {
+              if (seenBroadcasts.has(id)) {
+                return
+              }
+
+              seenBroadcasts.set(id, true)
+            }
+
+            poll()
+          })
+        : undefined
+
+    // A reconnect loses every push sent while the route's socket was down: re-read now, not at the backstop.
+    // A read dials the route itself: a gateway.ready before its groups.state reply is the read's own dial. One
+    // after the reply is a real reconnect the read may have missed, but only while the lease holds the socket
+    // open: without it every request (the read's log pages too) redials, so a ready during an answered read
+    // is its own dial again, re-reading on it would loop, and no push could have reached a closed socket.
+    const unsubscribeReady =
+      typeof host.onEvent === 'function'
+        ? host.onEvent('gateway.ready', event => {
+            if (cancelled || !fromThisRoute(event)) {
+              return
+            }
+
+            lease()
+
+            if (!reading.current || (reading.current.answered && release)) {
+              poll()
+            }
+          })
+        : undefined
+
+    lease()
+    poll()
 
     return () => {
       cancelled = true
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- invalidate the latest request counter; this ref is not a DOM node
       revision.current++
       clearTimeout(timer)
+      pollTimer.current = null
+      unsubscribe?.()
+      unsubscribeReady?.()
+      release?.()
     }
     // The keyed parent freezes the authority binding for this lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
 
-  const mutate = async (operation: () => Promise<unknown>, settle: () => unknown = refresh) => {
+  const mutate = async (operation: () => Promise<unknown>, settle: () => unknown = refreshAfterChange) => {
     if (busyRef.current) {
       throw new Error(labels.groupWorking)
     }
@@ -474,7 +648,8 @@ function CanonicalRoomView({
           await settle()
         } catch (e) {
           if (alive.current) {
-            setReadError(e instanceof Error ? e.message : String(e))
+            const failure = e instanceof Error && e.cause instanceof Error ? e.cause : e
+            setReadError(failure instanceof Error ? failure.message : String(failure))
           }
         }
       }
@@ -834,7 +1009,7 @@ function CanonicalRoomView({
 
       if (alive.current) {
         setNotice('stopped')
-        await refresh()
+        await refreshAfterChange()
       }
     } catch (e) {
       if (alive.current) {
@@ -916,8 +1091,14 @@ function CanonicalRoomView({
 
   usePeerRenewal(binding, state, methods, visible)
   const driver = state?.driver_status
-  const members = state?.room.members ?? []
+  const members = useSameValue(state?.room.members ?? NO_MEMBERS)
   const { nameFor } = useCanonicalMembers(binding)
+
+  const surfaceState = useMemo(
+    () => (state ? { ...state, room: { ...state.room, members: markRoomLead(members, state.context) } } : null),
+    [state, members]
+  )
+
   const { statuses, working } = useCanonicalRoomLive(events, driver, members, reply?.thread)
   useEffect(() => holdCanonicalRoomLive(binding), [binding])
   useEffect(() => {
@@ -994,7 +1175,7 @@ function CanonicalRoomView({
         restoredPending={restoredPending}
         sendHint={sendHint}
         sending={!!sending.current}
-        state={state ? { ...state, room: { ...state.room, members: markRoomLead(members, state.context) } } : null}
+        state={surfaceState}
         stopping={stopping}
         uploading={uploading}
         visible={visible}

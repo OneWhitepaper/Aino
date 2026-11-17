@@ -19,9 +19,9 @@ def home(tmp_path, monkeypatch):
     (home / "config.yaml").write_text("mcp_servers: {}\n")
     (home / ".env").write_text("EXISTING_SECRET=keep-me\n")
     (home / "mcp-tokens").mkdir()
-    live.reset_for_tests()
+    live._open.clear()
     yield home
-    live.reset_for_tests()
+    live._open.clear()
 
 
 def _install(config, callback, *, name="custom-docs"):

@@ -22,7 +22,9 @@ def endpoint_credential_slots(provider_key: str, entry: dict[str, Any], remainin
     Older CLI setup keyed its secret by host:port; a hand-written key_env can be
     shared with other integrations and is deliberately outside this deletion.
     """
-    slots = {custom_endpoint_key_env(provider_key)}
+    from hermes_cli.config_secret_refs import dashboard_endpoint_key_env
+
+    slots = {custom_endpoint_key_env(provider_key), dashboard_endpoint_key_env(entry, provider_key)}
     url = urlparse(str(entry.get("base_url") or entry.get("url") or entry.get("api") or ""))
     if url.hostname:
         identity = f"{url.hostname}_{url.port}" if url.port else url.hostname

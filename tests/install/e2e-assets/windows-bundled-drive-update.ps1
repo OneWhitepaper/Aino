@@ -17,7 +17,7 @@
 #      on 'update' for the button the app owns; NEVER an internal apply call.
 #   3. when the OS App Installer confirmation window appears, click its
 #      Update/Install button (UpdateSettings OnLaunch ShowPrompt=false means
-#      it usually does NOT appear; tolerate both).
+#      it usually does NOT appear; tolerate both), then accept its metered-network warning.
 #      -InstallerAction Cancel instead requires a new system window bound to
 #      -ExpectedDisplayName, invokes Cancel/Close, and observes its dismissal.
 #   4. wait for the app processes to exit (the hand-off quits the app) —
@@ -40,6 +40,9 @@ param(
     # How long to wait for the App Installer confirmation dialog, if the OS
     # shows one at all.
     [int]$ConfirmTimeoutSec = 120,
+    # How long after that click to watch for App Installer's metered-connection warning, which
+    # it shows only on a metered network.
+    [int]$MeteredWarningTimeoutSec = 20,
     # How long to wait for the app processes to exit after the click.
     [int]$ExitTimeoutSec = 600
 )
@@ -57,6 +60,7 @@ $ProcessName = $oldProcess.ProcessName
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+. (Join-Path $PSScriptRoot 'windows-uia-buttons.ps1')
 
 New-Item -ItemType Directory -Path $ProofDir -Force | Out-Null
 if (-not $ResultPath) { $ResultPath = Join-Path $ProofDir "drive-update-result.json" }
@@ -296,7 +300,21 @@ $installerWindow = $null
 $installerActionTaken = $null
 $newVisibleWindow = $false
 $processStartedForAttempt = $false
-while ((Get-Date) -lt $cDeadline -and -not $confirmed -and -not $installerCancelled) {
+$pressed = @()
+if ($InstallerAction -ne 'Cancel') {
+    $pressed = @(Confirm-AppInstallerPrompt -Root ([System.Windows.Automation.AutomationElement]::RootElement) `
+        -GetProcessIds { Get-Process -Name "AppInstaller" -ErrorAction SilentlyContinue | ForEach-Object { $_.Id } } `
+        -PromptTimeoutSec $ConfirmTimeoutSec -WarningTimeoutSec $MeteredWarningTimeoutSec -Press {
+            param($hit)
+            Save-Shot $(if ($hit.Name -eq 'Yes') { '02-appinstaller-metered-warning' } else { '02-appinstaller-confirm' })
+            Write-Host "  [uia] App Installer dialog: clicking '$($hit.Name)'"
+            Invoke-Button $hit.Element
+        })
+    $confirmed = $pressed.Count -gt 0
+    $installerObserved = $confirmed
+    if ($confirmed) { $installerActionTaken = 'confirm-button' }
+}
+while ($InstallerAction -eq 'Cancel' -and (Get-Date) -lt $cDeadline -and -not $installerCancelled) {
     if ($InstallerAction -eq 'Cancel') {
         $boundWindow = Find-TestInstallerWindow $updateClickedAt $ExpectedDisplayName $installerVisibleBeforeClick
         if ($boundWindow) {
@@ -327,26 +345,7 @@ while ((Get-Date) -lt $cDeadline -and -not $confirmed -and -not $installerCancel
         if (-not $installerCancelled) { Start-Sleep -Milliseconds 200 }
         continue
     }
-    $installer = Get-Process -Name "AppInstaller" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($installer) {
-        $root = [System.Windows.Automation.AutomationElement]::RootElement
-        $cond = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $installer.Id)
-        $win = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
-        if ($win) {
-            $installerObserved = $true
-            $installerPid = $installer.Id
-            $installerWindow = @{ handle=$win.Current.NativeWindowHandle; title=$win.Current.Name }
-            $hit = Find-InvokableButton -Root $win -Patterns @('^Update$', '^Install$', '^(Reinstall|Update) .*', '^更新$', '^安装$', '^重新安装$')
-            if ($hit) {
-                Save-Shot "02-appinstaller-confirm"
-                Write-Host "  [uia] App Installer dialog: clicking '$($hit.Name)'"
-                if (Invoke-Button $hit.Element) { $confirmed = $true; $installerActionTaken = 'confirm-button' }
-            }
-        }
-    }
-    # The app quits before App Installer opens; keep watching its confirmation.
-    Start-Sleep -Seconds 3
+
 }
 if ($InstallerAction -eq 'Cancel' -and -not $installerCancelled) {
     Save-Shot 'zz-appinstaller-cancel-ui-missing'
@@ -370,7 +369,7 @@ while ((Get-Date) -lt $eDeadline) {
     if ((Get-AppPids).Count -eq 0) {
         Save-Shot "04-app-exited"
         Write-Host "  [uia] OLD app exited for the package swap"
-        @{ ok = $true; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; exited = $true;
+        @{ ok = $true; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; appInstallerPressed=$pressed; exited = $true;
             installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
             installerPid=$installerPid; installerWindow=$installerWindow; action=$installerActionTaken;
             newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |
@@ -380,7 +379,7 @@ while ((Get-Date) -lt $eDeadline) {
     Start-Sleep -Seconds 5
 }
 Save-Shot "zz-app-never-exited"
-@{ ok = $false; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; exited = $false;
+@{ ok = $false; clicked = $clicked.Name; appInstallerConfirmed = [bool]$confirmed; appInstallerPressed=$pressed; exited = $false;
     installerAction=$InstallerAction; appInstallerObserved=$installerObserved; appInstallerCancelled=$installerCancelled;
     installerPid=$installerPid; installerWindow=$installerWindow; action=$installerActionTaken;
     newVisibleWindow=$newVisibleWindow; processStartedForAttempt=$processStartedForAttempt } |

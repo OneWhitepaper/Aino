@@ -6,7 +6,8 @@ import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from
 import { useI18n } from '@/i18n'
 import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from '@/lib/escape-layers'
 import { triggerHaptic } from '@/lib/haptics'
-import { Archive, Bell, Globe, Info, Keyboard, UserCircle, Zap } from '@/lib/icons'
+import { servedByHermesCloud } from '@/lib/hermes-cloud-host'
+import { Archive, Bell, CloudUpload, Globe, Info, Keyboard, UserCircle, Zap } from '@/lib/icons'
 import { isEditableTarget } from '@/lib/keybinds/combo'
 import { typeToFocusChar } from '@/lib/keybinds/composer-focus-keys'
 import { $commandPaletteOpen, openCommandPalettePage } from '@/store/command-palette'
@@ -21,6 +22,7 @@ import type { OverlayNavGroup } from '../overlays/overlay-split-layout'
 import { AboutSettings } from './about-settings'
 import { AccountSettings } from './account-settings'
 import { AppearanceSettings } from './appearance-settings'
+import { BackupSettings } from './backup-settings'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
@@ -58,6 +60,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'vault',
   'notifications',
   'sessions',
+  'backup',
   'plugins',
   'about'
 ]
@@ -312,6 +315,13 @@ export function SettingsView({
           onSelect: () => setActiveView('sessions')
         },
         {
+          active: activeView === 'backup',
+          icon: servedByHermesCloud() ? Archive : CloudUpload,
+          id: 'backup',
+          label: servedByHermesCloud() ? t.settings.nav.backupOnly : t.settings.nav.backup,
+          onSelect: () => setActiveView('backup')
+        },
+        {
           active: activeView === 'plugins',
           children: pluginSettingsNavChildren(plugins.entries, plugins.target, plugins.open),
           icon: PLUGINS_NAV_ICON,
@@ -426,6 +436,8 @@ export function SettingsView({
         onMainModelChanged={onMainModelChanged}
         view={providerView}
       />
+    ) : activeView === 'backup' ? (
+      <BackupSettings key={vaultOwnerKey(activeConnectionId, scopeProfile)} />
     ) : activeView === 'notifications' ? (
       <NotificationsSettings />
     ) : (

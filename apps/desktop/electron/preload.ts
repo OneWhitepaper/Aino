@@ -430,8 +430,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   oauthLoginConnectionConfig: (remoteUrl, options) =>
     ipcRenderer.invoke('hermes:connection-config:oauth-login', remoteUrl, options),
   oauthLogoutConnectionConfig: remoteUrl => ipcRenderer.invoke('hermes:connection-config:oauth-logout', remoteUrl),
-  // Legacy Nous-hosted connection recovery; no discovery or new cloud setup.
+  // Legacy connection recovery and explicit Backup & Transfer destination selection.
   cloud: {
+    discover: org => ipcRenderer.invoke('hermes:cloud:discover', org),
     status: () => ipcRenderer.invoke('hermes:cloud:status'),
     login: () => ipcRenderer.invoke('hermes:cloud:login'),
     agentSignIn: dashboardUrl => ipcRenderer.invoke('hermes:cloud:agent-sign-in', dashboardUrl)

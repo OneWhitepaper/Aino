@@ -60,7 +60,7 @@ def test_named_child_keeps_name_and_identity_in_events_roster_and_result(monkeyp
     child.session_id, child.model = "child-session", "example"
     child._session_init_model_config = {}
     monkeypatch.setattr(registry, "_active_subagents", {})
-    monkeypatch.setattr(dt, "_load_config", dict)
+    monkeypatch.setattr(dt.delegate_tool_config, "_load_config", dict)
     from tools.registry import registry as tools
     batches = []
     with (patch("run_agent.AIAgent", return_value=child),

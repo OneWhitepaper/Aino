@@ -250,12 +250,14 @@ def test_group_response_from_replaced_viewer_cannot_persist_old_selection(tmp_pa
         request = _pending(call, viewer, task)
         replacement = _connection(runner.session_authority)
         assert 'result' in _prepare(call, replacement)
-        response = _request(call, viewer, 'groups.model_respond', room_id='room', request_id=request['request_id'],
+        from hermes_state_local import local_receipt
+        previous = local_receipt(target.db, sid)['policy']
+        _request(call, viewer, 'groups.model_respond', room_id='room', request_id=request['request_id'],
                             result={'status': 'selected', 'selection': ROW})
         # A retired viewer cannot cause a selection to be committed even if its metadata answer arrives.
-        assert 'error' in response or response.get('result') == {'accepted': True}, response
         result = call(_finish(task))
         assert result.get('error', {}).get('data', {}).get('reason') == 'model_request_expired', result
+        assert local_receipt(target.db, sid)['policy'] == previous
         for connection in (viewer, cli, replacement):
             call(connection.close())
 

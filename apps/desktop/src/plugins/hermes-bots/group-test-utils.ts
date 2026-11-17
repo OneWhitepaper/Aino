@@ -483,6 +483,7 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
   const { profileColor } = await import('@/lib/profile-color')
   const { relativeTime } = await import('@/lib/time')
   const { useStickToBottom } = await import('use-stick-to-bottom')
+  const { LruCache } = await import('@/lib/lru-cache')
 
   // The gateway Group Chat row's right-click menu (#143571) renders the real one.
   const { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } =
@@ -545,6 +546,7 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
     composerSurfaceRing: '',
     useGatewayActivationEpoch: () => 0,
     host,
+    LruCache,
     randomUuid,
     profileColor,
     relativeTime,

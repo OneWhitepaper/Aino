@@ -29,9 +29,9 @@ from tests.waiting import wait_until
 def _clean_live(monkeypatch):
     # Fake catalog entries have no remote manifest; a cold GitHub probe delays the approval card.
     monkeypatch.setattr("hermes_cli.plugin_catalog_presence._pinned_manifest", lambda *_: None)
-    live.reset_for_tests()
+    live._open.clear()
     yield
-    live.reset_for_tests()
+    live._open.clear()
 
 
 def _entry(name, *, platforms=(), requires_env=()):

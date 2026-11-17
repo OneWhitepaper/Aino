@@ -130,7 +130,7 @@ it.each([
       }
     ]
 
-    const status = memberStatus('helper', [], memberOutcomes(events), 1)
+    const status = memberStatus('helper', [], memberOutcomes(events))
     const text = labels.statusFailed + (expected ? ' · ' + expected : '')
     expect(memberStatusText(status, labels)).toBe(text)
     const view = render(<MemberStatusChip avatar={null} labels={labels} name="Helper" status={status} />)

@@ -72,29 +72,23 @@ jobs:
             exit 1
           fi
 
-          # A v0.23.1 upstream import is the one reviewed exception to the
+          # A v0.23.2 upstream import is the one reviewed exception to the
           # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
           # its second parent is the proposed PR head and its first parent is
           # the target branch.  The release must be present in the PR head but
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
-          UPSTREAM=3b421578588243f920886e6fe79a6faa87ea026e
-          CATALOG_TREE=5302bba64a72ff88ef0724065a62cd57cb7c37dc
+          UPSTREAM=ae2a81ccc00e9b7c06301523e5bb09608397149c
+          CATALOG_TREE=be826e8883dcf55b8eb42a54748bdbff459c53c7
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # Pin the reviewed import's exact catalog tree. It retains Aino's
-            # existing Experiential Labs entry and excludes AtmoRouter because
-            # its pinned repository could not be cloned during review. Other
-            # imported entries continue through the pinned-source gate below.
-            # AI SENSE, Toll and Hermes Android use reachable replacement commits with plugin
-            # subtrees identical to their original pins (recorded in each entry).
-            # Limbic uses its official v0.9.5 commit: only a removed evaluation
-            # fixture differs; runtime, manifest and assets remain identical.
-            # Any unreviewed catalog edit is rejected.
+            # Pin the final reviewed v0.23.2 catalog, including retained Aino entries.
+            # Every changed entry still passes the exact release scanner and
+            # pinned-source validation below; unrelated catalog edits are rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
-              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.1"
+              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.2"
               exit 1
             fi
             # The import must use the release's reviewed enforcement inputs.
@@ -105,6 +99,7 @@ jobs:
                 scripts/ci/catalog_changed_entries.py \
                 scripts/ci/catalog_entry_fields.py \
                 scripts/ci/catalog_validate_pinned_entries.py \
+                scripts/ci/catalog_self_updater_allowlist.json \
                 scripts/scan_plugin_payloads.py \
                 scripts/validate_plugin_catalog.py \
                 .github/actions/setup-pm/action.yml; then
@@ -167,8 +162,8 @@ jobs:
           # upstream runtime version. Fetch the reviewed official tag locally
           # and verify both its immutable tag object and peeled release commit
           # before setup or plugin code can consume its version identity.
-          REVIEWED_TAG=v0.23.1
-          REVIEWED_TAG_OBJECT=b65acf3fdc1d43bd889211ea8e37032974b395a5
+          REVIEWED_TAG=v0.23.2
+          REVIEWED_TAG_OBJECT=28f57ed8e3dba4eceb67dfd3e3abda1a7604452d
           git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "refs/tags/$REVIEWED_TAG"
           if [ "$(git rev-parse FETCH_HEAD)" != "$REVIEWED_TAG_OBJECT" ] \
               || [ "$(git rev-parse 'FETCH_HEAD^{commit}')" != "$VALIDATION_REF" ]; then

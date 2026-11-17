@@ -119,7 +119,7 @@ def run_codex(ctx):
     request_limit, input_limit, output_limit = (runtime[name] for name in
         ('request_limit', 'input_limit', 'output_limit'))
     sandbox = 'workspace-write' if runtime['workspace_writable'] else 'read-only'
-    probe_read_path = 'agent/compaction_display.py' if scenario == 'large' else sorted(ctx['fixture_before'])[0]
+    probe_read_path = 'agent/compaction_display.py' if scenario == 'large' else min(ctx['fixture_before'])
     probe_read_text = ''.join((workspace / probe_read_path).read_text().splitlines(keepends=True)[:8]) \
         if not args.live and args.codex_dry_case.startswith('delegation') else ''
     record, progress, hashes = ctx['record'], ctx['progress'], ctx['hashes']

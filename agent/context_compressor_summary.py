@@ -107,19 +107,21 @@ class SummaryDispatchMixin:
                 self._summary_has_user_turn = scan.has_user_turn_before
             raise
 
+    def _render_tool_args_for_summary(self, arguments: str) -> str:
+        """Redacted, capped tool-call arguments for the summarizer."""
+        # Redact the FULL args before cutting: delimited secrets (PEM BEGIN…END) only match whole, so a
+        # pre-redaction cut would leave a key body straddling the cut unredacted in the persisted summary.
+        from agent.context_compressor import _redact_compaction_text
+        args = _redact_compaction_text(arguments or "")
+        return args[:self._TOOL_ARGS_HEAD] + "..." if len(args) > self._TOOL_ARGS_MAX else args
+
     def _render_tool_call_for_summary(self, tc: Any) -> str:
         """``  name(args)`` line for the summarizer; object-shaped calls render as ``name(...)``."""
-        from agent.context_compressor import _redact_compaction_text
         if not isinstance(tc, dict):
             fn = getattr(tc, "function", None)
             return f"  {getattr(fn, 'name', '?') if fn else '?'}(...)"
         fn = tc.get("function", {})
-        # Redact the FULL args before cutting: delimited secrets (PEM BEGIN…END) only match whole, so a
-        # pre-redaction cut would leave a key body straddling the cut unredacted in the persisted summary.
-        args = _redact_compaction_text(fn.get("arguments", ""))
-        if len(args) > self._TOOL_ARGS_MAX:
-            args = args[:self._TOOL_ARGS_HEAD] + "..."
-        return f"  {fn.get('name', '?')}({args})"
+        return f"  {fn.get('name', '?')}({self._render_tool_args_for_summary(fn.get('arguments', ''))})"
 
     def _serialize_records_for_summary(self, turns: list[dict[str, Any]]) -> list[str]:
         """Serialize turns into a list of labeled, redacted records for the summarizer."""
