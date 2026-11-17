@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+from hermes_cli.upstream_compatibility import UPSTREAM_VERSION
 from hermes_cli.version_info import (
     VersionInfo,
     _derived_version,
@@ -50,7 +51,7 @@ def test_display_version_keeps_tagless_stamp_identity(tmp_path, monkeypatch):
 
     info = get_version_info()
 
-    assert info.base_version == "0.23.0"
+    assert info.base_version == UPSTREAM_VERSION
     assert info.distribution_base_version == "unknown"
     assert info.display_version == stamp["displayVersion"]
     assert info.commit == stamp["commit"]
@@ -80,7 +81,7 @@ def test_stamp_version_info_reads_nix_stamp(tmp_path, monkeypatch):
 
     info = get_version_info()
 
-    assert info == VersionInfo("0.23.0", "0.19.0+3", 3, "a" * 40, "feature/version", "nix", distribution="nix",
+    assert info == VersionInfo(UPSTREAM_VERSION, "0.19.0+3", 3, "a" * 40, "feature/version", "nix", distribution="nix",
                                distribution_base_version="0.19.0")
 
 
@@ -114,7 +115,7 @@ def test_stamp_version_info_preserves_missing_branch(tmp_path, monkeypatch):
 
     info = get_version_info()
 
-    assert info == VersionInfo("0.23.0", "0.19.0+?", None, "b" * 40, None, "docker", True,
+    assert info == VersionInfo(UPSTREAM_VERSION, "0.19.0+?", None, "b" * 40, None, "docker", True,
                                distribution_base_version="0.19.0")
 
 
@@ -149,7 +150,7 @@ def test_get_version_info_unknown_when_no_stamp_and_no_git(monkeypatch):
 
     info = get_version_info()
 
-    assert info.base_version == "0.23.0"
+    assert info.base_version == UPSTREAM_VERSION
     assert info.distribution_base_version == "unknown"
     assert info.derived_version == "unknown"
     assert info.distance is None
@@ -184,7 +185,7 @@ def test_get_version_info_derives_identity_from_reachable_release_tag(tmp_path, 
 
     info = get_version_info()
 
-    assert info.base_version == "0.23.0"
+    assert info.base_version == UPSTREAM_VERSION
     assert info.distribution_base_version == "0.21.4"
     assert info.derived_version == f"0.21.4+1.g{git('rev-parse', '--short=7', 'HEAD')}"
     assert info.distance == 1
@@ -219,7 +220,7 @@ def test_get_version_info_takes_the_version_a_calver_only_release_shipped(tmp_pa
 
     info = get_version_info()
 
-    assert info.base_version == "0.23.0"
+    assert info.base_version == UPSTREAM_VERSION
     assert info.distribution_base_version == "0.21.4"
     assert info.distance == 1
     assert info.derived_version == f"0.21.4+1.g{git('rev-parse', '--short=7', 'HEAD')}"
@@ -281,7 +282,7 @@ def test_old_updater_version_stub_reads_the_same_stamp_as_version_info(tmp_path)
     (stamped / "install-stamp.json").write_text(json.dumps(stamp))
     compat, identity, core = read(stamped)
     assert compat == identity == stamp["baseVersion"]
-    assert core == "0.23.0"
+    assert core == UPSTREAM_VERSION
 
     unstamped = tmp_path / "unstamped"
     unstamped.mkdir()

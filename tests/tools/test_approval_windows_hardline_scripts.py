@@ -253,18 +253,24 @@ def test_later_list_element_below_the_root_stays_approvable(cmd):
     assert detect_dangerous_command(cmd)[0], cmd
 
 
-@pytest.mark.parametrize("command", [
-    "Get-Date" + "\r" * 8000 + "; x",
-    "Get-Date" + " \r" * 4000 + "; x",
-    "Get-Date" + "\rri -r" * 14000 + "; x",
-    "Get-Date" + "\rri x" * 16000 + "; x",
-    "Get-Date" + "\rpwsh -a" * 1500 + "; x",
+@pytest.mark.parametrize(("fragment", "count"), [
+    ("\r", 8000),
+    (" \r", 4000),
+    ("\rri -r", 14000),
+    ("\rri x", 16000),
+    ("\rpwsh -a", 1500),
 ], ids=["cr", "space-cr", "cr-delete-verb", "cr-delete-operand", "cr-launcher"])
-def test_bare_cr_runs_scan_in_linear_time(command):
+def test_bare_cr_runs_scan_in_linear_time(fragment, count):
     # A bare CR starts a PowerShell statement; a run of them must not make each CR rescan the rest of the run.
-    start = time.perf_counter()
-    assert not detect_hardline_command(command)[0]
-    assert time.perf_counter() - start < 2
+    # CPU time excludes other CI workers taking the core; doubling input still catches quadratic rescans.
+    elapsed = []
+    for repeats in (count // 2, count):
+        command = "Get-Date" + fragment * repeats + "; x"
+        start = time.process_time()
+        assert not detect_hardline_command(command)[0]
+        elapsed.append(time.process_time() - start)
+    assert elapsed[1] < 2
+    assert elapsed[1] < 3 * elapsed[0]
 
 
 @pytest.mark.parametrize("cmd", [

@@ -664,14 +664,15 @@ def _drop_stale_addresses(entry: dict[str, Any]) -> None:
             entry.pop(field, None)
 
 
-def _store_endpoint_key(entry: dict[str, Any], env_var: str, key: str, base_url: str, own_provider: Any) -> None:
+def _store_endpoint_key(entry: dict[str, Any], env_var: str, key: str, base_url: str, own_provider: Any, *,
+                        replacing_main_model: bool = False) -> None:
     """Save the key to ``.env`` and point the row at it; refuse (400) a variable another endpoint
     reads, so a save never sends this endpoint's key to that host."""
     from hermes_cli.config_secret_refs import store_secret
     from hermes_cli.config import require_env_writable
     require_env_writable(env_var, "set")
     try:
-        store_secret(env_var, key, base_url, own_provider)
+        store_secret(env_var, key, base_url, own_provider, replacing_main_model=replacing_main_model)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     entry["key_env"] = env_var
@@ -679,7 +680,7 @@ def _store_endpoint_key(entry: dict[str, Any], env_var: str, key: str, base_url:
 
 
 def _apply_endpoint_key(entry: dict[str, Any], body: CustomEndpointUpdate, endpoint_id: str, base_url: str,
-                        stored_key: Any) -> None:
+                        stored_key: Any, *, replacing_main_model: bool = False) -> None:
     from hermes_cli.config_secret_refs import dashboard_endpoint_key_env
     env_var = dashboard_endpoint_key_env(entry, endpoint_id)
     submitted_key = body.api_key.strip() if body.api_key is not None else None
@@ -688,15 +689,18 @@ def _apply_endpoint_key(entry: dict[str, Any], body: CustomEndpointUpdate, endpo
         # sentinel and legacy masks. Either one is display-only, current or stale.
         if _ENV_REF_RE.fullmatch(submitted_key) or is_redacted_credential_preview(submitted_key):
             raise HTTPException(status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL)
-        _store_endpoint_key(entry, env_var, submitted_key, base_url, stored_key)
+        _store_endpoint_key(entry, env_var, submitted_key, base_url, stored_key,
+                            replacing_main_model=replacing_main_model)
     elif submitted_key is not None:
         # Blank field means "clear the key", not "leave it alone". Keep a variable another block
         # still reads: model.api_key (the main picker reuses this row's variable) or a legacy name.
         from hermes_cli.config import read_raw_config
+        from hermes_cli.config_backend import keeping_read_base
         from hermes_cli.config_secret_refs import env_reference_owners
-        raw = read_raw_config()
+        raw = keeping_read_base(read_raw_config)
         own = raw["providers"].get(stored_key) if isinstance(raw.get("providers"), dict) else None
-        if not any(block is not own for block in env_reference_owners(raw, env_var)):
+        if not any(block is not own and not (replacing_main_model and block is raw.get("model"))
+                   for block in env_reference_owners(raw, env_var)):
             from hermes_cli.config import require_env_writable
             require_env_writable(env_var, "remove")
             remove_env_value(env_var)
@@ -705,7 +709,55 @@ def _apply_endpoint_key(entry: dict[str, Any], body: CustomEndpointUpdate, endpo
     elif str(entry.get("api_key") or "").strip() and not _config_api_key_is_env_ref(endpoint_id):
         # Migrate a plaintext key an earlier release wrote, on the next save,
         # without the user having to re-enter it.
-        _store_endpoint_key(entry, env_var, entry["api_key"].strip(), base_url, stored_key)
+        _store_endpoint_key(entry, env_var, entry["api_key"].strip(), base_url, stored_key,
+                            replacing_main_model=replacing_main_model)
+
+
+def _refreshes_main_endpoint(cfg: dict[str, Any], provider_key: str, existing: dict[str, Any]) -> bool:
+    """A named provider's copied route follows an edit; an independent main endpoint does not."""
+    from hermes_cli.route_identity import normalize_route_base_url
+
+    model_cfg = cfg.get("model")
+    if not isinstance(model_cfg, dict):
+        return False
+    old_url = next((existing.get(field) for field in ENDPOINT_ADDRESS_FIELDS if existing.get(field)), "")
+    model_pointer = model_cfg.get("key_env") or model_cfg.get("api_key_env")
+    entry_pointer = existing.get("key_env") or existing.get("api_key_env")
+    model_secret = model_cfg.get("api_key") or model_cfg.get("api")
+    return (bool(old_url) and (not model_pointer or model_pointer == entry_pointer)
+            and (not model_secret or model_secret == existing.get("api_key"))
+            and _model_names_provider(model_cfg, provider_key, existing)
+            and normalize_route_base_url(model_cfg.get("base_url")) == normalize_route_base_url(old_url))
+
+
+def _assign_endpoint_main(cfg: dict[str, Any], entry: dict[str, Any], endpoint_id: str,
+                          model: str, base_url: str, body: CustomEndpointUpdate) -> None:
+    from hermes_cli.model_assignment import apply_main_model_assignment, drop_model_key
+    from hermes_cli.model_switch import ModelSwitchResult
+    from hermes_cli.providers import determine_api_mode
+    from hermes_cli.route_identity import normalize_route_base_url
+    from hermes_cli.runtime_provider import frozen_runtime_config
+
+    route = custom_provider_slug(endpoint_id, endpoint_id) if is_builtin_provider_id(endpoint_id) else endpoint_id
+    if body.make_default:
+        with frozen_runtime_config(cfg):
+            result = _validated_main_model_selection(cfg, route, model, base_url)
+    else:
+        current = cfg["model"]
+        api_mode = _endpoint_api_mode(entry)
+        if (body.api_mode is None and not api_mode
+                and normalize_route_base_url(current.get("base_url")) == normalize_route_base_url(base_url)):
+            api_mode = str(current.get("api_mode") or "")
+        result = ModelSwitchResult(
+            success=True, new_model=str(current.get("default") or current.get("name") or model),
+            target_provider=str(current.get("provider") or route), base_url=base_url,
+            api_mode=api_mode or determine_api_mode(route, base_url), is_global=True)
+    assigned = apply_main_model_assignment(cfg.get("model", {}), result)
+    for key in ("api_key", "api", "key_env", "api_key_env"):
+        drop_model_key(assigned, key)
+    if entry.get("key_env"):
+        assigned["key_env"] = entry["key_env"]
+    cfg["model"] = assigned
 
 
 def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> tuple[str, dict[str, Any]]:
@@ -836,25 +888,16 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     # ``key_env`` — the indirection built-in providers use and that
     # runtime_provider.py resolves at load time.
     # See #69449.
-    _apply_endpoint_key(entry, body, endpoint_id, base_url, stored_key)
+    replacing_main = body.make_default or _refreshes_main_endpoint(cfg, endpoint_id, existing)
+    _apply_endpoint_key(entry, body, endpoint_id, base_url, stored_key, replacing_main_model=replacing_main)
 
     if stored_key is not None and stored_key != endpoint_id:
         providers.pop(stored_key, None)
     providers[endpoint_id] = entry
     cfg["providers"] = providers
 
-    if body.make_default:
-        from hermes_cli.model_assignment import apply_main_model_assignment, drop_model_key
-        from hermes_cli.runtime_provider import frozen_runtime_config
-
-        route = custom_provider_slug(endpoint_id, endpoint_id) if is_builtin_provider_id(endpoint_id) else endpoint_id
-        # Validate the pending entry, before it is committed to config.yaml.
-        with frozen_runtime_config(cfg):
-            result = _validated_main_model_selection(cfg, route, model, base_url)
-        cfg["model"] = apply_main_model_assignment(cfg.get("model", {}), result)
-        if entry.get("key_env") and isinstance(cfg["model"], dict):
-            cfg["model"]["key_env"] = entry["key_env"]
-            drop_model_key(cfg["model"], "api_key")
+    if replacing_main:
+        _assign_endpoint_main(cfg, entry, endpoint_id, model, base_url, body)
 
     return endpoint_id, entry
 
@@ -890,8 +933,10 @@ def upsert_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = 
                 providers if isinstance(providers, dict) else {}, body.id or body.name)
             created = existing is None
             endpoint_id = coerce_provider_id(stored_key) if existing is not None else _custom_endpoint_id(body.id or body.name)
+            from hermes_cli.config_secret_refs import dashboard_endpoint_key_env
             from hermes_cli.web_routers.custom_endpoint_cleanup import endpoint_credential_transaction
-            with endpoint_credential_transaction({custom_endpoint_key_env(endpoint_id)}):
+            slots = {custom_endpoint_key_env(endpoint_id), dashboard_endpoint_key_env(existing or {}, endpoint_id)}
+            with endpoint_credential_transaction(slots):
                 endpoint_id, _entry = _write_custom_endpoint(cfg, body)
                 # Every explicit edit refuses omitted fields, including non-default provider edits.
                 with refusing_locked_omissions(*_ROUTE_SECTIONS, "agent.reasoning_overrides"):

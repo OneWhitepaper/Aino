@@ -137,27 +137,32 @@ def _block_base_url(block: dict) -> str:
     return str(block.get("base_url") or block.get("url") or block.get("api") or "").strip()
 
 
-def other_endpoint_reads(env_name: str, base_url: str, own_provider: Any = None) -> bool:
+def other_endpoint_reads(env_name: str, base_url: str, own_provider: Any = None, *,
+                         replacing_main_model: bool = False) -> bool:
     """True when a RAW config block for an endpoint other than ``base_url`` reads ``env_name``.
     ``own_provider`` is the ``providers.<key>`` being saved: its on-disk row is the caller itself,
-    even when this save changes its ``base_url``."""
+    even when this save changes its ``base_url``. A writer replacing ``model`` in the same
+    transaction can exclude that discarded block too; every other consumer remains protected."""
     from hermes_cli.config import read_raw_config
-    raw = read_raw_config()
+    from hermes_cli.config_backend import keeping_read_base
+    raw = keeping_read_base(read_raw_config)
     providers = raw.get("providers")
     own = providers.get(own_provider) if own_provider is not None and isinstance(providers, dict) else None
     mine = _canonical_endpoint(base_url)
-    return any(b is not own and _block_base_url(b) and _canonical_endpoint(_block_base_url(b)) != mine
+    return any(b is not own and not (replacing_main_model and b is raw.get("model"))
+               and _block_base_url(b) and _canonical_endpoint(_block_base_url(b)) != mine
                for b in env_reference_owners(raw, env_name))
 
 
-def _refuse_cross_endpoint_overwrite(env_name: str, value: str, base_url: str, own_provider: Any = None) -> None:
+def _refuse_cross_endpoint_overwrite(env_name: str, value: str, base_url: str, own_provider: Any = None, *,
+                                     replacing_main_model: bool = False) -> None:
     """Refuse to change ``env_name`` when a config block for ANOTHER endpoint reads it: the new value
     is this endpoint's key, and overwriting would send it to that other host."""
     from hermes_cli.config import load_env
     current = load_env().get(env_name)
     if not current or current == value:
         return
-    if other_endpoint_reads(env_name, base_url, own_provider):
+    if other_endpoint_reads(env_name, base_url, own_provider, replacing_main_model=replacing_main_model):
         raise ValueError(f"refusing to overwrite {env_name}: another endpoint in config.yaml reads it "
                          "and it holds a different key")
 
@@ -221,7 +226,8 @@ def refs_supported() -> bool:
     return supports_file_tooling()
 
 
-def store_secret(env_name: str, value: str, base_url: str = "", own_provider: Any = None) -> str:
+def store_secret(env_name: str, value: str, base_url: str = "", own_provider: Any = None, *,
+                 replacing_main_model: bool = False) -> str:
     """Save ``value`` to ``.env`` as ``env_name`` and return the ``${env_name}`` reference.
     Raises ``ValueError`` when the ``.env`` write lock forbids the name, or when ``base_url`` (the
     endpoint the key is for) is given and another endpoint's block reads ``env_name``, so the caller
@@ -229,7 +235,8 @@ def store_secret(env_name: str, value: str, base_url: str = "", own_provider: An
     from hermes_cli.config import require_env_writable, save_env_value
     require_env_writable(env_name, "set")
     if base_url:
-        _refuse_cross_endpoint_overwrite(env_name, value, base_url, own_provider)
+        _refuse_cross_endpoint_overwrite(env_name, value, base_url, own_provider,
+                                         replacing_main_model=replacing_main_model)
     save_env_value(env_name, value)
     return f"${{{env_name}}}"
 

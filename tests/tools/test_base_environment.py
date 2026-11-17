@@ -4,6 +4,9 @@ Tests _wrap_command(), _extract_cwd_from_output(), _embed_stdin_heredoc(),
 init_session() failure handling, and the CWD marker contract.
 """
 
+import os
+import shutil
+import subprocess
 from unittest.mock import MagicMock
 
 import pytest
@@ -102,20 +105,33 @@ class TestAtomicSnapshotWrite:
     same-fs), so a reader sees the old-or-new complete file, never a torn one.
     """
 
-    def test_wrap_command_uses_atomic_temp_then_mv(self):
+    @pytest.mark.platforms("posix")
+    @pytest.mark.parametrize("noclobber", [False, True])
+    def test_snapshot_publication_preserves_open_readers(self, tmp_path, noclobber):
+        bash = shutil.which("bash")
+        if bash is None:
+            pytest.skip("bash required")
         env = _TestableEnv()
         env._snapshot_ready = True
-        wrapped = env._wrap_command("echo hi", "/tmp")
-        # Env dump goes to a temp file, not directly over the live snapshot.
-        assert "export -p" in wrapped and "> " in wrapped
-        assert ".tmp." in wrapped
-        # Then an atomic rename onto the real snapshot path.
-        assert "mv -f " in wrapped
-        # The env-dump must NOT write the live snapshot in place (the bug).
-        snap = env._snapshot_path
-        assert f"> {snap} " not in wrapped
-        assert f"> '{snap}'" not in wrapped
-        assert f"> {snap}\n" not in wrapped
+        snapshot = tmp_path / "snapshot.sh"
+        env._snapshot_path = str(snapshot)
+        previous = "export HERMES_ATOMIC_SENTINEL='old complete snapshot'\n"
+        snapshot.write_text(previous, encoding="utf-8")
+        command = ("set -C\n" if noclobber else "") + "export HERMES_ATOMIC_SENTINEL='new complete snapshot'"
+        child_env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+
+        with snapshot.open(encoding="utf-8") as reader:
+            old_inode = os.fstat(reader.fileno()).st_ino
+            subprocess.run([bash, "-c", env._wrap_command(command, str(tmp_path))],
+                           env=child_env, capture_output=True, text=True, check=True)
+            assert reader.read() == previous
+            assert snapshot.stat().st_ino != old_inode
+
+        restored = subprocess.run(
+            [bash, "-c", 'source "$1"; printf "%s" "$HERMES_ATOMIC_SENTINEL"', "snapshot-reader", str(snapshot)],
+            env=child_env, capture_output=True, text=True, check=True)
+        assert restored.stdout == "new complete snapshot"
+        assert not list(tmp_path.glob("snapshot.sh.tmp.*"))
 
     def test_temp_path_uses_mktemp_not_pid_variables(self):
         """The temp name MUST be allocated by ``mktemp`` — never ``$$`` (in

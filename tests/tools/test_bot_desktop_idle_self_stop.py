@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -101,6 +102,9 @@ def test_a_screen_started_before_an_update_still_stops_itself(abandoned_screen, 
     --run-module`` launcher, which loads the current generation at every run) with its own pid appended."""
     install = tmp_path / "an install's root"  # quoting: the command crosses the env as a shell-quoted string
     used = tmp_path / "launcher-used"
+    brand = install / "apps" / "desktop" / "brand.json"
+    brand.parent.mkdir(parents=True)
+    shutil.copyfile(_REPO / "apps" / "desktop" / "brand.json", brand)
     hermes = install / ".hermes" / "bin" / "hermes"
     hermes.parent.mkdir(parents=True)
     hermes.write_text(

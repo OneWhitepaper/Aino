@@ -99,11 +99,47 @@ default introduced upstream, with 15 relevant packaging contracts passing.
 The original serial catalog run passed 362 entries before its 60-minute limit.
 The import is therefore validated in deterministic parallel shards using the
 same exact-release validator and scanners, with complete coverage required.
-The newly imported optional `calm-mode` discovery entry is not listed: its own
-safety-detection regular expression contains a filesystem-format command name
-that the upstream scanner rejects. The official repository's only later
-revision adds artwork and leaves that runtime unchanged. This is a lexical
-false positive, but the scanner is retained without a bypass. Existing Aino
-catalog entries, installed plugins and plugin installation remain unchanged.
+The first complete eight-shard run attempted 1,228 entries: 1,221 passed and
+seven failed. Six newly introduced discovery entries are not listed:
+`hermes-proactive-radar`, `vibeline`, `injection-shield` and `helper` contain
+safety examples or static documentation that the exact release scanner rejects;
+`hermes-market` and `scope-recall` point to repositories that independently
+returned GitHub 404 and Git clone failures. The current official revisions do
+not repair the four scanner failures. The earlier `calm-mode` exclusion remains:
+its safety regex contains a filesystem-format command name, and its only later
+revision adds artwork. No scanner or allowlist exception was added. These are
+catalog discovery exclusions; installed plugins and plugin installation remain
+available, and this validation repair removes no pre-existing Aino catalog entry.
+
+The upstream release independently retires nine unavailable catalog sources and
+three author-withdrawn entries, and renames three entries: `antigravity-duet`
+to `daak-duffy`, `gemini-live-bridge` to `livetalk`, and `kiwi` to
+`kiwi-shopping`. Their replacement entries are retained. These upstream changes
+remove discovery and update paths for the old IDs; they do not delete or disable
+already installed copies, and no Aino-specific entry was removed.
+
+The existing Nexus entry remains at upstream version 0.22.48. Its original
+`625d1adc6c8e237f37b40a3808ed33f64f9dbdf0` pin disappeared from advertised Git
+history, so the catalog uses the reachable official rewritten commit
+`37f3c580f5a648b8ae03eb10c25c24ed9122b037`. All seven plugin files were compared:
+six blobs are identical, and the only differences in `__init__.py` redact two
+sample company names in a comment and a docstring. Python ASTs are identical
+after removing docstrings. The exact release CLI validates this replacement after installing its declared
+dependencies into an isolated PM environment; its capability probe and security
+scanner pass. Clean pinned payload, confinement and attestation-declaration
+checks also pass. The pinned-source CI repeats these checks on the final catalog.
+
+The first complete Linux Python matrix passed more than 85,000 cases and
+exposed five remaining failing files. The endpoint edit path now recognizes
+when the active main route is a copy of the provider being edited, replaces
+only that reference inside the credential transaction, and snapshots the actual
+hashed credential slot for rollback. Independent model overrides, other hosts
+and fallback consumers remain protected. Tests also compare public core
+identity with the compatibility source instead of a frozen release string;
+exercise atomic snapshot publication through real Bash and retained readers;
+complete the disposable pre-update desktop installation's brand resource; and
+measure the hardline scanner's CPU cost and linear scaling without counting
+other CI workers' scheduling time. Native Linux remains the authority for the
+desktop self-stop process contract.
 
 No production deployment or installer publication is part of this upgrade.
