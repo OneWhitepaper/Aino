@@ -54,6 +54,8 @@ function deliver(method: string, params: Record<string, unknown>, activeSessionI
   const fail = vi.fn()
   const decline = vi.fn()
 
+  // The stream dispatches the current ref value and keeps that ref live for cancellation.
+  deps.activeSessionIdRef.current = activeSessionId
   const handled = handleServerRequest(
     { decline, fail, id: 'srq-1', method, params, profile: 'default', replayed, respond },
     deps,
@@ -673,14 +675,18 @@ describe('preview requests act for the session that asked (#73890)', () => {
     const unbind = registerPreviewNav($previewTabs.get()[0]!.id, { back, forward: () => {}, reload: () => {} })
     // The selection names the stored id before rt-new's state binds it.
     setSelectedStoredSessionId('stored-new')
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
 
     try {
       const { respond } = deliver('preview.act', { action: 'back', session_id: 'rt-new' }, 'rt-new')
 
+      // Exercise the session guard while the lazy preview engine is still loading.
+      vi.advanceTimersByTime(50)
       await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1), { timeout: 30_000 })
       expect(JSON.parse(respond.mock.calls[0][0].value)).toMatchObject({ acted: 'back', success: true })
       expect(back).toHaveBeenCalledTimes(1)
     } finally {
+      vi.useRealTimers()
       unbind()
       dropSessionState('rt-new')
     }
