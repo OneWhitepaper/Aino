@@ -142,4 +142,12 @@ measure the hardline scanner's CPU cost and linear scaling without counting
 other CI workers' scheduling time. Native Linux remains the authority for the
 desktop self-stop process contract.
 
+The final hardline-scan throughput check exposed repeated command-start scans
+inside one detection call. Pure offsets now share the existing per-call parser
+memo, and quote-free text bypasses a quote-masking walk. The security patterns,
+decisions, parser budget and two-second CPU/linear-scaling contract remain in
+place. Full Python coverage uses the existing runner's eight-slice planner;
+all 8,243 discovered files were verified to appear exactly once, with no test
+exclusions or change to subprocess isolation.
+
 No production deployment or installer publication is part of this upgrade.

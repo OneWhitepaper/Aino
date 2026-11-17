@@ -22,8 +22,8 @@ SESSION = "scan-incomplete-human-only"
 GREP = 'v=$(grep -o "[^\\"]*" f)'
 BEAR_800 = "\n".join(rf'v=$(grep -o "\"f{i}\":\"[^\"]*\"" out.json)' if i % 2 == 0 else f'echo "step {i}"'
                      for i in range(800))
-TEKNIUM_175 = "\n".join(['if [ -f "$f" ]; then v=$(grep -o "name=\\"[^\\"]*\\"" "$f" | head -1); '
-                         'echo "$(date) $v" >> log.txt; fi'] * 175)
+TEKNIUM_250 = "\n".join(['if [ -f "$f" ]; then v=$(grep -o "name=\\"[^\\"]*\\"" "$f" | head -1); '
+                         'echo "$(date) $v" >> log.txt; fi'] * 250)
 GREP_500 = "\n".join([GREP] * 500)
 FORK_BOMB = ":()" + "{ :|:& };:"
 
@@ -142,7 +142,7 @@ def test_bear_800_line_script_still_asks_a_human_in_manual_mode(gate):
     assert _SCAN_INCOMPLETE_DESCRIPTION in callback.call_args.args[1]
 
 
-@pytest.mark.parametrize("command", [TEKNIUM_175, GREP_500], ids=["teknium-175", "grep-500"])
+@pytest.mark.parametrize("command", [TEKNIUM_250, GREP_500], ids=["teknium-250", "grep-500"])
 def test_ordinary_long_scripts_are_not_hard_blocked(command, gate):
     assert detect_hardline_command(command) == (False, None)
     callback = MagicMock(return_value="once")

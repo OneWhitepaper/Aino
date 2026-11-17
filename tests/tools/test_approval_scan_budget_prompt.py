@@ -13,15 +13,17 @@ from tools import approval
 from tools import approval_context
 from tools.approval import check_all_command_guards
 from tools.approval_detection import (
-    _PARSER_LIMIT_DESCRIPTION, _SCAN_INCOMPLETE_DESCRIPTION, detect_dangerous_command, detect_hardline_command)
+    _PARSER_LIMIT_DESCRIPTION, _SCAN_INCOMPLETE_DESCRIPTION, detect_dangerous_command, detect_hardline_command,
+    hardline_scan_incomplete)
 
 SESSION = "scan-budget-session"
 # Every `\"` inside `$(…)` leaves a `$(` open in the escape-stripped text, so a few hundred such
 # lines run the scanners out of budget although bash nests none of them.
 BEAR_800 = [rf'v=$(grep -o "\"f{i}\":\"[^\"]*\"" out.json)' if i % 2 == 0 else f'echo "step {i}"'
             for i in range(800)]
-TEKNIUM_175 = "\n".join(['if [ -f "$f" ]; then v=$(grep -o "name=\\"[^\\"]*\\"" "$f" | head -1); '
-                         'echo "$(date) $v" >> log.txt; fi'] * 175)
+_TEKNIUM_LINE = ('if [ -f "$f" ]; then v=$(grep -o "name=\\"[^\\"]*\\"" "$f" | head -1); '
+                 'echo "$(date) $v" >> log.txt; fi')
+TEKNIUM_250 = "\n".join([_TEKNIUM_LINE] * 250)
 GREP_500 = "\n".join(['v=$(grep -o "[^\\"]*" f)'] * 500)
 
 
@@ -72,7 +74,14 @@ def test_an_unread_command_is_approved_one_run_at_a_time(manual_cli):
     again.assert_called_once()
 
 
-@pytest.mark.parametrize("command", [TEKNIUM_175, GREP_500], ids=["teknium-175-lines", "grep-500"])
+def test_reused_command_positions_let_a_benign_script_finish_within_the_scan_budget():
+    command = "\n".join([_TEKNIUM_LINE] * 175)
+    assert detect_hardline_command(command) == (False, None)
+    assert not hardline_scan_incomplete(command)
+    assert detect_dangerous_command(command) == (False, None, None)
+
+
+@pytest.mark.parametrize("command", [TEKNIUM_250, GREP_500], ids=["teknium-250-lines", "grep-500"])
 def test_ordinary_scripts_over_the_budget_are_not_hard_blocked(command, manual_cli):
     assert detect_hardline_command(command) == (False, None)
     # Callers without a prompt (gateway session shell, TUI shell.exec) refuse it as dangerous.

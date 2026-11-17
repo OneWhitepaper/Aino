@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           # Freeze discovery once; each file belongs to exactly one job.
-          unit=$(python3 scripts/run_tests_parallel.py --generate-slices 4)
+          unit=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
           # Paid live canaries belong to live-providers.yml; pytest's default
           # 'not live' filter leaves that file with no runnable tests here.
           core_files=()
@@ -72,7 +72,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   test:
-    name: Run tests (slice ${{ matrix.slice.index }}/4)
+    name: Run tests (slice ${{ matrix.slice.index }}/8)
     needs: test-matrix
     strategy:
       fail-fast: false

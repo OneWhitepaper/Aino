@@ -1415,6 +1415,11 @@ def _deobfuscate_shell_word(word: str) -> str:
 
 
 def _iter_shell_command_starts(command: str):
+    yield from _parser_budget.memo(_shell_command_starts, command)
+
+
+def _shell_command_starts(command: str) -> tuple[int, ...]:
+    """Command offsets are pure; variant and rule passes share one scan within the detection budget."""
     starts = [0]
 
     def scan(start: int, end: int) -> None:
@@ -1440,6 +1445,7 @@ def _iter_shell_command_starts(command: str):
 
     scan(0, len(command))
     seen = set()
+    offsets = []
     run_from = run_to = -1
     for start in starts:
         # Each newline of a blank-line run is a start that skips to the same word: reuse the last skip
@@ -1450,10 +1456,11 @@ def _iter_shell_command_starts(command: str):
         if start >= len(command) or start in seen or _is_shell_comment_start(command, start):
             continue
         seen.add(start)
-        yield start
+        offsets.append(start)
         _, end, word = _read_shell_word(command, start)
         if word in _SHELL_COMMAND_TRANSITIONS:
             starts.append(end)
+    return tuple(offsets)
 
 
 def _mark_command_starts(command: str, marker: str = "\n", skip=()) -> str:

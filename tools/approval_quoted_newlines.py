@@ -13,6 +13,8 @@ def _mask_quoted_newlines(command: str) -> str:
     exactly as the shell would, so masking them cannot hide a runnable command."""
     if "\n" not in command and "\r" not in command:
         return command
+    if "'" not in command and '"' not in command:
+        return command
     return _mask_quoted_newlines_span(command, 0, len(command))
 
 
