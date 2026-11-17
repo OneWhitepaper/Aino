@@ -62,11 +62,13 @@ const runImport = () =>
 
 it('opens imported Bots in management while retaining the current chat and window layout', async () => {
   const conversation = group(['workspace'], { id: 'existing-layout', active: 'workspace' })
+
   const layout = split('row', [
     group(['sessions'], { id: 'existing-sidebar' }),
     conversation,
     group(['files', 'review', 'terminal'], { id: 'existing-tools', toolPanel: true, minimized: true })
   ])
+
   $layoutTree.set(layout)
   const currentProfile = profile.$activeGatewayProfile.get()
   const selectProfile = vi.spyOn(profile, 'selectProfile').mockImplementation(() => undefined)

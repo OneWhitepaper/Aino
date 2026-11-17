@@ -26,6 +26,7 @@ describe('SidebarModeHeader', () => {
       navigation: 'rail' as const,
       onSelect: vi.fn()
     }
+
     const view = render(<SidebarModeHeader {...props} activeId="hermes-bots:pane" />)
     expect(screen.getByText('Bot')).toBeTruthy()
     expect(screen.queryByTestId('brand-mark')).toBeNull()

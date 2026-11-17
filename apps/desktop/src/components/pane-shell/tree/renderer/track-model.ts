@@ -237,9 +237,7 @@ export const shownPaneIds = (group: GroupNode, ctx: TrackContext): string[] =>
 
 /** Tool width belongs to the shared host, including its temporarily hidden tabs. */
 export const sizingPaneIds = (group: GroupNode, axis: 'row' | 'column', ctx: TrackContext): string[] =>
-  axis === 'row' && isToolPanelGroup(group, ctx.paneFor)
-    ? group.panes
-    : shownPaneIds(group, ctx)
+  axis === 'row' && isToolPanelGroup(group, ctx.paneFor) ? group.panes : shownPaneIds(group, ctx)
 
 /** max() of the defined CSS lengths (deduped); undefined when none — the
  *  largest-tenant basis a fixed stack and its clamps both size from. */
