@@ -353,11 +353,7 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
             key = launch_key(authority, original)
             if key is None or not hmac.compare_digest(key, params.get('api_key') or ''):
                 raise RuntimeStoreError('admission_conflict')
-        ref = restore_local_session(authority, sid)
-        # A retried create resumes existing work. Refuse before the caller can
-        # apply launch hooks or sidebar writes, not only at its final snapshot.
-        authority.authorize(actor, ref, 'session:read')
-        return ref
+        return restore_local_session(authority, sid)
     from gateway.session_handoff import authorize_work_code_handoff
     authorize_work_code_handoff(authority, actor, params)
     from gateway.session_policy import launch_skills

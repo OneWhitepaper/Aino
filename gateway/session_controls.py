@@ -565,6 +565,9 @@ class AuthorityConnection:
                 await tracked_write(self.authority, partial(
                     commit_local_session, self.authority.db, epoch=self.authority.epoch, receipt=receipt))
                 ref = restore_local_session(self.authority, receipt['session_id'])
+            # The RPC opens the session and may update its state. Check read access before
+            # any updates, including when a concurrent create committed the same request.
+            self.authority.authorize(self.actor, ref, 'session:read')
             # `--accept-hooks`: record this launch's consent; ``resume`` below registers the hooks.
             if params.get('accept_hooks') is True:
                 from gateway.session_policy import accept_launch_hooks, restore_policy

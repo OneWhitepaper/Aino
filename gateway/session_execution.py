@@ -193,7 +193,8 @@ class GatewaySessionAgentMixin:
             # None leaves the agent reading the owner's config, as before.
             run_budget_seconds=policy.run_budget_seconds if policy else None,
         )
-        agent.execution_mode = policy.execution_mode if policy else 'work'
+        if code:
+            agent.execution_mode = 'code'
         return agent
 
     def _resolve_turn_agent(self, turn_route, platform_key, combined_ephemeral, max_iterations, reasoning_config, pr):
