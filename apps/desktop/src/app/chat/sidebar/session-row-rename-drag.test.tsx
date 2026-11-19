@@ -63,6 +63,7 @@ vi.mock('@/hermes', async importOriginal => {
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     t: {
+      executionMode: { work: 'Aino Work', code: 'Aino Code', workLabel: 'Work', codeLabel: 'Code' },
       assistant: {
         thread: {
           today: (time: string) => `Today at ${time}`,

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
+import { getDraftExecutionMode, setDraftExecutionMode } from '@/store/execution-mode'
 import { $interfaceMode } from '@/store/interface-mode'
 import { $projectTree } from '@/store/projects'
 import { $activeSessionId, $currentCwd, $newChatWorkspaceTarget, $selectedStoredSessionId } from '@/store/session'
@@ -28,6 +29,7 @@ beforeEach(() => {
   const active = $activeSessionId.get()
   const selected = $selectedStoredSessionId.get()
   const target = $newChatWorkspaceTarget.get()
+  const executionMode = getDraftExecutionMode()
 
   restore = () => {
     $interfaceMode.set(mode)
@@ -36,6 +38,7 @@ beforeEach(() => {
     $activeSessionId.set(active)
     $selectedStoredSessionId.set(selected)
     $newChatWorkspaceTarget.set(target)
+    setDraftExecutionMode(executionMode)
   }
 
   $interfaceMode.set('advanced')
@@ -46,6 +49,7 @@ beforeEach(() => {
   $selectedStoredSessionId.set(null)
   $currentCwd.set('')
   $newChatWorkspaceTarget.set(null)
+  setDraftExecutionMode('work')
   stubMenuDomApis()
 })
 
@@ -97,4 +101,17 @@ it('keeps conversation project selection outside the input card while retaining 
 it('retains the home project context inside its existing card', () => {
   render(<Composer homeLayout />)
   expect(screen.getByRole('button', { name: 'Select project' }).closest('[data-slot="composer-surface"]')).toBeTruthy()
+})
+
+it('offers Code without a project while retaining the project picker and draft', () => {
+  setDraftExecutionMode('code')
+  render(<Composer homeLayout />)
+  const selector = screen.getByRole('button', { name: 'No project' })
+  fireEvent.pointerDown(selector, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  expect(screen.getByRole('menuitem', { name: 'Footer project' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('menuitem', { name: 'No project' }))
+  expect($newChatWorkspaceTarget.get()).toBeNull()
+  expect($currentCwd.get()).toBe('')
+  expect(getDraftExecutionMode()).toBe('code')
+  expect(screen.getByRole('button', { name: 'No project' })).toBeTruthy()
 })

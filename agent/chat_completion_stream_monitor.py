@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from agent import chat_completion_wait_notice as wn
+from agent.auxiliary_billing_scope import ManagedCredential
 from agent.process_transport import is_local_server
 from agent.proxy_bypass import is_loopback_host
 from agent.sleep_clock import SleepWatch
@@ -48,8 +49,8 @@ class StreamingWaitMonitor:
         if self._note_attempt_kill(elapsed, "stale"):
             return
         if self._claims_liveness():  # the reconnect notice touches activity too (_emit_wait_notice)
-            self.agent._emit_diagnostic_wait(f"⚠ no output from provider for {int(elapsed)}s — reconnecting...")
-            self.agent._touch_activity(f"stale stream detected after {int(elapsed)}s, reconnecting")
+            self.agent._emit_diagnostic_wait(f"⚠ no output from provider for {int(elapsed)}s — {wn.recovery_notice(self.agent)}")
+            self.agent._touch_activity(f"stale stream detected after {int(elapsed)}s")
 
     def _note_attempt_kill(self, elapsed: float, kind: str) -> bool:
         """Count a stale or ``stream_max_lifetime`` kill of the current attempt. Once the same
@@ -200,7 +201,8 @@ class StreamingWaitMonitor:
                 return
             self._mon.wait_notice_started_ts = self._mon.last_heartbeat
             self.agent._emit_wait_notice(wn.wait_notice_text(
-                self.api_kwargs.get('model', 'the provider'), waiting_secs, phase, watchdog))
+                self.api_kwargs.get('model', 'the provider'), waiting_secs, phase, watchdog,
+                reconnect=not isinstance(getattr(self.agent, "api_key", None), ManagedCredential)))
         else:
             # Chunks are flowing — keep the tracker fresh, leave the display alone.
             self.agent._touch_activity(f"waiting for stream response ({waiting_secs}s, no chunks yet)")

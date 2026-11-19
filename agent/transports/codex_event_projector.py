@@ -30,6 +30,27 @@ def _dict_args(raw: Any) -> dict:
     return args if isinstance(args, dict) else {"arguments": args}
 
 
+def _patch_diff(change: dict) -> str:
+    """Codex sends raw contents for add/delete, but unified hunks for updates."""
+    diff = change.get("diff") or ""
+    if not diff:
+        return ""
+    kind = change.get("kind") or {}
+    path = change.get("path") or ""
+    operation = kind.get("type")
+    old = "/dev/null" if operation == "add" else path
+    new = "/dev/null" if operation == "delete" else kind.get("move_path") or path
+    if operation in {"add", "delete"}:
+        lines = diff.splitlines()
+        count = len(lines)
+        hunk = f"@@ -0,0 +1,{count} @@" if operation == "add" else f"@@ -1,{count} +0,0 @@"
+        prefix = "+" if operation == "add" else "-"
+        diff = hunk + "\n" + "\n".join(prefix + line for line in lines)
+    elif diff.startswith(("--- ", "diff --git ")):
+        return diff
+    return f"--- {old}\n+++ {new}\n{diff}"
+
+
 @dataclass
 class ProjectionResult:
     """Output of projecting one Codex item; empty ``messages`` = ignored (e.g. a streaming delta)."""
@@ -106,22 +127,38 @@ class CodexEventProjector:
         args = {"command": item.get("command") or "", "cwd": item.get("cwd") or ""}
         output = item.get("aggregatedOutput") or ""
         exit_code = item.get("exitCode")
+        receipt: dict[str, Any] = {"output": output}
         if exit_code is not None:
-            # Preserve executor status so successful marker-like output is not an interrupt.
-            output = json.dumps({"exit_code": exit_code, "output": output}, ensure_ascii=False)
-        # Unknown exit status keeps the legacy text shape and conservative replay handling.
+            receipt["exit_code"] = exit_code
+        if status := item.get("status"):
+            receipt["status"] = status
+            if status in {"failed", "declined"}:
+                receipt["error"] = f"Command execution {status}"
+        duration = item.get("durationMs")
+        if isinstance(duration, (int, float)) and not isinstance(duration, bool) and duration >= 0:
+            receipt["duration_s"] = duration / 1000
+        if len(receipt) > 1:
+            output = json.dumps(receipt, ensure_ascii=False)
+        # Older servers without any receipt metadata keep the legacy text shape.
         return "exec", "exec_command", args, output
 
     @staticmethod
     def _file_change_spec(item: dict) -> tuple[str, str, dict, str]:
-        # Per-file change kinds only — full file contents can be huge.
+        changes = [change for change in item.get("changes") or [] if isinstance(change, dict)]
+        # Args stay compact; the result carries the native evidence for review/reload.
         changes_summary = [
             {"kind": (change.get("kind") or {}).get("type") or "update", "path": change.get("path") or ""}
-            for change in item.get("changes") or []
+            for change in changes
         ]
         status = item.get("status") or "unknown"
-        content = f"apply_patch status={status}, {len(changes_summary)} change(s)"
-        return "apply_patch", "apply_patch", {"changes": changes_summary}, content
+        success = status in {"completed", "applied", "success"}
+        # Keep one copy per file. Duplicating the same bodies in inline_diff can
+        # push an otherwise displayable patch over the canonical event bound.
+        receipt = {"status": status, "success": success,
+                   "changes": [{**change, "diff": _patch_diff(change)} for change in changes]}
+        if not success:
+            receipt["error"] = f"apply_patch status={status}"
+        return "apply_patch", "apply_patch", {"changes": changes_summary}, json.dumps(receipt, ensure_ascii=False)
 
     @staticmethod
     def _mcp_tool_call_spec(item: dict) -> tuple[str, str, dict, str]:

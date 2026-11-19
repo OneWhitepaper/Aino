@@ -45,7 +45,10 @@ describe('D1 settlement and presentation consumers', () => {
       2
     )
 
-    expect(deriveChangedFiles(normalize(parts))).toEqual([{ path: '/tmp/a.ts', name: 'a.ts', added: 1, removed: 1 }])
+    const files = deriveChangedFiles(normalize(parts))
+    expect(files).toMatchObject([{ path: '/tmp/a.ts', name: 'a.ts', added: 1, removed: 1 }])
+    expect(files[0].diffs).toHaveLength(1)
+    expect(files[0].diffs[0]).toContain('-old\n+new')
   })
   it('keeps envelope-only todo completion and explicit clearing after normalization', () => {
     const todos = [{ id: 'a', content: 'Do it', status: 'completed' }]

@@ -23,6 +23,9 @@ _REASONING_STALE_TIMEOUT_FLOORS: dict[int, tuple[str, ...]] = {
         # ``deepseek-flash`` is the version-less canonical Flash id (2026-09 Flash refresh);
         # ``deepseek-v4-flash`` still aliases onto it server-side.
         "deepseek-r1", "deepseek-reasoner", "deepseek-flash", "deepseek-v4-flash", "deepseek-v4.1-flash", "deepseek-v4-pro",
+        # GLM 5.3 can stay silent beyond the chat default between tool rounds.
+        # Include the same routed spellings as the native reasoning knob.
+        "glm-5.3", "glm-5-3", "glm-5p3",
         # OpenAI o-series: each variant enumerated so bare ``o1`` cannot over-match ``olmo-1``.
         "o1", "o1-mini", "o1-pro", "o1-preview", "o3", "o3-pro",
         # OpenAI named reasoning lines (gpt-5.6-sol/-terra/-luna, gpt-6-astra, their -pro/-900k

@@ -490,6 +490,28 @@ def _auth_style(api_key, base_url, normalized_base_url) -> str:
     return "api_key"
 
 
+def anthropic_http_headers(api_key: str, base_url: str) -> dict[str, str]:
+    """SDK-equivalent auth for setup probes and the private Code HTTP relay.
+
+    Keep provider-specific token/header conventions here so detecting a working
+    connection cannot save credentials that the eventual inference leg misuses.
+    Managed Aino credentials still apply their own per-attempt hook afterwards.
+    """
+    style = _auth_style(api_key, base_url, base_url.rstrip("/"))
+    headers = {"anthropic-version": "2023-06-01"}
+    if style == "kimi":
+        headers.update(_attribution_headers())
+    elif style == "oauth":
+        betas = _common_betas_for_base_url(base_url)
+        headers.update(_beta_header(betas + _OAUTH_ONLY_BETAS))
+        headers["user-agent"] = f"claude-code/{_get_claude_code_version()} (external, cli)"
+        headers["x-app"] = "cli"
+    if api_key:
+        header = "Authorization" if style in {"bearer", "oauth"} else "x-api-key"
+        headers[header] = "Bearer " + api_key if header == "Authorization" else api_key
+    return headers
+
+
 def build_anthropic_client(api_key, base_url: str | None = None, timeout: float | None = None, *, drop_context_1m_beta: bool = False):
     """Create an Anthropic client, auto-detecting setup-tokens vs API keys. ``api_key`` is a static
     ``str`` or a ``Callable[[], str]`` Entra ID bearer provider (routed through

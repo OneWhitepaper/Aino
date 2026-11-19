@@ -11,6 +11,7 @@ import uuid
 from gateway.config import Platform
 from gateway.session_contract import CANONICAL_GATEWAY_PROTOCOL, SessionActor, SessionRef, Submission
 from gateway.session_llm_oneshot import DeferredReply
+from gateway.session_picker_fields import fill_execution_modes
 from hermes_constants import profile_name_for_home
 from hermes_state_runtime import RuntimeStoreError
 
@@ -533,7 +534,8 @@ class AuthorityConnection:
         hidden = params.pop('hidden', False)
         if type(hidden) is not bool:
             raise RuntimeStoreError('invalid_params', field='hidden', detail='must be a boolean')
-        ref = title and resolve_titled_session(self.authority, self.actor, title, missing_ok=True)
+        ref = (title and not params.get('handoff')
+               and resolve_titled_session(self.authority, self.actor, title, missing_ok=True))
         if (not ref and title == 'Bot Chat'
                 and not any(params.get(name) is True for name in BYPASS_FIELDS)
                 and staged_creation_follows(self.authority, self.actor, params.get('request_id'))):
@@ -555,7 +557,7 @@ class AuthorityConnection:
             # Host-bound client values apply only over the gateway's own ticketed attach (run_api).
             ref = stage_local_session(self.authority, self.actor, params, skills_prompt=skills_prompt,
                                       client_local=self.native_owner,
-                                      desktop_local=getattr(self.transport, 'desktop_local', False))
+                                      desktop_local=getattr(self.transport, 'desktop_local', False), handoff_title=title)
             if isinstance(ref, dict):
                 # The creation commit runs off the owner loop: a held writer must not freeze
                 # every session behind one new chat (N50).
@@ -569,7 +571,7 @@ class AuthorityConnection:
                 from hermes_state_local import local_receipt
                 policy = restore_policy(local_receipt(self.authority.db, ref.session_id)['policy'])
                 await asyncio.to_thread(accept_launch_hooks, policy)
-            if title:
+            if title and not params.get('handoff'):
                 await tracked_write(self.authority, partial(title_new_session, self.authority, ref, title))
             if hidden:
                 await tracked_write(self.authority, partial(self.authority.db.set_session_hidden, ref.session_id, True))
@@ -590,7 +592,7 @@ class AuthorityConnection:
                 'authority_epoch': self.authority.epoch,
                 'capabilities': ['durable-admission-v1', 'event-replay-v1', 'local-cli-create-v1', 'acp-editor-policy-v1',
                                  'acp-session-mcp-v1', 'clarify-batch-v1', 'plugin-rpc-v1', 'session-client-v1', 'session-transcript-v1', 'session-list-picker-v1',
-                                 'session-list-cursor-v1'],
+                                 'session-list-cursor-v1', 'work-code-handoff-v1', 'code-model-protocol-bridge-v1'],
                 'session_create': {'sources': sorted(SURFACES),
                                    'parameters': sorted(CREATE_FIELDS | {'title'})},
                 # Main's ``gateway.ready.skin``: the canonical client's own ready carries it.
@@ -634,13 +636,15 @@ class AuthorityConnection:
             row = self.authority.db.get_session(found.session_id) or {}
             root = self.authority.db.get_session(
                 self.authority.db.resolve_session_by_title(params['title']) or found.session_id) or row
-            return {'sessions': [{'session_id': found.session_id, 'id': root.get('id') or found.session_id,
+            result = {'sessions': [{'session_id': found.session_id, 'id': root.get('id') or found.session_id,
                                   'resolved_id': found.session_id, 'title': row.get('title') or '',
                                   'root_title': root.get('title') or '', 'source': row.get('source'),
                                   'started_at': row.get('started_at'),
                                   'message_count': row.get('message_count', 0),
                                   'running': found.session_id in self.authority.sessions}],
                     'scope': 'stored'}
+            fill_execution_modes(self.authority.db, result['sessions'])
+            return result
         from hermes_state_sessions import INTERNAL_LISTING_SOURCES
         from gateway.session_live_listing import live_entries
         sessions = []

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { artifactContentHash, artifactDownloadName, artifactSlug, detectArtifact } from './artifact-detect'
+import {
+  artifactContentHash,
+  artifactDownloadName,
+  artifactSlug,
+  detectArtifact,
+  detectStandaloneHtmlArtifact
+} from './artifact-detect'
 
 const HTML_DOC = `<!doctype html>
 <html>
@@ -35,6 +41,30 @@ describe('detectArtifact', () => {
 
   it('ignores a small html snippet', () => {
     expect(detectArtifact('html', '<div class="chip">hello</div>')).toBeNull()
+  })
+
+  it.each([
+    ['document', '<html>', '</html>', 160],
+    ['fragment', '<div>', '</div>', 1200]
+  ] as const)('promotes an HTML %s only at its trimmed size threshold', (_kind, start, end, minChars) => {
+    const content = `${start}${'x'.repeat(minChars - start.length - end.length)}${end}`
+
+    for (const language of ['html', 'htm', 'xhtml']) {
+      expect(detectArtifact(language, ` \n${content.replace('x', '')}\n `)).toBeNull()
+      expect(detectArtifact(language, ` \n${content}\n `)).toEqual({
+        kind: 'html',
+        language,
+        title: 'HTML'
+      })
+    }
+  })
+
+  it('requires HTML markup even when a declared HTML fence is long enough', () => {
+    const text = 'x'.repeat(3000)
+
+    for (const language of ['html', 'htm', 'xhtml']) {
+      expect(detectArtifact(language, text)).toBeNull()
+    }
   })
 
   it('ignores small svg fences (inline embed owns them)', () => {
@@ -74,6 +104,7 @@ describe('detectArtifact', () => {
 
   it('never promotes prose-ish or terminal fences', () => {
     expect(detectArtifact('text', longCode(80))).toBeNull()
+    expect(detectArtifact('text', HTML_DOC)).toBeNull()
     expect(detectArtifact('diff', longCode(80))).toBeNull()
     expect(detectArtifact('markdown', longCode(80))).toBeNull()
     expect(detectArtifact('mermaid', longCode(80))).toBeNull()
@@ -84,6 +115,16 @@ describe('detectArtifact', () => {
     // (or any renderer-owned language) would otherwise be stolen by the code
     // card and never render as its own component.
     expect(detectArtifact('listing', longCode(200))).toBeNull()
+  })
+})
+
+describe('detectStandaloneHtmlArtifact', () => {
+  it.each([
+    ['prose discussing a document', `The <html> root contains the page, for example:\n${HTML_DOC}`],
+    ['a long inline fragment', `<div>${'<p>This remains ordinary inline HTML.</p>'.repeat(50)}</div>`],
+    ['an explicitly text-only fence', `\`\`\`text\n${HTML_DOC}\n\`\`\``]
+  ])('does not promote %s into an executable artifact', (_label, text) => {
+    expect(detectStandaloneHtmlArtifact(text)).toBeNull()
   })
 })
 

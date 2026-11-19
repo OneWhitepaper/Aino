@@ -40,6 +40,7 @@ import { enSummary } from './en_summary_surface'
 import { enThemePicker } from './en_theme_picker'
 import { enUninstallSection } from './en_uninstall_section'
 import { enUpdateChannel } from './en_update_channel'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { notificationCenterCopy } from './notification-center'
 import { enAccountErrors } from './platform-account-errors'
@@ -55,6 +56,7 @@ export const en: Translations = {
   notificationCenter: notificationCenterCopy['en'],
   appearancePage: appearancePage.en,
   toolPanel: toolPanel['en'],
+  executionMode: executionModeCopy.en,
   workspacePage: workspacePage.en,
   accountPage: accountPage['en'],
   externalOpenFailed: enExternalOpenFailed,
@@ -3425,10 +3427,11 @@ export const en: Translations = {
   },
 
   artifactCard: {
-    kind: { code: 'Code', html: 'Interactive page', svg: 'Graphic' },
+    kind: { code: 'Code', html: 'Web preview', svg: 'Graphic' },
     generating: lines => `Generating… ${lines} lines`,
     versionBadge: count => `${count} versions`,
-    open: 'Open'
+    open: 'Open',
+    openWith: 'Open with'
   },
 
   artifactPreview: {
@@ -3438,8 +3441,8 @@ export const en: Translations = {
     latest: 'Latest',
     copyContent: 'Copy content',
     download: 'Download',
-    openInBrowser: 'Open in browser',
-    openInBrowserFailed: 'Could not open in browser',
+    openExternally: 'Open externally',
+    openExternallyFailed: 'Could not open externally',
     missingTitle: 'Artifact unavailable',
     missingBody: 'This artifact is no longer in the local registry.'
   },
@@ -5085,7 +5088,10 @@ export const en: Translations = {
       errorOpenDesktopLogs: 'Open Desktop logs',
       errorSendDiagnostics: 'Send diagnostics',
       filesChanged: count => (count === 1 ? '1 file changed' : `${count} files changed`),
-      reviewChanges: 'Review',
+      reviewChanges: 'View changes',
+      recordedFileChanges: 'Recorded changes from this turn. Repeated edits to a file appear in order.',
+      recordedFileEdit: index => `Edit ${index}`,
+      reviewRepositoryChanges: 'View Git changes',
       readAloudFailed: 'Read aloud failed',
       preparingAudio: 'Preparing audio...',
       stopReading: 'Stop reading',

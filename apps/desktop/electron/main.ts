@@ -15518,7 +15518,7 @@ registerNativePreviewIpc(ipcMain, {
   }
 })
 
-registerRendererContentIpc(ipcMain, {
+registerRendererContentIpc(ipcMain, findOnPath, {
   getMainWindow: () => mainWindow,
   getHermesHome: () => HERMES_HOME,
   getAccountUiRoot: () => accountWorkspaceUiRoot,

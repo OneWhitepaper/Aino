@@ -718,6 +718,8 @@ export function mergeSessionPage(
       // Bot Chat, room plumbing) is LISTED-NEVER by design, so a live turn or
       // open tab must not resurrect it into the sidebar (#113273).
       !session.hidden &&
+      // Open drafts stay off-list; a first-send preview survives until persistence.
+      (session.message_count !== 0 || Boolean(session.preview?.trim())) &&
       !tombstoned(session) &&
       !incomingIds.has(identity(session)) &&
       !incomingLineageKeys.has(lineageIdentity(session)) &&
@@ -1024,9 +1026,8 @@ export const $messagingTruncated = atom<boolean>(false)
 
 /**
  * Ownership stubs for UNLISTED draft tiles (the tab-strip "+" / project
- * sidebar "+" with `listed: false`, see `openNewSessionTile`). A brand-new
- * backend session is in-memory only until its first turn persists a row, so
- * these drafts have no row in any sidebar slice — yet the tile's immediate
+ * sidebar "+", see `openNewSessionTile`). Drafts stay out of sidebar slices
+ * until the first send, even when the backend has persisted an empty row. Their
  * `session.resume` must still name the backend that minted them. Without a
  * stub, a draft minted on the legacy ambient route (null owner route: local
  * source + named profile) records its owner NOWHERE — no tile route, no hint,

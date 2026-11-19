@@ -35,6 +35,12 @@ beforeAll(() => {
 
 const getGlobalModelOptions = vi.fn()
 
+vi.mock('@/store/gateway', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requestGatewayForAgent: vi.fn(async () => ({ capabilities: [] })),
+  requestGatewayForProfile: vi.fn(async () => ({ capabilities: [] }))
+}))
+
 vi.mock('@/hermes', () => ({
   getGlobalModelOptions: (...args: unknown[]) => getGlobalModelOptions(...args),
   setApiRequestProfile: vi.fn()
@@ -1111,4 +1117,29 @@ describe('ModelMenuPanel pinned draft', () => {
     await live.content.findByRole('menuitem', { name: 'Refresh models' })
     expect(live.content.queryByText('Use Settings default')).toBeNull()
   })
+})
+
+it('shows Code eligibility for the actual selected route and keeps settings recovery separate from selection', async () => {
+  $currentProvider.set('lab')
+  $currentModel.set('m1')
+  getGlobalModelOptions.mockResolvedValue({
+    providers: [{ slug: 'lab', name: 'Lab', models: ['m1'], api_mode: 'chat_completions' }]
+  })
+  const { onSelectModel } = renderPanel()
+  expect((await screen.findAllByText('Work only')).length).toBeGreaterThan(0)
+  expect(screen.getByRole('button', { name: 'Model settings' })).toBeDefined()
+  expect(onSelectModel).not.toHaveBeenCalled()
+})
+
+it('uses the selected session protocol metadata before a provider catalog without a route', async () => {
+  $currentProvider.set('lab')
+  $currentModel.set('m1')
+  getGlobalModelOptions.mockResolvedValue({
+    providers: [{ slug: 'lab', name: 'Lab', models: ['m1'] }],
+    session_info: { provider: 'lab', model: 'm1', api_mode: 'responses' }
+  })
+  const { requestGateway } = renderPanel()
+  const details = screen.getByRole('complementary', { name: 'Model details' })
+  expect(await within(details).findByText('Code compatible')).toBeDefined()
+  expect(requestGateway).toHaveBeenCalledWith('model.options', expect.objectContaining({ include_session_info: true }))
 })

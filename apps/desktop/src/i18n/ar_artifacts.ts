@@ -36,10 +36,11 @@ export const arArtifacts = {
     copyPath: 'نسخ المسار'
   },
   artifactCard: {
-    kind: { code: 'كود', html: 'صفحة تفاعلية', svg: 'رسم' },
+    kind: { code: 'كود', html: 'معاينة صفحة ويب', svg: 'رسم' },
     generating: lines => `جارٍ الإنشاء… ${lines} سطرًا`,
     versionBadge: count => `${count} إصدارات`,
-    open: 'فتح'
+    open: 'فتح',
+    openWith: 'فتح باستخدام'
   },
   artifactPreview: {
     versionOf: (current, total) => `الإصدار ${current} من ${total}`,
@@ -48,8 +49,8 @@ export const arArtifacts = {
     latest: 'الأحدث',
     copyContent: 'نسخ المحتوى',
     download: 'تنزيل',
-    openInBrowser: 'فتح في المتصفح',
-    openInBrowserFailed: 'تعذّر الفتح في المتصفح',
+    openExternally: 'فتح خارجيًا',
+    openExternallyFailed: 'تعذّر الفتح خارجيًا',
     missingTitle: 'الناتج غير متاح',
     missingBody: 'لم يعد هذا الناتج موجودًا في السجل المحلي.'
   },

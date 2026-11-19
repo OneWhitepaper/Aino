@@ -33,7 +33,7 @@ describe('SidebarModeHeader', () => {
     view.rerender(<SidebarModeHeader {...props} activeId="sessions" />)
     expect(screen.getByTestId('brand-mark')).toBeTruthy()
   })
-  it('leaves mode navigation to the activity rail while keeping scoped session search', () => {
+  it('keeps Work and Code navigation available beside scoped session search', () => {
     const onSelect = vi.fn()
     render(
       <SidebarModeHeader
@@ -44,8 +44,8 @@ describe('SidebarModeHeader', () => {
         onSelect={onSelect}
       />
     )
-    expect(screen.queryByRole('button', { name: /Switch mode/ })).toBeNull()
-    expect(screen.getByText('Aino')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Switch Aino mode: Aino Work' })).toBeTruthy()
+    expect(screen.getByText('Aino Work')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Search sessions' })).toBeTruthy()
     expect(onSelect).not.toHaveBeenCalled()
   })
@@ -57,15 +57,15 @@ describe('SidebarModeHeader', () => {
       <SidebarModeHeader activeId="sessions" items={items} menuLabel="Switch mode" onSelect={onSelect} />
     )
 
-    const trigger = screen.getByRole('button', { name: 'Switch mode: Aino' })
+    const trigger = screen.getByRole('button', { name: 'Switch Aino mode: Aino Work' })
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
 
-    const current = await screen.findByRole('menuitemradio', { name: /^Aino/ })
+    const current = await screen.findByRole('menuitemradio', { name: /^Aino Work/ })
     expect(current.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('menuitemradio', { name: /^Agent Hub/ }))
 
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('bots:pane')
-    expect(screen.getByRole('button', { name: 'Switch mode: Aino' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Switch Aino mode: Aino Work' })).toBeTruthy()
 
     rerender(<SidebarModeHeader activeId="bots:pane" items={items} menuLabel="Switch mode" onSelect={onSelect} />)
     expect(screen.getByRole('button', { name: 'Switch mode: Agent Hub' })).toBeTruthy()
@@ -73,10 +73,10 @@ describe('SidebarModeHeader', () => {
     rerender(
       <SidebarModeHeader activeId="sessions" items={items.slice(0, 1)} menuLabel="Switch mode" onSelect={onSelect} />
     )
-    expect(screen.queryByRole('button', { name: /Switch mode/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Switch Aino mode: Aino Work' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Search sessions' })).toBeTruthy()
     expect(screen.queryByRole('menu')).toBeNull()
-    expect(screen.getByText('Aino')).toBeTruthy()
+    expect(screen.getByText('Aino Work')).toBeTruthy()
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 
@@ -84,7 +84,7 @@ describe('SidebarModeHeader', () => {
     const onSelect = vi.fn()
     render(<SidebarModeHeader activeId="sessions" items={items} menuLabel="Switch mode" onSelect={onSelect} />)
 
-    const trigger = screen.getByRole('button', { name: 'Switch mode: Aino' })
+    const trigger = screen.getByRole('button', { name: 'Switch Aino mode: Aino Work' })
     trigger.focus()
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     const menu = await screen.findByRole('menu')

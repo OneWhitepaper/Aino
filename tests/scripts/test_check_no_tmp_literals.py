@@ -1,6 +1,7 @@
 """scripts/check_no_tmp_literals.py: literal /tmp paths are flagged; idioms, comments, markers and tests are not."""
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -137,3 +138,29 @@ def test_baseline_entries_are_burned_down_not_grown(tmp_path, monkeypatch, capsy
 
     monkeypatch.setattr(mod, "_BASELINE", {"tools/a.py": 2})
     assert mod.main(["--all"]) == 1  # burn-down view ignores the baseline
+
+
+def test_upstream_codex_is_excluded_without_hiding_aino_integration(tmp_path):
+    mod = _load()
+    for relative in ("third_party/codex/README.md", "third_party/integration.md"):
+        file = tmp_path / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("write to /tmp/example\n", encoding="utf-8")
+    assert list(mod.scan(root=tmp_path)) == ["third_party/integration.md"]
+    # An explicitly requested upstream audit remains possible.
+    upstream = tmp_path / "third_party/codex/README.md"
+    assert list(mod.scan([upstream], root=tmp_path)) == ["third_party/codex/README.md"]
+
+
+def test_ignored_nested_runtime_checkout_is_not_scanned_as_first_party_source(tmp_path):
+    mod = _load()
+    runtime = tmp_path / '.runtime' / 'plugins' / 'downloaded'
+    runtime.mkdir(parents=True)
+    for directory in (tmp_path, runtime):
+        subprocess.run(['git', '-C', str(directory), 'init', '-q'], check=True, capture_output=True)
+    (tmp_path / '.gitignore').write_text('.runtime/\n')
+    upstream = runtime / 'SKILL.md'
+    upstream.write_text('write to /tmp/upstream\n')
+    (tmp_path / 'integration.md').write_text('write to /tmp/first-party\n')
+    assert list(mod.scan(root=tmp_path)) == ['integration.md']
+    assert list(mod.scan([upstream], root=tmp_path)) == ['.runtime/plugins/downloaded/SKILL.md']

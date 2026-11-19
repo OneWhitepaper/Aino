@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react'
 import { useContext, useEffect, useState } from 'react'
 
-import { BrandMark } from '@/components/brand-mark'
+import { ExecutionModeSwitcher } from '@/app/shell/execution-mode-switcher'
 import { SidebarBrandContext } from '@/components/pane-shell/pane-visibility'
 import { Codicon } from '@/components/ui/codicon'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -113,8 +113,7 @@ export function SidebarNavigation({
     <>
       {!hostBrand && (
         <header aria-label="Aino" className="aino-sidebar-brand">
-          <BrandMark className="size-8" />
-          <span>Aino</span>
+          <ExecutionModeSwitcher />
         </header>
       )}
       <SidebarGroup className="aino-sidebar-navigation" role="navigation">

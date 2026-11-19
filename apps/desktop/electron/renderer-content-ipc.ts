@@ -7,6 +7,7 @@ import { registerClipboardTextIpc } from './clipboard-ipc'
 import { saveImageFromUrl, writeComposerImage } from './composer-image-files'
 import { writeComposerPaste } from './composer-paste'
 import { composerImageBufferFromIpc, composerPasteTextFromIpc } from './hardening'
+import { registerPreviewBrowserApps } from './preview-browser-apps'
 import { captureOwnedPreviewContents } from './preview-capture'
 import { createPreviewTargetResolver } from './preview-file-target'
 import { stopPreviewFileWatch, watchDirectory, watchPreviewFile } from './preview-file-watch'
@@ -32,6 +33,7 @@ interface RendererContentIpcDeps {
 /** Registers through the account-fenced IPC passed by main; mutable account paths stay live. */
 export function registerRendererContentIpc(
   ipcMain: Pick<IpcMain, 'handle'>,
+  findOnPath: (command: string) => string | null,
   {
     getMainWindow,
     getHermesHome,
@@ -118,6 +120,7 @@ export function registerRendererContentIpc(
   })
 
   registerSpellcheckDictionaryIpc(ipcMain, electronWebContents)
+  registerPreviewBrowserApps(ipcMain, getAccountUiRoot, findOnPath)
 
   ipcMain.handle('hermes:capturePreview', async (event, payload) => {
     const guest = electronWebContents.fromId(Number(payload?.webContentsId))

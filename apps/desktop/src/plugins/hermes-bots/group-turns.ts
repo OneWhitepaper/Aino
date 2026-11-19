@@ -13,11 +13,13 @@ import { groupFailureReason, recordGroupActivity } from './group-activity'
 import { $groupChats, $groupClarify, appendGroupChatEntry, updateGroupChat } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
 import {
+  failedTurnBoundaryError,
   failedTurnBoundaryRow,
   groupTranscriptRowText,
   mirrorExternalGroupWrites,
   syntheticGroupUserRow
 } from './group-external-writes'
+import type { GroupTranscriptRow as GroupTurnTranscriptMessage } from './group-external-writes'
 import {
   followGroupChat,
   groupMemberAuthor,
@@ -45,16 +47,6 @@ export function isGroupPassText(text: unknown) {
   }
 
   return /^\(?\s*pass\s*\)?\.?$/i.test(trimmed)
-}
-
-/** One transcript entry in a `session.resume` snapshot, as the turn harvester
- *  reads it — the session's own message shape, not the plugin's GroupMessage.
- *  `content` is a plain string on most providers and a part array on the rest. */
-interface GroupTurnTranscriptMessage {
-  content?: string | Array<string | { text?: string }>
-  display_kind?: string
-  role?: string
-  text?: string
 }
 
 /** What a finished turn left behind: the member's reply, or the notice of the
@@ -92,7 +84,7 @@ function pickGroupTurnReply(messages: GroupTurnTranscriptMessage[], before: numb
     const replyText = String(text).trim()
 
     if (failedTurnBoundaryRow(msg)) {
-      return passText ?? { failedNotice: replyText }
+      return passText ?? { failedNotice: failedTurnBoundaryError(msg) }
     }
 
     if (isGroupPassText(replyText)) {
@@ -139,7 +131,7 @@ function pickStrandedGroupTurnReply(messages: GroupTurnTranscriptMessage[], befo
     }
 
     if (failedTurnBoundaryRow(msg)) {
-      return { failedNotice: text }
+      return { failedNotice: failedTurnBoundaryError(msg) }
     }
 
     if (msg?.role !== 'assistant' || !text) {

@@ -77,6 +77,7 @@ import type { SessionInfo } from '@/types/hermes'
 
 import type { SessionDragPayload } from './composer/inline-refs'
 import { type ComposerScope, ComposerScopeProvider } from './composer/scope'
+import { TileHandoffEntry, WorkspaceHandoffEntry } from './handoff/header-entry'
 import { useComposerActions } from './hooks/use-composer-actions'
 import { paneMirror } from './pane-mirror'
 import { SessionDraftTitle } from './session-draft-title'
@@ -1036,7 +1037,12 @@ export function WorkspaceHeaderMenu() {
     return null
   }
 
-  return <SessionHeaderMenu onClose={() => closeTreePane('workspace')} storedSessionId={selected} />
+  return (
+    <>
+      <WorkspaceHandoffEntry />
+      <SessionHeaderMenu onClose={() => closeTreePane('workspace')} storedSessionId={selected} />
+    </>
+  )
 }
 
 /** The main tab's button menu (see `PaneChrome.tabActions`); none on a fresh
@@ -1088,7 +1094,10 @@ export const watchSessionTiles = paneMirror<SessionTile>({
   // The single-session header's visible ⋯ (see PaneChrome.headerMenu) — the
   // strip's right-click menu stays, this is the discoverable click surface.
   headerMenu: storedSessionId => (
-    <SessionHeaderMenu onClose={() => requestCloseSessionTile(storedSessionId)} storedSessionId={storedSessionId} />
+    <>
+      <TileHandoffEntry storedId={storedSessionId} />
+      <SessionHeaderMenu onClose={() => requestCloseSessionTile(storedSessionId)} storedSessionId={storedSessionId} />
+    </>
   ),
   tabWrap: (storedSessionId, tab) => (
     <SessionTabMenu

@@ -1,4 +1,5 @@
 import time
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -92,10 +93,15 @@ class DummyAgent:
         self.events.append((name, payload))
 
 
-def test_codex_app_server_native_auto_mode_leaves_thread_compaction_to_codex():
+@pytest.mark.parametrize(('api_mode', 'execution_mode', 'auto_compaction'), [
+    ('codex_app_server', 'work', 'native'), ('responses', 'code', 'native'),
+    ('codex_responses', 'code', 'hermes'),
+])
+def test_codex_app_server_native_auto_mode_leaves_thread_compaction_to_codex(api_mode, execution_mode, auto_compaction):
     agent = DummyAgent(
-        TurnResult(thread_id="thread-1", turn_id="compact-turn-1")
+        TurnResult(thread_id="thread-1", turn_id="compact-turn-1"), auto_compaction=auto_compaction,
     )
+    agent.api_mode, agent.execution_mode = api_mode, execution_mode
     messages = [{"role": "user", "content": "hi"}]
 
     returned, prompt = compress_context(
@@ -111,6 +117,39 @@ def test_codex_app_server_native_auto_mode_leaves_thread_compaction_to_codex():
     assert agent._codex_session.calls == 0
     assert agent.context_compressor.compression_count == 0
     assert agent.events == []
+
+
+@pytest.mark.parametrize('api_mode', ['responses', 'codex_responses'])
+def test_code_manual_compaction_uses_native_thread_with_active_relay_and_releases_retired_binding(api_mode):
+    active = []
+    closed = []
+
+    @contextmanager
+    def turn_context():
+        active.append(True)
+        try:
+            yield
+        finally:
+            active.pop()
+
+    result = TurnResult(thread_id='code-thread', turn_id='compact-turn', should_retire=True)
+    agent = DummyAgent(result)
+    agent.api_mode, agent.execution_mode = api_mode, 'code'
+    agent._code_model_binding = SimpleNamespace(turn_context=turn_context, close=lambda: closed.append('binding'))
+    codex_session = agent._codex_session
+
+    def compact_thread():
+        assert active == [True], 'Code compaction must activate its model relay'
+        codex_session.calls += 1
+        return result
+
+    codex_session.compact_thread = compact_thread
+    messages = [{'role': 'user', 'content': 'keep the projected transcript'}]
+    returned, prompt = compress_context(agent, messages, 'system', approx_tokens=100000, force=True)
+    assert returned is messages and prompt == 'cached prompt'
+    assert codex_session.calls == 1 and codex_session.closed
+    assert closed == ['binding'] and active == []
+    assert agent._codex_session is None and agent._code_model_binding is None
 
 
 def test_codex_app_server_compaction_heartbeat_refreshes_activity_while_waiting():

@@ -53,10 +53,28 @@ describe('ArtifactPreview', () => {
     const { artifactId } = register('Dashboard', 'html', '<h1>Hi</h1>')
     await renderArtifact(artifactId)
 
-    fireEvent.click(screen.getByRole('button', { name: /open in browser/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open externally' }))
 
     await waitFor(() => {
       expect(openPreviewInBrowser).toHaveBeenCalledWith('blob:http://localhost/artifact')
+    })
+  })
+
+  it('hands staged desktop HTML to the OS opener rather than the file reveal route', async () => {
+    const openPreviewInBrowser = vi.fn().mockResolvedValue(undefined)
+    const filePath = '/tmp/my artifact #1.html'
+    window.hermesDesktop = {
+      openExternal: vi.fn().mockResolvedValue(undefined),
+      openPreviewInBrowser,
+      saveImageBuffer: vi.fn().mockResolvedValue(filePath)
+    } as never
+    const { artifactId } = register('Dashboard', 'html', '<h1>Hi</h1>')
+    await renderArtifact(artifactId)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open externally' }))
+
+    await waitFor(() => {
+      expect(openPreviewInBrowser).toHaveBeenCalledWith(filePath)
     })
   })
 
@@ -69,8 +87,8 @@ describe('ArtifactPreview', () => {
 
     await renderArtifact(artifactId)
 
-    expect(document.querySelector('svg')).not.toBeNull()
-    expect(document.querySelector('svg script')).toBeNull()
+    expect(globalThis.document.querySelector('svg')).not.toBeNull()
+    expect(globalThis.document.querySelector('svg script')).toBeNull()
   })
 
   it('offers only the source view for code, which has nothing to render', async () => {

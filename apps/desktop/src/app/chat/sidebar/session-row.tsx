@@ -50,6 +50,7 @@ import {
   SidebarRowLeadGlyph,
   SidebarRowShell
 } from './chrome'
+import { ExecutionModeBadge } from './execution-mode-badge'
 import { shellOwnsPress } from './reorderable-list'
 import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
 import { sessionRowDetails } from './session-row-details'
@@ -573,6 +574,7 @@ function SidebarSessionRowImpl({
                   {leadNode}
                   <SessionRowSlot area={SESSION_ROW_AREAS.leading} sessionId={sessionPinId(session)} />
                   {handoffBadge}
+                  <ExecutionModeBadge mode={session.execution_mode} />
                   <span className="min-w-0 flex-1 self-center">
                     {/* The row's primary action (#38072 finding 3): the title
                         is the session row's real button — the grabber and ⋯
@@ -647,6 +649,7 @@ function SidebarSessionRowImpl({
                     {context}
                   </span>
                   {handoffBadge}
+                  <ExecutionModeBadge mode={session.execution_mode} />
                   <SessionRowSlot area={SESSION_ROW_AREAS.trailing} sessionId={sessionPinId(session)} />
                   {actionsNode}
                 </div>

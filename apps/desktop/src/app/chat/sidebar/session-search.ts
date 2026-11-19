@@ -1,4 +1,5 @@
 import type { SessionInfo, SessionSearchResult } from '@/hermes'
+import { executionMode } from '@/lib/execution-mode'
 import { sessionMatchesSearch } from '@/lib/session-search'
 
 // The backend's FTS layer wraps matched terms in literal '>>>' / '<<<'
@@ -21,6 +22,7 @@ export function searchResultToSession(result: SessionSearchResult): SessionInfo 
     archived: false,
     cwd: null,
     ended_at: null,
+    execution_mode: executionMode(result.execution_mode),
     id: result.session_id,
     _lineage_root_id: result.lineage_root ?? null,
     input_tokens: 0,

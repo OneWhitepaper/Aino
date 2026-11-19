@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
 import { unwrapPlatformAccountIpc } from '../shared/platform-contract'
+import type { PreviewBrowserAppsBridge } from '../shared/preview-browser-apps'
 
 import type { DesktopProfileRoute } from './desktop-profile'
 import type { HudModifierApi, HudModifierStatus } from './hud-modifier-types'
@@ -160,6 +161,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   setAccountWindowMode: (mode, height, expected) =>
     ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
   openBrowserWindow: tabId => ipcRenderer.invoke('hermes:window:openBrowser', tabId),
+  previewBrowserApps: {
+    list: () => ipcRenderer.invoke('hermes:preview-browser-apps:list'),
+    open: (id, data) => ipcRenderer.invoke('hermes:preview-browser-apps:open', id, data)
+  } satisfies PreviewBrowserAppsBridge,
   nativePreview: {
     mount: request => ipcRenderer.invoke('hermes:preview-native:mount', request),
     layout: (token, bounds, visible) => ipcRenderer.send('hermes:preview-native:layout', token, bounds, visible),

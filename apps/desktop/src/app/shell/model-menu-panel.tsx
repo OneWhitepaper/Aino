@@ -2,10 +2,12 @@ import './model-menu.css'
 
 import type { ModelOptionProvider, ModelOptionsResult } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useContext, useMemo, useRef, useState } from 'react'
 
+import { getCustomEndpoints } from '@/api/config'
 import { useSessionView } from '@/app/chat/session-view'
+import { CodeModelEndpointsContext } from '@/components/code-model-status'
 import { usePlatformModels } from '@/components/platform-model-list'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -14,6 +16,7 @@ import { useI18n } from '@/i18n'
 import { modelMenuPreviewCopy } from '@/i18n/model-menu-preview'
 import { catalogProviderMatches, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { managedModelSwitchBlocked } from '@/lib/model-switch-policy'
+import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { cn } from '@/lib/utils'
 import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { collapseModelFamilies } from '@/store/model-visibility'
@@ -47,6 +50,15 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
 
   const { activePlatformModel, activeSessionId, controller, defaultEffort, modelOptions } =
     useModelMenuController(props)
+
+  const endpointScope = platformDefaultScope({ connectionId: ownerConnectionId, profile })
+
+  const endpoints = useQuery({
+    queryKey: ['model-options', profile, 'code-protocol', endpointScope.key],
+    queryFn: () => getCustomEndpoints(endpointScope.route),
+    enabled: Boolean(modelOptions.data?.providers.length),
+    retry: false
+  })
 
   const view = useSessionView()
   const modelSource = useStore($currentModelSource)
@@ -134,6 +146,7 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
         gateway,
         profile,
         refresh: true,
+        includeSessionInfo: true,
         request: requestGateway,
         sessionId: activeSessionId
       })
@@ -152,112 +165,120 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
   }
 
   return (
-    <ModelMenuPreviewContext.Provider value={presentation}>
-      <div
-        className="aino-model-menu-layout"
-        data-detail-open={showDetail || undefined}
-        onKeyDownCapture={event => {
-          if (
-            event.key === 'Escape' &&
-            showDetail &&
-            event.target instanceof HTMLElement &&
-            !event.target.closest('[data-slot="dropdown-menu-sub-content"]')
-          ) {
-            event.preventDefault()
-            event.stopPropagation()
-            backToList()
-          }
-        }}
-        ref={layoutRef}
-      >
-        <section className="aino-model-menu-list">
-          <header className="aino-model-menu-heading">
-            <strong>{previewCopy.title}</strong>
-            <span>{previewCopy.currentChat}</span>
-            <Button aria-label={t.common.close} onClick={closeMenu} size="icon-sm" variant="ghost">
-              <Codicon name="close" />
-            </Button>
-          </header>
-          {(blocked || builtinBlocked) && (
-            <p className="aino-model-menu-busy" role="status">
-              {t.platformModels.switchBusy}
-            </p>
-          )}
-          <ModelCatalogMenu
-            controller={controller}
-            disabled={blocked}
-            footer={
-              <>
-                {pinnedDraft && onFollowDefaultModel && (
-                  <DropdownMenuItem onSelect={onFollowDefaultModel}>{copy.followDefault}</DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  aria-label={copy.refreshModels}
-                  className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}
-                  disabled={refreshing}
-                  onSelect={event => {
-                    event.preventDefault()
-                    void refreshModels()
-                  }}
-                >
-                  <Codicon className={cn(refreshing && 'animate-spin')} name="sync" size="0.875rem" />
-                  {previewCopy.refresh}
-                </DropdownMenuItem>
-              </>
+    <CodeModelEndpointsContext.Provider
+      value={{
+        endpoints: endpoints.data?.endpoints,
+        scope: endpointScope.route,
+        sessionInfo: modelOptions.data?.session_info
+      }}
+    >
+      <ModelMenuPreviewContext.Provider value={presentation}>
+        <div
+          className="aino-model-menu-layout"
+          data-detail-open={showDetail || undefined}
+          onKeyDownCapture={event => {
+            if (
+              event.key === 'Escape' &&
+              showDetail &&
+              event.target instanceof HTMLElement &&
+              !event.target.closest('[data-slot="dropdown-menu-sub-content"]')
+            ) {
+              event.preventDefault()
+              event.stopPropagation()
+              backToList()
             }
-            gateway={gateway}
-            header={<LocalSetupMenuRow />}
-            includeMoa
-            ownerConnectionId={ownerConnectionId}
-            platformSection={
-              window.hermesDesktop?.platformModels
-                ? {
-                    disabled: builtinBlocked || managedCapability !== 'supported',
-                    models: platform.models,
-                    props: {
-                      disabled: builtinBlocked,
-                      managedCapability,
-                      onApplied: closeMenu,
-                      onInspect: model => onInspect({ kind: 'aino', model }),
-                      onPreview: model => onPreview({ kind: 'aino', model }),
-                      onSelect: async model => {
-                        const openInstance = readOpenInstance()
-                        const result = await controller.select(model.id, 'aino')
+          }}
+          ref={layoutRef}
+        >
+          <section className="aino-model-menu-list">
+            <header className="aino-model-menu-heading">
+              <strong>{previewCopy.title}</strong>
+              <span>{previewCopy.currentChat}</span>
+              <Button aria-label={t.common.close} onClick={closeMenu} size="icon-sm" variant="ghost">
+                <Codicon name="close" />
+              </Button>
+            </header>
+            {(blocked || builtinBlocked) && (
+              <p className="aino-model-menu-busy" role="status">
+                {t.platformModels.switchBusy}
+              </p>
+            )}
+            <ModelCatalogMenu
+              controller={controller}
+              disabled={blocked}
+              footer={
+                <>
+                  {pinnedDraft && onFollowDefaultModel && (
+                    <DropdownMenuItem onSelect={onFollowDefaultModel}>{copy.followDefault}</DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    aria-label={copy.refreshModels}
+                    className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}
+                    disabled={refreshing}
+                    onSelect={event => {
+                      event.preventDefault()
+                      void refreshModels()
+                    }}
+                  >
+                    <Codicon className={cn(refreshing && 'animate-spin')} name="sync" size="0.875rem" />
+                    {previewCopy.refresh}
+                  </DropdownMenuItem>
+                </>
+              }
+              gateway={gateway}
+              header={<LocalSetupMenuRow />}
+              includeMoa
+              ownerConnectionId={ownerConnectionId}
+              platformSection={
+                window.hermesDesktop?.platformModels
+                  ? {
+                      disabled: builtinBlocked || managedCapability !== 'supported',
+                      models: platform.models,
+                      props: {
+                        disabled: builtinBlocked,
+                        managedCapability,
+                        onApplied: closeMenu,
+                        onInspect: model => onInspect({ kind: 'aino', model }),
+                        onPreview: model => onPreview({ kind: 'aino', model }),
+                        onSelect: async model => {
+                          const openInstance = readOpenInstance()
+                          const result = await controller.select(model.id, 'aino')
 
-                        return (
-                          result !== false &&
-                          openInstance === readOpenInstance() &&
-                          controller.selectionIsCurrent?.() !== false
-                        )
-                      },
-                      presentation: 'menu',
-                      selectedId: currentProvider === 'aino' ? currentModel : undefined,
-                      selectionIsCurrent: controller.selectionIsCurrent
+                          return (
+                            result !== false &&
+                            openInstance === readOpenInstance() &&
+                            controller.selectionIsCurrent?.() !== false
+                          )
+                        },
+                        presentation: 'menu',
+                        selectedId: currentProvider === 'aino' ? currentModel : undefined,
+                        selectionIsCurrent: controller.selectionIsCurrent
+                      }
                     }
-                  }
-                : undefined
-            }
-            profile={profile}
-            request={requestGateway}
-            sessionId={activeSessionId}
+                  : undefined
+              }
+              profile={profile}
+              request={requestGateway}
+              sessionId={activeSessionId}
+            />
+            <p className="aino-model-menu-session-hint">{previewCopy.sessionHint}</p>
+          </section>
+          <ModelMenuPreviewDetails
+            controller={controller}
+            defaultEffort={defaultEffort}
+            disabled={previewOptionsBlocked({
+              preview: inspected,
+              current: controller.current,
+              activePlatformModel,
+              builtinBlocked: builtinBlocked || managedCapability !== 'supported',
+              customBlocked: blocked
+            })}
+            onBack={backToList}
+            preview={inspected}
           />
-          <p className="aino-model-menu-session-hint">{previewCopy.sessionHint}</p>
-        </section>
-        <ModelMenuPreviewDetails
-          controller={controller}
-          defaultEffort={defaultEffort}
-          disabled={previewOptionsBlocked({
-            preview: inspected,
-            current: controller.current,
-            activePlatformModel,
-            builtinBlocked: builtinBlocked || managedCapability !== 'supported',
-            customBlocked: blocked
-          })}
-          onBack={backToList}
-          preview={inspected}
-        />
-      </div>
-    </ModelMenuPreviewContext.Provider>
+        </div>
+      </ModelMenuPreviewContext.Provider>
+    </CodeModelEndpointsContext.Provider>
   )
 }
 

@@ -313,6 +313,34 @@ it('keeps an unbound stage unauthorized if native binding fails', async () => {
   })
 })
 
+it.each(['source-work', 'other-source', null])(
+  'recovers an empty Work/Code handoff only with matching backend evidence: %s',
+  async source => {
+    io.row.mockResolvedValue({
+      id: 'bot-stored',
+      profile: 'bot',
+      message_count: 0,
+      source: 'gui',
+      execution_mode: 'code',
+      handoff: source ? { source_session_id: source, summary: 'Reviewed requirements', files: [] } : undefined,
+      model_config: { model_source: 'aino', model_id: 'catalog-a', provider: 'aino', _branched_from: 'source-work' }
+    })
+    publishSessionState('bot-runtime', {
+      ...createClientSessionState('bot-stored'),
+      model: 'catalog-a',
+      provider: 'aino',
+      platformModel: { modelId: 'catalog-a', ownerUserId: '', status: 'awaiting_managed_credentials' }
+    })
+    openRecovery()
+    let accepted = false
+    await act(async () => {
+      accepted = await io.picker!.onSelect({ provider: 'aino', model: 'catalog-a' })
+    })
+    expect(accepted).toBe(source === 'source-work')
+    expect(bind).toHaveBeenCalledTimes(source === 'source-work' ? 1 : 0)
+  }
+)
+
 it.each([
   { message_count: 1 },
   { parent_session_id: 'historical-parent' },

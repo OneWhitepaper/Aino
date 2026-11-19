@@ -616,6 +616,50 @@ describe('toChatMessages', () => {
     expect(chatMessageText(messages[2])).toBe('Your request was not processed.')
   })
 
+  it.each(['First paragraph.\n\nSecond paragraph.', ''])('restores an uncertain managed reply once: %j', partial => {
+    const error = 'The request outcome is unknown. Automatic retry is stopped.'
+    const surface = { code: 'managed_operation_unknown', layer: 'provider', retryable: false } as const
+
+    const stored = toChatMessages([
+      { role: 'user', content: 'Inspect the file', row_id: 1 },
+      {
+        role: 'assistant',
+        content: 'Reading it.',
+        tool_calls: [{ id: 'read', function: { name: 'read_file', arguments: '{}' } }],
+        row_id: 2
+      },
+      { role: 'tool', tool_call_id: 'read', tool_name: 'read_file', content: 'done', row_id: 3 },
+      {
+        role: 'assistant',
+        row_id: 4,
+        display_kind: 'failed_turn',
+        content: [partial, error].filter(Boolean).join('\n\n'),
+        display_metadata: JSON.stringify({ error, error_surface: surface })
+      }
+    ])
+
+    const live = [
+      stored[0],
+      {
+        id: 'live',
+        role: 'assistant' as const,
+        error,
+        errorSurface: surface,
+        parts: partial ? [assistantTextPart(partial)] : []
+      }
+    ]
+
+    for (const messages of [stored, preserveLocalAssistantErrors(stored, live)]) {
+      const failures = messages.filter(message => message.error)
+      expect(failures).toHaveLength(1)
+      expect(failures[0]).toMatchObject({ role: 'assistant', error, rowId: 4, durableComplete: false })
+      expect(chatMessageText(failures[0])).toBe(partial)
+      expect(messages.flatMap(message => message.parts).filter(part => part.type === 'tool-call')).toHaveLength(1)
+      expect(messages.map(chatMessageText).join('')).toBe('Inspect the fileReading it.' + partial)
+      expect(messages.reduce((sum, m) => sum + (m.serverRowSpan ?? 1), 0)).toBe(4)
+    }
+  })
+
   it('shows only the notice for a boundary row without a usable error surface', () => {
     const messages = toChatMessages([
       { role: 'user', content: 'do the thing', timestamp: 1 },

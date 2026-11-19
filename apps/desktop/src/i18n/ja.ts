@@ -7,6 +7,7 @@ import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introJa } from './intro-ja'
 import { jaBoot } from './ja_boot'
@@ -291,6 +292,7 @@ const jaBaseOverrides = {
   appearancePage: appearancePage.ja,
   home: homeGuidance.ja,
   toolPanel: toolPanel['ja'],
+  executionMode: executionModeCopy.ja,
   workspacePage: workspacePage.ja,
   accountPage: accountPage['ja'],
   connectorOffer: {
@@ -2430,10 +2432,11 @@ const jaBaseOverrides = {
   },
 
   artifactCard: {
-    kind: { code: 'コード', html: 'インタラクティブページ', svg: 'グラフィック' },
+    kind: { code: 'コード', html: 'ウェブプレビュー', svg: 'グラフィック' },
     generating: lines => `生成中… ${lines} 行`,
     versionBadge: count => `${count} 個のバージョン`,
-    open: '開く'
+    open: '開く',
+    openWith: '開く方法'
   },
 
   artifactPreview: {
@@ -2443,8 +2446,8 @@ const jaBaseOverrides = {
     latest: '最新',
     copyContent: 'コンテンツをコピー',
     download: 'ダウンロード',
-    openInBrowser: 'ブラウザで開く',
-    openInBrowserFailed: 'ブラウザで開けませんでした',
+    openExternally: '外部で開く',
+    openExternallyFailed: '外部で開けませんでした',
     missingTitle: 'アーティファクトを利用できません',
     missingBody: 'このアーティファクトはローカルレジストリに存在しません。'
   },
@@ -3798,7 +3801,10 @@ const jaBaseOverrides = {
       errorOpenDesktopLogs: 'デスクトップのログを開く',
       errorSendDiagnostics: '診断情報を送信',
       filesChanged: count => `${count} 件のファイルを変更`,
-      reviewChanges: 'レビュー',
+      reviewChanges: '変更を表示',
+      recordedFileChanges: 'このターンで記録された変更です。同じファイルの複数の編集は順番に表示されます。',
+      recordedFileEdit: index => `編集 ${index}`,
+      reviewRepositoryChanges: 'Git の変更を表示',
       readAloudFailed: '読み上げに失敗しました',
       preparingAudio: '音声を準備中...',
       stopReading: '読み上げを停止',

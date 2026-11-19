@@ -15,6 +15,8 @@ import { storedSessionIdForNotification } from '@/lib/session-ids'
 import { $botChatScopes } from '@/store/bot-chat-scope'
 import { announceNewSessionDraftKey } from '@/store/composer'
 import { recordAction } from '@/store/desktop-metrics'
+import { $executionModeScope } from '@/store/execution-mode'
+import { $modeWorkspaces } from '@/store/execution-mode/workspaces'
 import { onKeptRouteOpened } from '@/store/gateway-kept-routes'
 import { requestMcpInstallFromDeepLink } from '@/store/mcp-deeplink-install'
 import { startMcpHealthChecker, stopMcpHealthChecker } from '@/store/mcp-health'
@@ -29,16 +31,13 @@ import { openPluginInstallRequest } from '@/store/plugin-install-request'
 import { openFolderAsProject } from '@/store/projects'
 import {
   $selectedStoredSessionId,
-  forgetSessionOwnerHintsForSession,
   getRememberedRoute,
   getRememberedSessionId,
   resolveComposerSessionKey,
   sessionBelongsToProfile,
   sessionMatchesStoredId,
-  sessionOwnerRouteFromRow,
   setRememberedRoute,
-  setRememberedSessionId,
-  setSessionOwnerHint
+  setRememberedSessionId
 } from '@/store/session'
 import { $sessionTiles, storedSessionIdForRuntimeId } from '@/store/session-states'
 import { onSessionsChanged } from '@/store/session-sync'
@@ -50,7 +49,7 @@ import type { SessionInfo } from '@/types/hermes'
 import { requestComposerFocus, requestComposerInsert } from '../../chat/composer/focus'
 import { appViewForPath, isRouteBlockingSurface, NEW_CHAT_ROUTE, routeSessionId, sessionRoute } from '../../routes'
 
-import { resolveRememberedSessionId } from './remembered-session'
+import { canRestoreRememberedRoute, repairOwnerHintsForRestore, resolveRememberedSessionId } from './remembered-session'
 
 // Trailing window that folds a burst of kept-route opens into one list refresh.
 const KEPT_ROUTE_REFRESH_COALESCE_MS = 400
@@ -169,6 +168,7 @@ export function useDesktopIntegrations({
   }, [])
 
   const restoredRef = useRef(false)
+  const modeNavigationAtMount = useRef($modeWorkspaces.get())
   const diskPluginsScanPending = useStore($diskPluginsScanPending)
 
   // Wait until boot has adopted the primary profile, then restore that profile's
@@ -212,6 +212,17 @@ export function useDesktopIntegrations({
         const restorableNonSessionRoute =
           !!route && route !== NEW_CHAT_ROUTE && !routeSession && !isRouteBlockingSurface(appViewForPath(route))
 
+        // Mode memory owns the explicit fresh/history entry. Legacy last-session
+        // fallback must not turn a remembered Work draft back into Code on reload.
+        const modeMemory = modeNavigationAtMount.current[$executionModeScope.get()]
+
+        if (!restorableNonSessionRoute && modeMemory?.[modeMemory.mode]) {
+          restoredRef.current = true
+          setInitialNavigationReady(true)
+
+          return
+        }
+
         // Boot adoption can publish renderer.ready before its async session
         // refresh completes. Keep the restore latch open until ownership can be
         // decided; treating an unloaded list as authoritative would erase valid
@@ -246,42 +257,12 @@ export function useDesktopIntegrations({
         // synchronous there; an unlisted id resolves by id below.
         const rowFor = (id: string) => sessions.find(session => sessionMatchesStoredId(session, id))
 
-        // The same owner hygiene the click path (openStoredSession) applies to
-        // a list row: an untagged row is owned by the ambient backend, so a
-        // stale explicit hint (older builds persisted `local` for legacy
-        // primary-SSH rows) must not survive into the pathname-driven resume —
-        // it would dial the Mac backend for a remote session and die with
-        // "session not found" (#97809). A connection-tagged row pins its exact
-        // route instead, exactly as a clicked row does.
-        const repairOwnerHintsForRestore = (id: string) => {
-          const row = rowFor(id)
-
-          if (!row) {
-            return
-          }
-
-          const ownerRoute = sessionOwnerRouteFromRow(row)
-
-          if (ownerRoute) {
-            setSessionOwnerHint(id, ownerRoute)
-          } else {
-            forgetSessionOwnerHintsForSession(id)
-          }
-        }
-
-        const restorableRouteSession = routeSession && rowFor(routeSession)?.source !== 'subagent' ? routeSession : null
-
-        if (
-          route &&
-          route !== NEW_CHAT_ROUTE &&
-          !isRouteBlockingSurface(appViewForPath(route)) &&
-          (!routeSession || (restorableRouteSession && sessionBelongsToProfile(sessions, routeSession, activeProfile)))
-        ) {
+        if (canRestoreRememberedRoute(route, sessions, activeProfile)) {
           // The user may have started typing on the fresh chat while the
           // backend was still coming up; the composer moves that draft onto
           // the restored session when its scope swaps (#114122).
           if (routeSession) {
-            repairOwnerHintsForRestore(routeSession)
+            repairOwnerHintsForRestore(routeSession, rowFor(routeSession))
           }
 
           announceNewSessionDraftKey(routeSession && resolveComposerSessionKey(routeSession, sessions))
@@ -300,7 +281,7 @@ export function useDesktopIntegrations({
           // Fast path: a listed, non-delegate row restores directly, exactly
           // as before — no by-id fetch on the common cold start.
           if (rowFor(last)?.source !== 'subagent' && sessionBelongsToProfile(sessions, last, activeProfile)) {
-            repairOwnerHintsForRestore(last)
+            repairOwnerHintsForRestore(last, rowFor(last))
             announceNewSessionDraftKey(resolveComposerSessionKey(last, sessions))
             navigate(sessionRoute(last), { replace: true })
 
@@ -320,7 +301,7 @@ export function useDesktopIntegrations({
                 return
               }
 
-              repairOwnerHintsForRestore(remembered)
+              repairOwnerHintsForRestore(remembered, rowFor(remembered))
               announceNewSessionDraftKey(resolveComposerSessionKey(remembered, sessions))
               setRememberedSessionId(remembered, activeProfile)
               navigate(sessionRoute(remembered), { replace: true })

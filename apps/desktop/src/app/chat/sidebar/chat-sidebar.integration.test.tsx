@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useSessionListActions } from '@/app/session/hooks/use-session-list-actions'
 import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { group, split } from '@/components/pane-shell/tree/model'
 import { $layoutTree, noteActiveTreeGroup } from '@/components/pane-shell/tree/store'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { registry } from '@/contrib/registry'
+import * as hermes from '@/hermes'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
+import { setDraftExecutionMode, setExecutionModeFilter } from '@/store/execution-mode'
 import {
   $dismissedAutoProjectIds,
   $pinnedSessionIds,
@@ -31,7 +34,9 @@ import { $activeGatewayProfile, $profiles, setShowAllProfiles } from '@/store/pr
 import { $projectScope, ALL_PROJECTS, exitProjectScope } from '@/store/project-scope'
 import { $projectDialog, $projects, $projectTree, closeProject, enterProject } from '@/store/projects'
 import {
+  $cronSessions,
   $currentCwd,
+  $gatewayState,
   $messagingSessions,
   $messagingTruncated,
   $selectedStoredSessionId,
@@ -41,6 +46,7 @@ import {
   $workspaceCwdOwner
 } from '@/store/session'
 import { $removedSessionIds } from '@/store/session-removal'
+import { $sessionStates } from '@/store/session-states'
 import { SIDEBAR_NAV_PREFS_AREA } from '@/store/sidebar-nav'
 import { makeSessionInfo } from '@/test/session-info'
 
@@ -119,6 +125,7 @@ describe('ChatSidebar navigation activity', () => {
 
   beforeEach(() => {
     $dismissedAutoProjectIds.set([])
+    setExecutionModeFilter('current')
     resetNotifications()
     $pinnedSessionIds.set([])
     $sidebarPinsOpen.set(true)
@@ -151,6 +158,8 @@ describe('ChatSidebar navigation activity', () => {
 
   afterEach(() => {
     cleanup()
+    setDraftExecutionMode('work')
+    setExecutionModeFilter('current')
     disposeContributions()
     $selectedStoredSessionId.set(null)
     $sessions.set([])
@@ -163,6 +172,159 @@ describe('ChatSidebar navigation activity', () => {
     $projectDialog.set(null)
     $dismissedAutoProjectIds.set([])
     resetNotifications()
+  })
+
+  it.each([null, undefined])(
+    'renders startup and reconnect with a %s cron payload through the list producer',
+    async cronPayload => {
+      $selectedStoredSessionId.set(null)
+      $sessions.set([])
+      $cronSessions.set([])
+      $messagingSessions.set([])
+      $gatewayState.set('connecting')
+      setDraftExecutionMode('work')
+
+      const list = vi.spyOn(hermes, 'listSidebarSessions').mockResolvedValue({
+        recents: { sessions: [makeSessionInfo({ id: 'startup-work', title: 'Recovered Work' })] },
+        cron: { sessions: cronPayload },
+        messaging: { sessions: [] }
+      } as unknown as hermes.SidebarSessionsResponse)
+
+      const jobs = vi.spyOn(hermes, 'getCronJobs').mockResolvedValue([])
+      const search = vi.spyOn(hermes, 'searchSessions').mockResolvedValue({ results: [] })
+
+      try {
+        renderSidebar('/', 'chat')
+        expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
+        const { result } = renderHook(() => useSessionListActions({ profileScope: 'default' }))
+        await act(async () => {
+          $gatewayState.set('open')
+          await result.current.refreshSessions()
+        })
+        expect($cronSessions.get()).toEqual([])
+        expect(screen.getByText('Recovered Work')).toBeTruthy()
+        act(() => window.dispatchEvent(new Event(SESSION_SEARCH_FOCUS_EVENT)))
+        const dialog = screen.getByRole('dialog')
+        fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Recovered' } })
+        await waitFor(() => expect(search).toHaveBeenCalled())
+        expect(within(dialog).getByText('Recovered Work')).toBeTruthy()
+      } finally {
+        list.mockRestore()
+        jobs.mockRestore()
+        search.mockRestore()
+        $gatewayState.set('idle')
+      }
+    }
+  )
+
+  it('filters current/all modes in recents and pins, treating legacy rows as Work', () => {
+    $selectedStoredSessionId.set(null)
+    setDraftExecutionMode('code')
+    $sessions.set([
+      makeSessionInfo({ id: 'code-pinned', title: 'Code pinned', execution_mode: 'code' }),
+      makeSessionInfo({ id: 'work-pinned', title: 'Work pinned' }),
+      makeSessionInfo({ id: 'code-recent', title: 'Code recent', execution_mode: 'code' }),
+      makeSessionInfo({ id: 'work-recent', title: 'Work recent' })
+    ])
+    $pinnedSessionIds.set(['code-pinned', 'work-pinned'])
+    renderSidebar('/', 'chat')
+    expect(screen.queryByText('Work recent')).toBeNull()
+    expect(screen.queryByText('Work pinned')).toBeNull()
+    expect(screen.getByText('Code recent')).toBeTruthy()
+    expect(screen.getByText('Code pinned')).toBeTruthy()
+    act(() => setExecutionModeFilter('all'))
+    expect(screen.getByText('Work recent')).toBeTruthy()
+    expect(screen.getByText('Work pinned')).toBeTruthy()
+  })
+
+  it('keeps an accessible running-work entry when its mode is filtered out', () => {
+    $selectedStoredSessionId.set(null)
+    setDraftExecutionMode('code')
+    $sessions.set([makeSessionInfo({ id: 'work-background', title: 'Background report' })])
+    $sessionStates.set({ background: { storedSessionId: 'work-background', busy: true } } as never)
+    renderSidebar('/', 'chat')
+    fireEvent.click(screen.getByRole('button', { name: /running.*other mode/i }))
+    expect(screen.getByText('Background report')).toBeTruthy()
+    expect($sessionStates.get().background.busy).toBe(true)
+    $sessionStates.set({})
+  })
+
+  it('uses the same mode filter for project previews and entered project lanes', () => {
+    $selectedStoredSessionId.set(null)
+    setDraftExecutionMode('code')
+    const work = makeSessionInfo({ id: 'project-work', title: 'Project Work', cwd: '/repo' })
+    const code = makeSessionInfo({ id: 'project-code', title: 'Project Code', cwd: '/repo', execution_mode: 'code' })
+    $sessions.set([work, code])
+    $projectTree.set([
+      {
+        id: 'p_modes',
+        label: 'Mode project',
+        path: '/repo',
+        sessionCount: 2,
+        previewSessions: [work, code],
+        repos: [
+          {
+            id: 'repo',
+            label: 'repo',
+            path: '/repo',
+            sessionCount: 2,
+            groups: [{ id: 'lane', label: 'Main', path: '/repo', sessions: [work, code] }]
+          }
+        ]
+      }
+    ])
+    $openProjectsByProfile.set({ default: [{ id: 'p_modes', path: '/repo' }] })
+    renderSidebar('/', 'chat')
+    expect(screen.queryByText('Project Work')).toBeNull()
+    expect(screen.getByText('Project Code')).toBeTruthy()
+    act(() => $projectScope.set('p_modes'))
+    expect(screen.queryByText('Project Work')).toBeNull()
+    expect(screen.getByText('Project Code')).toBeTruthy()
+    act(() => setExecutionModeFilter('all'))
+    expect(screen.getByText('Project Work')).toBeTruthy()
+  })
+
+  it('filters loaded and unloaded search hits by mode', async () => {
+    $selectedStoredSessionId.set(null)
+    setDraftExecutionMode('code')
+    $sessions.set([makeSessionInfo({ id: 'search-work', title: 'Work match' })])
+
+    const search = vi.spyOn(hermes, 'searchSessions').mockResolvedValue({
+      results: [
+        {
+          session_id: 'search-work',
+          title: 'Work match',
+          source: 'desktop',
+          model: null,
+          snippet: 'match',
+          role: 'user',
+          session_started: 1
+        },
+        {
+          session_id: 'search-code',
+          title: 'Code match',
+          source: 'desktop',
+          model: null,
+          snippet: 'match',
+          role: 'user',
+          session_started: 1,
+          execution_mode: 'code'
+        }
+      ]
+    } as never)
+
+    try {
+      renderSidebar('/', 'chat')
+      fireEvent.click(screen.getByRole('button', { name: 'View all conversations' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search sessions' }), { target: { value: 'match' } })
+      const dialog = within(screen.getByRole('dialog'))
+      await waitFor(() => expect(dialog.getByText('Code match')).toBeTruthy())
+      expect(dialog.queryByText('Work match')).toBeNull()
+      act(() => setExecutionModeFilter('all'))
+      expect(dialog.getByText('Work match')).toBeTruthy()
+    } finally {
+      search.mockRestore()
+    }
   })
 
   it('keeps navigation and session activity coherent with the focused pane', () => {

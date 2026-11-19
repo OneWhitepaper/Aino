@@ -13,6 +13,8 @@ import { registry } from '@/contrib/registry'
 import { en } from '@/i18n/en'
 import type { ErrorCardCopy } from '@/i18n/types'
 import { applyProductBrand } from '@/lib/brand'
+import { toChatMessages } from '@/lib/chat-messages'
+import { toRuntimeMessage } from '@/lib/chat-runtime'
 import { $touchPointer } from '@/lib/touch-interaction'
 import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
 import { $displayTimestamps } from '@/store/display-timestamps'
@@ -242,6 +244,40 @@ function Harness({
     </AssistantRuntimeProvider>
   )
 }
+
+it.each(['live', 'history'])('keeps a partial managed reply and one actionable error surface (%s)', async path => {
+  const error = 'The request outcome is unknown. Automatic retry is stopped.'
+  const partial = 'The first result is available.'
+  const surface = { code: 'managed_operation_unknown', layer: 'provider', retryable: false } as const
+
+  const stored = toChatMessages([
+    {
+      role: 'assistant',
+      row_id: 42,
+      display_kind: 'failed_turn',
+      content: partial + '\n\n' + error,
+      display_metadata: { error, error_surface: surface }
+    }
+  ])[0]
+
+  const assistant =
+    path === 'history'
+      ? toRuntimeMessage(stored)
+      : {
+          ...failedMessage(surface, error),
+          content: [{ type: 'text' as const, text: partial }]
+        }
+
+  const reload = vi.fn(async () => {})
+  render(<Harness assistant={assistant} onReload={reload} />)
+  expect(await screen.findByText(partial)).toBeTruthy()
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.getByText(copy(codes.managed_operation_unknown.title))).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /retry|switch provider/i })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: en.assistant.thread.errorDetails }))
+  expect(screen.getByText(error)).toBeTruthy()
+  expect(reload).not.toHaveBeenCalled()
+})
 
 describe('merged hover timestamps and touch actions', () => {
   it('keeps a resolved model error as collapsed history without an active alert or model picker', async () => {

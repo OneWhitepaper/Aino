@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 from agent.auxiliary_client import AuxiliaryExplicitCancellation
 from agent.context_compressor_summary import _accepts_keyword_argument
 from agent.context_engine import CompactionProgressText, automatic_compaction_status_message, sanitize_memory_context
-from agent.conversation_compression_codex import _compress_context_via_codex_app_server
+from agent.conversation_compression_codex import _compress_context_via_codex_app_server, codex_owns_context
 from agent.conversation_compression_deadline import resolve_context_compression_timeouts
 from agent.conversation_compression_scaffolding import _SYNTHETIC_USER_FLAGS, _message_text, is_user_role_scaffolding
 from agent.conversation_compression_telemetry import (
@@ -3994,7 +3994,7 @@ def compress_context(
     # compression.codex_app_server_auto). Memory handoff is Hermes-only: no native
     # summary prompt to inject into. `is True`: MagicMock attributes are truthy.
     checkpoint_required = getattr(agent, "compression_checkpoint_required", False) is True
-    if getattr(agent, "api_mode", None) == "codex_app_server":
+    if codex_owns_context(agent):
         if checkpoint_required:
             blocked = _checkpoint_blocked(
                 "codex_app_server owns the authoritative thread and does not expose a truthful pre-compaction transcript boundary"

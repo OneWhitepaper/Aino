@@ -305,6 +305,8 @@ export function validateCustomEndpoint(
     ...capabilityScoped(profile),
     path: '/api/providers/custom-endpoints/validate',
     method: 'POST',
+    // Auto detection may try three bounded model protocols after catalog discovery.
+    timeoutMs: 60_000,
     body: endpoint
   })
 }

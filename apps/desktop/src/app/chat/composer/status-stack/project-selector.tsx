@@ -19,6 +19,7 @@ import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
 import { useStoresSelector } from '@/lib/use-session-slice'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
+import { $currentExecutionMode } from '@/store/execution-mode'
 import { copyFilePath, revealFile } from '@/store/file-actions'
 import { revealFileInTree } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
@@ -56,6 +57,8 @@ export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: C
   useStore(view.$busy)
   const draft = canSelectDraftProject(view)
   const bindingProject = useStore($projectBindingSessions).has(runtimeId ?? '')
+  const codeMode = useStore($currentExecutionMode) === 'code'
+  const projectLabel = label || (codeMode ? t.statusStack.coding.noProject : t.statusStack.coding.selectProject)
 
   const selectProject = (path: string | null, projectId?: string) => {
     void captureProjectSelection(view, scope.attachments)
@@ -163,7 +166,7 @@ export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: C
           <DropdownMenuLabel>
             {draft ? t.statusStack.coding.selectProject : t.statusStack.coding.startProjectChat}
           </DropdownMenuLabel>
-          {draft && !runtimeId && cwd && (
+          {draft && !runtimeId && (cwd || codeMode) && (
             <DropdownMenuItem onSelect={() => selectProject(null)}>
               <Codicon name="close" size="0.875rem" />
               {t.statusStack.coding.noProject}
@@ -224,7 +227,7 @@ export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: C
       <DropdownMenuSub>
         <DropdownMenuSubTrigger disabled={opening || bindingProject}>
           <Codicon name="folder" size="0.875rem" />
-          <span className="truncate">{label || t.statusStack.coding.selectProject}</span>
+          <span className="truncate">{projectLabel}</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="max-w-72">{items}</DropdownMenuSubContent>
       </DropdownMenuSub>
@@ -235,14 +238,14 @@ export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: C
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          aria-label={label || t.statusStack.coding.selectProject}
+          aria-label={projectLabel}
           className="min-w-0 max-w-full"
           disabled={opening || bindingProject}
           size="inline"
           variant="ghost"
         >
           <span className="max-w-56 truncate text-[length:var(--aino-text-ui)] font-normal">
-            {label || t.statusStack.coding.selectProject}
+            {projectLabel}
           </span>
           <Codicon name="chevron-down" size="0.75rem" />
         </Button>

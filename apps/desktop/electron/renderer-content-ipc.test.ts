@@ -12,11 +12,13 @@ const native = vi.hoisted(() => ({
   clipboard: { read: vi.fn(), readText: vi.fn(), writeText: vi.fn() },
   showOpenDialog: vi.fn(),
   showSaveDialog: vi.fn(),
-  fromId: vi.fn()
+  fromId: vi.fn(),
+  fromWebContents: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
+  BrowserWindow: { fromWebContents: native.fromWebContents },
   clipboard: native.clipboard,
   dialog: { showOpenDialog: native.showOpenDialog, showSaveDialog: native.showSaveDialog },
   webContents: { fromId: native.fromId }
@@ -34,8 +36,12 @@ class NativeIpc extends EventEmitter {
     this.handlers.set(channel, listener)
   }
 
-  invoke(channel: string, sender: object, ...args: unknown[]) {
-    return this.handlers.get(channel)!({ sender }, ...args)
+  invoke(channel: string, sender: { id: number; mainFrame?: object }, ...args: unknown[]) {
+    return this.invokeFromFrame(channel, sender, sender.mainFrame, ...args)
+  }
+
+  invokeFromFrame(channel: string, sender: { id: number }, senderFrame: object | undefined, ...args: unknown[]) {
+    return this.handlers.get(channel)!({ sender, senderFrame }, ...args)
   }
 }
 
@@ -64,7 +70,7 @@ function setup() {
   const window = {} as BrowserWindow
   const points = new Map([[1, { x: 17, y: 29 }]])
 
-  registerRendererContentIpc(fence.ipc, {
+  registerRendererContentIpc(fence.ipc, () => null, {
     getMainWindow: () => window,
     getHermesHome: () => path.join(root, String(account), 'home'),
     getAccountUiRoot: () => path.join(root, String(account), 'ui'),
@@ -163,5 +169,23 @@ test('composer IPC refuses invalid or oversized payloads before writing account 
   await expect(
     ipc.invoke('hermes:savePastedText', sender, { text: 'a'.repeat(COMPOSER_PASTE_MAX_BYTES + 1) })
   ).rejects.toMatchObject({ code: 'EFBIG' })
+  expect(fs.readdirSync(root)).toEqual([])
+})
+
+test('native browser actions refuse a sender without a BrowserWindow-owned top-level frame', async () => {
+  const { ipc, root } = setup()
+  const guest = { id: 1, mainFrame: {} }
+
+  await expect(ipc.invoke('hermes:preview-browser-apps:list', guest)).rejects.toThrow(/unauthorized/)
+  await expect(ipc.invoke('hermes:preview-browser-apps:open', guest, 'chrome', new Uint8Array([1]))).rejects.toThrow(
+    /unauthorized/
+  )
+
+  const sender = { id: 1, mainFrame: {} }
+  native.fromWebContents.mockReturnValue({ isDestroyed: () => false, webContents: sender })
+  await expect(ipc.invokeFromFrame('hermes:preview-browser-apps:list', sender, {})).rejects.toThrow(/unauthorized/)
+  await expect(
+    ipc.invokeFromFrame('hermes:preview-browser-apps:open', sender, undefined, 'chrome', new Uint8Array([1]))
+  ).rejects.toThrow(/unauthorized/)
   expect(fs.readdirSync(root)).toEqual([])
 })

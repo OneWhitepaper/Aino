@@ -1499,6 +1499,25 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 
 ## Chat, tools & boot surfaces
 
+- Generated HTML previews span the reply column in a quiet outlined card. A blue
+  globe on a neutral tile marks the file type, and the page's own title sits
+  above its Web preview label. Clicking the card content opens that version in
+  the preview pane. The compact Open with menu aligns to the button's trailing
+  edge and shows Aino first, then the installed browser apps with their icons.
+  Each app opens the clicked card's version. Hosts without browser discovery
+  retain the existing external opener. Streaming cards keep the same layout
+  and disable both actions until the document is ready.
+- The newest settled reply groups its file edits in one outlined, 14px-radius
+  card. The header pairs the file count with aggregate added/removed lines and
+  an explicit View changes action. Compact rows show muted relative directories,
+  readable basenames and right-aligned per-file counts; a long list scrolls
+  inside the card. The card sits above the reply footer. Its file actions open
+  a read-only sheet of recorded tool diffs, including edits outside Git; repeated
+  edits remain in execution order rather than claiming a net working-tree diff.
+  The sheet retains a scoped Git review action with the conversation's worktree
+  and composer target. The card never offers an Undo action without an
+  exact, authoritative checkpoint for that turn; rerunning a prompt or reverting
+  unrelated working-tree changes is not an equivalent action.
 - The transcript and composer are built on `@assistant-ui/react`. Extend the
   existing components under `src/components/assistant-ui` and
   `src/app/chat/composer`; do not fork a second markdown, message, tool-call, or
@@ -1728,10 +1747,10 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   controls. The changed line must be visibly inside its viewport, not merely
   present in the DOM.
 - **Inline widgets** — a tool result that renders as a panel the user reads or
-  acts on (clarify, artifact card) wears `WIDGET_SHELL_CLASS`
+  acts on (clarify, code and graphic artifact cards) wears `WIDGET_SHELL_CLASS`
   (`src/components/chat/widget-shell.ts`): shared radius, the
   `--ui-widget-surface-background` fill, no border. Its actions sit _outside_
-  the panel, below it. Don't give one widget its own radius or fill.
+  the panel, below it. Generated HTML uses the outlined Web preview card above.
 - Bordered surfaces in the transcript (tables, fences, callouts, attachments)
   use `--ui-stroke-tertiary`. Not `border-border` — that's the app-wide
   default and reads too hot against the thread.

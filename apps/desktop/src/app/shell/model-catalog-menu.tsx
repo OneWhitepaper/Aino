@@ -24,6 +24,7 @@ import {
 } from 'react'
 
 import { getApiRequestConnection } from '@/api/client'
+import { CodeModelStatus } from '@/components/code-model-status'
 import { PlanLimitLine, UsageLevelTag } from '@/components/model-picker'
 import { PlatformModelList, type PlatformModelListProps } from '@/components/platform-model-list'
 import { ProviderStatusChip } from '@/components/provider-status-chip'
@@ -302,7 +303,8 @@ function useModelCatalogSources({
     // Gateway-first even with no session: a connected (possibly remote)
     // gateway owns the model catalog, including virtual providers the local
     // REST fallback can't know about (#53817).
-    queryFn: (): Promise<ModelOptionsResult> => requestModelOptions({ gateway, profile, request, sessionId }),
+    queryFn: (): Promise<ModelOptionsResult> =>
+      requestModelOptions({ gateway, profile, request, sessionId, includeSessionInfo: true }),
     refetchOnMount: query => nousRefetchOnMount(query.state.data),
     refetchInterval: query => nousPricingPoll(query.state.data, query.state.dataUpdateCount)
   })
@@ -1481,6 +1483,7 @@ function ModelFamilyRow({
             </Badge>
           ) : null}
         </span>
+        <CodeModelStatus model={activeId ?? family.id} provider={provider.slug} providers={[provider]} />
         <ModelResetBadge time={limit.reset} />
         {loadProgress ? (
           <span className="flex shrink-0 items-center gap-1.5" title={copyPicker.loadingIntoMemory}>

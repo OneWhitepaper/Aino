@@ -5,7 +5,7 @@ import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 import {
   compactPreview,
   fileEditBasename,
-  fileEditPath,
+  fileEditPaths,
   findFirstUrl,
   hostnameOf,
   isFileEditTool,
@@ -95,6 +95,7 @@ const TOOL_CATEGORY: Record<string, RunCategory> = {
   search_files: 'explore',
   session_search_recall: 'search',
   terminal: 'run',
+  exec_command: 'run',
   vision_analyze: 'analyze',
   web_extract: 'read',
   web_search: 'search'
@@ -117,15 +118,17 @@ function fileCount(tools: readonly ToolCallLike[]): number {
   let unnamed = 0
 
   for (const tool of tools) {
-    const path = fileEditPath(parseMaybeObject(tool.args), {}) || fileEditPath({}, parseMaybeObject(tool.result))
+    const editedPaths = fileEditPaths(parseMaybeObject(tool.args), parseMaybeObject(tool.result))
 
-    if (path) {
-      paths.add(
-        path
-          .replaceAll('\\', '/')
-          .replace(/\/{2,}/g, '/')
-          .replace(/^\.\//, '')
-      )
+    if (editedPaths.length) {
+      for (const path of editedPaths) {
+        paths.add(
+          path
+            .replaceAll('\\', '/')
+            .replace(/\/{2,}/g, '/')
+            .replace(/^\.\//, '')
+        )
+      }
     } else {
       unnamed += 1
     }

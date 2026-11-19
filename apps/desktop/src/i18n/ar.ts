@@ -15,6 +15,7 @@ import { arDiagnostics } from './ar_diagnostics'
 import { arFirstRun } from './ar_first_run'
 import { arSettings } from './ar_settings'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
 import { messagingOnboarding } from './messaging-onboarding'
@@ -40,6 +41,7 @@ const arBaseOverrides = {
   appearancePage: appearancePage.ar,
   home: homeGuidance.ar,
   toolPanel: toolPanel['ar'],
+  executionMode: executionModeCopy.ar,
   workspacePage: workspacePage.ar,
   accountPage: accountPage['ar'],
   platformRecharge: {

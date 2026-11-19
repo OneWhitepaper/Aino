@@ -12,6 +12,7 @@ import queue
 import threading
 import time
 from agent.i18n import t
+from agent.managed_inference_errors import ManagedOperationUnknown
 from agent.turn_failure_copy import (
     FAILED_TURN_DISPLAY_KIND, FAILED_TURN_NOTICE, OPEN_TURN_TAIL_ROLES, PARTIAL_FAILED_TURN_NOTICE,
 )
@@ -329,11 +330,15 @@ class GatewayTurnPersistenceMixin:
     def _hmwa_add_failed_turn_notice(self, response, notice):
         """Make failed-turn delivery explicit without replacing the provider-specific guidance."""
         response = str(response or "").strip()
+        if response == notice or response.endswith("\n\n" + notice):
+            return response
         return f"{response}\n\n{notice}" if response else notice
 
     def _hmwa_failed_turn_notice(self, agent_result):
         """Choose retry guidance without assuming completed tool effects can be repeated safely."""
         from gateway.media_repair import _current_turn_messages
+        if agent_result.get("failure_reason") == "managed_operation_unknown":
+            return str(agent_result.get("error") or ManagedOperationUnknown())
         # Compression during the failed turn can move the slice boundary; the shared helper falls
         # back to the last user row so tool evidence is not silently dropped.
         turn_messages = _current_turn_messages(

@@ -37,6 +37,7 @@ from agent.chat_completion_headers import _chat_completion_capturing_headers
 from agent.chat_completion_stream_errors import (
     rejects_stream_options, anthropic_connection_error_types, is_sse_connection_error)
 from agent.chat_completion_stream_monitor import StreamingWaitMonitor, StreamLifetimeExceeded
+from agent.chat_completion_wait_notice import recovery_notice
 from agent.transports.chat_completions import is_router_timeout_shim, router_timeout_shim_may_follow
 from agent.fast_mode import effective_request_overrides
 from agent.turn_context import substitute_api_content
@@ -697,8 +698,7 @@ def _cloud_stale_timeout_for(agent, api_kwargs: dict) -> float:
     if explicit is not None:
         return explicit
     base, explicit_env = _stream_env_stale_base()
-    timeout = _cloud_stale_timeout(base, api_kwargs)
-    return timeout if explicit_env else cap_to_run_budget(agent, timeout)
+    return base if explicit_env else cap_to_run_budget(agent, _cloud_stale_timeout(base, api_kwargs))
 
 
 def _bedrock_reasoning_stale_floor(model_id: object) -> float | None:
@@ -2805,10 +2805,10 @@ class _StreamingCall(StreamingWaitMonitor):
             return base, cfg, min(base, 60.0)
         read = env_float("HERMES_STREAM_READ_TIMEOUT", 120.0)
         stale = self._stream_stale_timeout
-        if read == 120.0 and waits_like_local(self.agent.base_url, self.agent.provider):
+        if "HERMES_STREAM_READ_TIMEOUT" not in os.environ and waits_like_local(self.agent.base_url, self.agent.provider):
             read = base  # local providers prefill for minutes
             logger.debug("Local provider detected (%s) — stream read timeout raised to %.0fs", self.agent.base_url, read)
-        elif read == 120.0 and stale is not None and stale != float("inf") and stale > read:
+        elif "HERMES_STREAM_READ_TIMEOUT" not in os.environ and stale is not None and stale != float("inf") and stale > read:
             # Reasoning models pause mid-stream for minutes; the stale detector
             # tolerates that, so the raw read timeout must not fire first.
             read = stale
@@ -3730,7 +3730,7 @@ class _StreamingCall(StreamingWaitMonitor):
         )
         self.agent._buffer_diagnostic_status(
             f"⚠️ No response from provider for {int(elapsed)}s (model: {self.api_kwargs.get('model', 'unknown')}, "
-            f"context: ~{_est_ctx:,} tokens). Reconnecting...")
+            f"context: ~{_est_ctx:,} tokens). {recovery_notice(self.agent)}")
         # Captured BEFORE the cancel/abort: the pool sweep can miss a checked-out
         # connection, so shut down the killed attempt's own socket too — still
         # shutdown-only, never close (see the helper).

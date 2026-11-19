@@ -37,10 +37,11 @@ export const zhHantArtifacts = {
   },
 
   artifactCard: {
-    kind: { code: '程式碼', html: '互動頁面', svg: '圖形' },
+    kind: { code: '程式碼', html: '網頁預覽', svg: '圖形' },
     generating: lines => `產生中… ${lines} 行`,
     versionBadge: count => `${count} 個版本`,
-    open: '開啟'
+    open: '開啟',
+    openWith: '開啟方式'
   },
 
   artifactPreview: {
@@ -50,8 +51,8 @@ export const zhHantArtifacts = {
     latest: '最新',
     copyContent: '複製內容',
     download: '下載',
-    openInBrowser: '在瀏覽器中開啟',
-    openInBrowserFailed: '無法在瀏覽器中開啟',
+    openExternally: '在外部開啟',
+    openExternallyFailed: '無法在外部開啟',
     missingTitle: '產物無法使用',
     missingBody: '此產物已不在本機註冊表中。'
   },

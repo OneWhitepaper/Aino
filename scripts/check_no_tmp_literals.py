@@ -71,7 +71,11 @@ SKIP_DIRS = {
 # Pruned only directly under the repo root.
 ROOT_SKIP_DIRS = {".github"}
 # Pruned as repo-relative paths.
-SKIP_REL_DIRS = {Path("website/i18n"), Path("website/build"), Path("website/node_modules")}
+SKIP_REL_DIRS = {
+    Path("website/i18n"), Path("website/build"), Path("website/node_modules"),
+    # Pinned upstream source follows its own portability policy; Aino glue is still scanned.
+    Path("third_party/codex"),
+}
 
 SKIP_FILE_NAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "poetry.lock"}
 SKIP_FILE_PATTERNS = (
@@ -186,7 +190,7 @@ def iter_files(root: Path | None = None):
         rel_here = here.relative_to(root) if here != root else Path()
         excluded = SKIP_DIRS | (ROOT_SKIP_DIRS if here == root else set())
         dirnames[:] = sorted(
-            d for d in dirnames if d not in excluded and (rel_here / d) not in SKIP_REL_DIRS
+            d for d in dirnames if d not in excluded and (rel_here / d) not in SKIP_REL_DIRS and (here / d) not in ignored
         )
         for filename in sorted(filenames):
             path = here / filename

@@ -335,6 +335,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
                 <ErrorCard onDismiss={onDismissError ? () => onDismissError(messageId) : undefined} />
               </MessagePrimitive.Error>
             </div>
+            <SettledChangedFiles />
             <MessageTimelineTimestamp className="px-(--message-text-indent) pt-0.5" suppressIfDuplicatePart />
             {/* Sealed interims skip the footer so a tool-heavy turn doesn't grow a
               copy bar per paragraph (72dd01c553) — EXCEPT when the interim is the
@@ -354,9 +355,6 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
                   onBranchInNewChat={onBranchInNewChat}
                 />
               )}
-            {/* Last thing in the turn — under the action bar, the way Cursor ends a
-          turn on its summary rather than burying it above the controls. */}
-            <SettledChangedFiles />
             <StreamingMarker />
           </ResponseProcessBody>
         </>

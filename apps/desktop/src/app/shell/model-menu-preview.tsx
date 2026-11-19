@@ -2,6 +2,7 @@ import { isReasoningEffort, type ModelOptionProvider } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { createContext, type ReactNode, type RefObject, useRef, useState } from 'react'
 
+import { CodeModelStatus } from '@/components/code-model-status'
 import { PlatformModelDetails } from '@/components/platform-model-details'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -329,6 +330,13 @@ export function ModelMenuPreviewDetails({
   return (
     <aside aria-label={copy.details} className="aino-model-menu-detail" tabIndex={-1}>
       <ModelPreviewHeader favoriteKeys={favoriteKeys} identity={identity} onBack={onBack} preview={preview} />
+      <CodeModelStatus
+        details
+        model={identity.active ? controller.current.model : identity.model}
+        platformModel={preview.kind === 'aino' ? preview.model : null}
+        provider={identity.provider}
+        providers={preview.kind === 'custom' ? [preview.provider] : undefined}
+      />
       <div className="aino-model-menu-detail-rows">
         <ModelPreviewFacts options={options} preview={preview} />
         {hasOptions && (

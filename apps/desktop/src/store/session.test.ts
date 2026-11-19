@@ -90,7 +90,7 @@ import {
   publishSessionState
 } from './session-states'
 
-const session = (over: Partial<SessionInfo>): SessionInfo => makeSessionInfo({ id: 'live', ...over })
+const session = (over: Partial<SessionInfo>): SessionInfo => makeSessionInfo({ id: 'live', message_count: 1, ...over })
 
 describe('composer model persistence scope', () => {
   const local = { baseUrl: '', connectionId: 'local', mode: 'local' } as never
@@ -579,7 +579,12 @@ describe('mergeSessionPage', () => {
     // Repro of the disappearing-sessions bug: A finished and is returned by the
     // server, but B and C are mid-first-response (message_count 0 in the DB) so
     // listSessions(min_messages=1) skips them. They must survive the refresh.
-    const previous = [session({ id: 'c' }), session({ id: 'b' }), session({ id: 'a' })]
+    const previous = [
+      session({ id: 'c', message_count: 0, preview: 'First prompt C' }),
+      session({ id: 'b', message_count: 0, preview: 'First prompt B' }),
+      session({ id: 'a' })
+    ]
+
     const incoming = [session({ id: 'a', message_count: 2 })]
 
     const merged = mergeSessionPage(previous, incoming, ['b', 'c'])
@@ -588,6 +593,20 @@ describe('mergeSessionPage', () => {
     // The finished session comes from the fresh server payload, not the stale
     // optimistic copy.
     expect(merged.find(s => s.id === 'a')?.message_count).toBe(2)
+  })
+
+  it('drops untouched open drafts while retaining a pending first send and untitled history', () => {
+    const previous = [
+      session({ id: 'draft', message_count: 0, preview: null, title: null }),
+      session({ id: 'sending', message_count: 0, preview: 'First message', title: null }),
+      session({ id: 'history', message_count: 2, preview: null, title: null })
+    ]
+
+    const merged = mergeSessionPage(previous, [], ['draft', 'sending', 'history'])
+
+    expect(merged.map(s => s.id)).toEqual(['sending', 'history'])
+    expect(merged[0]).toBe(previous[1])
+    expect(merged[1]).toBe(previous[2])
   })
 
   it('does not preserve an omitted internal delegate child even when selected or working', () => {

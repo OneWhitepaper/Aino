@@ -68,6 +68,26 @@ export function createPreviewTargetResolver({
     return decoded !== resolvedPath ? decoded : null
   }
 
+  function sourceReferencePathIfMissing(resolvedPath: string): string {
+    // A real filename wins, even when its suffix looks like a line citation.
+    // Only the preview boundary interprets references; filesystem reads keep
+    // their literal-path contract (including Windows drive-letter colons).
+    if (fileExists(resolvedPath) || directoryExists(resolvedPath)) {
+      return resolvedPath
+    }
+
+    for (const candidate of [resolvedPath, decodedPathIfMissing(resolvedPath)]) {
+      const match = candidate?.match(/^(.+?)(?::[1-9]\d*(?::[1-9]\d*|-[1-9]\d*)?|#L[1-9]\d*(?:-L[1-9]\d*)?)$/)
+      const filePath = match?.[1]
+
+      if (filePath && fileExists(filePath)) {
+        return filePath
+      }
+    }
+
+    return resolvedPath
+  }
+
   async function previewFileTarget(rawTarget, baseDir) {
     const raw = String(rawTarget || '').trim()
     const base = baseDir ? path.resolve(expandUserPath(baseDir)) : resolveHermesCwd()
@@ -112,6 +132,10 @@ export function createPreviewTargetResolver({
         resolved = decoded
       }
     }
+
+    // Codex-style links include source locations (`index.ts:818`), not just
+    // filenames. Preserve `raw` as the citation, but read/reveal the real file.
+    resolved = sourceReferencePathIfMissing(resolved)
 
     // A directory is not a preview (#101683). Overloading it as
     // `<dir>/index.html` made a directory without one classify as missing, and

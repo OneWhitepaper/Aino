@@ -4,6 +4,10 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const frErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_operation_unknown: {
+    title: 'Résultat de la demande non confirmé',
+    body: 'La réponse complète n’a pas été reçue. La conversation et les éléments reçus sont conservés. La demande a peut-être été exécutée ; Aino ne l’a pas renvoyée automatiquement. Vérifiez les actions effectuées avant de décider de renvoyer la demande.'
+  },
   managed_billing_unavailable: {
     title: 'État de l’abonnement indisponible',
     body: 'Vérifiez votre abonnement et sa date d’expiration dans Mon compte. Une fois l’accès rétabli, renvoyez le message ou choisissez un modèle disponible.'

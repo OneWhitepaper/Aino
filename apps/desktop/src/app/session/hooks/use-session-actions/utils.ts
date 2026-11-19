@@ -1697,12 +1697,10 @@ function upsertResolvedSession(
 
   const lineage = session._lineage_root_id ?? session.id
 
-  // A hidden row (canonical Bot Chat, room plumbing) is unlisted by design:
-  // inserting it into $sessions paints a sidebar row until the next refresh,
-  // and the keep-list then holds it there (#113273). Park it on the off-list
-  // owner atom the draft stubs ride — owner resolution still finds it via
-  // ownerLookupSessionRows, the sidebar never does.
-  if (session.hidden) {
+  // Resolving an open draft must not bypass the history's min_messages=1
+  // boundary. Like hidden Bot Chats, it still needs an off-list owner route.
+  // A submitted optimistic preview keeps the first turn visible while it saves.
+  if (session.hidden || (session.message_count === 0 && !session.preview?.trim())) {
     setUnlistedSessionOwnerRows(prev => [
       session,
       ...prev.filter(existing => (existing._lineage_root_id ?? existing.id) !== lineage)

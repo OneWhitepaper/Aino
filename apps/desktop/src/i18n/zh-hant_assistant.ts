@@ -81,6 +81,10 @@ export const zhHantAssistant = {
         streaming: '回覆完成前連線已中斷。請重試以重新傳送。'
       },
       errorCodes: {
+        managed_operation_unknown: {
+          title: '本次請求結果未確認',
+          body: '未收到完整回覆，聊天記錄和已收到的內容均已保留。請求可能已經執行，Aino 未自動重傳。請先檢查已執行操作的結果，再決定是否重新傳送。'
+        },
         managed_billing_unavailable: {
           title: '方案狀態無法使用',
           body: '請到「我的帳戶」查看訂閱和到期情況。恢復後重新傳送，或選擇其他可用模型。'
@@ -280,7 +284,10 @@ export const zhHantAssistant = {
       errorOpenDesktopLogs: '開啟桌面端日誌',
       errorSendDiagnostics: '傳送診斷資訊',
       filesChanged: count => `${count} 個檔案已變更`,
-      reviewChanges: '檢視',
+      reviewChanges: '檢視變更',
+      recordedFileChanges: '本輪檔案修改記錄；同一檔案的多次編輯按順序顯示。',
+      recordedFileEdit: index => `第 ${index} 次編輯`,
+      reviewRepositoryChanges: '檢視 Git 變更',
       readAloudFailed: '朗讀失敗',
       preparingAudio: '正在準備音訊...',
       stopReading: '停止朗讀',

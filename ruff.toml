@@ -8,7 +8,11 @@ target-version = "py311"
 
 # Frozen evaluation inputs include historical and deliberately faulty source. Their exact
 # bytes are part of the benchmark contract (evals/ultra_delegation/fixtures.sha256.json).
-extend-exclude = ["evals/ultra_delegation/fixtures"]
+extend-exclude = [
+    "evals/ultra_delegation/fixtures",
+    # Unmodified upstream dependency, maintained with its own lint configuration.
+    "third_party/codex",
+]
 
 [format]
 # Like Black, use double quotes for strings.

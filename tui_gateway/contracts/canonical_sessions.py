@@ -11,7 +11,7 @@ from .common import ProfileParams, TranscriptMessage
 from .connectors_operation import ConnectionRequestPayload
 from .sessions import OpenRequestEntry, TodoState
 from .canonical import (AdmissionStatus, CanonicalClientLabel, CanonicalSessionRef, PromptResponseResult,
-                        SessionInventoryFields)
+                        SessionInventoryFields, WorkCodeHandoff)
 from .registry import canonical_method
 
 
@@ -29,6 +29,8 @@ class CanonicalClientIdentity(Params):
 
 class CanonicalCreateParams(ProfileParams):
     request_id: str | None = None
+    execution_mode: Literal['work', 'code'] | None = None
+    handoff: WorkCodeHandoff | None = None
     source: Literal['cli', 'tui', 'gui', 'acp', 'tool', 'oneshot'] = 'cli'
     cwd: str | None = None
     # The sessions-row ``cwd`` when it differs from the execution ``cwd`` (the classic CLI records
@@ -124,6 +126,7 @@ class CanonicalPendingPrompt(Result):
 
 class CanonicalSnapshotInfo(SessionInventoryFields):
     desktop_protocol: Literal['hermes-gateway-v1']
+    execution_mode: Literal['work', 'code'] = 'work'
     source: str | None = None
     model: str | None = None
     model_source: Literal['aino'] | None = None
@@ -202,6 +205,7 @@ class CanonicalListParams(ProfileParams):
 
 class CanonicalSessionListRow(Result):
     session_id: str
+    execution_mode: Literal['work', 'code'] = 'work'
     id: str
     title: str
     source: str | None

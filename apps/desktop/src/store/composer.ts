@@ -283,10 +283,17 @@ export const freshDraftScope = (): string => $freshDraftKey.get()
 
 export const rotateFreshDraftKey = (): string => {
   const key = createFreshDraftKey()
-  $freshDraftKey.set(key)
-  persistString(FRESH_DRAFT_STORAGE_KEY, key)
+  restoreFreshDraftKey(key)
 
   return key
+}
+
+/** Restore an existing draft identity; contents remain in the composer stash. */
+export function restoreFreshDraftKey(key: string): void {
+  if (isFreshDraftScope(key)) {
+    $freshDraftKey.set(key)
+    persistString(FRESH_DRAFT_STORAGE_KEY, key)
+  }
 }
 
 // A draft key belongs to a fresh-chat lifecycle when it is the legacy shared
@@ -675,6 +682,9 @@ export function adoptNewSessionDraft(toKey: string | null | undefined): boolean 
  * finds nothing to restore.
  */
 let announcedGoneSessionDraftKey: string | null = null
+
+/** The recovery owner may restore a draft pointer before the composer consumes its text. */
+export const pendingGoneSessionDraftKey = (): string | null => announcedGoneSessionDraftKey
 
 export function announceGoneSessionDraft(fromKey: string | null | undefined): void {
   announcedGoneSessionDraftKey = fromKey?.trim() || null

@@ -4,6 +4,8 @@ from ``build_turn_context``)."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from agent.turn_context_compaction import (
     CompactionOutcome,
     _codex_native_auto_compaction,
@@ -48,3 +50,23 @@ def test_disabled_compression_rearms_overflow_warn_when_under_window():
     agent._clear_context_overflow_warn.assert_called_once()
     assert agent._turn_received_provider_response is False
     assert agent._turn_preflight_display_snapshot is None
+
+
+@pytest.mark.parametrize('api_mode', ['responses', 'codex_responses'])
+@pytest.mark.parametrize('auto_mode', ['native', 'hermes', 'off'])
+def test_code_turn_start_leaves_idle_and_threshold_compaction_to_codex(monkeypatch, api_mode, auto_mode):
+    agent = _agent(execution_mode='code', api_mode=api_mode, compression_enabled=True,
+                   codex_app_server_auto_compaction=auto_mode, compression_idle_compact_after_seconds=1,
+                   _last_activity_ts=0, _compress_context=MagicMock())
+    estimate = MagicMock(side_effect=AssertionError('Hermes must not estimate a Code thread for compression'))
+    monkeypatch.setattr('agent.turn_context._preflight_request_tokens', estimate)
+    messages = [{'role': 'user', 'content': 'keep this Code context'}]
+    out = run_turn_start_compaction(
+        agent, messages=messages, system_message=None, active_system_prompt='unchanged',
+        conversation_history=messages, current_turn_user_idx=0, user_message=messages[0]['content'],
+        effective_task_id='code-turn',
+    )
+    assert out.messages is messages and out.conversation_history is messages
+    assert out.active_system_prompt == 'unchanged' and not out.compressed
+    agent._compress_context.assert_not_called()
+    estimate.assert_not_called()

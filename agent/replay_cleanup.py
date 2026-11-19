@@ -51,7 +51,11 @@ def is_interrupted_tool_result(content: Any) -> bool:
             envelope = json.loads(content)
         except ValueError:
             return False
-        if not isinstance(envelope, dict) or envelope.get("exit_code") in (0, None):
+        if not isinstance(envelope, dict) or envelope.get("exit_code") == 0:
+            return False
+        # Native Codex may report a failed/interrupted item without an exit code.
+        # Its explicit failure is still conservative; ordinary JSON output is not.
+        if envelope.get("exit_code") is None and envelope.get("status") != "failed":
             return False
         output = envelope.get("output")
         if not isinstance(output, str):

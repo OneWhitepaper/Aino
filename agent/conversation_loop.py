@@ -1625,7 +1625,8 @@ def _turn_without_loop(agent: Any, s: _LoopState, block_message: str) -> Optiona
     if block_message:
         s.final_response, s._turn_exit_reason = block_message, PRE_LLM_BLOCK_EXIT_REASON
         return _finalize_from_state(agent, s)
-    return _codex_app_server_turn(agent, s) if agent.api_mode == "codex_app_server" else None
+    return (_codex_app_server_turn(agent, s)
+            if agent.api_mode == "codex_app_server" or getattr(agent, "execution_mode", "work") == "code" else None)
 
 
 def _codex_app_server_turn(agent: Any, s: Any) -> Optional[dict[str, Any]]:
@@ -1636,6 +1637,8 @@ def _codex_app_server_turn(agent: Any, s: Any) -> Optional[dict[str, Any]]:
         messages=s.messages, effective_task_id=s.effective_task_id,
         should_review_memory=s._should_review_memory, turn_id=s.turn_id,
     )
+    if getattr(agent, "execution_mode", "work") == "code":
+        return codex_result
     from agent.turn_recovery import activate_codex_app_server_fallback
     if not activate_codex_app_server_fallback(agent, codex_result):
         return codex_result

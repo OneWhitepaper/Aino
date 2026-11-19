@@ -48,6 +48,7 @@ import { translateNow, useI18n } from '@/i18n'
 import { connectorCalls, mcpTargets } from '@/lib/connector-tools'
 import { PrettyLink, LinkifiedText as SharedLinkifiedText, urlSlugTitleLabel } from '@/lib/external-link'
 import { AlertCircle, CheckCircle2 } from '@/lib/icons'
+import { isShellTool } from '@/lib/tool-render-class'
 import { toolResultRecord } from '@/lib/tool-result-metadata'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
@@ -536,7 +537,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   const open = disclosureOpen && !summaryOnly && !runDisclosure?.preview
   const showInlineDiff = Boolean(view.inlineDiff) && !hideCodeDiffs
   const showPayload = toolViewMode === 'technical' && !(hideCodeDiffs && isFileEdit)
-  const showTerminalTranscript = toolName === 'terminal' && !showPayload
+  const showTerminalTranscript = isShellTool(toolName) && !showPayload
 
   useToolPreviews(
     useMemo(() => [stablePart], [stablePart]),
@@ -579,7 +580,7 @@ function ToolEntry({ part }: ToolEntryProps) {
 
   const renderDetailAsCode =
     view.status !== 'error' &&
-    (part.toolName === 'terminal' || part.toolName === 'execute_code' || part.toolName === 'read_file')
+    (isShellTool(part.toolName) || part.toolName === 'execute_code' || part.toolName === 'read_file')
 
   const hasSearchHits = Boolean(view.searchHits?.length)
   const searchResultsLabel = part.toolName === 'web_search' ? copy.searchResults : view.detailLabel
@@ -743,9 +744,7 @@ function ToolEntry({ part }: ToolEntryProps) {
               <SearchResultsList hits={view.searchHits} />
             </div>
           )}
-          {showInlineDiff && (
-            <FileDiffPanel className="-mt-1.5" diff={view.inlineDiff} path={isFileEdit ? view.subtitle : undefined} />
-          )}
+          {showInlineDiff && <ToolDiffPanels isFileEdit={isFileEdit} view={view} />}
           {showDetail &&
             !showPayload &&
             !showTerminalTranscript &&
@@ -823,6 +822,24 @@ function ToolEntry({ part }: ToolEntryProps) {
       )}
     </div>
   )
+}
+
+interface ToolDiffPanelsProps {
+  view: ToolView
+  isFileEdit: boolean
+}
+
+function ToolDiffPanels({ view, isFileEdit }: ToolDiffPanelsProps) {
+  if (view.fileDiffs?.length) {
+    return view.fileDiffs.map(file => (
+      <div key={file.path}>
+        <p className={TOOL_HEADER_SUBTITLE_CLASS}>{file.path}</p>
+        <FileDiffPanel className="h-48" diff={file.diff} path={file.path} virtualized />
+      </div>
+    ))
+  }
+
+  return <FileDiffPanel className="-mt-1.5" diff={view.inlineDiff} path={isFileEdit ? view.subtitle : undefined} />
 }
 
 interface TerminalTranscriptProps {

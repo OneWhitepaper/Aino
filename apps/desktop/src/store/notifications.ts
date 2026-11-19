@@ -426,6 +426,21 @@ const ERROR_SUMMARIES: ErrorSummaryRule[] = [
     summarize: () => translateNow('desktop.fileDownloadBridgeUnavailable')
   },
   {
+    category: 'other',
+    test: msg => msg === 'The selected browser is no longer available.',
+    summarize: () => translateNow('preview.unavailable')
+  },
+  {
+    category: 'other',
+    test: msg => msg === 'Could not open artifact in the selected browser.',
+    summarize: () => translateNow('artifactPreview.openExternallyFailed')
+  },
+  {
+    category: 'other',
+    test: msg => msg === 'Could not write artifact file',
+    summarize: () => translateNow('preview.artifactWriteFailed')
+  },
+  {
     category: 'rpc_out_of_sync',
     test: msg => isOutOfSyncRpcParams(msg),
     summarize: () => translateNow('notifications.errors.rpcOutOfSync'),

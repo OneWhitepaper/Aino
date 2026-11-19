@@ -3,6 +3,7 @@ live in pm/lock.json (written by `pm lock`), never here."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -155,6 +156,85 @@ class Dmgbuild(BinaryPackage):
 
     def verify(self, entry: Path, target: str) -> str:
         return super().verify(entry, target) or self._binary_reason(entry / "python/bin/python3", entry, target)
+
+
+@register
+class Codex(BinaryPackage):
+    """The complete upstream engine package, including its private executor and sandbox.
+
+    Source installs opt in. Desktop bundles include the package through the same
+    locked tool closure as Python, without a global npm installation.
+    """
+
+    name = "codex"
+    optional = True
+    flatten = False
+    binary_rel = {"posix": "bin/codex", "win32": "bin/codex.exe"}
+    gaps = {"linux-arm64-bionic": "upstream does not ship an Android engine package"}
+    # The release archive omits the project's distribution notices. Keep their
+    # upstream source immutable; artifact hashes still belong to pm/lock.json.
+    notices_source = "https://raw.githubusercontent.com/openai/codex/ce21072c90d32c40af7a55b60b2fb35c84a43a6a"
+
+    def fetch_url(self, version: str, target: str) -> str:
+        triple = _RUST_TRIPLE[target].replace("linux-gnu", "linux-musl")
+        return (f"https://github.com/openai/codex/releases/download/rust-v{version}/"
+                f"codex-package-{triple}.tar.gz")
+
+    def fetch_urls(self, version: str, target: str) -> list[str]:
+        return [self.fetch_url(version, target), *[f"{self.notices_source}/{name}" for name in ("LICENSE", "NOTICE")]]
+
+    def unpack(self, archive: Path, staged: Path, target: str) -> None:
+        if archive.name in {"LICENSE", "NOTICE"}:
+            staged.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(archive, staged / archive.name)
+        else:
+            super().unpack(archive, staged, target)
+
+    def _layout_problem(self, entry: Path, target: str, version: str | None = None) -> str:
+        try:
+            metadata = json.loads((entry / "codex-package.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return "codex-package.json missing or invalid"
+        extension = ".exe" if target.startswith("win32-") else ""
+        expected = {
+            "layoutVersion": 1, "target": _RUST_TRIPLE[target].replace("linux-gnu", "linux-musl"),
+            "variant": "codex", "entrypoint": f"bin/codex{extension}",
+            "execServer": f"bin/codex-exec-server{extension}",
+            "resourcesDir": "codex-resources", "pathDir": "codex-path",
+        }
+        if version is not None:
+            expected["version"] = version
+        if not isinstance(metadata, dict):
+            return "codex-package.json must be an object"
+        for key, value in expected.items():
+            if metadata.get(key) != value:
+                return f"codex package {key} does not match the selected package"
+        required = [f"bin/{name}{extension}" for name in ("codex", "codex-code-mode-host", "codex-exec-server")]
+        required.append(f"codex-path/rg{extension}")
+        resources = {
+            "linux": ("bwrap",),
+            "win32": ("codex-command-runner.exe", "codex-windows-sandbox-setup.exe"),
+            "darwin": (),
+        }[target.split("-")[0]]
+        required.extend(f"codex-resources/{name}" for name in resources)
+        for relative in required:
+            reason = self._binary_reason(entry / relative, entry, target)
+            if reason:
+                return reason
+        for name in ("LICENSE", "NOTICE"):
+            if not (entry / name).is_file():
+                return f"Codex {name} missing"
+        if not (entry / "codex-resources").is_dir():
+            return "codex-resources missing"
+        return ""
+
+    def stage(self, store: Store, staged: Path, version: str, target: str) -> None:
+        reason = self._layout_problem(staged, target, version)
+        if reason:
+            raise InstallError(self.name, reason, "use the complete pinned Codex package archive")
+
+    def verify(self, entry: Path, target: str) -> str:
+        return self._layout_problem(entry, target) or super().verify(entry, target)
 
 
 class _BionicDebArm:

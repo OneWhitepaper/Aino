@@ -10,6 +10,7 @@ from hermes_state_runtime import RuntimeStoreError
 
 from gateway.owner_identity import same_owner
 from gateway.session_route_recovery import _messaging_platform, mountable
+from gateway.session_picker_fields import fill_execution_modes
 
 # Local labels (a cron run is a canonical local session whose last viewer is its own fire).
 _LOCAL_SOURCES = ('cli', 'tui', 'gui', 'desktop', 'local', 'cron')
@@ -157,6 +158,7 @@ def stored_picker_sessions(authority, actor, *, limit, include_hidden=False, wor
         if len(rows) < _BATCH:
             exhausted = offset == end
             break
+    fill_execution_modes(db, sessions)
     if picker and sessions:
         from gateway.session_picker_fields import fill_picker_fields
         fill_picker_fields(db, [(row, *source) for row, source in zip(sessions, sources)])

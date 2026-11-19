@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { listTileSessionRow } from '@/app/chat/session-tile-actions'
 import type * as HermesModule from '@/hermes'
 import { getSession } from '@/hermes'
 import { $activeGatewayProfile, $profiles } from '@/store/profile'
 import { $projectTree } from '@/store/projects'
-import { $cronSessions, $messagingSessions, $sessions, $unlistedSessionOwnerRows } from '@/store/session'
+import {
+  $cronSessions,
+  $messagingSessions,
+  $sessions,
+  $unlistedSessionOwnerRows,
+  knownSessionOwner,
+  ownerLookupSessionRows
+} from '@/store/session'
 import { $removedSessionIds, tombstoneSessions, untombstoneSessions } from '@/store/session-removal'
 import type { SessionInfo } from '@/types/hermes'
 
@@ -145,6 +153,29 @@ describe('resolveStoredSession profile ownership', () => {
     expect($sessions.get()).toEqual([])
     // owner resolution still finds the row on the off-list stub atom
     expect($unlistedSessionOwnerRows.get().find(s => s.id === 's1')?.hidden).toBe(true)
+  })
+
+  it('restores an empty draft off-list with its owner and lists it once on first send', async () => {
+    mockGetSession.mockResolvedValue(session({ id: 'draft', message_count: 0, preview: null, title: null }))
+
+    const resolved = await resolveStoredSession('draft')
+
+    expect(resolved).toMatchObject({ id: 'draft', profile: 'meta' })
+    expect($sessions.get()).toEqual([])
+    expect(knownSessionOwner(ownerLookupSessionRows(), 'draft')).toBe('meta')
+
+    const firstSend = () =>
+      listTileSessionRow({
+        preview: 'Keep my first message',
+        runtimeId: 'runtime-draft',
+        sessions: $sessions.get(),
+        storedSessionId: 'draft'
+      })
+
+    expect(firstSend()).toBe(true)
+    expect(firstSend()).toBe(false)
+    expect($sessions.get()).toMatchObject([{ id: 'draft', preview: 'Keep my first message', profile: 'meta' }])
+    expect($unlistedSessionOwnerRows.get()).toEqual([])
   })
 
   it('returns an internal delegate child without promoting it into regular sessions', async () => {

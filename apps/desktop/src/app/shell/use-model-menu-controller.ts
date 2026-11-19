@@ -133,7 +133,13 @@ export function useModelMenuController({
   const modelOptions = useQuery({
     queryKey: modelOptionsQueryKey(profile, activeSessionId, ownerConnectionId),
     queryFn: (): Promise<ModelOptionsResult> =>
-      requestModelOptions({ gateway, profile, request: requestGateway, sessionId: activeSessionId })
+      requestModelOptions({
+        gateway,
+        profile,
+        request: requestGateway,
+        sessionId: activeSessionId,
+        includeSessionInfo: true
+      })
   })
 
   const { model: optionsModel, provider: optionsProvider } = currentPickerSelection(

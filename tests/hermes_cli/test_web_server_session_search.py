@@ -1,4 +1,6 @@
 import asyncio
+import sqlite3
+from contextlib import contextmanager
 
 from hermes_cli import web_server
 import hermes_cli.web_routers.sessions as _rt_sessions
@@ -19,6 +21,17 @@ class _FakeSessionDB:
 
     def __init__(self, *args, **kwargs):
         type(self).opened_read_only = kwargs.get("read_only")
+
+    @contextmanager
+    def _read_ctx(self):
+        # These legacy fixtures predate canonical creation policies.
+        conn = sqlite3.connect(':memory:')
+        try:
+            conn.execute('CREATE TABLE state_meta(key TEXT, value TEXT)')
+            conn.execute('CREATE TABLE sessions(id TEXT, chat_id TEXT)')
+            yield conn
+        finally:
+            conn.close()
 
     @staticmethod
     def _source_allowed(row, source=None, sources=None, exclude_sources=None):
@@ -127,6 +140,7 @@ def test_desktop_session_search_merges_id_matches_before_content_matches(monkeyp
             {
                 "id": "20260603_090200_exact",
                 "profile": "default",
+                "execution_mode": "work",
                 "is_default_profile": True,
                 "session_id": "20260603_090200_exact",
                 "lineage_root": "20260603_090200_exact",
@@ -141,6 +155,7 @@ def test_desktop_session_search_merges_id_matches_before_content_matches(monkeyp
             {
                 "id": "content_session",
                 "profile": "default",
+                "execution_mode": "work",
                 "is_default_profile": True,
                 "session_id": "content_session",
                 "lineage_root": "content_session",

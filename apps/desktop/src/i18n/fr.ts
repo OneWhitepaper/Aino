@@ -7,6 +7,7 @@ import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { frBoot } from './fr_boot'
 import { frClarify } from './fr_clarify'
 import { frConnectorAccounts } from './fr_connector_accounts'
@@ -339,6 +340,7 @@ const frBaseOverrides = {
   appearancePage: appearancePage.fr,
   home: homeGuidance.fr,
   toolPanel: toolPanel['fr'],
+  executionMode: executionModeCopy.fr,
   workspacePage: workspacePage.fr,
   accountPage: accountPage['fr'],
   platformRecharge: {
@@ -3766,12 +3768,13 @@ const frBaseOverrides = {
   artifactCard: {
     kind: {
       code: 'Code',
-      html: 'Page interactive',
+      html: 'Aperçu web',
       svg: 'Graphique'
     },
     generating: lines => `Génération… ${lines} lignes`,
     versionBadge: count => `${count} versions`,
-    open: 'Ouvrir'
+    open: 'Ouvrir',
+    openWith: 'Ouvrir avec'
   },
   artifactPreview: {
     versionOf: (current, total) => `v${current} sur ${total}`,
@@ -3780,8 +3783,8 @@ const frBaseOverrides = {
     latest: 'Dernière',
     copyContent: 'Copier le contenu',
     download: 'Télécharger',
-    openInBrowser: 'Ouvrir dans le navigateur',
-    openInBrowserFailed: "Impossible d'ouvrir dans le navigateur",
+    openExternally: 'Ouvrir en externe',
+    openExternallyFailed: "Impossible d'ouvrir en externe",
     missingTitle: 'Artefact indisponible',
     missingBody: 'Cet artefact ne figure plus dans le registre local.'
   },
@@ -5347,7 +5350,11 @@ const frBaseOverrides = {
       errorOpenDesktopLogs: 'Ouvrir les journaux du Desktop',
       errorSendDiagnostics: 'Envoyer les diagnostics',
       filesChanged: count => (count === 1 ? '1 fichier modifié' : `${count} fichiers modifiés`),
-      reviewChanges: 'Examiner',
+      reviewChanges: 'Voir les modifications',
+      recordedFileChanges:
+        'Modifications enregistrées pendant ce tour. Les éditions répétées d’un fichier apparaissent dans l’ordre.',
+      recordedFileEdit: index => `Modification ${index}`,
+      reviewRepositoryChanges: 'Voir les modifications Git',
       readAloudFailed: 'Échec de la lecture à voix haute',
       preparingAudio: "Préparation de l'audio…",
       stopReading: 'Arrêter la lecture',

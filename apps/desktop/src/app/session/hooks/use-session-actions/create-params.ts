@@ -1,9 +1,11 @@
 import { capturePlatformDraftAuthority, type PlatformDraftAuthority } from '@/api/platform-session-binding'
 import { translateNow } from '@/i18n'
+import { assertCodeModelCompatible } from '@/lib/code-model-capability'
 import { resolveModelDefault } from '@/lib/model-default'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { platformCreateOverrides } from '@/lib/platform-session-model'
 import { getComposerModelSelection } from '@/store/composer-model-selection'
+import { getDraftExecutionMode } from '@/store/execution-mode'
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { verifiedPlatformModel } from '@/store/platform-model-capability'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
@@ -17,13 +19,11 @@ import {
 } from '@/store/profile'
 import {
   $currentCwdExplicit,
-  $currentFastMode,
-  $currentPlatformOrigin,
-  $currentPlatformOwner,
-  $currentReasoningEffort,
-  $currentServiceTier,
-  getComposerSelectionGeneration
+  getComposerSelectionGeneration,
+  getComposerSelectionScope
 } from '@/store/session'
+
+import { captureCreateSelection, type SessionCreateSelection } from './create-selection'
 
 // `session.create` params from the current draft's owner and model/effort/fast,
 // ensuring the gateway is on that profile first. Shared by the primary send path
@@ -69,34 +69,60 @@ async function capturePlatformCreateAuthority(
   return authority
 }
 
+interface SessionCreateIntent {
+  executionMode: 'work' | 'code'
+  retainModelSelection?: boolean
+  selection?: SessionCreateSelection
+  cwdExplicit?: boolean
+  isCurrent?: () => boolean
+}
+
+function captureExecutionWorkspaceParams(
+  cwd: string, includeComposerSelection: boolean | 'defaults', intent?: SessionCreateIntent
+) {
+  const executionMode = intent?.executionMode ?? (includeComposerSelection ? getDraftExecutionMode() : 'work')
+  const cwdExplicit = intent?.cwdExplicit ?? $currentCwdExplicit.get()
+
+  if (executionMode === 'code' && (!cwd.trim() || !cwdExplicit)) {
+    // The owner allocates a durable per-chat workspace. An inherited cwd is
+    // not a project choice and must never turn into Code's writable root.
+    return { execution_mode: executionMode, row_cwd: '' }
+  }
+
+  return {
+    ...((intent || executionMode === 'code') && { execution_mode: executionMode }),
+    ...(cwd && { cwd, cwd_explicit: cwdExplicit })
+  }
+}
+
 export async function desktopSessionCreateParams(
   cwd: string,
   capturedRoute = resolveNewChatOwnerRoute(),
   requestedProfile?: string,
   legacyProfileIntent = false,
-  includeComposerSelection: boolean | 'defaults' = true
+  includeComposerSelection: boolean | 'defaults' = true,
+  intent?: SessionCreateIntent
 ): Promise<{
   params: Record<string, unknown>
   platformAuthority: PlatformDraftAuthority | null
   platformOwner: string
 }> {
+  const workspaceParams = captureExecutionWorkspaceParams(cwd, includeComposerSelection, intent)
+
   // Send captures user intent before any I/O. Manual selections never join
   // default resolution; their provider, owner, effort and fast mode travel
   // together even if another pick arrives during profile readiness.
   const picked = getComposerModelSelection()
   const selectionSource = picked.source
   const generation = getComposerSelectionGeneration()
-  let platformOwner = $currentPlatformOwner.get()
-  let platformOrigin = $currentPlatformOrigin.get()
+  const selectionScope = getComposerSelectionScope()
+  const draftOwner = JSON.stringify(resolveNewChatOwnerRoute())
+  const selection = captureCreateSelection(includeComposerSelection, intent?.retainModelSelection, intent?.selection)
+  let platformOwner = selection.platformOwner
+  let platformOrigin = selection.platformOrigin
   let platformAuthority: PlatformDraftAuthority | null = null
 
-  const selection = {
-    effort: includeComposerSelection === true ? $currentReasoningEffort.get().trim() : '',
-    fast: $currentFastMode.get(),
-    serviceTier: $currentServiceTier.get().trim(),
-    model: picked.model.trim(),
-    provider: picked.provider.trim()
-  }
+  let codeSelection = { provider: selection.provider, model: selection.model }
 
   const profile = resolveCreateProfile(capturedRoute, requestedProfile)
 
@@ -108,7 +134,8 @@ export async function desktopSessionCreateParams(
     ? { connectionId: capturedRoute.connectionId, profile }
     : platformDefaultScope(profile).route
 
-  if (includeComposerSelection && (includeComposerSelection === 'defaults' || selectionSource !== 'manual')) {
+  if (!intent?.retainModelSelection && includeComposerSelection &&
+    (includeComposerSelection === 'defaults' || selectionSource !== 'manual')) {
     // A persisted default or a live session's footer is not billing authority.
     // Resolve the captured owner directly, even before background effects run.
     const resolved = await resolveModelDefault(scope, managedRoute)
@@ -117,6 +144,7 @@ export async function desktopSessionCreateParams(
       throw new Error(translateNow('desktop.modelSwitchFailed'))
     }
 
+    codeSelection = { provider: resolved.provider, model: resolved.model }
     selection.model = resolved.platform?.modelId || ''
     selection.provider = resolved.platform ? 'aino' : ''
     platformOwner = resolved.platform?.ownerUserId || ''
@@ -161,6 +189,25 @@ export async function desktopSessionCreateParams(
     platformOrigin = platformAuthority.owner.platform_origin
   }
 
+  if (workspaceParams.execution_mode === 'code') {
+    const account = catalog.account.get()
+    const ownerScope = platformDefaultScope(scope).key
+    await assertCodeModelCompatible({
+      ...codeSelection,
+      scope,
+      platformModel: verifiedPlatformModel(codeSelection.model, platformOwner, platformOrigin),
+      isCurrent: () =>
+        (includeComposerSelection !== true || (
+          generation === getComposerSelectionGeneration() &&
+          selectionScope === getComposerSelectionScope() &&
+          JSON.stringify(picked) === JSON.stringify(getComposerModelSelection()) &&
+          draftOwner === JSON.stringify(resolveNewChatOwnerRoute())
+        )) &&
+        account === catalog.account.get() &&
+        ownerScope === platformDefaultScope(scope).key && intent?.isCurrent?.() !== false
+    })
+  }
+
   const modelParams = platformCreateOverrides(
     selection.provider,
     selection.model,
@@ -181,7 +228,7 @@ export async function desktopSessionCreateParams(
     params: {
       cols: 96,
       source: 'desktop',
-      ...(cwd && { cwd, cwd_explicit: $currentCwdExplicit.get() }),
+      ...workspaceParams,
       ...(profile ? { profile: capturedRoute?.targetProfile || profile } : {}),
       ...modelParams,
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),

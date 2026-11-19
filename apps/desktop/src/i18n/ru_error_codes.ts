@@ -4,6 +4,10 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const ruErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_operation_unknown: {
+    title: 'Результат запроса не подтверждён',
+    body: 'Полный ответ не получен. Переписка и полученная часть ответа сохранены. Запрос мог быть выполнен, поэтому Aino не отправил его повторно автоматически. Проверьте результаты действий перед повторной отправкой.'
+  },
   managed_billing_unavailable: {
     title: 'Статус подписки недоступен',
     body: 'Проверьте подписку и срок действия в разделе «Моя учётная запись». После восстановления доступа отправьте сообщение снова или выберите доступную модель.'

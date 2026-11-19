@@ -13,8 +13,22 @@ import logging
 from typing import Any, Optional
 
 from agent.conversation_compression_telemetry import _emit_bypassed_attempt_telemetry
+from agent.transports.aino_code.binding import code_turn_context
 
 logger = logging.getLogger("agent.conversation_compression")
+
+
+def codex_owns_context(agent: Any) -> bool:
+    """Code preserves its model API protocol while Codex owns the real thread."""
+    return getattr(agent, "execution_mode", "work") == "code" or getattr(agent, "api_mode", None) == "codex_app_server"
+
+
+def codex_auto_compaction_mode(agent: Any) -> str:
+    """Code uses native compaction independently of Work's optional runtime setting."""
+    if getattr(agent, "execution_mode", "work") == "code":
+        return "native"
+    mode = str(getattr(agent, "codex_app_server_auto_compaction", "native") or "native").lower()
+    return mode if mode in {"native", "hermes", "off"} else "native"
 
 
 def _codex_compaction_cooldown_remaining(agent: Any) -> float:
@@ -68,9 +82,7 @@ def _compress_context_via_codex_app_server(
 
     _sid = getattr(agent, "session_id", None) or "none"
     _tokens = f"{approx_tokens:,}" if approx_tokens else "unknown"
-    auto_mode = str(getattr(agent, "codex_app_server_auto_compaction", "native") or "native").lower()
-    if auto_mode not in {"native", "hermes", "off"}:
-        auto_mode = "native"
+    auto_mode = codex_auto_compaction_mode(agent)
     skip_reason = skip_status = skip_class = None
     if not force and auto_mode != "hermes":
         skip_reason, skip_status, skip_class = f"mode={auto_mode} force=false", "skipped", f"codex_auto_{auto_mode}"
@@ -96,7 +108,8 @@ def _compress_context_via_codex_app_server(
         agent._emit_status(COMPACTION_STATUS)
     _activity_heartbeat = _CompressionActivityHeartbeat(agent, emit_client_status=True).start()
     try:
-        result = codex_session.compact_thread()
+        with code_turn_context(agent):
+            result = codex_session.compact_thread()
     except BaseException as exc:
         _activity_heartbeat.stop("context compression failed")
         # Same class shape as the Hermes route's raising exits; the caller still gets the original error.
@@ -105,9 +118,8 @@ def _compress_context_via_codex_app_server(
     failed = bool(getattr(result, "interrupted", False) or getattr(result, "error", None))
     _activity_heartbeat.stop("context compression failed" if failed else "context compression completed")
     if getattr(result, "should_retire", False):
-        with contextlib.suppress(Exception):
-            codex_session.close()
-        agent._codex_session = None
+        from agent.codex_runtime import _close_codex_session
+        _close_codex_session(agent)
     if failed:
         with contextlib.suppress(Exception):
             agent._emit_warning(f"⚠ Codex app-server compaction failed: {result.error}")

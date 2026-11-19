@@ -11,7 +11,16 @@ retry policy live with the watchdogs; this is presentation only.
 import math
 from typing import Optional
 
+from agent.auxiliary_billing_scope import ManagedCredential
+
 NEAR_DEADLINE_SECS = 15.0
+
+
+def recovery_notice(agent) -> str:
+    """The watchdog cannot promise a replay the managed transport forbids."""
+    if isinstance(getattr(agent, "api_key", None), ManagedCredential):
+        return "Stopping the wait; the request will not be automatically resent."
+    return "Reconnecting..."
 
 
 def _near_deadline(watchdog: Optional[tuple[str, float]]) -> bool:
@@ -31,13 +40,14 @@ _PHASE_TEXT = {
 
 
 def wait_notice_text(model: str, silence_secs: float, phase: str,
-                     watchdog: Optional[tuple[str, float]] = None) -> str:
+                     watchdog: Optional[tuple[str, float]] = None, *, reconnect: bool = True) -> str:
     """One neutral status line. ``watchdog`` is ``(label, seconds_until_it_fires)``."""
     lead = "still waiting on" if _near_deadline(watchdog) else "waiting on"
     text = f"⏳ {lead} {model} — " + _PHASE_TEXT[phase].format(n=int(silence_secs))
     if watchdog is not None:
         label, remaining = watchdog
-        text += f" (auto-reconnect: {label} watchdog in {max(0, int(remaining))}s)"
+        action = "auto-reconnect" if reconnect else "stop waiting; no automatic resend"
+        text += f" ({action}: {label} watchdog in {max(0, int(remaining))}s)"
     return text
 
 

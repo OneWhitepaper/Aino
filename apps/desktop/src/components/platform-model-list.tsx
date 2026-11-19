@@ -15,6 +15,7 @@ import { platformModelCatalog } from '@/store/platform-models'
 
 import { hasPlatformModelIdentity, type PlatformModel, type PlatformModelPurpose } from '../../shared/platform-contract'
 
+import { CodeModelStatus } from './code-model-status'
 import { PlatformModelDetails } from './platform-model-details'
 import { PlatformModelRate } from './platform-model-rate'
 import { Button } from './ui/button'
@@ -118,6 +119,7 @@ function PlatformModelMenuRows({
             >
               <Codicon name="brain" size="1rem" />
               <span className="aino-model-menu-name">{model.display_name}</span>
+              <CodeModelStatus model={model.id} platformModel={model} provider="aino" />
               <PlatformModelRate model={model} />
               {model.state !== 'available' && (
                 <span className="text-xs text-muted-foreground">{copy[model.state]}</span>
@@ -351,6 +353,7 @@ export function PlatformModelList({
                               : copy[model.state]}
                         </span>
                       </span>
+                      <CodeModelStatus model={model.id} platformModel={model} provider="aino" />
                       <PlatformModelRate model={model} />
                       {selectedId === model.id && <Check className="size-3.5 shrink-0" />}
                     </CommandItem>

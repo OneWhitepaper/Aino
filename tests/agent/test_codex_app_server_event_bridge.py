@@ -15,6 +15,7 @@ tests can stay focused on the wire format ↔ callback contract.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -117,7 +118,7 @@ class TestCodexItemCompletionPayload:
             "exitCode": 0,
             "aggregatedOutput": "hello\nworld\n",
         })
-        assert result == "hello\nworld\n"
+        assert json.loads(result) == {"output": "hello\nworld\n", "exit_code": 0}
         assert is_error is False
 
     def test_mcp_tool_error_is_error(self):
@@ -192,7 +193,7 @@ class TestToolProgressDispatch:
         assert completed.args[3] is None  # args unused on completion
         assert completed.kwargs["duration"] == pytest.approx(0.042)
         assert completed.kwargs["is_error"] is False
-        assert completed.kwargs["result"] == "hi\n"
+        assert json.loads(completed.kwargs["result"]) == {"output": "hi\n", "exit_code": 0, "duration_s": 0.042}
 
     def test_web_search_builtin_fires_started_and_completed(self):
         """Codex's built-in webSearch produces a start/complete bubble pair

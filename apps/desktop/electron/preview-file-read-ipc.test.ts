@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterEach, expect, test, vi } from 'vitest'
 
@@ -150,4 +151,66 @@ test('preview truncation leaves plugin reads complete and the persisted data URL
   const saved = await invoke('hermes:data-url-read-max:set', 4)
   registerPreviewFileReadIpc({ rememberLog: () => {} })
   expect(await invoke('hermes:data-url-read-max:get')).toEqual(saved)
+})
+
+test('source references resolve to the real file for preview reads without losing their citation', async () => {
+  const { home, invoke, resolve } = setup()
+  const file = path.join(home, 'source with spaces.ts')
+  fs.writeFileSync(file, 'export const preview = true\n')
+
+  for (const reference of [
+    `${file}:818`,
+    `${file}:818:12`,
+    `${file}:818-820`,
+    `${file}#L818`,
+    `${file}#L818-L820`,
+    'source%20with%20spaces.ts:818',
+    'source%20with%20spaces.ts%3A818',
+    `${pathToFileURL(file)}:818`,
+    `${pathToFileURL(file)}#L818`
+  ]) {
+    const target = await resolve(reference, home)
+    expect(target, reference).toMatchObject({
+      path: file,
+      source: reference,
+      url: pathToFileURL(file).href,
+      previewKind: 'text',
+      language: 'typescript'
+    })
+
+    if (!target || !('path' in target)) {
+      throw new Error('expected a source file preview')
+    }
+
+    expect(await invoke('hermes:readFileText', target.path)).toMatchObject({
+      text: 'export const preview = true\n',
+      truncated: false
+    })
+  }
+})
+
+test('source-reference fallback preserves literal files and does not invent missing files or directories', async () => {
+  const { home, resolve } = setup()
+  fs.writeFileSync(path.join(home, 'source.ts'), 'ordinary source')
+
+  // Hashes are legal filenames on every desktop host; numeric colons are
+  // legal on POSIX. The real file must win over a possible line citation.
+  for (const name of ['source.ts#L818', ...(process.platform === 'win32' ? [] : ['source.ts:818'])]) {
+    const literal = path.join(home, name)
+    fs.writeFileSync(literal, 'literal filename')
+    expect(await resolve(literal, home)).toMatchObject({ path: literal, previewKind: 'text' })
+    expect(await resolve(pathToFileURL(literal).href, home)).toMatchObject({ path: literal, previewKind: 'text' })
+  }
+
+  for (const missing of ['gone.ts:818', 'source.ts:abc', 'source.ts:0', 'source.ts#notes']) {
+    expect(await resolve(missing, home)).toMatchObject({ previewKind: 'missing' })
+  }
+
+  const directory = path.join(home, 'folder')
+  fs.mkdirSync(directory)
+  expect(await resolve(`${directory}:818`, home)).toMatchObject({ previewKind: 'missing' })
+  expect(await resolve('https://example.com:818/source.ts:12#L3', home)).toMatchObject({
+    kind: 'url',
+    source: 'https://example.com:818/source.ts:12#L3'
+  })
 })

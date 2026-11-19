@@ -13,6 +13,7 @@ from hermes_state_runtime import RuntimeStoreError
 logger = logging.getLogger(__name__)
 
 CREATE_FIELDS = frozenset({'request_id', 'source', 'cwd', 'model', 'toolsets',
+                           'execution_mode', 'handoff',
                            'model_source', 'model_id',
                            'provider', 'base_url', 'reasoning', 'max_turns', 'ignore_rules', 'api_key', 'editor',
                            'yolo', 'safe_mode', 'ignore_user_config',
@@ -128,6 +129,7 @@ def _refuse(field, detail=None):
 
 # ``acp_adapter/edit_approval.py``'s AUTO_APPROVE_* values, in main's ACP mode order.
 EDIT_APPROVAL_POLICIES = ('ask', 'workspace_session', 'session')
+EXECUTION_MODES = ('work', 'code')
 
 
 @dataclass(frozen=True)
@@ -168,6 +170,7 @@ class LocalSessionPolicy:
     # An ACP session's edit approval (``session.mutate edit_policy``; main's ACP modes): ``ask`` (Default),
     # ``workspace_session`` (Accept Edits) or ``session`` (Don't Ask). Sensitive paths always ask.
     edit_approval_policy: str = 'ask'
+    execution_mode: str = 'work'
 
     def client_env(self):
         return None if self.client_env_json is None else json.loads(self.client_env_json)
@@ -439,12 +442,12 @@ def present_sections(config):
 
 
 def build_policy(params, config, *, private_secrets=None, profile_terminal=True, workspace_posture=False,
-                 client_local=False):
-    from agent.runtime_cwd import resolve_agent_cwd
+                 client_local=False, session_id=None):
     from tools.terminal_scope import build_profile_terminal_scope, default_terminal_scope
     from hermes_constants import get_hermes_home
 
     source = params.get('source', 'cli')
+    execution_mode = _create_execution_mode(params)
     if source == 'a2a':
         from gateway.session_a2a import build_forward_policy
         return build_forward_policy(params, config, private_secrets=private_secrets)
@@ -462,14 +465,10 @@ def build_policy(params, config, *, private_secrets=None, profile_terminal=True,
     model = params.get('model')
     if 'model' in params and (not isinstance(model, str) or not model.strip()):
         _refuse('model', 'must be a non-empty string')
-    cwd = params.get('cwd', str(resolve_agent_cwd()))
-    if not isinstance(cwd, str) or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
-        _refuse('cwd', 'must be an absolute path to an existing directory')
+    cwd = _creation_cwd(params, execution_mode, session_id)
     row_cwd = params.get('row_cwd')
     if 'row_cwd' in params and (not isinstance(row_cwd, str) or (row_cwd and not Path(row_cwd).is_absolute())):
         _refuse('row_cwd', 'must be an absolute path when set')
-    if params.get('cwd_explicit') is False and 'cwd' in params:
-        cwd = _profile_workspace_cwd(get_hermes_home()) or cwd
     from gateway.session_local_editor import validate_editor
     validate_editor(source, params.get('editor'))
     if 'client' in params:  # a self-declared label kept in the request as sent; no decision below reads it
@@ -508,6 +507,8 @@ def build_policy(params, config, *, private_secrets=None, profile_terminal=True,
     # Values stay out of the request: ``launch_request`` is echoed to every viewer of the session.
     request = {k: v for k, v in params.items() if k not in {'request_id', 'api_key', 'client_env'}}
     request.setdefault('source', 'cli')
+    if execution_mode == 'code' and params.get('cwd_explicit') is not True:
+        request['row_cwd'] = ''
     from gateway.session_local_mcp import private_editor_request
     private_editor_request(request, private_secrets)
     _extract_config_secrets(config, private_secrets)
@@ -517,7 +518,34 @@ def build_policy(params, config, *, private_secrets=None, profile_terminal=True,
                               safe_mode=safe_mode, ignore_user_config=ignore_user_config,
                               coding_posture=coding_posture, client_env_json=client_env,
                               client_env_remote=client_env is not None and not client_local,
-                              client_env_rules_json=rules)
+                              client_env_rules_json=rules, execution_mode=execution_mode)
+
+
+def _create_execution_mode(params):
+    mode = params.get('execution_mode', 'work')
+    if mode not in EXECUTION_MODES:
+        _refuse('execution_mode', 'must be work or code')
+    return mode
+
+
+def _creation_cwd(params, execution_mode, session_id):
+    from agent.runtime_cwd import resolve_agent_cwd
+    from hermes_constants import get_hermes_home
+
+    if execution_mode == 'code' and params.get('cwd_explicit') is not True:
+        if session_id is None:
+            _refuse('cwd', 'projectless Code requires an owning session')
+        # The canonical session id is stable across retries and owner restarts.
+        # Never borrow the gateway's cwd or another profile's configured project.
+        workspace = get_hermes_home() / 'code' / 'workspaces' / session_id
+        workspace.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return str(workspace)
+    cwd = params.get('cwd') if execution_mode == 'code' else params.get('cwd', str(resolve_agent_cwd()))
+    if not isinstance(cwd, str) or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
+        _refuse('cwd', 'must be an absolute path to an existing directory')
+    if params.get('cwd_explicit') is False and 'cwd' in params:
+        cwd = _profile_workspace_cwd(get_hermes_home()) or cwd
+    return cwd
 
 
 def terminal_uses_host_cwd(terminal):
@@ -1063,6 +1091,7 @@ def restore_policy(data):
                 or not _valid_client_env(policy.client_env_json) or type(policy.client_env_remote) is not bool
                 or not _valid_client_env(policy.client_env_rules_json, list)
                 or policy.edit_approval_policy not in EDIT_APPROVAL_POLICIES
+                or policy.execution_mode not in EXECUTION_MODES
                 or (policy.edit_approval_policy != 'ask' and policy.source != 'acp')
                 or (policy.safe_mode and not policy.ignore_user_config)):
             raise ValueError('invalid policy')

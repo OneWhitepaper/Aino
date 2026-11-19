@@ -19,6 +19,7 @@ afterEach(cleanup)
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     t: {
+      executionMode: { work: 'Aino Work', code: 'Aino Code', workLabel: 'Work', codeLabel: 'Code' },
       common: { cancel: 'Cancel', close: 'Close', delete: 'Delete', save: 'Save' },
       assistant: {
         thread: {

@@ -4,6 +4,10 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const enErrorCodes: ThreadCopy['errorCodes'] = {
+  managed_operation_unknown: {
+    title: 'Request outcome unconfirmed',
+    body: 'The complete response was not received. Your conversation and any partial reply are saved. The request may have executed, so Aino has not automatically resent it. Check any completed actions before deciding whether to send again.'
+  },
   managed_billing_unavailable: {
     title: 'Plan status unavailable',
     body: 'Check your subscription and expiry in My Account. Once access is restored, send your message again, or choose an available model.'

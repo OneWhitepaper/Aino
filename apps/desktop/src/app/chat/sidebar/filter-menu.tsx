@@ -24,6 +24,7 @@ import { useI18n } from '@/i18n'
 import { desktopGit } from '@/lib/desktop-git'
 import { cn } from '@/lib/utils'
 import { profiles as profileArchives } from '@/sdk/bridge'
+import { $executionModeFilter, setExecutionModeFilter } from '@/store/execution-mode'
 import { $showsAdvancedChrome } from '@/store/interface-mode'
 import {
   $sidebarCardRows,
@@ -176,6 +177,7 @@ export function SidebarFilterMenu({
 }) {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const modeFilter = useStore($executionModeFilter)
   const recentGrouping = useStore($sidebarRecentGrouping)
   const ordering = useStore($sidebarOrdering)
   const rowMeta = useStore($sidebarRowMeta)
@@ -363,6 +365,19 @@ export function SidebarFilterMenu({
         <DropdownMenuSeparator />
 
         <DropdownMenuGroup>
+          <DropdownMenuLabel>{t.executionMode.sessionFilter}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            onValueChange={value => {
+              if (value === 'current' || value === 'all') {
+                setExecutionModeFilter(value)
+              }
+            }}
+            value={modeFilter}
+          >
+            <OptionRadio option={{ id: 'current', label: t.executionMode.currentMode }} />
+            <OptionRadio option={{ id: 'all', label: t.executionMode.allModes }} />
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
           <DropdownMenuLabel>{t.ui.actions.filters}</DropdownMenuLabel>
 
           <DropdownMenuSub>
