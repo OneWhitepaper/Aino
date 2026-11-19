@@ -637,12 +637,17 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       let retainedKey: string | undefined
 
       try {
-        await preflightCodeSession({
+        const codePreflight = preflightCodeSession({
           sessionId,
           storedSessionId: targetStoredSessionId,
           destination: captured,
           isCurrent: captureCodeSubmitView(targetStartedInCurrentView, selectedStoredSessionIdRef, getRouteToken)
         })
+
+        // A fresh draft's create path must capture model intent before yielding.
+        if (codePreflight) {
+          await codePreflight
+        }
 
         // Only an explicit retry (the caller names the uncertain send's identity) reuses a
         // retained entry; a new message with the same text is a new turn.

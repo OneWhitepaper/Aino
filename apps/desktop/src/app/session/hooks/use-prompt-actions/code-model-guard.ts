@@ -26,7 +26,7 @@ export function notifyCodeModelRefusal(error: CodeModelCompatibilityError): void
 
 /** Stored Code chats keep their own model and owner even when another pane has focus.
  * New drafts are checked by desktopSessionCreateParams after resolving their Settings default. */
-export async function preflightCodeSession({
+export function preflightCodeSession({
   sessionId,
   storedSessionId,
   destination,
@@ -36,7 +36,7 @@ export async function preflightCodeSession({
   storedSessionId: string | null
   destination: SubmissionDestination
   isCurrent: () => boolean
-}): Promise<void> {
+}): Promise<void> | undefined {
   const target = storedSessionId || sessionId
 
   if (!target) {
@@ -76,25 +76,29 @@ export async function preflightCodeSession({
     ((typeof destination.owner === 'object' && destination.owner !== null) ||
       capturedScope.key === platformDefaultScope(ownerScope).key)
 
-  // session.info reads the owner's existing route; it does not start a model turn.
-  const info = await destination.requestGateway<SessionLiveInfo>('session.info', { session_id: target })
+  async function check(): Promise<void> {
+    // session.info reads the owner's existing route; it does not start a model turn.
+    const info = await destination.requestGateway<SessionLiveInfo>('session.info', { session_id: target })
 
-  if (!current()) {
-    throw new CodeModelCompatibilityError('changed', scope)
+    if (!current()) {
+      throw new CodeModelCompatibilityError('changed', scope)
+    }
+
+    const provider = state?.provider || info.provider || ''
+    const model = state?.platformModel?.modelId || state?.model || info.model_id || info.model || ''
+    await assertCodeModelCompatible({
+      provider,
+      model,
+      scope,
+      sessionInfo: info,
+      platformModel: state?.platformModel
+        ? verifiedPlatformModel(model, state.platformModel.ownerUserId, state.platformModel.platformOrigin)
+        : null,
+      isCurrent: current
+    })
   }
 
-  const provider = state?.provider || info.provider || ''
-  const model = state?.platformModel?.modelId || state?.model || info.model_id || info.model || ''
-  await assertCodeModelCompatible({
-    provider,
-    model,
-    scope,
-    sessionInfo: info,
-    platformModel: state?.platformModel
-      ? verifiedPlatformModel(model, state.platformModel.ownerUserId, state.platformModel.platformOrigin)
-      : null,
-    isCurrent: current
-  })
+  return check()
 }
 
 /** Pin only the foreground view; background queues remain on their captured destination. */
