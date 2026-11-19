@@ -9332,6 +9332,33 @@
             "default": null,
             "title": "Request Id"
           },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "work",
+                  "code"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Mode"
+          },
+          "handoff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkCodeHandoff"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "source": {
             "default": "cli",
             "enum": [
@@ -10931,6 +10958,32 @@
             "default": null,
             "title": "Provider"
           },
+          "handoff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkCodeHandoff"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "linked_sessions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WorkCodeSessionLink"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Linked Sessions"
+          },
           "tools": {
             "anyOf": [
               {
@@ -11146,6 +11199,15 @@
           },
           "source": {
             "title": "Source",
+            "type": "string"
+          },
+          "execution_mode": {
+            "default": "work",
+            "enum": [
+              "work",
+              "code"
+            ],
+            "title": "Execution Mode",
             "type": "string"
           },
           "model": {
@@ -11415,6 +11477,15 @@
         "properties": {
           "session_id": {
             "title": "Session Id",
+            "type": "string"
+          },
+          "execution_mode": {
+            "default": "work",
+            "enum": [
+              "work",
+              "code"
+            ],
+            "title": "Execution Mode",
             "type": "string"
           },
           "id": {
@@ -11804,6 +11875,32 @@
             "default": null,
             "title": "Provider"
           },
+          "handoff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkCodeHandoff"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "linked_sessions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WorkCodeSessionLink"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Linked Sessions"
+          },
           "tools": {
             "anyOf": [
               {
@@ -12020,6 +12117,15 @@
           "desktop_protocol": {
             "const": "hermes-gateway-v1",
             "title": "Desktop Protocol",
+            "type": "string"
+          },
+          "execution_mode": {
+            "default": "work",
+            "enum": [
+              "work",
+              "code"
+            ],
+            "title": "Execution Mode",
             "type": "string"
           },
           "source": {
@@ -53158,6 +53264,75 @@
           "disabled_persisted"
         ],
         "title": "WakeStopResult",
+        "type": "object"
+      },
+      "WorkCodeHandoff": {
+        "additionalProperties": false,
+        "description": "User-reviewed context for a new, independently executed conversation. Paths are references,\nnever instructions to read files at creation; the first prompt still needs ordinary admission.",
+        "properties": {
+          "source_session_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Source Session Id",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 32000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_session_id",
+          "summary"
+        ],
+        "title": "WorkCodeHandoff",
+        "type": "object"
+      },
+      "WorkCodeSessionLink": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "execution_mode": {
+            "enum": [
+              "work",
+              "code"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "relation": {
+            "enum": [
+              "source",
+              "child"
+            ],
+            "title": "Relation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "execution_mode",
+          "relation"
+        ],
+        "title": "WorkCodeSessionLink",
         "type": "object"
       },
       "WorkerExecution": {

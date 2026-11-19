@@ -14,6 +14,7 @@ import pytest
 import hermes_cli.web_models as _web_models
 import hermes_cli.web_routers.sessions as _rt_sessions
 import hermes_cli.web_server_sessions as _web_server_sessions
+from hermes_state import SessionDB
 
 
 def test_bulk_delete_sessiondb_work_runs_off_event_loop(monkeypatch):
@@ -49,42 +50,21 @@ def test_bulk_delete_sessiondb_work_runs_off_event_loop(monkeypatch):
     assert all(thread_id != loop_thread for thread_id in db_threads)
 
 
-class _ReadDB:
-    """Read-only stand-in that records which thread every SessionDB call runs on."""
+class _ReadDB(SessionDB):
+    """A real read-only store that records the threads opening and reading it."""
 
-    def __init__(self, threads: list[int]):
+    def __init__(self, db_path, threads: list[int]):
         self._threads = threads
-
-    def _hit(self, value=None):
         self._threads.append(threading.get_ident())
-        return value
+        super().__init__(db_path=db_path, read_only=True)
 
-    def session_count(self, **_kw):
-        return self._hit(3)
-
-    def message_count(self):
-        return self._hit(7)
-
-    def session_count_by_source(self, **_kw):
-        return self._hit({"cli": 3})
-
-    def get_session(self, sid):
-        return self._hit({"id": sid, "title": "t"})
-
-    def get_session_rich_row(self, sid):
-        return self._hit(None)
-
-    def get_compression_tip(self, root_id):
-        return self._hit(None)
-
-    def search_sessions_by_id(self, q, **_kw):
-        return self._hit([{"id": "sess-1", "preview": "hello", "started_at": 1.0}])
-
-    def search_messages(self, **_kw):
-        return self._hit([])
+    def _read_ctx(self):
+        self._threads.append(threading.get_ident())
+        return super()._read_ctx()
 
     def close(self):
-        self._hit()
+        self._threads.append(threading.get_ident())
+        super().close()
 
 
 @pytest.mark.parametrize(
@@ -95,15 +75,19 @@ class _ReadDB:
         pytest.param(lambda: _rt_sessions.get_session_detail("sess-1"), id="detail"),
     ],
 )
-def test_session_read_handlers_run_sessiondb_work_off_event_loop(monkeypatch, call):
+def test_session_read_handlers_run_sessiondb_work_off_event_loop(monkeypatch, tmp_path, call):
     """Regression for #60747: /search, /stats and /{id} ran FTS + SQLite inline on the
     loop thread, so a large state.db froze every other dashboard request."""
     loop_thread = threading.get_ident()
     db_threads: list[int] = []
+    db_path = tmp_path / "state.db"
+    with SessionDB(db_path=db_path) as db:
+        db.create_session("sess-1", source="cli")
+        db.append_message("sess-1", role="user", content="hello")
 
     def _open_db(profile=None, *, read_only):
         assert read_only is True
-        return _ReadDB(db_threads)
+        return _ReadDB(db_path, db_threads)
 
     monkeypatch.setattr(_web_server_sessions, "_open_session_db_for_profile", _open_db)
     monkeypatch.setattr(_rt_sessions, "_resolve_session_id", lambda db, sid: sid)

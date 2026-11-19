@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 
+from gateway.session_picker_fields import fill_execution_modes
 from hermes_cli.session_listing import subagent_listing_scope
 from hermes_cli.web_deps import late
 from hermes_cli.config import get_process_hermes_home
@@ -410,7 +411,7 @@ def get_profiles_sessions(
     filters = dict(
         source=source or None, sources=_csv_list(sources) or None,
         exclude_sources=_csv_list(exclude_sources) or None, min_message_count=max(0, min_messages),
-        include_archived=archived == "include", archived_only=archived == "only")
+        include_archived=archived == "include", archived_only=archived == "only", include_handoff_drafts=True)
     # Over-fetch per profile so the merged+sorted window is correct for the requested page.
     # ``limit`` is already bounded to 500 by FastAPI; the offset is caller-controlled
     # pagination state, so include it instead of capping the source window at 500.
@@ -433,6 +434,7 @@ def get_profiles_sessions(
                 # Same SQL-level blob skip as /api/sessions.
                 compact_rows=not full, include_pinned=True, **scoped)
             totals[name] = db.session_count(exclude_children=True, **scoped)
+            fill_execution_modes(db, rows, id_key='id')
             merged.extend(_tag_rows(rows, name, now))
         _read_profile_db(name, home, errors, _read)
 
@@ -491,11 +493,13 @@ def get_profiles_sessions_sidebar(
         include_subagents, exclude = recents_subagents if key == "recents" else (False, exclude)
         # include_pinned: a pinned conversation must reach the sidebar even when it has aged
         # past the window, or its Pinned row renders empty.
-        return db.list_sessions_rich(
+        rows = db.list_sessions_rich(
             source=source, exclude_sources=exclude or None, limit=cap[key], offset=0,
             min_message_count=1, include_archived=False, archived_only=False,
             order_by_last_active=True, compact_rows=True, include_pinned=True,
-            include_subagents=include_subagents)
+            include_subagents=include_subagents, include_handoff_drafts=key == 'recents')
+        fill_execution_modes(db, rows, id_key='id')
+        return rows
 
     def _build_slices(db, cache_key, recents_subagents):
         # ``usage`` is aggregated in SQL rather than over the recents window: the window is a

@@ -212,7 +212,13 @@ def _tar_filter(member, dest: str):
             if os.path.commonpath([path, dest]) != dest:
                 raise tarfile.LinkOutsideDestinationError(member, path)
         return member.replace(deep=False, uid=None, gid=None, uname=None, gname=None, mode=None)
-    return tarfile.data_filter(member, dest)
+    filtered = tarfile.data_filter(member, dest)
+    if filtered.isdir() and os.sep != "/" and "/" in filtered.name:
+        # The delayed directory metadata pass uses the filtered name as-is.
+        # Windows verbatim store paths do not accept forward slashes.
+        return filtered.replace(name=filtered.name.replace("/", os.sep), deep=False)
+    return filtered
+
 
 def extract_tar(archive: Path | IO[bytes], dest: Path) -> None:
     """Extract a tarball (a path, or an open stream such as a .deb's data.tar)

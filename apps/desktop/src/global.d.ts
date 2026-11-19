@@ -21,6 +21,7 @@ import type {
   PlatformDiagnosticsBridge,
   PlatformModelsBridge
 } from '../shared/platform-contract'
+import type { PreviewBrowserAppsBridge } from '../shared/preview-browser-apps'
 import type {
   PreviewBrowserDialog,
   PreviewBrowserFileChooser,
@@ -540,6 +541,7 @@ declare global {
         cancel: (id: string) => Promise<boolean>
       }
       openPreviewInBrowser?: (url: string) => Promise<void>
+      previewBrowserApps?: PreviewBrowserAppsBridge
       fetchLinkTitle: (url: string) => Promise<string>
       /** A site's icon as a data URL, or '' when it has none we can read.
        *  Resolved and cached in the main process (electron/favicon.ts). */

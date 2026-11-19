@@ -4,11 +4,21 @@ import threading
 import time
 from collections import OrderedDict
 
+from hermes_state_common import _sql_json_extract
 from hermes_state_runtime import RuntimeStoreError, _epoch, _json
 
 POLICY_PREFIX = 'gateway.local_policy.v1:'
 API_BINDING_PREFIX = 'gateway.api.binding.v1.'
 API_DECLARED_PREFIX = 'gateway.api.conversation.v1.'
+
+
+def handoff_draft_filter_sql():
+    """A reviewed independent draft is intentional work, not an abandoned launch stub."""
+    request = _sql_json_extract('handoff_policy.value', '$.policy.request_json')
+    source = _sql_json_extract(request, '$.handoff.source_session_id')
+    branch = _sql_json_extract('s.model_config', '$._branched_from')
+    return (f"EXISTS (SELECT 1 FROM state_meta handoff_policy "
+            f"WHERE handoff_policy.key = '{POLICY_PREFIX}' || s.id AND {source} = {branch})")
 
 
 def commit_local_session(db, *, epoch, receipt):
@@ -56,6 +66,8 @@ def commit_local_session(db, *, epoch, receipt):
             from hermes_state_local_migration import bind_legacy_target
             bind_legacy_target(db, conn, receipt)
         policy, entry = receipt['policy'], receipt['entry']
+        from gateway.session_handoff import title_work_code_child, work_code_creation_fields
+        parent_session_id, model_config = work_code_creation_fields(conn, receipt)
         from datetime import datetime
         started = datetime.fromisoformat(entry['created_at']).timestamp()
         # Auxiliary usage inserts created_source='unknown' when it creates the row
@@ -67,11 +79,13 @@ def commit_local_session(db, *, epoch, receipt):
         from gateway.session_policy import created_surface
         created = created_surface(policy['source'])
         conn.execute('''INSERT INTO sessions(id,source,created_source,user_id,session_key,chat_id,chat_type,
-            model,cwd,profile_name,origin_json,started_at) VALUES(?,?,?,?,?,?,'dm',?,?,?,?,?)
+            model,cwd,profile_name,origin_json,started_at,parent_session_id,model_config)
+            VALUES(?,?,?,?,?,?,'dm',?,?,?,?,?,?,?)
             ON CONFLICT(id) DO NOTHING''',
             (sid, policy['source'], created, receipt['principal_id'], route,
              entry['origin']['chat_id'], policy['model'], _row_cwd(policy), db._own_profile_name(),
-             _json(entry['origin']), started))
+             _json(entry['origin']), started, parent_session_id, model_config))
+        title_work_code_child(db, conn, receipt)
         conn.execute("INSERT INTO gateway_routing(scope,session_key,entry_json,updated_at) VALUES('',?,?,?)",
                      (route, _json(entry), started))
         conn.execute('INSERT INTO state_meta(key,value) VALUES(?,?)', (key, encoded))

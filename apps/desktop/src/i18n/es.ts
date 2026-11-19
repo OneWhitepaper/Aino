@@ -31,6 +31,7 @@ import { esProjects } from './es_projects'
 import { esSharedMetrics } from './es_shared_metrics'
 import { esThemePicker } from './es_theme_picker'
 import { esUpdateChannel } from './es_update_channel'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introEs } from './intro-es'
 import { messagingDirectory } from './messaging-directory'
@@ -341,6 +342,7 @@ const esBaseOverrides = {
   appearancePage: appearancePage.es,
   home: homeGuidance.es,
   toolPanel: toolPanel['es'],
+  executionMode: executionModeCopy.es,
   workspacePage: workspacePage.es,
   accountPage: accountPage['es'],
   platformRecharge: {
@@ -3745,12 +3747,13 @@ const esBaseOverrides = {
   artifactCard: {
     kind: {
       code: 'Código',
-      html: 'Página interactiva',
+      html: 'Vista previa web',
       svg: 'Gráfico'
     },
     generating: lines => `Generando… ${lines} líneas`,
     versionBadge: count => `${count} versiones`,
-    open: 'Abrir'
+    open: 'Abrir',
+    openWith: 'Abrir con'
   },
   artifactPreview: {
     versionOf: (current, total) => `v${current} de ${total}`,
@@ -3759,8 +3762,8 @@ const esBaseOverrides = {
     latest: 'Última',
     copyContent: 'Copiar contenido',
     download: 'Descargar',
-    openInBrowser: 'Abrir en el navegador',
-    openInBrowserFailed: 'No se pudo abrir en el navegador',
+    openExternally: 'Abrir externamente',
+    openExternallyFailed: 'No se pudo abrir externamente',
     missingTitle: 'Artefacto no disponible',
     missingBody: 'Este artefacto ya no está en el registro local.'
   },
@@ -5322,7 +5325,11 @@ const esBaseOverrides = {
       errorOpenDesktopLogs: 'Abrir registros de Desktop',
       errorSendDiagnostics: 'Enviar diagnóstico',
       filesChanged: count => (count === 1 ? '1 archivo cambiado' : `${count} archivos cambiados`),
-      reviewChanges: 'Revisar',
+      reviewChanges: 'Ver cambios',
+      recordedFileChanges:
+        'Cambios registrados en este turno. Las ediciones repetidas de un archivo se muestran en orden.',
+      recordedFileEdit: index => `Edición ${index}`,
+      reviewRepositoryChanges: 'Ver cambios de Git',
       readAloudFailed: 'Falló la lectura en voz alta',
       preparingAudio: 'Preparando audio...',
       stopReading: 'Detener lectura',

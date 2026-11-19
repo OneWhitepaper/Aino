@@ -5,7 +5,7 @@ import { normalizeExternalUrl } from '@/lib/external-link'
 import { isFileMediaPath, mediaKind } from '@/lib/media'
 import { summarizeShellCommand } from '@/lib/summarize-command'
 import { capitalize, firstStringField, normalize } from '@/lib/text'
-import { CONNECTION_CARD_KEY, isCardTool, isFileEditTool, isSilentTool } from '@/lib/tool-render-class'
+import { CONNECTION_CARD_KEY, isCardTool, isFileEditTool, isShellTool, isSilentTool } from '@/lib/tool-render-class'
 import { envelopeErrorText, toolResultRecord } from '@/lib/tool-result-metadata'
 import { extractToolErrorMessage, formatToolResultSummary } from '@/lib/tool-result-summary'
 
@@ -27,6 +27,7 @@ import type {
   CountMetric,
   MessageRunningStateSlice,
   SearchResultRow,
+  ToolFileDiff,
   ToolMeta,
   ToolMetaSpec,
   ToolPart,
@@ -44,7 +45,7 @@ export * from './types'
 // The transcript's render budget prices a turn by the same classification, so
 // it lives in `@/lib/tool-render-class` where both sides can reach it without
 // pulling this module's formatting/i18n weight into the cost path.
-export { CONNECTION_CARD_KEY, isCardTool, isFileEditTool, isSilentTool }
+export { CONNECTION_CARD_KEY, isCardTool, isFileEditTool, isShellTool, isSilentTool }
 
 export interface DiffLineStats {
   added: number
@@ -72,6 +73,20 @@ export function fileEditPath(args: Record<string, unknown>, result: Record<strin
     firstStringField(result, ['path', 'file', 'filepath', 'resolved_path']) ||
     htmlPathFromInlineDiff(firstStringField(result, ['inline_diff', 'diff']))
   )
+}
+
+export function fileEditPaths(args: Record<string, unknown>, result: Record<string, unknown>): string[] {
+  const landed = nativeFileDiffs(result)
+
+  if (landed.length) {
+    return [...new Set(landed.map(file => file.path))]
+  }
+
+  const changes = Array.isArray(args.changes) ? args.changes : Array.isArray(result.changes) ? result.changes : []
+  const paths = changes.map(change => firstStringField(parseMaybeObject(change), ['path'])).filter(Boolean)
+  const path = fileEditPath(args, result)
+
+  return [...new Set(path ? [path, ...paths] : paths)]
 }
 
 export function fileEditBasename(path: string): string {
@@ -146,6 +161,21 @@ function shellCommand(args: Record<string, unknown>): string {
   return (
     firstStringField(args, ['command', 'code']) || firstStringField(args, ['context', 'preview']) || contextValue(args)
   )
+}
+
+function shellOutput(part: ToolPart, result: Record<string, unknown>): string {
+  if (part.toolName === 'exec_command' && part.result !== undefined) {
+    const raw = parseMaybeObject(part.result)
+    const receipt = typeof raw.output === 'string' && ['exit_code', 'duration_s', 'status'].some(key => key in raw)
+
+    // Old stdout may itself be JSON. Only an execution receipt has both the
+    // output field and executor metadata; don't swallow ordinary JSON logs.
+    if (!receipt) {
+      return typeof part.result === 'string' ? part.result : (JSON.stringify(part.result) ?? '')
+    }
+  }
+
+  return firstStringField(result, ['output', 'stdout', 'stderr'])
 }
 
 const TOOL_META: Record<ToolTitleKey, ToolMetaSpec> = {
@@ -245,6 +275,8 @@ const PREFIX_META: { icon?: string; labelKey: string; prefix: string; tone: Tool
 ]
 
 export function toolMeta(name: string): ToolMeta {
+  name = ({ exec_command: 'terminal', apply_patch: 'patch' } as Record<string, string>)[name] ?? name
+
   if (isToolTitleKey(name)) {
     const meta = TOOL_META[name]
 
@@ -741,7 +773,7 @@ function toolStatus(part: ToolPart, resultRecord: Record<string, unknown>): Tool
     return 'notice'
   }
 
-  if (part.toolName === 'terminal' && error === 'Command failed with exit code 1.') {
+  if (isShellTool(part.toolName) && error === 'Command failed with exit code 1.') {
     return 'notice'
   }
 
@@ -860,6 +892,24 @@ function stripDividerLines(value: string): string {
     .trim()
 }
 
+export function nativeFileDiffs(result: Record<string, unknown>): ToolFileDiff[] {
+  if (!Array.isArray(result.changes) || result.success === false) {
+    return []
+  }
+
+  return result.changes
+    .map(value => {
+      const change = parseMaybeObject(value)
+      const kind = parseMaybeObject(change.kind)
+
+      return {
+        path: firstStringField(kind, ['move_path']) || firstStringField(change, ['path']),
+        diff: firstStringField(change, ['diff'])
+      }
+    })
+    .filter(file => file.path && file.diff)
+}
+
 export function inlineDiffFromResult(result: unknown): string {
   const record = parseMaybeObject(result)
 
@@ -871,7 +921,9 @@ export function inlineDiffFromResult(result: unknown): string {
     }
   }
 
-  return ''
+  return nativeFileDiffs(record)
+    .map(file => file.diff)
+    .join('\n')
 }
 
 // Falls back to a string only when there's something concrete to render —
@@ -1045,8 +1097,8 @@ function toolSubtitle(
       : translateNow('assistant.tool.subtitles.queriedWebSources')
   }
 
-  if (toolName === 'terminal' || toolName === 'execute_code') {
-    const output = firstStringField(resultRecord, ['output', 'stdout', 'stderr'])
+  if (isShellTool(toolName) || toolName === 'execute_code') {
+    const output = shellOutput(part, resultRecord)
 
     const lines = Array.isArray(resultRecord.lines)
       ? resultRecord.lines.filter((line): line is string => typeof line === 'string').join('\n')
@@ -1139,12 +1191,12 @@ function toolDetailText(
     return snapshot ? summarizeBrowserSnapshot(snapshot) : fallbackDetailText(argsRecord, resultRecord)
   }
 
-  if (part.toolName === 'terminal' || part.toolName === 'execute_code') {
+  if (isShellTool(part.toolName) || part.toolName === 'execute_code') {
     // Streams are split out into ToolView.stdout / ToolView.stderr by
     // buildToolView so the renderer can label them separately. The merged
     // fallback here is only used when the backend doesn't expose either
     // stream individually.
-    const output = firstStringField(resultRecord, ['output', 'stdout', 'stderr'])
+    const output = shellOutput(part, resultRecord)
 
     const lines = Array.isArray(resultRecord.lines)
       ? resultRecord.lines.filter((line): line is string => typeof line === 'string').join('\n')
@@ -1156,7 +1208,7 @@ function toolDetailText(
 
     // A terminal row already owns its `$` transcript. Code has no such row;
     // keep its source intact here instead of flattening it into a JSON summary.
-    if (part.toolName === 'terminal') {
+    if (isShellTool(part.toolName)) {
       return ''
     }
 
@@ -1257,7 +1309,7 @@ export function toolCopyPayload(part: ToolPart, view: ToolView): { label: string
   const detail = view.detail.trim()
   const hasSubstantialOutput = detail.length > 16
 
-  if (part.toolName === 'terminal' || part.toolName === 'execute_code') {
+  if (isShellTool(part.toolName) || part.toolName === 'execute_code') {
     if (hasSubstantialOutput) {
       return { label: copy.output, text: detail }
     }
@@ -1377,6 +1429,20 @@ function withoutLeadingAction(value: string, action: string): string {
   return text.slice(0, boundary).toLowerCase() === verb.toLowerCase() ? text.slice(boundary + 1).trimStart() : value
 }
 
+function fileEditTitle(
+  name: string,
+  args: Record<string, unknown>,
+  result: Record<string, unknown>
+): ToolTitleParts | null {
+  if (!isFileEditTool(name)) {
+    return null
+  }
+
+  const paths = fileEditPaths(args, result)
+
+  return paths.length ? { title: compactPreview(paths.map(fileEditBasename).join(', '), 160) } : null
+}
+
 function dynamicTitle(
   part: ToolPart,
   args: Record<string, unknown>,
@@ -1472,7 +1538,7 @@ function dynamicTitle(
       : fallback
   }
 
-  if (part.toolName === 'terminal') {
+  if (isShellTool(part.toolName)) {
     const command = shellCommand(args)
 
     if (command) {
@@ -1499,15 +1565,7 @@ function dynamicTitle(
     }
   }
 
-  if (isFileEditTool(part.toolName)) {
-    const path = fileEditPath(args, result)
-
-    if (path) {
-      return { title: fileEditBasename(path) }
-    }
-  }
-
-  return fallback
+  return fileEditTitle(part.toolName, args, result) ?? fallback
 }
 
 /** Status + detected preview target only — for feeds that never render the
@@ -1526,15 +1584,18 @@ function toolOutputStreams(part: ToolPart, argsRecord: Record<string, unknown>, 
   // streams in the renderer. Many CLIs use stderr for informational
   // messages (npm progress, git hints), so we deliberately don't paint
   // stderr destructively even though it's tagged.
-  const rendersAnsi = part.toolName === 'terminal' || part.toolName === 'execute_code'
-  const stdout = rendersAnsi ? firstStringField(resultRecord, ['stdout']) : ''
-  const stderrRaw = rendersAnsi ? firstStringField(resultRecord, ['stderr']) : ''
+  const rendersAnsi = isShellTool(part.toolName) || part.toolName === 'execute_code'
+  // Codex's receipt is aggregatedOutput, never separate streams. Older JSON
+  // stdout may contain these field names as ordinary data.
+  const streams = part.toolName === 'exec_command' ? {} : resultRecord
+  const stdout = rendersAnsi ? firstStringField(streams, ['stdout']) : ''
+  const stderrRaw = rendersAnsi ? firstStringField(streams, ['stderr']) : ''
   // Only attach stderr when the backend actually returned it as its own
   // field — otherwise the merged `detail` already covers it and double-
   // rendering would duplicate output.
   const hasSplitStreams = rendersAnsi && (Boolean(stdout) || Boolean(stderrRaw))
-  const terminalCommand = part.toolName === 'terminal' ? shellCommand(argsRecord) : undefined
-  const terminalExitCode = part.toolName === 'terminal' ? numericField(resultRecord, 'exit_code') : undefined
+  const terminalCommand = isShellTool(part.toolName) ? shellCommand(argsRecord) : undefined
+  const terminalExitCode = isShellTool(part.toolName) ? numericField(resultRecord, 'exit_code') : undefined
 
   return {
     rendersAnsi: rendersAnsi || undefined,
@@ -1542,7 +1603,7 @@ function toolOutputStreams(part: ToolPart, argsRecord: Record<string, unknown>, 
     terminalCommand,
     terminalExitCode,
     terminalBackground:
-      part.toolName === 'terminal' &&
+      isShellTool(part.toolName) &&
       Boolean(
         resultRecord.session_id || resultRecord.status === 'yielded_to_background' || resultRecord.status === 'running'
       ),
@@ -1585,7 +1646,7 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
   const baseSubtitle = error || toolSubtitle(part, argsRecord, resultRecord)
 
   const keepSubtitleWithTitle =
-    part.toolName === 'terminal' ||
+    isShellTool(part.toolName) ||
     part.toolName === 'execute_code' ||
     (isFileEditTool(part.toolName) && Boolean(baseSubtitle.trim()))
 
@@ -1617,6 +1678,7 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
     icon: meta.icon,
     imageUrl: toolImageUrl(argsRecord, resultRecord),
     inlineDiff,
+    fileDiffs: nativeFileDiffs(resultRecord),
     previewTarget: toolPreviewTarget(part.innerToolName || part.toolName, argsRecord, resultRecord),
     ...toolOutputStreams(part, argsRecord, resultRecord),
     searchQuery: searchQuery || undefined,

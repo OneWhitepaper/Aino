@@ -109,13 +109,14 @@ it.each([true, false])(
         <ToolsetConfigPanel onConfiguredChange={configured} profile={scope} toolset="image_gen" />
       </MemoryRouter>
     )
-    await screen.findByRole('option', { name: /Aino Image Fixture/ })
+    const imageOption = await screen.findByRole('option', { name: /Aino Image Fixture/ })
+    expect(imageOption.textContent).not.toMatch(/Code compatible|Code auto-adapted|Code unverified|Work only/)
     expect(screen.queryByText('Nous Subscription')).toBeNull()
     expect(screen.queryByText('FAL.ai')).toBeNull()
     expect(screen.queryByText('Use this backend')).toBeNull()
     expect(screen.queryByRole('option', { name: /Fixture Model/ })).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
-    fireEvent.click(screen.getByRole('option', { name: /Aino Image Fixture/ }))
+    fireEvent.click(imageOption)
     await waitFor(() =>
       expect(selectToolsetModel).toHaveBeenCalledWith(
         'image_gen',

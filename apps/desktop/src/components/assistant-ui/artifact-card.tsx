@@ -8,9 +8,12 @@ import { CodeCardIcon } from '@/components/chat/code-card'
 import { WIDGET_SHELL_CLASS } from '@/components/chat/widget-shell'
 import { useI18n } from '@/i18n'
 import type { ArtifactDetection } from '@/lib/artifact-detect'
+import { Globe } from '@/lib/icons'
 import { codiconForLanguage } from '@/lib/markdown-code'
 import { cn } from '@/lib/utils'
 import { $artifactRegistry, artifactsForSession, openArtifact, upsertArtifact } from '@/store/artifacts'
+
+import { ArtifactOpenWith } from './artifact-open-with'
 
 interface ArtifactCardProps {
   code: string
@@ -18,14 +21,51 @@ interface ArtifactCardProps {
   streaming?: boolean
 }
 
-const KIND_ICON: Record<ArtifactDetection['kind'], string> = {
-  code: 'code',
-  html: 'browser',
-  svg: 'symbol-color'
+interface WebPreviewCardProps {
+  content: string
+  description: string
+  disabled: boolean
+  onOpen: () => void
+  streaming: boolean
+  title: string
 }
 
-function detectionIcon(detection: ArtifactDetection): string {
-  return detection.kind === 'code' ? codiconForLanguage(detection.language) : KIND_ICON[detection.kind]
+function WebPreviewCard({ content, description, disabled, onOpen, streaming, title }: WebPreviewCardProps) {
+  const { t } = useI18n()
+
+  return (
+    <div
+      className="my-1.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-(--aino-radius-card) border border-(--ui-stroke-tertiary) bg-(--ui-widget-surface-background) p-3"
+      data-slot="aui_artifact-card"
+    >
+      <button
+        aria-label={`${t.preview.openPreview}: ${title}`}
+        className="flex min-w-0 flex-1 basis-36 items-center gap-2.5 rounded-(--aino-radius-control) text-start transition-colors enabled:cursor-pointer enabled:hover:bg-(--ui-row-hover-background) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        disabled={disabled}
+        onClick={onOpen}
+        type="button"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-(--ui-bg-quaternary) text-(--ui-blue) dark:text-[color:color-mix(in_srgb,var(--ui-blue)_72%,var(--ui-text-primary))]">
+          <Globe className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              'block truncate text-[length:var(--conversation-text-font-size)] leading-snug font-medium text-(--ui-text-primary)',
+              streaming && 'shimmer text-foreground/55'
+            )}
+            title={title}
+          >
+            {title}
+          </span>
+          <span className="block truncate text-[length:var(--conversation-caption-font-size)] leading-snug text-(--ui-text-secondary)">
+            {description}
+          </span>
+        </span>
+      </button>
+      <ArtifactOpenWith content={content} disabled={disabled} onOpen={onOpen} />
+    </div>
+  )
 }
 
 /**
@@ -74,8 +114,16 @@ export function ArtifactCard({ code, detection, streaming = false }: ArtifactCar
   const versionCount = record?.versions.length ?? 0
   const title = (record?.title || detection.title || kindLabel).trim() || kindLabel
 
+  const description = streaming
+    ? copy.generating(lineCount)
+    : versionCount > 1
+      ? `${kindLabel} · ${copy.versionBadge(versionCount)}`
+      : kindLabel
+
+  const disabled = streaming || !sessionId || !trimmed
+
   const open = () => {
-    if (streaming || !sessionId || !trimmed) {
+    if (disabled) {
       return
     }
 
@@ -94,6 +142,19 @@ export function ArtifactCard({ code, detection, streaming = false }: ArtifactCar
     openArtifact(result.artifactId, versionIndex === -1 ? undefined : versionIndex)
   }
 
+  if (detection.kind === 'html') {
+    return (
+      <WebPreviewCard
+        content={trimmed}
+        description={description}
+        disabled={disabled}
+        onOpen={open}
+        streaming={streaming}
+        title={title}
+      />
+    )
+  }
+
   return (
     <button
       className={cn(
@@ -107,7 +168,10 @@ export function ArtifactCard({ code, detection, streaming = false }: ArtifactCar
       type="button"
     >
       <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/55 text-muted-foreground">
-        <CodeCardIcon className="text-[1rem]" name={detectionIcon(detection)} />
+        <CodeCardIcon
+          className="text-[1rem]"
+          name={detection.kind === 'code' ? codiconForLanguage(detection.language) : 'symbol-color'}
+        />
       </span>
       <span className="min-w-0 flex-1">
         <span
@@ -119,11 +183,7 @@ export function ArtifactCard({ code, detection, streaming = false }: ArtifactCar
           {title}
         </span>
         <span className="block truncate text-[length:var(--conversation-tool-font-size)] text-muted-foreground">
-          {streaming
-            ? copy.generating(lineCount)
-            : versionCount > 1
-              ? `${kindLabel} · ${copy.versionBadge(versionCount)}`
-              : kindLabel}
+          {description}
         </span>
       </span>
       {!streaming && (

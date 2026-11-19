@@ -23,6 +23,8 @@ vi.mock('@/app/shell/sidebar-identity-footer', () => ({ SidebarIdentityFooter: (
 
 const disposers: (() => void)[] = []
 const hubId = 'example-agent-plugin:roster'
+const workModeLabel = 'Switch Aino mode: Aino Work'
+const modeSwitcherLabel = /^Switch (Aino|conversation) mode:/
 let disableHub: () => void
 
 function SessionContents() {
@@ -93,11 +95,15 @@ afterEach(() => {
   window.location.hash = '#/'
 })
 
-function chooseHub() {
-  fireEvent.pointerDown(screen.getByRole('button', { name: /Switch conversation mode: Aino/ }), {
+function openWorkModeMenu() {
+  fireEvent.pointerDown(screen.getByRole('button', { name: workModeLabel }), {
     button: 0,
     ctrlKey: false
   })
+}
+
+function chooseHub() {
+  openWorkModeMenu()
   fireEvent.click(screen.getByRole('menuitemradio', { name: /Agent Hub/ }))
 }
 
@@ -136,7 +142,7 @@ describe('conversation navigation surfaces', () => {
       </MemoryRouter>
     )
 
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(screen.getByRole('button', { name: workModeLabel })).toBeTruthy()
     const draft = screen.getByRole('textbox', { name: 'Session draft' }) as HTMLInputElement
     fireEvent.change(draft, { target: { value: 'Unsaved text' } })
     const navigation = $layoutTree.get()
@@ -150,7 +156,7 @@ describe('conversation navigation surfaces', () => {
 
     expect($workspaceIsPage.get()).toBe(true)
     expect(window.location.hash).toBe('#/capabilities?tab=tools')
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: modeSwitcherLabel })).toBeNull()
     // jsdom does not apply inert to accessibility queries; the native host blocks this retained input.
     expect(draft.closest('[data-pane-hidden]')?.hasAttribute('inert')).toBe(true)
     expect(container.querySelector('input[aria-label="Session draft"]')).toBe(draft)
@@ -167,7 +173,7 @@ describe('conversation navigation surfaces', () => {
     expect($workspaceIsPage.get()).toBe(false)
     expect(screen.getByRole('textbox', { name: 'Session draft' })).toBe(draft)
     expect(draft.value).toBe('Unsaved text')
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(screen.getByRole('button', { name: workModeLabel })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Agent Hub' }))
     expect($layoutTree.get()).toMatchObject({ active: 'hermes-bots:pane' })
     expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
@@ -203,7 +209,7 @@ describe('conversation navigation surfaces', () => {
 
     expect($workspaceIsPage.get()).toBe(true)
     expect(window.location.hash).toBe('#/capabilities?tab=tools')
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: modeSwitcherLabel })).toBeNull()
     expect(globalThis.document.querySelector('[data-narrow-overlay]')).toBeNull()
     expect($layoutTree.get()).toEqual(navigation)
     expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
@@ -245,8 +251,11 @@ describe('conversation navigation surfaces', () => {
     chooseHub()
     act(() => disableHub())
     expect(screen.getByRole('textbox', { name: 'Session draft' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
     expect(container.querySelectorAll('[data-sidebar-mode-header]')).toHaveLength(1)
+    openWorkModeMenu()
+    expect(screen.getByRole('menuitemradio', { name: /Aino Work/ })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /Aino Code/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: /Agent Hub/ })).toBeNull()
   })
 
   it('keeps ordinary tabs for a mixed group with an unknown guest', () => {
@@ -265,7 +274,7 @@ describe('conversation navigation surfaces', () => {
         <LiveGroup />
       </MemoryRouter>
     )
-    expect(screen.queryByRole('button', { name: /Switch conversation mode/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: modeSwitcherLabel })).toBeNull()
     expect(globalThis.document.querySelector(`[data-tree-tab="${hubId}"]`)).toBeTruthy()
     expect(screen.getByText('Legacy Aino brand')).toBeTruthy()
   })
@@ -297,10 +306,7 @@ describe('conversation navigation surfaces', () => {
     // Hover reveal is deliberately unpinned; crossing into the portal must not dismiss it.
     fireEvent.mouseEnter(container.firstElementChild!)
     expect(screen.getByRole('textbox', { name: 'Session draft' })).toBeTruthy()
-    fireEvent.pointerDown(screen.getByRole('button', { name: /Switch conversation mode: Aino/ }), {
-      button: 0,
-      ctrlKey: false
-    })
+    openWorkModeMenu()
     const item = screen.getByRole('menuitemradio', { name: /Agent Hub/ })
     fireEvent.mouseLeave(globalThis.document.querySelector('[data-narrow-overlay]')!, { relatedTarget: item })
     expect(screen.getByRole('menuitemradio', { name: /Agent Hub/ })).toBeTruthy()

@@ -3,6 +3,7 @@ import { mergeTranslations } from '@hermes/shared/i18n'
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
 import { messagingDirectory } from './messaging-directory'
@@ -35,6 +36,7 @@ const zhHantBaseOverrides = {
   appearancePage: appearancePage['zh-hant'],
   home: homeGuidance['zh-hant'],
   toolPanel: toolPanel['zh-hant'],
+  executionMode: executionModeCopy['zh-hant'],
   workspacePage: workspacePage['zh-hant'],
   accountPage: accountPage['zh-hant'],
   connectorOffer: {

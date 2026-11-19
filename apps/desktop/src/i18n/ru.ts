@@ -7,6 +7,7 @@ import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
 import { messagingOnboarding } from './messaging-onboarding'
@@ -344,6 +345,7 @@ const ruBaseOverrides = {
   appearancePage: appearancePage.ru,
   home: homeGuidance.ru,
   toolPanel: toolPanel['ru'],
+  executionMode: executionModeCopy.ru,
   workspacePage: workspacePage.ru,
   accountPage: accountPage['ru'],
   platformRecharge: {
@@ -2618,10 +2620,11 @@ const ruBaseOverrides = {
   },
 
   artifactCard: {
-    kind: { code: 'Код', html: 'Интерактивная страница', svg: 'Графика' },
+    kind: { code: 'Код', html: 'Предпросмотр страницы', svg: 'Графика' },
     generating: lines => `Генерация… ${lines} ${RU_NOUN(lines, 'строка', 'строки', 'строк')}`,
     versionBadge: count => `${count} ${RU_NOUN(count, 'версия', 'версии', 'версий')}`,
-    open: 'Открыть'
+    open: 'Открыть',
+    openWith: 'Открыть с помощью'
   },
 
   artifactPreview: {
@@ -2631,8 +2634,8 @@ const ruBaseOverrides = {
     latest: 'Последняя',
     copyContent: 'Копировать содержимое',
     download: 'Скачать',
-    openInBrowser: 'Открыть в браузере',
-    openInBrowserFailed: 'Не удалось открыть в браузере',
+    openExternally: 'Открыть вне приложения',
+    openExternallyFailed: 'Не удалось открыть вне приложения',
     missingTitle: 'Артефакт недоступен',
     missingBody: 'Этот артефакт больше нет в локальном реестре.'
   },
@@ -3890,7 +3893,10 @@ const ruBaseOverrides = {
       dismissError: 'Скрыть ошибку',
       errorCodes: ruErrorCodes,
       filesChanged: count => `${count} ${RU_PLURAL(count, 'файл изменён', 'файла изменено', 'файлов изменено')}`,
-      reviewChanges: 'Проверить',
+      reviewChanges: 'Посмотреть изменения',
+      recordedFileChanges: 'Изменения, записанные в этом ходе. Повторные правки файла показаны по порядку.',
+      recordedFileEdit: index => `Правка ${index}`,
+      reviewRepositoryChanges: 'Посмотреть изменения Git',
       readAloudFailed: 'Не удалось зачитать вслух',
       preparingAudio: 'Подготовка аудио...',
       stopReading: 'Остановить чтение',

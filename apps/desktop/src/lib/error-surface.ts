@@ -33,6 +33,7 @@ export const ERROR_CODE_KEYS = [
   'managed_billing_unavailable',
   'managed_subscription_expired',
   'managed_model_access_denied',
+  'managed_operation_unknown',
   'rate_limit',
   'upstream_rate_limit',
   'overloaded',
@@ -347,6 +348,7 @@ const SWITCH_PROVIDER_LAYERS: readonly ErrorSurfaceLayer[] = ['auth', 'billing',
 // an unchanged retry is known to reproduce it for the user (too long a
 // conversation, a blocked prompt, a chat another surface owns).
 const CODE_PLANS: Partial<Record<ErrorCodeKey, Partial<ErrorRecoveryPlan>>> = {
+  managed_operation_unknown: { retry: false, switchProvider: false },
   SESSION_NOT_OWNED: { retry: false, startNewSession: true },
   SESSION_OWNER_BUSY: { retry: true, startNewSession: false },
   SESSION_OWNER_UNCONFIRMED: { retry: false, startNewSession: false },
@@ -486,6 +488,7 @@ export function providerSettingsUrl(surface?: ErrorSurface | null): string | und
 
 // One main action + at most one second option per code (Error System Overhaul).
 const CODE_ACTIONS: Partial<Record<ErrorCodeKey, ErrorCardActions>> = {
+  managed_operation_unknown: { primary: null },
   managed_billing_unavailable: { primary: 'choose_model' },
   managed_subscription_expired: { primary: 'choose_model' },
   managed_model_access_denied: { primary: 'choose_model' },
@@ -636,7 +639,7 @@ export type ErrorCardSeverity = 'blocking' | 'degraded'
 const DEGRADED_ACTIONS: ReadonlySet<ErrorActionId> = new Set(['retry', 'retry_at_reset', 'continue'])
 
 export function errorCardSeverity(surface: ErrorSurface | null | undefined): ErrorCardSeverity {
-  if (surface?.code === 'free_tier_model_not_free') {
+  if (surface?.code === 'free_tier_model_not_free' || surface?.code === 'managed_operation_unknown') {
     return 'degraded'
   }
 

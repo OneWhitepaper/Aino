@@ -259,6 +259,45 @@ function failedTurnError(
   return { error, errorSurface }
 }
 
+/** The managed boundary stores partial output followed by its exact error. Split only
+ * that owned suffix; model text quoting an error and other failure notices stay intact. */
+function failedTurnMessage(
+  message: SessionMessage,
+  index: number,
+  content: string | null,
+  rowIds: number[]
+): ChatMessage | null {
+  const failure = message.display_kind === 'failed_turn' ? failedTurnError(message.display_metadata) : null
+
+  if (!failure) {
+    return null
+  }
+
+  const body = content ?? ''
+  const suffix = `\n\n${failure.error}`
+
+  const partial =
+    failure.errorSurface?.code !== 'managed_operation_unknown'
+      ? null
+      : body === failure.error
+        ? ''
+        : body.endsWith(suffix)
+          ? body.slice(0, -suffix.length)
+          : null
+
+  return {
+    id: `${message.timestamp || Date.now()}-${index}-failed-turn-error`,
+    role: 'assistant',
+    parts: partial ? [{ ...assistantTextPart(partial, message.timestamp), sourceRowId: rowIds[0] }] : [],
+    pending: false,
+    // An ordinary failure still has a separate system notice counting its row.
+    serverRowSpan: partial === null ? 0 : 1,
+    ...(partial !== null ? { durableComplete: false, rowId: rowIds[0], sourceRowIds: rowIds } : {}),
+    ...failure,
+    ...(message.timestamp ? { timestamp: message.timestamp } : {})
+  }
+}
+
 // agent/turn_failure_copy.py::CONTENT_REFUSED_NOTICE, stored under
 // display_metadata.content_refused.notice. Absent on older backends — the
 // renderer falls back to an i18n string then.
@@ -740,19 +779,16 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       flushPendingTools(index)
     }
 
-    const failure = message.display_kind === 'failed_turn' ? failedTurnError(message.display_metadata) : null
+    const failure = failedTurnMessage(message, index, rawDisplayContent, rowIds)
 
     if (failure) {
-      // Stands for no backend row of its own; the boundary row below counts itself.
-      result.push({
-        id: `${message.timestamp || Date.now()}-${index}-failed-turn-error`,
-        role: 'assistant',
-        parts: [],
-        pending: false,
-        serverRowSpan: 0,
-        ...failure,
-        ...(message.timestamp ? { timestamp: message.timestamp } : {})
-      })
+      result.push(failure)
+
+      if (failure.serverRowSpan === 1) {
+        activeAssistantIndex = null
+
+        return
+      }
     }
 
     const reactions = messageReactions(message.display_metadata)

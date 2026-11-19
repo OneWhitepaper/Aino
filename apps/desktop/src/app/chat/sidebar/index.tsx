@@ -74,8 +74,7 @@ import {
   $profileScope,
   type AgentProfileRoute,
   ALL_PROFILES,
-  messagingTotalsKey,
-  normalizeProfileKey
+  messagingTotalsKey
 } from '@/store/profile'
 import { $projectScope, ALL_PROJECTS, exitProjectScope } from '@/store/project-scope'
 import {
@@ -96,7 +95,6 @@ import {
 import {
   $prBranchBySession,
   $pullRequestsByBranch,
-  pullRequestBucket,
   recoverSessionPullRequests,
   refreshPullRequests,
   sessionPrKey
@@ -116,7 +114,7 @@ import {
   ownerLookupSessionRows,
   sessionPinId
 } from '@/store/session'
-import { $sessionDotStateById, sessionStatusBucket } from '@/store/session-dot-state'
+import { $sessionDotStateById } from '@/store/session-dot-state'
 import { $focusedSessionIsTile, $focusedStoredSessionId } from '@/store/session-focus'
 import { $unconfirmedPinWrites } from '@/store/session-pin-sync'
 import { $removedSessionIds } from '@/store/session-removal'
@@ -133,6 +131,7 @@ import { type NewSessionSplitHandler } from '../new-session-drag'
 
 import { SidebarSectionAddButton } from './chrome'
 import { SidebarCronJobsSection } from './cron-jobs-section'
+import { OtherModeActivity, useSessionModeFilter } from './execution-mode-filter'
 import { SidebarFilterMenu } from './filter-menu'
 import { buildGatewaySessionGroups, scopeGatewaySessionGroups, useGatewaySessionGroups } from './gateway-group-model'
 import { SidebarLoadMoreRow } from './load-more-row'
@@ -154,7 +153,6 @@ import {
   ProjectMenu,
   projectTreeCwd,
   sessionBucketId,
-  sessionMatchesProjectFilter,
   sessionRecency as sessionTime,
   type SidebarProjectTree,
   type SidebarWorkspaceTree,
@@ -169,12 +167,12 @@ import { WorktreeDialog } from './projects/worktree-dialog'
 import { SidebarRecentFooter } from './recent-footer'
 import { recentSessionsOutsideProjects } from './recent-sessions'
 import { SidebarLoadErrorState, SidebarSessionSkeletons, SidebarStorageCorruptNotice } from './section-states'
+import { useSidebarSessionFilters } from './session-filters'
 import { buildSessionByAnyId, resolvePinnedSessions } from './session-index'
-import { mergeSearchResults } from './session-search'
 import { SidebarSessionSearchDialog } from './session-search-dialog'
 import { SidebarSessionsSection, VIRTUALIZE_THRESHOLD } from './sessions-section'
 import { useEnteredProjectSessions } from './use-entered-project-sessions'
-import { useServerSessionSearch } from './use-server-session-search'
+import { useModeSessionSearch } from './use-mode-session-search'
 
 // Non-session groups (messaging platforms) stay compact: show a few rows up
 // front, reveal more in larger steps on demand. Keeps a busy platform from
@@ -269,6 +267,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { t } = useI18n()
   const s = t.sidebar
+  const { matchesMode, modeFilter } = useSessionModeFilter()
   const { pathname } = useLocation()
   const showsAdvancedChrome = useStore($showsAdvancedChrome)
   const navPrefs = useContributions(SIDEBAR_NAV_PREFS_AREA)
@@ -378,27 +377,11 @@ export function ChatSidebar({
   const activeProjectId = useStore($activeProjectId)
   const projectScope = useStore($projectScope)
   const gatewayState = useStore($gatewayState)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
   const [messagingLoadMorePending, setMessagingLoadMorePending] = useState<Record<string, boolean>>({})
   const [recentsLoadMorePending, setRecentsLoadMorePending] = useState(false)
   const messagingOpenIds = useStore($sidebarMessagingOpenIds)
   // Per-platform count of rows currently revealed (starts at NON_SESSION_INITIAL_ROWS).
   const [messagingVisible, setMessagingVisible] = useState<Record<string, number>>({})
-  const trimmedQuery = searchQuery.trim()
-
-  // Hotkey (session.focusSearch) → focus the field once it's mounted.
-  useEffect(() => {
-    const onFocus = () => {
-      if (routeView === 'chat' && paneVisible) {
-        setSearchOpen(true)
-      }
-    }
-
-    window.addEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
-
-    return () => window.removeEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
-  }, [routeView, paneVisible])
 
   const activeSidebarSessionId = currentView === 'chat' ? selectedSessionId : null
 
@@ -428,32 +411,9 @@ export function ChatSidebar({
   // page may not, so it has to be answerable per session rather than by
   // membership in the filtered set. Detached rows file under the Home bucket id
   // (same rule as the overview overlay), so filtering to Home keeps Home's rows.
-  const sessionMatchesFilters = useCallback(
-    (session: SessionInfo) => {
-      if (statusFilter.length && !statusFilter.includes(sessionStatusBucket(dotStates[session.id]))) {
-        return false
-      }
-
-      // Narrowing to a few of the profiles on screen. Scoped to one profile the
-      // list is already that profile's, so a stale selection can't blank it.
-      if (showAllProfiles && profileFilter.length && !profileFilter.includes(normalizeProfileKey(session.profile))) {
-        return false
-      }
-
-      if (prFilter.length) {
-        const key = sessionPrKey(session)
-
-        if (!prFilter.includes(pullRequestBucket(key ? pullRequests[key] : undefined))) {
-          return false
-        }
-      }
-
-      // Same membership the sidebar groups and colors by (backend owner first,
-      // cwd walk otherwise), so a filtered row lands in the lane the user
-      // picked it from.
-      return sessionMatchesProjectFilter(session, projectFilter, projects, projectOwners)
-    },
-    [
+  const { sessionMatchesFilters, viewFiltersNarrow, filtersNarrow } = useSidebarSessionFilters(
+    {
+      matchesMode,
       statusFilter,
       projectFilter,
       profileFilter,
@@ -463,14 +423,9 @@ export function ChatSidebar({
       projects,
       projectOwners,
       dotStates
-    ]
+    },
+    modeFilter
   )
-
-  const filtersNarrow =
-    statusFilter.length > 0 ||
-    projectFilter.length > 0 ||
-    prFilter.length > 0 ||
-    (showAllProfiles && profileFilter.length > 0)
 
   const visibleSessions = useMemo(
     () => (filtersNarrow ? scopedSessions.filter(sessionMatchesFilters) : scopedSessions),
@@ -487,13 +442,13 @@ export function ChatSidebar({
   )
 
   const visibleCronSessions = useMemo(
-    () => filterSessionsByProfileScope(cronSessions, displayScope),
-    [cronSessions, displayScope]
+    () => filterSessionsByProfileScope(cronSessions, displayScope).filter(matchesMode),
+    [cronSessions, displayScope, matchesMode]
   )
 
   const visibleMessagingSessions = useMemo(
-    () => filterSessionsByProfileScope(messagingSessions, displayScope),
-    [messagingSessions, displayScope]
+    () => filterSessionsByProfileScope(messagingSessions, displayScope).filter(matchesMode),
+    [messagingSessions, displayScope, matchesMode]
   )
 
   // Index sessions by every id a pin might be stored under — recents, cron,
@@ -512,10 +467,17 @@ export function ChatSidebar({
       resolvePinnedSessions(
         pinnedSessionIds,
         sessionByAnyId,
-        [...visibleSessions, ...cronSessions, ...messagingSessions],
+        [...visibleSessions, ...visibleCronSessions, ...visibleMessagingSessions],
         unconfirmedPinWrites
       ),
-    [pinnedSessionIds, sessionByAnyId, visibleSessions, cronSessions, messagingSessions, unconfirmedPinWrites]
+    [
+      pinnedSessionIds,
+      sessionByAnyId,
+      visibleSessions,
+      visibleCronSessions,
+      visibleMessagingSessions,
+      unconfirmedPinWrites
+    ]
   )
 
   // Every id a pin is reachable under: the raw stored ids, plus BOTH identities
@@ -557,24 +519,21 @@ export function ChatSidebar({
     [isPinnedSession, filtersNarrow, sessionMatchesFilters]
   )
 
-  const { searchPending, serverMatches } = useServerSessionSearch(trimmedQuery, searchScope)
+  const { searchPending, searchResults, searchQuery, setSearchQuery, searchOpen, setSearchOpen, onResumeSearchResult } =
+    useModeSessionSearch(searchScope, sortedSessions, onResumeSession)
 
-  const searchResults = useMemo(
-    () => mergeSearchResults(sortedSessions, trimmedQuery, serverMatches, sessionByAnyId, searchPending),
-    [sortedSessions, trimmedQuery, serverMatches, sessionByAnyId, searchPending]
-  )
+  // Hotkey (session.focusSearch) → focus the field once it's mounted.
+  useEffect(() => {
+    const onFocus = () => {
+      if (routeView === 'chat' && paneVisible) {
+        setSearchOpen(true)
+      }
+    }
 
-  // Selecting a result is the one action that both resumes a session and
-  // dismisses the search dialog. Clear the query before navigating so
-  // reopening search cannot paint the previous session's results.
-  const onResumeSearchResult = useCallback(
-    (sessionId: string, session?: SessionInfo) => {
-      setSearchQuery('')
-      setSearchOpen(false)
-      onResumeSession(sessionId, session)
-    },
-    [onResumeSession]
-  )
+    window.addEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
+
+    return () => window.removeEventListener(SESSION_SEARCH_FOCUS_EVENT, onFocus)
+  }, [routeView, paneVisible, setSearchOpen])
 
   const unpinnedAgentSessions = useMemo(
     () => sortedSessions.filter(s => !isPinnedSession(s)),
@@ -1184,7 +1143,7 @@ export function ChatSidebar({
   }, [visibleMessagingSessions, messagingPlatformTotals, messagingTruncated, isPinnedSession, messagingProfile])
 
   const ownerGrouped = profileScope === ALL_PROFILES && grouping === 'profile'
-  const profileGroups = useGatewaySessionGroups(displayAgentSessions, ownerGrouped, filtersNarrow)
+  const profileGroups = useGatewaySessionGroups(displayAgentSessions, ownerGrouped, viewFiltersNarrow)
 
   // Pagination is scope-aware. In "All profiles" mode it tracks the global
   // unified set; scoped to one profile it tracks that profile's own truncation
@@ -1389,6 +1348,7 @@ export function ChatSidebar({
         />
 
         <SidebarStorageCorruptNotice />
+        <OtherModeActivity displayScope={displayScope} />
         <div
           className={cn('aino-sidebar-sections', SCROLL_Y, SCROLL_GUTTER)}
           data-sessions-mode={sessionsMode}

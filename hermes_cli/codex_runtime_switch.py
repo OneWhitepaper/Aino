@@ -7,6 +7,9 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from hermes_platform.resolver import locate_command
+from pm import installed_package
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,14 +67,22 @@ def get_current_runtime(config: dict) -> str:
 
 
 def get_configured_codex_binary(config: dict) -> str:
-    """``model.codex_bin`` (one argv element, never shell-parsed) or bare ``codex`` from PATH.
+    """Explicit ``model.codex_bin``, the pinned PM engine, then an existing PATH command.
 
-    Gateway/service/Kanban-worker processes often run with a minimal PATH that lacks the codex
-    CLI (e.g. a desktop-bundled ``.../Codex.app/Contents/Resources/codex``), so users need a
-    config-level override for every codex spawn site (#61360)."""
+    This lookup never installs. Bundles carry the PM package; source developers may
+    select an existing engine without replacing the user's separate Codex install.
+    An explicit value stays one argv element, never a shell command (#61360).
+    """
     model_cfg = config.get("model") if isinstance(config, dict) else None
     value = model_cfg.get("codex_bin") if isinstance(model_cfg, dict) else None
-    return str(value or "").strip() or "codex"
+    configured = str(value or "").strip()
+    if configured:
+        return configured
+    package = installed_package("codex")
+    if package is not None and package.binary is not None:
+        return str(package.binary)
+    command = locate_command("codex").command
+    return command[0] if command else "codex"
 
 
 def set_runtime(config: dict, new_value: str) -> str:
@@ -139,7 +150,7 @@ def apply(
         ok, ver = _check_binary_cached(codex_bin)
         msg = (
             f"openai_runtime: {current}\n"
-            f"codex CLI: {'OK ' + ver if ok else 'not available — ' + (ver or 'install with `npm i -g @openai/codex`')}"
+            f"codex CLI: {'OK ' + ver if ok else 'not available — ' + (ver or 'repair the bundled engine or run `hermes pm install codex`')}"
         )
         return CodexRuntimeStatus(success=True, new_value=current, old_value=current, message=msg)
 
@@ -164,7 +175,7 @@ def apply(
                 message=(
                     "Cannot enable codex_app_server runtime: "
                     f"{ver_or_msg or 'codex CLI not available'}\n"
-                    "Install with: npm i -g @openai/codex"))
+                    "Repair the bundled app, or for a source install run: hermes pm install codex"))
 
     if not reapplying_enable:
         set_runtime(config, new_value)

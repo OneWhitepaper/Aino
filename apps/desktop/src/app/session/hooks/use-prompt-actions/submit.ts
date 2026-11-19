@@ -6,6 +6,7 @@ import { getSession, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS } from '@/hermes'
 import { translateNow, type Translations } from '@/i18n'
 import { type ChatMessage, finalizeInterruptedMessages, textPart } from '@/lib/chat-messages'
 import { optimisticAttachmentRef } from '@/lib/chat-runtime'
+import { CodeModelCompatibilityError } from '@/lib/code-model-capability'
 import { sanitizeComposerInput } from '@/lib/composer-input-sanitize'
 import { setMutableRef } from '@/lib/mutable-ref'
 import {
@@ -64,6 +65,7 @@ import { routeTargetFromToken, sessionContextDrift } from '../session-context-dr
 import type { CreateBackendSessionForSend } from '../use-session-actions/create-overrides'
 import { resolveSessionOwner, resolveSessionProfile } from '../use-session-actions/utils'
 
+import { captureCodeSubmitView, notifyCodeModelRefusal, preflightCodeSession } from './code-model-guard'
 import {
   adoptPreparedSubmission,
   type PreparedSubmission,
@@ -340,6 +342,31 @@ function acceptsImageAttachments(
   return true
 }
 
+/** Queue admission and image checks belong to the target, which may be a background chat. */
+function prepareSubmitAdmission(
+  input: NonNullable<ReturnType<typeof prepareSubmitInput>>,
+  options: SubmitTextOptions | undefined,
+  activeSessionId: string | null,
+  busy: boolean,
+  copy: Translations['desktop']
+): boolean | null {
+  const guardSessionId = options?.sessionId ?? activeSessionId
+  const serverQueue = serverOwnsComposerQueue(options?.storedSessionId ?? guardSessionId)
+  const targetBusy = isTargetSessionBusy($sessionStates.get(), guardSessionId, busy)
+  const hasSendable = Boolean(input.visibleText.trim() || input.attachments.length || input.hasImage)
+
+  // A queue drain owns its lock and can run before the busy ref catches up.
+  if (!hasSendable || (!serverQueue && !options?.fromQueue && targetBusy)) {
+    return null
+  }
+
+  if (input.hasImage && !acceptsImageAttachments(guardSessionId, options?.fromQueue, copy)) {
+    return null
+  }
+
+  return serverQueue && Boolean(options?.fromQueue || targetBusy)
+}
+
 function notifySubmitFailure(err: unknown, copy: Translations['desktop']): void {
   if (err instanceof PlatformSelectionError) {
     const recovery = platformRecoveryAction(err)
@@ -372,6 +399,27 @@ function notifySubmitFailure(err: unknown, copy: Translations['desktop']): void 
     })
   } else {
     notifyError(err, copy.promptFailed)
+  }
+}
+
+function notifyPreflightFailure(error: unknown, fallback: string): void {
+  if (error instanceof CodeModelCompatibilityError) {
+    notifyCodeModelRefusal(error)
+  } else {
+    notifyError(error, fallback)
+  }
+}
+
+function notifySessionCreateFailure(error: unknown, copy: Translations['desktop']): void {
+  if (error instanceof PlatformSelectionError) {
+    notify({
+      kind: 'error',
+      title: copy.sessionUnavailable,
+      message: error.message,
+      action: { label: copy.chooseModel, onClick: () => setModelPickerOpen(true) }
+    })
+  } else {
+    notifyPreflightFailure(error, copy.sessionUnavailable)
   }
 }
 
@@ -424,46 +472,20 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         return false
       }
 
-      const {
-        usingComposerAttachments,
-        attachments,
-        titlePreview,
-        transportRaw,
-        bubbleOverride,
-        visibleText,
-        hasImage
-      } = prepared
+      const { usingComposerAttachments, attachments, titlePreview, transportRaw, bubbleOverride, visibleText } =
+        prepared
 
       let { attachmentRefs } = prepared
 
-      // Queue drains fire on the busy→false settle edge, where busyRef (synced
-      // from $busy by a separate effect) may still read true — honoring it would
-      // bounce the drained send. The drain lock serializes them; the user path
-      // keeps the guard so a stray Enter mid-turn can't double-submit.
-      //
-      // The guard reads the TARGET session's busy state (isTargetSessionBusy),
-      // not the foreground flag: an explicit target (tile, queue drain) is
-      // frequently not the session on screen, so the foreground flag would gate
-      // one session's send on another session's turn.
-      const hasSendable = Boolean(visibleText.trim() || attachments.length || hasImage)
+      const queueAdmission = prepareSubmitAdmission(
+        prepared,
+        options,
+        activeSessionIdRef.current,
+        busyRef.current,
+        copy
+      )
 
-      const guardSessionId = options?.sessionId ?? activeSessionIdRef.current
-      const serverQueue = serverOwnsComposerQueue(options?.storedSessionId ?? guardSessionId)
-
-      const queueAdmission =
-        serverQueue &&
-        Boolean(options?.fromQueue || isTargetSessionBusy($sessionStates.get(), guardSessionId, busyRef.current))
-
-      if (
-        !hasSendable ||
-        (!serverQueue &&
-          !options?.fromQueue &&
-          isTargetSessionBusy($sessionStates.get(), guardSessionId, busyRef.current))
-      ) {
-        return false
-      }
-
-      if (hasImage && !acceptsImageAttachments(guardSessionId, options?.fromQueue, copy)) {
+      if (queueAdmission === null) {
         return false
       }
 
@@ -615,6 +637,18 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       let retainedKey: string | undefined
 
       try {
+        const codePreflight = preflightCodeSession({
+          sessionId,
+          storedSessionId: targetStoredSessionId,
+          destination: captured,
+          isCurrent: captureCodeSubmitView(targetStartedInCurrentView, selectedStoredSessionIdRef, getRouteToken)
+        })
+
+        // A fresh draft's create path must capture model intent before yielding.
+        if (codePreflight) {
+          await codePreflight
+        }
+
         // Only an explicit retry (the caller names the uncertain send's identity) reuses a
         // retained entry; a new message with the same text is a new turn.
         const adopted = options?.submission_id
@@ -641,7 +675,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
           return false
         }
       } catch (err) {
-        notifyError(err, copy.promptFailed)
+        notifyPreflightFailure(err, copy.promptFailed)
 
         return false
       }
@@ -1087,16 +1121,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
           releaseBusy()
 
           if (targetIsCurrentView()) {
-            if (err instanceof PlatformSelectionError) {
-              notify({
-                kind: 'error',
-                title: copy.sessionUnavailable,
-                message: err.message,
-                action: { label: copy.chooseModel, onClick: () => setModelPickerOpen(true) }
-              })
-            } else {
-              notifyError(err, copy.sessionUnavailable)
-            }
+            notifySessionCreateFailure(err, copy)
           }
 
           return false

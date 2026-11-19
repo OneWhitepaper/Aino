@@ -10,6 +10,24 @@ store checkout in a worker thread: batched lookups and one indexed probe per seg
 """
 from __future__ import annotations
 
+from hermes_state_common import _sql_json_extract
+from hermes_state_local import POLICY_PREFIX, local_lineage_owner
+
+
+def fill_execution_modes(db, rows, *, id_key='session_id'):
+    """Project display metadata without restoring sessions or letting one unreadable receipt hide the page."""
+    if not rows:
+        return
+    mode_expr = _sql_json_extract('value', '$.policy.execution_mode')
+    with db._read_ctx() as conn:
+        owners = {row[id_key]: local_lineage_owner(conn, row[id_key]) for row in rows}
+        keys = list({POLICY_PREFIX + owner for owner in owners.values()})
+        placeholders = ','.join('?' for _ in keys)
+        saved = conn.execute(f'SELECT key,{mode_expr} FROM state_meta WHERE key IN ({placeholders})', keys).fetchall()
+    modes = {key[len(POLICY_PREFIX):]: mode for key, mode in saved if mode in ('work', 'code')}
+    for row in rows:
+        row['execution_mode'] = modes.get(owners[row[id_key]], 'work')
+
 
 def workspace_members(db, session_ids, workspace):
     """The ids among *session_ids* whose row is in *workspace* (``SessionDB.sessions_in_workspace``: the
@@ -68,6 +86,7 @@ def live_picker_page(authority, sessions, limit, workspace=None, picker=False):
         members = workspace_members(authority.db, [row['session_id'] for row in sessions], workspace)
         sessions = [row for row in sessions if row['session_id'] in members]
     page = sessions[:limit]
+    fill_execution_modes(authority.db, page)
     if picker and page:
         segments = current_segments(authority, [row['session_id'] for row in page])
         fill_picker_fields(authority.db, [(row, row['session_id'], segments.get(row['session_id'], row['session_id']),

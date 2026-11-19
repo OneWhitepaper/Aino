@@ -41,6 +41,7 @@ export interface GroupTranscriptRow {
   /** The gateway's display type for scaffolding rows it persists typed
    *  (`persist_user_display_kind`); absent on real user words. */
   display_kind?: string
+  display_metadata?: unknown
   role?: string
   text?: string
 }
@@ -81,6 +82,23 @@ export const SYNTHETIC_USER_ROW_PREFIXES = [
  *  bot speaking and loses the failure (#92760). */
 export function failedTurnBoundaryRow(row: GroupTranscriptRow): boolean {
   return row.role === 'assistant' && row.display_kind === 'failed_turn'
+}
+
+/** A boundary may contain partial model output. The error sidecar is the failure reason. */
+export function failedTurnBoundaryError(row: GroupTranscriptRow): string {
+  let metadata = row.display_metadata
+
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch {
+      return groupTranscriptRowText(row)
+    }
+  }
+
+  const error = metadata && typeof metadata === 'object' && 'error' in metadata ? metadata.error : null
+
+  return typeof error === 'string' && error.trim() ? error.trim() : groupTranscriptRowText(row)
 }
 
 /** A user row that carries no user words: typed scaffolding (auto-continue

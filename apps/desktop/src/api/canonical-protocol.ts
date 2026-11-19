@@ -863,8 +863,11 @@ export class CanonicalDesktopProtocol {
 
     const allowed = new Set([
       'request_id',
+      'handoff',
       'source',
       'cwd',
+      'row_cwd',
+      'execution_mode',
       'model',
       'model_source',
       'model_id',
@@ -893,7 +896,10 @@ export class CanonicalDesktopProtocol {
         ([key, value]) =>
           [
             'request_id',
+            'handoff',
             'cwd',
+            'row_cwd',
+            'execution_mode',
             'model',
             'model_source',
             'model_id',

@@ -1,5 +1,7 @@
 import { isLikelyProseCodeBlock, sanitizeLanguageTag } from '@/lib/markdown-code'
 
+import { isArtifactHtml } from './artifact-detect/html'
+
 /**
  * Artifact detection — decides when a fenced block in an assistant message is
  * substantial, self-contained content that deserves an artifact card (opening
@@ -23,10 +25,7 @@ export interface ArtifactDetection {
 // A fence only becomes an artifact once it is unambiguously a document (html),
 // a large standalone graphic (svg), or long enough that inlining it would
 // drown the conversation (code). Small snippets stay inline code cards.
-const HTML_DOC_RE = /<!doctype\s+html|<html[\s>]|<head[\s>]|<body[\s>]/i
-const HTML_TAG_RE = /<[a-z][a-z0-9-]*(\s[^>]*)?>/i
-const HTML_DOC_MIN_CHARS = 160
-const HTML_FRAGMENT_MIN_CHARS = 1200
+const HTML_DOCUMENT_START_RE = /^\s*(?:<!doctype\s+html\b|<html[\s>])/i
 const SVG_MIN_CHARS = 2000
 const CODE_MIN_LINES = 48
 const CODE_MIN_CHARS = 3000
@@ -116,13 +115,12 @@ export function detectArtifact(language: string | undefined, code: string | unde
 
   const clean = sanitizeLanguageTag(language || '')
 
-  if (HTML_LANGUAGES.has(clean)) {
-    const isDocument = HTML_DOC_RE.test(trimmed)
+  if (!clean && HTML_DOCUMENT_START_RE.test(trimmed)) {
+    return detectArtifact('html', trimmed)
+  }
 
-    if (
-      (isDocument && trimmed.length >= HTML_DOC_MIN_CHARS) ||
-      (!isDocument && trimmed.length >= HTML_FRAGMENT_MIN_CHARS && HTML_TAG_RE.test(trimmed))
-    ) {
+  if (HTML_LANGUAGES.has(clean)) {
+    if (isArtifactHtml(trimmed)) {
       return {
         kind: 'html',
         language: clean,
@@ -156,6 +154,12 @@ export function detectArtifact(language: string | undefined, code: string | unde
   }
 
   return { kind: 'code', language: clean, title: codeTitle(clean, trimmed) }
+}
+
+/** Recognize a document-only reply before Markdown can rewrite its source.
+ * Inline tags, examples embedded in prose and small snippets stay Markdown. */
+export function detectStandaloneHtmlArtifact(text: string): ArtifactDetection | null {
+  return HTML_DOCUMENT_START_RE.test(text) ? detectArtifact('html', text) : null
 }
 
 /** Stable identity slug for versioning: the same (kind, title, language) in a

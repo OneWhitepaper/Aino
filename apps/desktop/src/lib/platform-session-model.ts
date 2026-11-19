@@ -45,6 +45,10 @@ export interface CanonicalModelRow {
   parent_session_id?: unknown
   archived?: unknown
   model_config?: unknown
+  source?: string | null
+  execution_mode?: string
+  /** Fresh backend projection verified against the canonical creation receipt. */
+  handoff?: { source_session_id: string } | null
 }
 
 /** A follow-profile marker carries no explicit session model/provider pin. */
@@ -135,6 +139,16 @@ export function unboundManagedSessionRow(
 
       if (key === 'provider') {
         return value === 'aino'
+      }
+
+      if (key === '_branched_from') {
+        return (
+          row.source === 'gui' &&
+          ['work', 'code'].includes(row.execution_mode ?? '') &&
+          typeof value === 'string' &&
+          Boolean(value) &&
+          value === row.handoff?.source_session_id
+        )
       }
 
       return (key === 'follow_profile_config' || key === 'yolo_mode') && typeof value === 'boolean'

@@ -1,8 +1,11 @@
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
+import { executionMode } from '@/lib/execution-mode'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
+import { rememberSessionExecutionMode } from '@/store/execution-mode'
 import { requestDesktopOnboardingForCredentialWarning } from '@/store/onboarding'
 import { pendingSnapshotFence, reconcilePendingSubmissions } from '@/store/pending-submissions'
 import {
+  $selectedStoredSessionId,
   commitWorkspaceCwdForSelectedSession,
   releaseWorkspaceCwdOwner,
   setCurrentBranch,
@@ -33,6 +36,7 @@ export type SessionRuntimeStatePatch = Partial<
     ClientSessionState,
     | 'branch'
     | 'cwd'
+    | 'executionMode'
     | 'fast'
     | 'model'
     | 'personality'
@@ -67,6 +71,10 @@ export interface ApplyRuntimeInfoOptions {
 /** Mirror a session's runtime state into the composer atoms the MAIN pane
  *  renders from. Foreground sessions only — see ApplyRuntimeInfoOptions. */
 export function publishRuntimeToComposer(state: SessionRuntimeStatePatch): void {
+  if (state.executionMode !== undefined) {
+    rememberSessionExecutionMode($selectedStoredSessionId.get(), state.executionMode)
+  }
+
   if (state.platformModel) {
     setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')
   }
@@ -146,7 +154,7 @@ export function applyRuntimeInfo(
 
   reportInstallMethodWarning(info.install_warning)
 
-  const sessionState: SessionRuntimeStatePatch = {}
+  const sessionState: SessionRuntimeStatePatch = { executionMode: executionMode(info.execution_mode) }
 
   if (typeof info.model === 'string') {
     sessionState.model = info.model
@@ -225,10 +233,11 @@ export function applyRuntimeInfo(
 }
 
 export function applyStoredSessionPreviewRuntimeInfo(
-  stored: { cwd?: null | string; model?: null | string } | undefined,
+  stored: { cwd?: null | string; model?: null | string; execution_mode?: 'work' | 'code' } | undefined,
   storedSessionId: null | string,
   options: { sameSession?: boolean } = {}
 ) {
+  rememberSessionExecutionMode(storedSessionId, stored?.execution_mode)
   // Compression count is live runtime state, not part of a durable session row.
   // Drop the previous session's value immediately while the selected runtime
   // resumes; the authoritative usage snapshot will repopulate it when present.

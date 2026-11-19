@@ -177,6 +177,7 @@ def test_budget_without_started_clock_is_inert(monkeypatch, tmp_path):
         ("", None, 60.0),
         ("providers:\n  openai:\n    stale_timeout_seconds: 1200\n", None, 1200.0),
         ("", "900", 900.0),
+        ("", "45", 45.0),
     ],
 )
 def test_cloud_stream_budget_preserves_explicit_deadlines(

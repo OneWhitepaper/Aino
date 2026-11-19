@@ -15,6 +15,7 @@ import { platformModelCatalog } from '@/store/platform-models'
 
 import { hasPlatformModelIdentity, type PlatformModel, type PlatformModelPurpose } from '../../shared/platform-contract'
 
+import { CodeModelStatus } from './code-model-status'
 import { PlatformModelDetails } from './platform-model-details'
 import { PlatformModelRate } from './platform-model-rate'
 import { Button } from './ui/button'
@@ -76,6 +77,7 @@ interface PlatformModelMenuRowsProps extends Pick<
 > {
   models: PlatformModel[]
   onSelect: (model: PlatformModel) => Promise<void>
+  showCodeStatus: boolean
   status: ReactNode
 }
 
@@ -87,6 +89,7 @@ function PlatformModelMenuRows({
   onPreview,
   onInspect,
   onSelect: select,
+  showCodeStatus,
   status
 }: PlatformModelMenuRowsProps) {
   const { t } = useI18n()
@@ -118,6 +121,7 @@ function PlatformModelMenuRows({
             >
               <Codicon name="brain" size="1rem" />
               <span className="aino-model-menu-name">{model.display_name}</span>
+              {showCodeStatus && <CodeModelStatus model={model.id} platformModel={model} provider="aino" />}
               <PlatformModelRate model={model} />
               {model.state !== 'available' && (
                 <span className="text-xs text-muted-foreground">{copy[model.state]}</span>
@@ -239,6 +243,7 @@ export function PlatformModelList({
   const { t } = useI18n()
   const copy = t.platformModels
   const catalog = usePlatformModels(purpose)
+  const showCodeStatus = purpose === 'chat'
   const [search, setSearch] = useState('')
   const [highlighted, setHighlighted] = useState(selectedId || '')
   const [pending, setPending] = useState(false)
@@ -312,6 +317,7 @@ export function PlatformModelList({
           onPreview={onPreview}
           onSelect={select}
           selectedId={selectedId}
+          showCodeStatus={showCodeStatus}
           status={status}
         />
       ) : (
@@ -351,6 +357,7 @@ export function PlatformModelList({
                               : copy[model.state]}
                         </span>
                       </span>
+                      {showCodeStatus && <CodeModelStatus model={model.id} platformModel={model} provider="aino" />}
                       <PlatformModelRate model={model} />
                       {selectedId === model.id && <Check className="size-3.5 shrink-0" />}
                     </CommandItem>

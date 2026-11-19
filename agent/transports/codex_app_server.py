@@ -91,6 +91,7 @@ class CodexAppServerClient:
     def __init__(
         self, codex_bin: str = "codex", codex_home: Optional[str] = None,
         extra_args: Optional[list[str]] = None, env: Optional[dict[str, str]] = None,
+        inherit_credentials: bool = True,
     ) -> None:
         self._codex_bin = codex_bin
         # codex needs LLM provider creds but must not receive Tier-1 Hermes secrets (gateway/GitHub/infra tokens).
@@ -102,7 +103,7 @@ class CodexAppServerClient:
         # GATEWAY_RELAY_* auth — none of which a coding subprocess has any use for. Route through the
         # centralized helper so Tier-1 + dynamic-internal secrets are always stripped while provider creds
         # still flow, matching the ACP client (#29157 sibling spawn-site gap).
-        spawn_env = hermes_subprocess_env(inherit_credentials=True)
+        spawn_env = hermes_subprocess_env(inherit_credentials=inherit_credentials)
         if env:
             spawn_env.update(env)
         if codex_home:

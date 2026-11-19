@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .base import JsonValue, Params, Result
 from .common import McpServerStatus, OpenModel, PlanGauge, ProfileParams, ProjectRef, Usage
@@ -156,12 +156,44 @@ class CanonicalSessionInfoParams(Params):
     session_id: str
 
 
+class WorkCodeHandoff(Params):
+    """User-reviewed context for a new, independently executed conversation. Paths are references,
+    never instructions to read files at creation; the first prompt still needs ordinary admission."""
+
+    source_session_id: str = Field(min_length=1, max_length=256)
+    summary: str = Field(min_length=1, max_length=32000)
+    files: list[str] = Field(default_factory=list, max_length=32)
+
+    @field_validator('source_session_id', 'summary')
+    @classmethod
+    def nonempty_text(cls, value):
+        if not value.strip() or '\x00' in value:
+            raise ValueError('must contain text without null bytes')
+        return value
+
+    @field_validator('files')
+    @classmethod
+    def file_references(cls, values):
+        if any(not value.strip() or len(value) > 4096 or any(c in value for c in '\x00\r\n') for value in values):
+            raise ValueError('file paths must be non-empty single lines of at most 4096 characters')
+        return values
+
+
+class WorkCodeSessionLink(Result):
+    session_id: str
+    title: str
+    execution_mode: Literal['work', 'code']
+    relation: Literal['source', 'child']
+
+
 class SessionInventoryFields(Result):
     """Main's banner / status-bar inventory (``gateway/session_local_inventory.py::session_inventory``):
     the shapes ``tui_gateway/server.py::_session_info`` sent, computed for the session's frozen policy.
     ``enabled_toolsets`` / ``tool_availability`` / ``context_length`` feed the classic CLI banner."""
 
     provider: str | None = None
+    handoff: WorkCodeHandoff | None = None
+    linked_sessions: list[WorkCodeSessionLink] | None = None
     tools: dict[str, list[str]] | None = None
     skills: dict[str, list[str]] | None = None
     mcp_servers: list[McpServerStatus] | None = None
@@ -193,6 +225,7 @@ class CanonicalSessionInfo(SessionInventoryFields, OpenModel):
     """``gateway/session_local_inventory.py::snapshot_info``: ``local_session_info`` + the inventory."""
 
     source: str
+    execution_mode: Literal['work', 'code'] = 'work'
     model: str | None = None
     lazy: bool
     profile_id: str

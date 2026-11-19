@@ -522,7 +522,7 @@ _TOOL_LIFECYCLE_UI_TOOLS = frozenset({
     "clarify", "manage_connections", "setup_mcp",
     "image_generate", "manage_catalog", "delegate_task", "setup_beat", "set_theme",
     # File edits are the turn's deliverable — the diff card the user reviews.
-    "edit_file", "patch", "write_file",
+    "edit_file", "patch", "write_file", "apply_patch",
 })
 
 

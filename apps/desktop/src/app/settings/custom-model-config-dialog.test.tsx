@@ -64,6 +64,13 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn()
   getCustomEndpoints.mockResolvedValue(emptyResponse)
   saveCustomEndpoint.mockResolvedValue({ ...emptyResponse, ok: true, id: 'team' })
+  validateCustomEndpoint.mockResolvedValue({
+    ok: true,
+    reachable: true,
+    message: '',
+    models: [],
+    detected_api_mode: 'codex_responses'
+  })
   deleteCustomEndpoint.mockResolvedValue({ ...emptyResponse, ok: true })
   confirm.mockResolvedValue(true)
 })
@@ -150,7 +157,15 @@ describe('CustomModelConfigDialog', () => {
   })
 
   it('tests and saves the explicit owner without changing the default model', async () => {
-    validateCustomEndpoint.mockResolvedValue({ ok: true, reachable: true, models: ['team-model'], message: '' })
+    validateCustomEndpoint
+      .mockResolvedValueOnce({ ok: true, reachable: true, models: ['team-model'], message: '' })
+      .mockResolvedValueOnce({
+        ok: true,
+        reachable: true,
+        models: ['team-model'],
+        message: '',
+        detected_api_mode: 'codex_responses'
+      })
     const onOpenChange = vi.fn()
     const onConfigSaved = vi.fn()
     renderDialog({ onConfigSaved, onOpenChange })
@@ -165,7 +180,7 @@ describe('CustomModelConfigDialog', () => {
     await waitFor(() =>
       expect(screen.getByRole<HTMLInputElement>('combobox', { name: '模型名称' }).value).toBe('team-model')
     )
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '保存' })))
     await waitFor(() => expect(onConfigSaved).toHaveBeenCalledOnce())
     expect(validateCustomEndpoint).toHaveBeenCalledWith(expect.objectContaining({ api_key: 'fixture-secret' }), scope)
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
@@ -177,7 +192,7 @@ describe('CustomModelConfigDialog', () => {
 
   it('discards a validation result after the endpoint credentials change', async () => {
     let finish!: (response: CustomEndpointValidationResponse) => void
-    validateCustomEndpoint.mockReturnValue(new Promise(resolve => (finish = resolve)))
+    validateCustomEndpoint.mockReturnValueOnce(new Promise(resolve => (finish = resolve)))
     renderDialog()
     await enterConnection()
     fireEvent.click(screen.getByRole('button', { name: '测试连接' }))
@@ -197,7 +212,7 @@ describe('CustomModelConfigDialog', () => {
     expect(screen.getByRole<HTMLInputElement>('combobox', { name: '模型名称' }).value).toBe('')
     expect(notify).not.toHaveBeenCalled()
     fireEvent.change(screen.getByRole('combobox', { name: '模型名称' }), { target: { value: 'new-model' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '保存' })))
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'new-model', model_details: undefined, models: undefined }),
       scope
@@ -211,7 +226,7 @@ describe('CustomModelConfigDialog', () => {
     const view = renderDialog({ onConfigSaved })
     await enterConnection()
     fireEvent.change(screen.getByRole('combobox', { name: '模型名称' }), { target: { value: 'team-model' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '保存' })))
     view.unmount()
     await act(async () => finish({ ...emptyResponse, ok: true }))
     expect(onConfigSaved).not.toHaveBeenCalled()
@@ -247,7 +262,7 @@ describe('CustomModelConfigDialog', () => {
     expect(screen.getByLabelText<HTMLInputElement>('API 密钥').value).toBe('')
     expect(screen.getByPlaceholderText('留空以保留当前密钥')).toBeTruthy()
     expect(screen.getByText('高级设置').closest('details')?.open).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '保存' })))
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'saved', api_key: undefined, make_default: false }),
       scope
@@ -288,7 +303,7 @@ describe('CustomModelConfigDialog', () => {
   })
 
   it('invalidates discovered aliases when the connection key changes', async () => {
-    validateCustomEndpoint.mockResolvedValue({
+    validateCustomEndpoint.mockResolvedValueOnce({
       ok: true,
       reachable: true,
       models: ['old-alias'],
@@ -303,7 +318,7 @@ describe('CustomModelConfigDialog', () => {
     )
     fireEvent.change(screen.getByLabelText('API 密钥'), { target: { value: 'new-fixture-key' } })
     fireEvent.change(screen.getByRole('combobox', { name: '模型名称' }), { target: { value: 'new-model' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '保存' })))
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({ api_key: 'new-fixture-key', model_details: undefined, models: undefined }),
       scope

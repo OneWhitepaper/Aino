@@ -182,6 +182,7 @@ import {
   reconcileAuthoritativeMessages,
   resumedStreamTarget
 } from './resume-reconcile'
+import { restoreResumedRuntimeInfo } from './resume-runtime-info'
 import { applyRuntimeInfo, applyStoredSessionPreviewRuntimeInfo } from './runtime-info'
 import { backgroundRuntimeOptions, runtimeOwner, runtimeOwnerProfile } from './runtime-owner'
 import { archiveStoredSession, restoreArchivedSession, type SessionArchiveOptions } from './session-archive'
@@ -690,13 +691,8 @@ export function useSessionActions({
   /** Create a fresh session and open it as a tile — leaves the primary chat alone.
    *  Used by the New session row's "Open in split" menu and the tab-strip "+".
    *
-   *  `listed` (default true) controls sidebar visibility. A brand-new backend
-   *  session is IN-MEMORY only until its first turn persists a row, so
-   *  `listSessions(min_messages=1)` already hides an unused one — the sidebar
-   *  pollution comes solely from the optimistic upsert here. The tab-strip "+"
-   *  passes `listed: false` so an unused new tab never clutters the session
-   *  list (Cursor-style draft tab); it surfaces on the next refresh once the
-   *  first message persists a turn. "Open in split" keeps the listed behavior. */
+   *  Tabs and splits stay out of history by default until the first send.
+   *  The owner stub still routes draft requests to the backend that created it. */
   const openNewSessionTile = useCallback(
     async (
       dir: TileDock = 'right',
@@ -710,7 +706,7 @@ export function useSessionActions({
         workspaceScope?: SessionTileWorkspaceScope
       }
     ) => {
-      const listed = options?.listed ?? true
+      const listed = options?.listed ?? false
 
       try {
         // A project supplies the working folder and current service; ordinary
@@ -1293,7 +1289,7 @@ export function useSessionActions({
                 ? Boolean(settlePendingClarifyToolCall(cachedViewState.messages, {}, false).streamId)
                 : false
 
-              const runtimeInfo = applyRuntimeInfo(activated.info, { owner: sessionOwner })
+              const runtimeInfo = restoreResumedRuntimeInfo(storedSessionId, activated, sessionOwner)
 
               // `omit_messages` means the response carries NO transcript, not
               // an empty one — the cache is the base and the live projection is
@@ -1999,7 +1995,7 @@ export function useSessionActions({
         const clarifyAuthoritativelyAbsent =
           pendingClarifyState.authoritativeAbsent && !$clarifyRequests.get()[resumed.session_id]
 
-        const runtimeInfo = applyRuntimeInfo(resumed.info, { owner: sessionOwner })
+        const runtimeInfo = restoreResumedRuntimeInfo(storedSessionId, resumed, sessionOwner)
 
         patchSessionWorkspace(storedSessionId, runtimeInfo?.cwd)
 

@@ -165,6 +165,7 @@ export interface PendingReplyBilling {
 }
 
 export interface ClientSessionState {
+  executionMode?: 'work' | 'code'
   pendingReplyBilling?: Record<string, PendingReplyBilling>
   storedSessionId: string | null
   /** Locally created empty runtime; cleared at its first send, never inferred from loading history. */

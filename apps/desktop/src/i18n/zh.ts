@@ -5,6 +5,7 @@ import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introZh } from './intro-zh'
 import { notificationCenterCopy } from './notification-center'
@@ -327,6 +328,7 @@ export const zhOverrides = {
   notificationCenter: notificationCenterCopy['zh'],
   appearancePage: appearancePage.zh,
   toolPanel: toolPanel['zh'],
+  executionMode: executionModeCopy.zh,
   workspacePage: workspacePage.zh,
   accountPage: accountPage['zh'],
   connectorOffer: {
@@ -3707,10 +3709,11 @@ export const zhOverrides = {
   },
 
   artifactCard: {
-    kind: { code: '代码', html: '交互页面', svg: '图形' },
+    kind: { code: '代码', html: '网页预览', svg: '图形' },
     generating: lines => `生成中… ${lines} 行`,
     versionBadge: count => `${count} 个版本`,
-    open: '打开'
+    open: '打开',
+    openWith: '打开方式'
   },
 
   artifactPreview: {
@@ -3720,8 +3723,8 @@ export const zhOverrides = {
     latest: '最新',
     copyContent: '复制内容',
     download: '下载',
-    openInBrowser: '在浏览器中打开',
-    openInBrowserFailed: '无法在浏览器中打开',
+    openExternally: '在外部打开',
+    openExternallyFailed: '无法在外部打开',
     missingTitle: '产物不可用',
     missingBody: '此产物已不在本地注册表中。'
   },
@@ -5520,8 +5523,11 @@ export const zhOverrides = {
       errorOpenLogsFailed: '无法打开日志文件夹',
       errorOpenDesktopLogs: '打开桌面端日志',
       errorSendDiagnostics: '发送诊断信息',
-      filesChanged: count => `${count} 个文件已更改`,
-      reviewChanges: '查看',
+      filesChanged: count => `已编辑 ${count} 个文件`,
+      reviewChanges: '查看变更',
+      recordedFileChanges: '本轮文件修改记录；同一文件的多次编辑按顺序展示。',
+      recordedFileEdit: index => `第 ${index} 次编辑`,
+      reviewRepositoryChanges: '查看 Git 变更',
       readAloudFailed: '朗读失败',
       preparingAudio: '正在准备音频...',
       stopReading: '停止朗读',

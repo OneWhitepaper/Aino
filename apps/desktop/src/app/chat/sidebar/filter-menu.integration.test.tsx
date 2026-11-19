@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { en } from '@/i18n/en'
+import { $executionModeFilter, setExecutionModeFilter } from '@/store/execution-mode'
 import { $interfaceMode } from '@/store/interface-mode'
 import { $sidebarListGroupIds, $sidebarWorkspaceNodeOpen, setSidebarGrouping } from '@/store/layout'
 import type * as Notifications from '@/store/notifications'
@@ -108,4 +109,14 @@ it('rejects remote archive import through the shared SDK before opening a native
   expect(importFlow).not.toHaveBeenCalled()
   expect(screen.getByLabelText('Current route').textContent).toBe('/')
   expect($activeGatewayProfile.get()).toBe('research')
+})
+
+it('switches the session mode filter without changing the selected engine', async () => {
+  setExecutionModeFilter('current')
+  renderMenu()
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Filters' }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'All modes' }))
+  expect($executionModeFilter.get()).toBe('all')
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Current mode' }))
+  expect($executionModeFilter.get()).toBe('current')
 })

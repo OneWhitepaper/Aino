@@ -103,7 +103,6 @@ import { CommandPalette } from '../command-palette'
 import { triggerAndRefreshCronJobs } from '../cron/cron-actions'
 import { useGatewayBoot } from '../gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from '../gateway/hooks/use-gateway-request'
-import { useHermesConfigRecord } from '../hooks/use-config-record'
 import { useKeybinds } from '../hooks/use-keybinds'
 import { useHudHandoff } from '../hud/handoff'
 import { ModelPickerOverlay } from '../model-picker-overlay'
@@ -164,7 +163,8 @@ import {
   useFreshSessionRequest,
   useGatewayScopeRefresh,
   useOpenKeybindsListener,
-  usePublishRestartPreviewServer
+  usePublishRestartPreviewServer,
+  useResumeLastSessionPreference
 } from './wiring-effects'
 import { WiringTitlebar } from './wiring-titlebar'
 
@@ -548,7 +548,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     updateSessionState
   })
 
-  useFreshSessionRequest(startFreshSessionDraft)
+  const resumeLastSession = useResumeLastSessionPreference()
+
+  useFreshSessionRequest(startFreshSessionDraft, resumeLastSession)
   useGatewayScopeRefresh(activeConnectionId, activeGatewayProfile, refreshCurrentModel, refreshHermesConfig)
 
   // New session anchored to a workspace. Seeds cwd + branch from the clicked
@@ -650,10 +652,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     void openNewSessionTile(placement.dir, {
       anchor: placement.anchor,
       before: placement.before,
-      cwd: path,
-      // Same draft-tab contract as onNewSessionSplit: a center/strip drop is
-      // an unlisted draft tab until its first turn; an edge split lists.
-      listed: placement.dir === 'center' ? false : undefined
+      cwd: path
     })
   }, [newProjectSessionRequest, openNewSessionTile])
 
@@ -780,11 +779,6 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
   // Navigation restoration must settle before `/` can initialize a fresh draft.
   const previewTarget = useStore($previewTarget)
-  const configRecord = useHermesConfigRecord()
-
-  const resumeLastSession = configRecord.isPending
-    ? undefined
-    : (configRecord.data?.display as { resume_last_session?: unknown } | undefined)?.resume_last_session !== false
 
   const initialNavigationReady = useDesktopIntegrations({
     activeProfile: normalizeProfileKey(activeGatewayProfile),
@@ -1082,15 +1076,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     onNavigate: selectSidebarItem,
     onNewSessionInWorkspace: (path, options) =>
       startSessionInWorkspace(path, { openTab: options?.openTab ?? true, owner: options?.owner }),
-    onNewSessionSplit: (dir, opts) =>
-      void openNewSessionTile(dir, {
-        ...opts,
-        // A CENTER drop stacks a fresh TAB: keep the existing draft-tab
-        // contract and leave it out of the sidebar until its first turn
-        // persists (same as the tab-strip "+" and the occupied-project "+").
-        // An EDGE drop SPLITS a visible pane — list it like every other split.
-        listed: dir === 'center' ? false : undefined
-      }),
+    onNewSessionSplit: (dir, opts) => void openNewSessionTile(dir, opts),
     onPasteClipboardImage: opts => composer.pasteClipboardImage(opts),
     onPickFiles: () => void composer.pickContextPaths('file'),
     onPickFolders: () => void composer.pickContextPaths('folder'),

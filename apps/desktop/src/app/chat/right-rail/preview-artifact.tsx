@@ -6,13 +6,11 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { PreviewDocumentFrame } from '@/components/ui/preview-document-frame'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { localizedPreviewError } from '@/i18n/preview-errors'
 import { artifactDownloadName, type ArtifactKind } from '@/lib/artifact-detect'
+import { canOpenHtmlArtifactExternally, composeArtifactHtml, openHtmlArtifactExternally } from '@/lib/artifact-html'
 import { downloadTextFile } from '@/lib/download-text'
 import { ChevronLeft, ChevronRight, Download, ExternalLink } from '@/lib/icons'
-import { pathToFileUrl } from '@/lib/local-preview'
 import { $artifactRegistry, $artifactVersionSelection, findArtifact, selectArtifactVersion } from '@/store/artifacts'
-import { notifyError } from '@/store/notifications'
 import type { PreviewTarget } from '@/store/preview'
 
 import { PreviewEmptyState, PreviewModeSwitcher, type PreviewViewMode, SourceView } from './preview-file'
@@ -28,51 +26,6 @@ const SOURCE_LANGUAGE_BY_KIND: Record<ArtifactKind, string | undefined> = {
 
 const HEADER_BUTTON_CLASS =
   'flex items-center gap-1 rounded-md px-1.5 text-[length:var(--aino-text-caption)] font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
-
-/** Wrap an HTML fragment in a minimal document shell; full documents pass
- *  through untouched. Keeps generated fragments (no <html>/<body>) rendering
- *  with sane defaults instead of quirks-mode soup. */
-function composeArtifactHtml(content: string): string {
-  if (/<html[\s>]|<!doctype\s+html/i.test(content)) {
-    return content
-  }
-
-  return [
-    '<!doctype html>',
-    '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<style>body{margin:0;font-family:system-ui,sans-serif}</style></head><body>',
-    content,
-    '</body></html>'
-  ].join('\n')
-}
-
-/** Write the composed document to a real temp file through the existing
- *  buffer-save IPC, then hand it to the OS browser. A blob/data URL can't
- *  cross into the OS default browser, so a file on disk is the honest path. */
-async function openHtmlInBrowser(content: string): Promise<void> {
-  const bridge = window.hermesDesktop
-
-  if (!bridge?.saveImageBuffer || !bridge.openExternal) {
-    throw new Error('Desktop bridge unavailable')
-  }
-
-  const bytes = new TextEncoder().encode(composeArtifactHtml(content))
-  const path = await bridge.saveImageBuffer(bytes, '.html')
-
-  if (!path) {
-    throw new Error('Could not write artifact file')
-  }
-
-  const fileUrl = pathToFileUrl(path)
-
-  if (bridge.openPreviewInBrowser) {
-    await bridge.openPreviewInBrowser(fileUrl)
-
-    return
-  }
-
-  await bridge.openExternal(fileUrl)
-}
 
 /**
  * Live view for renderable artifact content.
@@ -243,16 +196,12 @@ export function ArtifactPreview({ onClose, target }: { onClose?: () => void; tar
                 <Download className="size-3" />
               </button>
             </Tip>
-            {record.kind === 'html' && window.hermesDesktop && (
-              <Tip label={copy.openInBrowser}>
+            {record.kind === 'html' && canOpenHtmlArtifactExternally() && (
+              <Tip label={copy.openExternally}>
                 <button
-                  aria-label={copy.openInBrowser}
+                  aria-label={copy.openExternally}
                   className={HEADER_BUTTON_CLASS}
-                  onClick={() =>
-                    void openHtmlInBrowser(version.content).catch(error =>
-                      notifyError(new Error(localizedPreviewError(t, error)), copy.openInBrowserFailed)
-                    )
-                  }
+                  onClick={() => void openHtmlArtifactExternally(version.content, t)}
                   type="button"
                 >
                   <ExternalLink className="size-3" />

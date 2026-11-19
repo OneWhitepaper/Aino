@@ -29,6 +29,7 @@ afterEach(cleanup)
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     t: {
+      executionMode: { work: 'Aino Work', code: 'Aino Code', workLabel: 'Work', codeLabel: 'Code' },
       ui: { accessibility: { openPullRequest: (number: number) => `Open pull request #${number}` } },
       sidebar: {
         messageCount: (count: number) => `${count} messages`,

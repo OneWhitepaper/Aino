@@ -1,3 +1,4 @@
+import { executionMode } from '@/lib/execution-mode'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { $currentCwd } from '@/store/session'
 import type { SessionProfileRoute } from '@/store/session-request-router'
@@ -32,6 +33,7 @@ export function buildOptimisticSession(
     // the session was just started in when the create response omits it.
     cwd: created.info?.cwd ?? ($currentCwd.get().trim() || null),
     ended_at: null,
+    execution_mode: executionMode(created.info?.execution_mode),
     id,
     input_tokens: 0,
     is_active: true,

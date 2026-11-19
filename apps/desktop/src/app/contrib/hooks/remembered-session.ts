@@ -1,3 +1,11 @@
+import { appViewForPath, isRouteBlockingSurface, NEW_CHAT_ROUTE, routeSessionId } from '@/app/routes'
+import {
+  forgetSessionOwnerHintsForSession,
+  sessionBelongsToProfile,
+  sessionMatchesStoredId,
+  sessionOwnerRouteFromRow,
+  setSessionOwnerHint
+} from '@/store/session'
 import type { SessionInfo } from '@/types/hermes'
 
 /**
@@ -21,4 +29,42 @@ export async function resolveRememberedSessionId(
   const session = await getSession(id)
 
   return session.source === 'subagent' ? (session.parent_session_id ?? null) : session.id
+}
+
+/** Apply the click path's owner hygiene before pathname-driven cold restore.
+ * Untagged legacy remote rows must not inherit a stale local connection hint. */
+export function repairOwnerHintsForRestore(
+  id: string,
+  row: Pick<SessionInfo, 'connection_id' | 'profile'> | undefined
+): void {
+  if (!row) {
+    return
+  }
+
+  const ownerRoute = sessionOwnerRouteFromRow(row)
+
+  if (ownerRoute) {
+    setSessionOwnerHint(id, ownerRoute)
+  } else {
+    forgetSessionOwnerHintsForSession(id)
+  }
+}
+
+/** Only a real page or an owner-matching, user-facing session is a boot target. */
+export function canRestoreRememberedRoute(
+  route: string | null,
+  sessions: readonly Pick<SessionInfo, 'id' | '_lineage_root_id' | 'profile' | 'source'>[],
+  profile: string
+): route is string {
+  if (!route || route === NEW_CHAT_ROUTE || isRouteBlockingSurface(appViewForPath(route))) {
+    return false
+  }
+
+  const id = routeSessionId(route)
+
+  return (
+    !id ||
+    (sessions.find(row => sessionMatchesStoredId(row, id))?.source !== 'subagent' &&
+      sessionBelongsToProfile(sessions, id, profile))
+  )
 }

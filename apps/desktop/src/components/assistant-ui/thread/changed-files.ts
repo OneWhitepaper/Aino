@@ -7,12 +7,17 @@ import {
   fileEditPath,
   inlineDiffFromResult,
   isFileEditTool,
+  nativeFileDiffs,
   parseMaybeObject
 } from '@/components/assistant-ui/tool/fallback-model'
+import { displayPath, normalizeDisplayPath } from '@/lib/display-path'
+import { comparisonPath } from '@/lib/path-compare'
 import { type ToolResultMetadata, toolResultRecord } from '@/lib/tool-result-metadata'
 
 export interface ChangedFile {
   added: number
+  /** Recorded edits in execution order; these are not a net working-tree diff. */
+  diffs: string[]
   /** Basename, for the row label. */
   name: string
   /** Path exactly as the tool reported it (absolute or repo-relative). */
@@ -26,6 +31,24 @@ interface ChangedFilePart {
   result?: unknown
   toolName?: unknown
   type?: unknown
+}
+
+/** Keep repo paths compact without changing the target passed to review. */
+export function changedFileDisplayPath(path: string, cwd: string): string {
+  const normalized = normalizeDisplayPath(path)
+  const root = normalizeDisplayPath(cwd)
+  const prefix = root.endsWith('/') ? root : `${root}/`
+
+  if (root && comparisonPath(normalized).startsWith(comparisonPath(prefix))) {
+    return normalized.slice(prefix.length)
+  }
+
+  const displayed = displayPath(normalized)
+  const segments = displayed.split('/')
+
+  // Cache and external paths can contain long installation/account prefixes.
+  // Their immediate parents identify the file; the tooltip keeps the full path.
+  return segments.length > 4 ? `…/${segments.slice(-3).join('/')}` : displayed
 }
 
 /**
@@ -50,20 +73,30 @@ export function deriveChangedFiles(parts: readonly unknown[]): ChangedFile[] {
       continue
     }
 
-    const path = fileEditPath(parseMaybeObject(part.args), result)
+    const native = nativeFileDiffs(result)
+    const files = native.length ? native : [{ path: fileEditPath(parseMaybeObject(part.args), result), diff }]
 
-    if (!path) {
-      continue
-    }
+    for (const { path, diff: fileDiff } of files) {
+      if (!path) {
+        continue
+      }
 
-    const stats = countDiffLineStats(diff)
-    const existing = byPath.get(path)
+      const stats = countDiffLineStats(fileDiff)
+      const existing = byPath.get(path)
 
-    if (existing) {
-      existing.added += stats.added
-      existing.removed += stats.removed
-    } else {
-      byPath.set(path, { added: stats.added, name: fileEditBasename(path), path, removed: stats.removed })
+      if (existing) {
+        existing.added += stats.added
+        existing.removed += stats.removed
+        existing.diffs.push(fileDiff)
+      } else {
+        byPath.set(path, {
+          added: stats.added,
+          diffs: [fileDiff],
+          name: fileEditBasename(path),
+          path,
+          removed: stats.removed
+        })
+      }
     }
   }
 

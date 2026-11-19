@@ -5394,11 +5394,11 @@ describe('openNewSessionTile unlisted owner (#102792)', () => {
     vi.restoreAllMocks()
   })
 
-  it('records the ambient-profile owner for an unlisted tile created on the null (legacy ambient) route', async () => {
+  it.each(['center', 'right'] as const)('keeps a new %s draft unlisted with its owner', async dir => {
     const handle = await readyHandle(createRequestGateway())
 
     await act(async () => {
-      await handle.openNewSessionTile('center', { listed: false, route: null })
+      await handle.openNewSessionTile(dir, { route: null })
     })
 
     // The draft stays out of the visible sidebar list ...

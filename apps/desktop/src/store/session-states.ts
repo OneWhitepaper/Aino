@@ -33,7 +33,6 @@ import {
 import { workspaceShownPaneIds } from '@/components/pane-shell/tree/workspace-presentation'
 import { resolveRememberedActivePane, workspaceScopeKey } from '@/components/pane-shell/workspace-scope'
 import type { WorkspaceMode } from '@/contrib/types'
-import { dropBrowserProfilePrefs, migrateBrowserProfilePrefs } from '@/lib/browser-profile-prefs'
 import { finalizeInterruptedMessages, sealOpenToolParts } from '@/lib/chat-messages'
 import { tileFocusStampOnFocusChange } from '@/lib/session-timer-since'
 import { stableArray } from '@/lib/stable-array'
@@ -41,15 +40,12 @@ import { readJson, writeJson } from '@/lib/storage'
 import type { SessionInfo } from '@/types/hermes'
 
 import { $botChatScopes, $botChatSessionIds, inheritBotChatScope, rememberBotChatScope } from './bot-chat-scope'
-import { dropQueuedLaunchPicksForProfile, migrateQueuedLaunchPicksForProfile } from './composer-queued-pick'
 import { dropStatusDrawersForProfile, migrateStatusDrawersForProfile } from './composer-status-drawer'
 import { registryConnectionKind } from './connection-registry-state'
 import { recordDislike } from './desktop-metrics'
 import { dialedGatewayModeFor } from './gateway'
 import {
   adoptPendingRuntimeTabs,
-  dropPreviewTabsForProfile,
-  migratePreviewTabsForProfile,
   rekeyPreviewTabsSession,
   setPreviewScope
 } from './preview'
@@ -57,6 +53,7 @@ import { forgetPendingRuntimeTabs } from './preview-ownership'
 import { dropPreviewArtifactsForProfile, migratePreviewArtifactsForProfile } from './preview-status'
 import { $activeGatewayProfile, normalizeProfileKey } from './profile'
 import { renameLocalOwnerRoute } from './profile-owner-rename'
+import { dropProfilePresentation, migrateProfilePresentation } from './profile-persistence'
 import { $projectTree } from './project-tree'
 import { clearAllProviderWaits, clearSessionProviderWait } from './provider-wait'
 import {
@@ -2755,9 +2752,7 @@ export function dropTilesForProfile(
   // The rail is a profile-keyed family too (a later same-named profile must not inherit the tabs).
   // F4: the cookie jar lives in LOCAL userData — clear it only for a LOCAL delete, never a remote one.
   const previewConnection = route ? routeConnection || LOCAL_CONNECTION_ID : ambientConnection
-  dropPreviewTabsForProfile(name, previewConnection === LOCAL_CONNECTION_ID, previewConnection)
-  dropBrowserProfilePrefs(name, route?.connectionId?.trim() || undefined)
-  dropQueuedLaunchPicksForProfile(name, route ? (route.connectionId ?? '') : undefined)
+  dropProfilePresentation(name, previewConnection, route)
 }
 
 /**
@@ -2809,9 +2804,7 @@ export function migrateTilesForProfile(oldProfile: string, newProfile: string): 
   migrateStatusDrawersForProfile(from, to)
   // Sibling family: the rail's profile-keyed buckets move with the rename, or
   // the renamed profile opens with an empty rail and the old name keeps them.
-  migratePreviewTabsForProfile(from, to, LOCAL_CONNECTION_ID)
-  migrateBrowserProfilePrefs(from, to)
-  migrateQueuedLaunchPicksForProfile(from, to)
+  migrateProfilePresentation(from, to)
 }
 
 /** ⌘⇧T — reopen the most recently closed tab where it was, then focus it.

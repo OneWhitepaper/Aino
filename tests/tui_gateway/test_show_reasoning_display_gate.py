@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from tui_gateway import server
+from agent.codex_runtime import make_codex_app_server_event_bridge
 
 
 def _capture(monkeypatch):
@@ -294,6 +295,21 @@ def test_tool_progress_off_keeps_file_edit_lifecycle_pair(monkeypatch):
     for tool_id in cases:
         lifecycle = [event[0] for event in events if event[2].get("tool_id") == tool_id]
         assert lifecycle == ["tool.start", "tool.complete"], tool_id
+
+
+def test_native_patch_remains_reviewable_when_optional_tool_activity_is_off(monkeypatch):
+    events = _capture(monkeypatch)
+    _session(monkeypatch, "native-edit", show_reasoning=False, tool_progress="off")
+    bridge = make_codex_app_server_event_bridge(SimpleNamespace(
+        tool_start_callback=lambda *args: server._on_tool_start("native-edit", *args),
+        tool_complete_callback=lambda *args: server._on_tool_complete("native-edit", *args)))
+    item = {"id": "patch", "type": "fileChange", "status": "completed", "changes": [
+        {"path": "src/a.py", "kind": {"type": "add"}, "diff": "new line\n"}]}
+    bridge({"method": "item/started", "params": {"item": {**item, "status": "inProgress"}}})
+    bridge({"method": "item/completed", "params": {"item": item}})
+    lifecycle = [event for event in events if event[0] in {"tool.start", "tool.complete"}]
+    assert [event[0] for event in lifecycle] == ["tool.start", "tool.complete"]
+    assert "+new line" in lifecycle[-1][2]["result"]["changes"][0]["diff"]
 
 
 def test_gateway_lifecycle_set_covers_desktop_card_tools():

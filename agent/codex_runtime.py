@@ -17,12 +17,15 @@ from typing import Any, Callable, Dict, List
 
 from agent.display import redact_tool_args_for_display
 from agent.redact import redact_sensitive_text
+from agent.tool_progress_relay import bound_tool_progress, current_tool_progress
+from agent.transports.codex_event_projector import CodexEventProjector
 from agent.stream_single_writer import claim_stream_writer, stream_writer_is_current
 from agent.transports.hermes_tools_mcp_server import HERMES_TOOLS_MCP_SERVER_NAME
 from agent.sdk_transform_bypass import bypass_sdk_request_transform
 from agent.stream_diag import buffer_connect_exhausted_notice
 from agent.usage_anchor import set_usage_anchor
 from agent.managed_inference_errors import raise_managed_agent_operation_error, require_managed_stream_completion
+from agent.transports.aino_code.binding import close_code_binding, code_binding_matches, code_session_options, code_turn_context
 
 logger = logging.getLogger(__name__)
 _codex_watchdog_state_var: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
@@ -367,16 +370,14 @@ def _codex_display_args(name: str, args: dict) -> dict:
 
 def _codex_item_completion_payload(item: dict) -> tuple[str, bool]:
     """(result_text, is_error) for a completed tool item — display-facing text for live tool cards (the
-    persisted history keeps the projector's ``{exit_code, output}`` envelope instead)."""
+    persisted history keeps the same execution receipt)."""
     item_type = item.get("type") or ""
     if item_type == "commandExecution":
-        out, exit_code = item.get("aggregatedOutput") or "", item.get("exitCode")
-        is_error = bool(exit_code is not None and exit_code != 0)
-        return (f"[exit {exit_code}]\n{out}" if is_error else out), is_error
+        exit_code = item.get("exitCode")
+        is_error = item.get("status") in {"failed", "declined"} or bool(exit_code is not None and exit_code != 0)
+        return CodexEventProjector._command_spec(item)[3], is_error
     if item_type == "fileChange":
-        status = item.get("status") or "unknown"
-        n = len(item.get("changes") or [])
-        return f"apply_patch status={status}, {n} change(s)", status not in {"completed", "applied", "success"}
+        return CodexEventProjector._file_change_spec(item)[3], item.get("status") not in {"completed", "applied", "success"}
     if item_type == "mcpToolCall":
         if error := item.get("error"):
             return f"[error] {json.dumps(error, ensure_ascii=False)[:1000]}", True
@@ -398,6 +399,30 @@ def _stable_call_id(item: dict, name: str) -> str:
     return _deterministic_call_id(prefix or _STABLE_ID_PREFIXES.get(item_type, name), item.get("id") or "")
 
 
+def _codex_output_preview(buffer: str, disabled: bool, delta: str) -> tuple[str, str, bool]:
+    """Keep bounded source context for multi-line/fragmented secret redaction.
+
+    Never slide the context window: losing a secret's prefix can expose its tail.
+    Past the budget, stop raw progress previews; the final result still arrives.
+    """
+    if disabled or len(buffer) + len(delta) > 64 * 1024:
+        return "", "", True
+    buffer += delta
+    if "\n" not in delta:
+        return "", buffer, False
+    complete = buffer.rpartition("\n")[0]
+    private_key_open = False
+    for line in complete.splitlines():
+        if "PRIVATE KEY" in line:
+            if "-----BEGIN" in line:
+                private_key_open = True
+            if "-----END" in line:
+                private_key_open = False
+    if private_key_open:
+        return "", buffer, False
+    return redact_sensitive_text(complete, force=True).rstrip()[-500:], buffer, False
+
+
 def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
     """Build the ``on_event`` callback for ``CodexAppServerSession(on_event=...)``.
 
@@ -408,6 +433,7 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
     without display hooks. Every callback is guarded so a buggy display hook cannot tear down the turn loop."""
     # item_id -> (tool_name, args, started_monotonic); duration even when codex omits durationMs.
     started: dict[str, tuple[str, dict, float]] = {}
+    progress: dict[str, tuple[Callable, str, bool]] = {}
 
     def agent_cb(attr: str, fail_msg: str, *fail_args: Any, args: tuple = (), kwargs: dict | None = None) -> None:
         _call_guarded(getattr(agent, attr, None), fail_msg, *fail_args, args=args, kwargs=kwargs)
@@ -423,10 +449,15 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
         # Stable-ID tool card (TUI/desktop) fires alongside the progress bubble.
         agent_cb("tool_start_callback", "tool_start_callback raised for %s", name,
                  args=(_stable_call_id(item, name), name, shown))
+        if item_id and item.get("type") in {"commandExecution", "fileChange"}:
+            with bound_tool_progress(getattr(agent, "tool_progress_callback", None), name, _stable_call_id(item, name)):
+                if reporter := current_tool_progress():
+                    progress[item_id] = (reporter, "", False)
 
     def _fire_tool_completed(item: dict) -> None:
         name = _codex_item_to_tool_name(item)
         prior = started.pop(item_id, None) if (item_id := item.get("id") or "") else None
+        progress.pop(item_id, None)
         # Prefer codex's durationMs; else our started timestamp; else None (some codex
         # versions only emit completed for fast items).
         codex_ms = item.get("durationMs")
@@ -437,8 +468,25 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
                  args=("tool.completed", name, None, None),
                  kwargs={"duration": duration, "is_error": is_error, "result": result})
         args = prior[1] if prior is not None else _codex_item_to_args(item)
+        if prior is not None and item.get("type") in {"commandExecution", "fileChange"}:
+            # A patch's paths may arrive only at completion; older command events
+            # omit command/cwd on completion, so retain their start-time values.
+            args = args | {key: value for key, value in _codex_item_to_args(item).items() if value}
         agent_cb("tool_complete_callback", "tool_complete_callback raised for %s", name,
                  args=(_stable_call_id(item, name), name, _codex_display_args(name, args), result))
+
+    def _fire_output_progress(params: dict) -> None:
+        item_id = params.get("itemId")
+        entry = progress.get(item_id)
+        delta = _delta_text(params)
+        if entry is not None and delta:
+            reporter, buffer, disabled = entry
+            # The complete result is authoritative. Live progress is only a bounded,
+            # redacted tail, throttled by the existing per-call progress reporter.
+            preview, buffer, disabled = _codex_output_preview(buffer, disabled, delta)
+            progress[item_id] = (reporter, buffer, disabled)
+            if preview:
+                reporter(0, None, preview)
 
     def _fire_delta(params: dict, attr: str) -> None:
         text = _delta_text(params)
@@ -474,6 +522,8 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
     }
     handlers["item/started"] = lambda p: _on_item(p, completed=False)
     handlers["item/completed"] = lambda p: _on_item(p, completed=True)
+    handlers["item/commandExecution/outputDelta"] = _fire_output_progress
+    handlers["item/fileChange/outputDelta"] = _fire_output_progress
 
     def on_event(note: dict) -> None:
         if not isinstance(note, dict):
@@ -502,10 +552,15 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
 
 
 def _close_codex_session(agent) -> None:
-    """Drop the session so the next turn respawns codex instead of reusing a dead client."""
-    with suppress(Exception):
-        agent._codex_session.close()
+    """Detach before closing; the child and its model route share one lifetime."""
+    session = getattr(agent, "_codex_session", None)
     agent._codex_session = None
+    try:
+        with suppress(Exception):
+            if session is not None:
+                session.close()
+    finally:
+        close_code_binding(agent)
 
 
 def _consume_user_interrupt(agent, active: bool = True) -> tuple[bool, Any]:
@@ -520,6 +575,8 @@ def _consume_user_interrupt(agent, active: bool = True) -> tuple[bool, Any]:
 
 def _codex_developer_instructions(agent) -> str:
     """The prompt composition the standard loop sends as its system message (turn_context order)."""
+    if getattr(agent, "execution_mode", "work") == "code":
+        return ""
     developer_instructions = getattr(agent, "_cached_system_prompt", None) or ""
     if getattr(agent, "ephemeral_system_prompt", None):
         developer_instructions = (developer_instructions + "\n\n" + agent.ephemeral_system_prompt).strip()
@@ -569,6 +626,8 @@ def _codex_model_provider(agent) -> str | None:
     """codex's ``[model_providers.<id>]`` for a named custom provider (``providers.<name>``); None means codex's
     own provider. Only the stable id is sent and codex resolves base_url/env_key itself, so Hermes' credential
     never enters the JSON-RPC payload (#75186)."""
+    if getattr(agent, "execution_mode", "work") == "code":
+        return "aino_code"
     if str(getattr(agent, "provider", "") or "").strip().lower() != "custom":
         return None
     from hermes_cli.runtime_provider_custom import codex_model_provider_id
@@ -580,6 +639,8 @@ def _codex_wire_model(agent, model_provider: str | None) -> str | None:
     ("not supported when using Codex with a ChatGPT account"); codex applies the catalog's extended window
     to the base slug itself. On codex's own provider the slug is bare (``openai/gpt-5.5`` -> ``gpt-5.5``),
     as for openai-codex; a named custom provider's model ids are its own and pass through."""
+    if getattr(agent, "execution_mode", "work") == "code":
+        return getattr(agent, "model", None)
     from agent.model_metadata import strip_codex_context_variant_suffix
     model = strip_codex_context_variant_suffix(getattr(agent, "model", None)) or None
     if model and model_provider is None:
@@ -637,13 +698,13 @@ def _ensure_codex_session(agent, messages: list[dict[str, Any]] | None = None) -
         # The provider is fixed per thread (turn/start can switch the model, not the provider), so an
         # in-place switch to or from a named custom provider retires the thread too.
         recorded = getattr(agent, "_codex_session_prompt", None)
-        if recorded is None or (recorded == developer_instructions
-                                and getattr(agent, "_codex_session_model_provider", None) == model_provider):
+        if code_binding_matches(agent) and (recorded is None or (recorded == developer_instructions
+                                and getattr(agent, "_codex_session_model_provider", None) == model_provider)):
             return
         _close_codex_session(agent)
     resume_thread_id = None if getattr(agent, "_codex_session_prompt", None) is not None else _stored_codex_thread_id(agent)
     from agent.runtime_cwd import resolve_agent_cwd
-    from agent.transports.codex_app_server_session import CodexAppServerSession, _ServerRequestRouting
+    from agent.transports.codex_app_server_session import CodexAppServerSession, CodexAppServerClient, _ServerRequestRouting
     from hermes_cli.codex_runtime_switch import get_configured_codex_binary
     from hermes_cli.config import load_config
     # Approval callback: Hermes' standard prompt flow when a CLI thread installed one. `hermes chat -q`, cron and
@@ -679,14 +740,16 @@ def _ensure_codex_session(agent, messages: list[dict[str, Any]] | None = None) -
     history_seed = render_history_seed(messages) or None
     # The model always rides along: codex's home is shared, while the Hermes model is per profile/session,
     # so omitting it ran codex's own default instead of the selection.
+    code_options = code_session_options(agent, CodexAppServerClient)
     agent._codex_session = CodexAppServerSession(
         cwd=getattr(agent, "session_cwd", None) or str(resolve_agent_cwd()), approval_callback=approval_callback,
         codex_bin=get_configured_codex_binary(load_config()),
         request_routing=_ServerRequestRouting(auto_approve_exec=auto_approve_requests, auto_approve_apply_patch=auto_approve_requests),
         on_event=make_codex_app_server_event_bridge(agent),
         developer_instructions=developer_instructions or None,
-        model=_codex_wire_model(agent, model_provider), model_provider=model_provider,
+        model=_codex_wire_model(agent, model_provider),
         resume_thread_id=resume_thread_id, history_seed=history_seed,
+        **({"model_provider": model_provider} | code_options),
     )
 
 
@@ -732,6 +795,8 @@ def _finish_codex_turn(agent, turn, messages: list[dict[str, Any]], *, original_
     agent._iters_since_skill = getattr(agent, "_iters_since_skill", 0) + turn.tool_iterations
     _record_codex_app_server_compaction(agent, turn)
     usage_result = _record_codex_app_server_usage(agent, turn, messages=messages)
+    if getattr(agent, "execution_mode", "work") == "code":
+        return usage_result
     # Skill nudge check AFTER iters were incremented (same as chat_completions).
     should_review_skills = (0 < agent._skill_nudge_interval <= agent._iters_since_skill
                             and "skill_manage" in agent.valid_tool_names)
@@ -783,20 +848,22 @@ def run_codex_app_server_turn(agent, *, user_message: str, original_user_message
         from agent.conversation_compression_checkpoint import _checkpoint_blocked
         raise _checkpoint_blocked("codex_app_server owns the authoritative thread and compacts it "
                                   "without a truthful pre-compaction transcript boundary")
-    _ensure_codex_session(agent, messages)
     try:
-        _start_codex_thread(agent)
-        wire_model = _codex_wire_model(agent, getattr(agent, "_codex_session_model_provider", None))
-        turn = agent._codex_session.run_turn(
-            user_input=user_message,
-            model=wire_model, reasoning_effort=_codex_turn_effort(agent, wire_model),
-            service_tier=_codex_turn_service_tier(agent))
+        _ensure_codex_session(agent, messages)
+        with code_turn_context(agent):
+            _start_codex_thread(agent)
+            wire_model = _codex_wire_model(agent, getattr(agent, "_codex_session_model_provider", None))
+            turn = agent._codex_session.run_turn(
+                user_input=user_message,
+                model=wire_model, reasoning_effort=_codex_turn_effort(agent, wire_model),
+                service_tier=_codex_turn_service_tier(agent))
     except Exception as exc:
         logger.exception("codex app-server turn failed")
         _close_codex_session(agent)
+        recovery = "Check the selected model and retry in Code mode." if getattr(agent, "execution_mode", "work") == "code" else "Fall back to default runtime with `/codex-runtime auto`."
         return _turn_result(
             _consume_user_interrupt(agent), messages, api_calls=0, completed=False, error=str(exc),
-            final_response=f"Codex app-server turn failed: {exc}. Fall back to default runtime with `/codex-runtime auto`.",
+            final_response=f"Codex app-server turn failed: {exc}. {recovery}",
         )
     interrupt = _consume_user_interrupt(agent, turn.interrupted)
     # Wedged client (turn deadline blown, OAuth refresh died, subprocess exited): retire it. Post-tool

@@ -172,7 +172,7 @@ def authorize_local_source(runner, source):
     return adapter.authorize_source(source)
 
 
-def _bypass_policy(params, *, private_secrets, client_local=False):
+def _bypass_policy(params, *, private_secrets, client_local=False, session_id=None):
     """Frozen snapshot for --safe-mode / --ignore-user-config: code defaults plus the explicit
     launch options. The profile's config.yaml/.env are never read, so a malformed profile cannot
     block or shape the session; there is no default model to inherit, so one must be explicit."""
@@ -186,7 +186,7 @@ def _bypass_policy(params, *, private_secrets, client_local=False):
     if not isinstance(defaults.get('model'), dict):  # code default is the empty string
         defaults['model'] = {}
     return build_policy(params, defaults, private_secrets=private_secrets, profile_terminal=False,
-                        client_local=client_local)
+                        client_local=client_local, session_id=session_id)
 
 
 def load_profile_config(home=None):
@@ -274,7 +274,7 @@ def staged_creation_follows(authority, actor, request_id):
 
 
 def stage_local_session(authority, actor, params, *, trusted_policy=None, trusted_secrets=None, skills_prompt=None,
-                        client_local=False, desktop_local=False):
+                        client_local=False, desktop_local=False, handoff_title=None):
     """Everything before the creation commit: the existing session's ref on an exact retry, else the
     receipt ``commit_local_session`` writes (the async RPC commits it off the owner loop).
     ``client_local``: the gateway's own proof that the client is on this host (its connection redeemed a
@@ -285,6 +285,15 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
         raise RuntimeStoreError('profile_mismatch')
     if 'session:create' not in actor.capabilities:
         raise RuntimeStoreError('permission_denied')
+    from gateway.session_handoff import validate_work_code_handoff
+    params = validate_work_code_handoff(params)
+    request_id = params.get('request_id', uuid.uuid4().hex)
+    if not isinstance(request_id, str) or not request_id or len(request_id) > 256:
+        raise RuntimeStoreError('invalid_params', field='request_id',
+                                detail='must be a non-empty string of at most 256 characters')
+    from gateway.session_local_recovery import local_identity, restore_local_session
+    authority._require_admission_open()
+    sid = local_identity(authority.profile_id, actor.subject, request_id)
     from gateway.session_policy import build_policy, BYPASS_FIELDS, FOLLOW_ADOPTED, LOCAL_DESKTOP_CHAT
     from gateway.run import _resolve_gateway_model
     from dataclasses import replace
@@ -293,7 +302,7 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
     if trusted_policy is not None:
         policy = trusted_policy
     elif any(params.get(name) is True for name in BYPASS_FIELDS):
-        policy = _bypass_policy(params, private_secrets=private_secrets, client_local=client_local)
+        policy = _bypass_policy(params, private_secrets=private_secrets, client_local=client_local, session_id=sid)
     else:
         from gateway.session_local_route import resolve_launch_route
         raw_model, sent = params.get('model'), params
@@ -302,12 +311,11 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
             params = resolve_launch_route(params, config)
         # A client's session.create is the one caller whose named folder may select the coding posture.
         policy = build_policy(params, config, private_secrets=private_secrets, workspace_posture=True,
-                              client_local=client_local)
+                              client_local=client_local, session_id=sid)
         if params is not sent:  # resolved, even to a model of the alias's own name
             # Owner-stamped provenance (not create fields): a remote client cannot re-resolve the typed
             # `-m` alias against its own home, so resume and an exact retry compare a repeat against the
             # name, and ``route_derived`` names the fields the route (not the client) filled.
-            import json
             derived = sorted(key for key in ('provider', 'base_url') if key in params and key not in sent)
             policy = replace(policy, request_json=json.dumps(
                 {**json.loads(policy.request_json), 'model_requested': raw_model, 'route_derived': derived},
@@ -320,19 +328,13 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
                 # Follows its profile, so the provider the user connects later replaces the trial model.
                 marks[FOLLOW_ADOPTED] = True
         if marks:
-            import json
             policy = replace(policy, config_json=json.dumps({**json.loads(policy.config_json), **marks}))
-    request_id = params.get('request_id', uuid.uuid4().hex)
-    if not isinstance(request_id, str) or not request_id or len(request_id) > 256:
-        raise RuntimeStoreError('invalid_params', field='request_id',
-                                detail='must be a non-empty string of at most 256 characters')
     from dataclasses import asdict
     from gateway.session import SessionEntry
     from gateway.session_lifecycle import _now
-    from gateway.session_local_recovery import local_identity, restore_local_session
-    authority._require_admission_open()
-    sid = local_identity(authority.profile_id, actor.subject, request_id)
     from gateway.session_policy import bind_launch_key, restore_policy, launch_key
+    from gateway.session_handoff import with_handoff_title
+    policy = with_handoff_title(policy, handoff_title)
     if authority.db.get_session(sid) is not None:
         from hermes_state_local import local_receipt
         saved = local_receipt(authority.db, sid)
@@ -342,7 +344,6 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
             raise RuntimeStoreError('invalid_params', field='request_id',
                                     detail='a resumed request_id must carry the same frozen request')
         import hmac
-        import json
         if 'model_requested' in json.loads(original.request_json):
             # An owner-resolved alias: its key came from the profile (a `.env` rotation is not a changed
             # request) and the client sent none, so one it sends now is a different request.
@@ -353,6 +354,8 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
             if key is None or not hmac.compare_digest(key, params.get('api_key') or ''):
                 raise RuntimeStoreError('admission_conflict')
         return restore_local_session(authority, sid)
+    from gateway.session_handoff import authorize_work_code_handoff
+    authorize_work_code_handoff(authority, actor, params)
     from gateway.session_policy import launch_skills
     if launch_skills(params) and skills_prompt is None:
         # `-s` is rendered off-loop by the RPC handler (render_launch_skills); a caller that
@@ -461,7 +464,7 @@ def local_session_info(authority, ref):
         source = authority.db.get_session(ref.session_id)['source']
     else:
         source = policy.source if policy else live.source.platform.value
-    info = {'source': source,
+    info = {'source': source, 'execution_mode': policy.execution_mode if policy else 'work',
             'model': (getattr(agent, 'model', policy.current_model(authority) if policy else None) if agent is not None
                       else _lazy_model(authority, policy)),
             'lazy': agent is None,
@@ -498,6 +501,8 @@ def local_session_info(authority, ref):
     # Every live projection must retain the catalog identity beside the SDK wire model.
     from gateway.session_platform_model import managed_info
     info.update(managed_info(authority, ref.session_id))
+    from gateway.session_handoff import work_code_links
+    info.update(work_code_links(authority.db, ref.session_id))
     return info
 
 

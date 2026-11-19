@@ -163,10 +163,11 @@ class GatewaySessionAgentMixin:
         from gateway.session_policy import policy_for_source
         from gateway.session_worker_construct import session_prefill
         policy = policy_for_source(runner, src)
-        return ctx.AIAgent(
+        code = bool(policy and policy.execution_mode == 'code')
+        agent = ctx.AIAgent(
             model=turn_route["model"], **turn_route["runtime"], **_checkpoint_agent_kwargs(ctx.user_config),
             max_iterations=max_iterations, quiet_mode=not bool(policy and policy.verbose), verbose_logging=False,
-            enabled_toolsets=ctx.enabled_toolsets, disabled_toolsets=ctx.disabled_toolsets,
+            enabled_toolsets=[] if code else ctx.enabled_toolsets, disabled_toolsets=ctx.disabled_toolsets,
             ephemeral_system_prompt=combined_ephemeral or None,
             prefill_messages=(session_prefill(active_authority(runner), policy, src.chat_id) if policy
                               else runner._prefill_messages) or None,
@@ -182,16 +183,19 @@ class GatewaySessionAgentMixin:
             session_db=getattr(runner._session_db, "_db", runner._session_db),
             # Reload from disk — do not reuse the startup snapshot.
             # See #60955.
-            fallback_model=None if api_runtime_locked() else self._runner._refresh_fallback_model(),
-            skip_context_files=skip_context_files,
+            fallback_model=None if code or api_runtime_locked() else self._runner._refresh_fallback_model(),
+            skip_context_files=skip_context_files or code,
             # Keep the persona even with minimal context: soul identity is one small file.
-            load_soul_identity=not bool(policy and policy.ignore_rules),
-            skip_memory=bool(policy and policy.ignore_rules),
+            load_soul_identity=not (code or bool(policy and policy.ignore_rules)),
+            skip_memory=code or bool(policy and policy.ignore_rules),
             pass_session_id=bool(policy and policy.pass_session_id),
             # A local session's frozen budget (`--run-budget` / its profile's agent.run_budget_seconds);
             # None leaves the agent reading the owner's config, as before.
             run_budget_seconds=policy.run_budget_seconds if policy else None,
         )
+        if code:
+            agent.execution_mode = 'code'
+        return agent
 
     def _resolve_turn_agent(self, turn_route, platform_key, combined_ephemeral, max_iterations, reasoning_config, pr):
         """Reuse this session's cached AIAgent (frozen system prompt + tool schemas → prompt cache

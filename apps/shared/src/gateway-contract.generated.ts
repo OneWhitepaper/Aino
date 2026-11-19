@@ -5144,6 +5144,8 @@ export interface CanonicalSessionInfoParams {
 /** ``gateway/session_local_inventory.py::snapshot_info``: ``local_session_info`` + the inventory. */
 export interface CanonicalSessionInfo {
   provider?: string | null
+  handoff?: WorkCodeHandoff | null
+  linked_sessions?: WorkCodeSessionLink[] | null
   tools?: Record<string, string[]> | null
   skills?: Record<string, string[]> | null
   mcp_servers?: McpServerStatus[] | null
@@ -5161,6 +5163,7 @@ export interface CanonicalSessionInfo {
   unknown_toolsets?: string[] | null
   usage?: Usage | null
   source: string
+  execution_mode?: 'work' | 'code'
   model?: string | null
   lazy: boolean
   profile_id: string
@@ -5184,6 +5187,18 @@ export interface CanonicalSessionInfo {
   credential_hint?: string | null
   config_warning?: string | null
   [key: string]: unknown
+}
+/** User-reviewed context for a new, independently executed conversation. Paths are references, never instructions to read files at creation; the first prompt still needs ordinary admission. */
+export interface WorkCodeHandoff {
+  source_session_id: string
+  summary: string
+  files?: string[]
+}
+export interface WorkCodeSessionLink {
+  session_id: string
+  title: string
+  execution_mode: 'work' | 'code'
+  relation: 'source' | 'child'
 }
 /** The client a session's creator declared itself as (``session.create`` ``client``). */
 export interface CanonicalClientLabel {
@@ -5463,6 +5478,8 @@ export interface CanonicalGroupsPeerRegisterParams {
 export interface CanonicalCreateParams {
   profile?: string | null
   request_id?: string | null
+  execution_mode?: 'work' | 'code' | null
+  handoff?: WorkCodeHandoff | null
   source?: 'cli' | 'tui' | 'gui' | 'acp' | 'tool' | 'oneshot'
   cwd?: string | null
   row_cwd?: string | null
@@ -5547,6 +5564,8 @@ export interface CanonicalPendingPrompt {
 }
 export interface CanonicalSnapshotInfo {
   provider?: string | null
+  handoff?: WorkCodeHandoff | null
+  linked_sessions?: WorkCodeSessionLink[] | null
   tools?: Record<string, string[]> | null
   skills?: Record<string, string[]> | null
   mcp_servers?: McpServerStatus[] | null
@@ -5564,6 +5583,7 @@ export interface CanonicalSnapshotInfo {
   unknown_toolsets?: string[] | null
   usage?: Usage | null
   desktop_protocol: 'hermes-gateway-v1'
+  execution_mode?: 'work' | 'code'
   source?: string | null
   model?: string | null
   model_source?: 'aino' | null
@@ -5623,6 +5643,7 @@ export interface CanonicalListResult {
 }
 export interface CanonicalSessionListRow {
   session_id: string
+  execution_mode?: 'work' | 'code'
   id: string
   title: string
   source: string | null

@@ -179,3 +179,25 @@ def test_explicit_provider_stale_timeout_wins_over_context_tier_and_reasoning_fl
 
     _write_config(tmp_path, "")
     assert _derive_stream_stale_timeout(agent, api_kwargs) == 600.0
+
+
+def test_glm_wait_policy_covers_routes_and_both_transports(monkeypatch, tmp_path):
+    from agent.chat_completion_helpers import _StreamingCall
+    from agent.reasoning_timeouts import get_reasoning_stale_timeout_floor as floor
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    for name in ("HERMES_API_CALL_STALE_TIMEOUT", "HERMES_STREAM_STALE_TIMEOUT", "HERMES_STREAM_READ_TIMEOUT"):
+        monkeypatch.delenv(name, raising=False)
+    _write_config(tmp_path, "")
+    for model in ("glm-5.3-flash", "z-ai/glm-5.3-flash", "GLM-5-3", "vendor/glm-5p3:free"):
+        agent = _make_agent(tmp_path, model=model, provider="aino", base_url="https://aino.invalid/v1")
+        call = _StreamingCall(agent, {"model": model}, None)
+        call._resolve_stale_timeout()
+        assert 210 < call._stream_stale_timeout <= 900
+        assert agent._compute_non_stream_stale_timeout({"model": model}) == call._stream_stale_timeout
+        assert call._stream_timeouts()[1] >= call._stream_stale_timeout
+    for unrelated in ("glm-4-air", "glm-5.30", "my-glm-5.3"):
+        assert floor(unrelated) is None
+    # Explicit read deadlines must still win, including a value equal to the old default.
+    monkeypatch.setenv("HERMES_STREAM_READ_TIMEOUT", "120")
+    assert call._stream_timeouts()[1] == 120

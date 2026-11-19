@@ -341,6 +341,34 @@ describe('session-gone classification', () => {
   // typed `display_kind: failed_turn` (agent/turn_failure_copy.py). That row is
   // a transcript boundary, not the member speaking: read as the reply, the
   // room posted it as the bot's answer, re-drove the member and hid the error.
+  it.each([false, true])(
+    'uses the managed error rather than partial output for a failed room turn (json=%s)',
+    async json => {
+      const error = 'The request outcome is unknown. Automatic retry is stopped.'
+
+      const metadata = {
+        error,
+        error_surface: { code: 'managed_operation_unknown', layer: 'provider', retryable: false }
+      }
+
+      const room = await loadRoom({
+        turn: () => [
+          {
+            role: 'assistant',
+            display_kind: 'failed_turn',
+            content: 'Partial answer.\n\n' + error,
+            display_metadata: json ? JSON.stringify(metadata) : metadata
+          }
+        ]
+      })
+
+      await expect(room.turns.runGroupChatMemberTurn('Room', LOCAL_MEMBER, 'hi', 't1', [])).rejects.toEqual(
+        new Error(error)
+      )
+      expect(room.gateway.rpcFor('prompt.submit')).toHaveLength(1)
+    }
+  )
+
   it('reports a failed turn whose transcript Hermes closed with the failed-turn notice', async () => {
     let now = 1_000_000
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => (now += 60_000))

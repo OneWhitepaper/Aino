@@ -18,6 +18,16 @@ import {
 } from './error-surface'
 import { errorCardText } from './error-surface-copy'
 
+it('explains an unconfirmed managed request without suggesting it can safely be replayed', () => {
+  const surface = { layer: 'provider', code: 'managed_operation_unknown', retryable: false } as const
+  const copy = errorCardText(TRANSLATIONS.zh.assistant.thread, surface)
+  expect(copy.title).toContain('未确认')
+  expect(copy.body).toContain('未自动重发')
+  expect(errorCardActions(surface)).toEqual({ primary: null })
+  expect(errorRecoveryPlan(surface)).toMatchObject({ retry: false, switchProvider: false, diagnostics: true })
+  expect(errorCardSeverity(surface)).toBe('degraded')
+})
+
 describe('parseErrorSurface', () => {
   it('accepts a valid descriptor', () => {
     expect(parseErrorSurface({ layer: 'streaming', code: 'stream_drop', retryable: true })).toEqual({

@@ -32,7 +32,7 @@ import { useContributions } from '@/contrib'
 import { useMediaImage } from '@/hooks/use-media-image'
 import { useMediaPlaybackSrc } from '@/hooks/use-media-playback-src'
 import { useI18n } from '@/i18n'
-import { detectArtifact } from '@/lib/artifact-detect'
+import { detectArtifact, detectStandaloneHtmlArtifact } from '@/lib/artifact-detect'
 import { renderMediaTags } from '@/lib/chat-messages/parts'
 import { ExternalLink, normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/external-link'
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
@@ -706,6 +706,14 @@ function MarkdownTextSurface({
 
   const isStreaming = status.type === 'running'
 
+  const documentArtifact = useMemo(
+    () =>
+      disableArtifacts || previewOnly || scratchpad || text.length > MAX_MARKDOWN_CHARS
+        ? null
+        : detectStandaloneHtmlArtifact(text),
+    [disableArtifacts, previewOnly, scratchpad, text]
+  )
+
   // Keep code parsing enabled while streaming so incomplete fenced blocks still
   // render as code cards. The expensive Shiki pass is deferred by
   // `SyntaxHighlighter` below when `isStreaming` is true, and the code plugin
@@ -863,24 +871,34 @@ function MarkdownTextSurface({
       fallback={() => <HugeTextFallback containerClassName={containerClassName} text={text} />}
       label="markdown-render"
     >
-      <StreamdownTextPrimitive
-        components={components}
-        containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
-        containerProps={surfaceContainerProps}
-        defer={defer}
-        lineNumbers={false}
-        mode="streaming"
-        // Incomplete-markdown repair runs in preprocessWithTailRepair on the
-        // full accumulated text; the built-in tail-bounded remend is disabled
-        // because a custom parseMarkdownIntoBlocksFn is supplied, and
-        // parseIncompleteMarkdown stays false to avoid a second full-text
-        // remend pass.
-        parseIncompleteMarkdown={false}
-        parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksCached}
-        plugins={plugins}
-        preprocess={preprocessWithTailRepair}
-        remarkPlugins={REMARK_PLUGINS}
-      />
+      {documentArtifact ? (
+        <div
+          {...surfaceContainerProps}
+          className={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
+          data-status={isStreaming ? 'running' : 'complete'}
+        >
+          <ArtifactCard code={text} detection={documentArtifact} streaming={isStreaming} />
+        </div>
+      ) : (
+        <StreamdownTextPrimitive
+          components={components}
+          containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
+          containerProps={surfaceContainerProps}
+          defer={defer}
+          lineNumbers={false}
+          mode="streaming"
+          // Incomplete-markdown repair runs in preprocessWithTailRepair on the
+          // full accumulated text; the built-in tail-bounded remend is disabled
+          // because a custom parseMarkdownIntoBlocksFn is supplied, and
+          // parseIncompleteMarkdown stays false to avoid a second full-text
+          // remend pass.
+          parseIncompleteMarkdown={false}
+          parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksCached}
+          plugins={plugins}
+          preprocess={preprocessWithTailRepair}
+          remarkPlugins={REMARK_PLUGINS}
+        />
+      )}
     </ErrorBoundary>
   )
 }

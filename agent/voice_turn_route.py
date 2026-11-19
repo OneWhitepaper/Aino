@@ -137,6 +137,9 @@ def begin_voice_turn_route(agent: Any, messages: list[dict[str, Any]], system_pr
     if not getattr(agent, "_voice_turn_pending", False):
         return system_prompt
     agent._voice_turn_pending = False
+    if getattr(agent, "execution_mode", "work") == "code":
+        # Voice is an input method for Code; its selected model owns the whole Codex turn.
+        return system_prompt
     from agent.auxiliary_task_config import _get_auxiliary_task_config
     from hermes_constants import parse_reasoning_effort
     cfg = _get_auxiliary_task_config(TASK)

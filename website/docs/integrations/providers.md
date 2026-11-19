@@ -674,6 +674,22 @@ Hermes Agent works with **any OpenAI-compatible API endpoint**. If a server impl
 
 ### General Setup
 
+**Aino Desktop:** open custom model settings, enter the API address, key and model,
+and leave the advanced API mode on **Auto-detect**. **Save** runs the same short
+protocol check as **Test connection**; it can incur the provider's normal inference
+charge. A model list or HTTP 200 alone is not proof of a usable model reply.
+Pasted standard inference URLs (for example `/v1/chat/completions`, `/v1/responses`
+or `/v1/messages`) are normalized to their base address. Existing saved secrets
+are not carried to a different tenant path by that normalization; enter the new
+route's key when requested. Authentication and quota errors stop probing instead
+of silently selecting another protocol. A manual protocol selection stays pinned.
+
+Code uses native Responses or an explicitly labeled local adapter for Chat
+Completions and Anthropic Messages when the owning backend supports it. The
+adapter keeps the chosen model, endpoint and billing source. See
+[Aino Work and Code model compatibility](../user-guide/features/codex-app-server-runtime.md#model-compatibility)
+for capabilities and limitations.
+
 Three ways to configure a custom endpoint:
 
 **Interactive setup (recommended):**
@@ -1438,6 +1454,16 @@ extra_body:
 The configured `extra_body` follows the provider everywhere: it is merged at agent construction, **survives every gateway turn** (including turns where `/fast` layers `service_tier`/`speed` overrides on top — those merge over your `extra_body` rather than replacing it), and is **re-derived on `/model` switches** — switching to a named custom provider applies its `extra_body`, and switching away clears it so it never leaks to another provider.
 
 The `hermes model` → Custom Endpoint wizard now prompts for the API mode explicitly and persists your answer to `config.yaml` (as `transport` on the provider entry). URL-based auto-detection (e.g. `/anthropic` paths → `anthropic_messages`) still happens as a fallback when the field is left blank.
+
+In Desktop's custom-model editor, **Auto-detect** performs real inference probes for
+the selected model when testing or saving. It prefers a verified Responses stream
+on unfamiliar endpoints, then checks Chat Completions and Anthropic Messages as
+needed; known native URL hints go first. A successful detection is saved as
+`api_mode`, so the runtime does not fall back to guessing from the URL. The probes
+use short prompts with no tools and may incur normal provider charges. A model
+catalog alone is not protocol evidence, and failed or inconclusive detection does
+not silently save a default. Manual API modes remain under your control. For Code's
+native Responses and local Chat/Messages adaptation, see [Aino Work and Aino Code](../user-guide/features/codex-app-server-runtime.md#model-compatibility).
 
 **Native vision for custom-provider models.** If your custom endpoint serves a vision-capable model that isn't in models.dev, set `model.supports_vision: true` so Hermes routes attached images natively (as `image_url` parts) instead of pre-processing them through `vision_analyze`. Single knob — no need to also set `agent.image_input_mode: native`.
 

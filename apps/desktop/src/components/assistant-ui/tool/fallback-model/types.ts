@@ -39,6 +39,11 @@ export interface CountMetric {
   noun: string
 }
 
+export interface ToolFileDiff {
+  path: string
+  diff: string
+}
+
 export interface ToolView {
   countLabel?: string
   detail: string
@@ -47,6 +52,7 @@ export interface ToolView {
   icon?: string
   imageUrl?: string
   inlineDiff: string
+  fileDiffs?: ToolFileDiff[]
   previewTarget?: string
   /** Set for tools whose output naturally contains ANSI escape codes
    *  (terminal/execute_code) so the renderer knows to run them through

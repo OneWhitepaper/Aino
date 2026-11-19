@@ -5,6 +5,138 @@ sidebar_label: Codex App-Server Runtime
 
 # Codex App-Server Runtime
 
+## Aino Work and Aino Code
+
+Aino Desktop offers two modes in the sidebar's brand menu. **Aino Work** keeps
+the Hermes workflow. **Aino Code** runs coding tasks through the bundled Codex
+App Server. Both use the same Aino account, model settings, and conversation
+entry point. Each mode remembers its last conversation, project scope and unsent
+draft, including the draft's model selection. Switching modes restores that area;
+it does not stop tasks running in the other mode. These pointers are scoped to the
+account, connection and profile. Existing conversations retain their engine,
+including after restart or branching. Older conversations are Work. The sidebar
+can show the current mode or all conversations; background tasks remain accessible.
+
+### Hand work between modes
+
+In an existing conversation, choose **Continue in Code** or **Continue in Work**.
+Review or edit the summary and optional file paths before creating the linked
+conversation. Aino keeps the original transcript untouched and saves the link and
+reviewed context with the new conversation. Only path references are transferred,
+not the files' contents. Both conversations provide navigation to their related
+conversation. This works within the same account/profile, not as a way to copy
+another user's private conversation.
+
+Creation prepares an **editable draft**; it makes no inference request. Press
+**Send** in the destination conversation when ready. The draft keeps the selected
+model source and its billing route. A known Work-only model is refused before a
+Code conversation is created: choose a compatible route explicitly instead of
+expecting Aino to substitute one. An unverified route is labeled as such, not
+promised to support coding tools.
+
+For a Code conversation handed over from Work, **Return result to Work** lets you
+review a result summary and prepare it in the original Work conversation. It does
+not automatically submit a prompt or modify earlier messages. If Work already has
+an unsent draft, Aino asks you to handle that draft first rather than overwrite it.
+Links and initial handoff context survive a gateway restart; duplicate creation
+retries reuse the same conversation. Deleting a source does not delete its
+independent child. A reviewed handoff draft remains visible in conversation lists
+before its first message, unlike an abandoned empty launch. Search preserves a
+conversation's mode even when compression or reset has moved its transcript.
+An older gateway without `work-code-handoff-v1` rejects the
+feature explicitly; Aino never silently creates an unlinked substitute.
+
+### Model compatibility
+
+Start a Code conversation without a project for self-contained work, or select a
+project folder when the task needs its files and instructions. With **No project**,
+Aino allocates a separate persistent working folder for each conversation under
+the owning account/profile's `code/workspaces/` directory. Retries and reopening
+the conversation retain that folder and its outputs; an inherited desktop or
+gateway directory is never used as the project's writable root. This follows the
+[Codex projectless chat workflow](https://learn.chatgpt.com/codex/projects).
+
+Built-in models use
+the current Aino account's existing balance and managed credentials. Provider and
+custom models use the user's configured upstream account. Code does not require
+a separate Codex installation or ChatGPT sign-in, and it does not read the user's
+independent Codex login or configuration.
+
+The Code engine speaks Responses to Aino's private local connection; **the model
+service does not have to speak Responses**. Aino can use native Responses, or
+adapt Chat Completions and Anthropic Messages on the same selected route. Native
+Responses stays direct. For other supported routes, the existing local relay
+translates requests, streamed answers and function/freeform tool calls; Codex
+still executes the tools and handles approvals. No request is moved to another
+provider, model or billing account. In particular, an Aino-managed GLM channel
+can keep its actual Chat Completions protocol. A custom Chat endpoint remains a
+direct connection to the user's service, not an Aino-paid proxy.
+
+For a custom connection, enter the API address, key and model, keep
+**Auto-detect**, then **Test connection** or **Save**. Desktop verifies actual
+inference on that endpoint (preferring Responses
+unless the URL identifies a native protocol) and saves the verified API mode.
+An unfamiliar relay URL is not evidence that it only supports Chat Completions.
+Responses detection requires a complete stream, not just HTTP 200 or a model list.
+Changing the URL, key or model invalidates an unsaved detection result. If detection
+cannot verify a reply, it reports that uncertainty instead of saving a guessed
+protocol; retry or choose a mode explicitly. Manual selections are never replaced.
+
+Detection makes short model requests without tools and may incur the provider's
+normal inference charges. A catalog-only test before choosing a model does not
+verify its protocol. Responses, Chat Completions and Anthropic Messages routes
+can serve Work and Code; the UI explicitly identifies routes using the local
+adapter. Existing custom connections
+saved with an incorrect mode can be repaired by selecting Auto-detect and saving
+again; changing this connection does not alter other providers.
+
+The shared model picker and Code composer distinguish **Code compatible**,
+**Code auto-adapted**, **Work only**, and **Code unverified**, based on the route's protocol
+metadata. The sending preflight reads metadata only and does not perform a paid
+probe. Compatibility is not a certification of tool calling, long-running tasks,
+context compaction, or a third-party model's quality. Route changes are checked
+against the captured selection and owner; a stale check cannot authorize a
+different model or account.
+
+Automatic adaptation requires the owning backend's
+`code-model-protocol-bridge-v1` capability. An older or unreachable backend is
+not assumed to provide it. Image-generation and Bedrock-native routes are not
+converted by this adapter. Provider-hosted Responses search and other native
+server-side tool types are not ordinary function tools: hosted search is disabled
+on adapted routes, and unsupported shapes fail before inference rather than being
+silently removed. Standard local tools remain Codex-owned.
+Responses-only request controls such as reasoning effort, text formatting and
+include options are not forwarded blindly to Chat/Messages services; those
+services use their supported defaults. Protocol adaptation is not full emulation
+of every native Responses feature.
+
+Signed thinking and reasoning needed by later tool turns are preserved in opaque
+encrypted replay items in the existing Codex transcript, with a profile-private
+key under `code/protocol-replay.key`. These items are scoped to the conversation,
+model and endpoint; they are not sent to a different selected route. Preserve this
+key along with the owning profile when backing up conversation state.
+
+The private Codex-to-Aino loopback connection bypasses local/system proxies while
+preserving proxy settings for external requests. Managed Aino model requests and
+adapted routes disable Codex's automatic HTTP and stream retries: a failed or partial paid
+request may already have executed and must not be replayed automatically.
+Endpoint failures include a safe error category, HTTP status where available,
+and a validated request ID for support; upstream response bodies and credentials
+are not exposed in those diagnostics.
+
+A failed Code task does not silently switch providers, accounts, or the
+Hermes engine. Code uses Codex's own tools and project instructions; Hermes memory
+review and tool callbacks described below belong to the older opt-in runtime.
+Automatic context compaction is owned by Codex. The desktop's manual `/compress`
+operation is currently refused for Code conversations, matching the existing
+native-runtime protection against rewriting only the local display transcript.
+
+Codex state is kept under the owning Aino account/profile's `code/` directory.
+The engine and required companion programs ship with native desktop bundles;
+project-specific SDKs and dependencies still depend on the project being run.
+
+## Existing Hermes opt-in runtime
+
 Hermes can optionally hand `openai/*`, `openai-codex/*` and [named custom provider](#named-custom-providers) turns to the [Codex CLI app-server](https://github.com/openai/codex) instead of running its own tool loop. When enabled, terminal commands, file edits, sandboxing, and MCP tool calls all execute inside Codex's runtime — Hermes becomes the shell around it (sessions DB, slash commands, gateway, memory and skill review).
 
 This is **opt-in only**. Default Hermes behavior is unchanged unless you flip the flag. Hermes never auto-routes you onto this runtime. Weighing the two? [Hermes Agent vs Codex](https://hermes-agent.nousresearch.com/compare/codex) compares model choice, platforms and pricing with sources.
@@ -231,19 +363,27 @@ model:
   openai_runtime: codex_app_server   # default is "auto" (= Hermes runtime)
 ```
 
-If the Hermes process cannot resolve `codex` from `PATH` — typical for gateway services,
-cron and Kanban workers, or a desktop-bundled CLI — and the first turn fails with
-`No such file or directory: 'codex'`, point the runtime at the executable explicitly:
+Desktop bundles include a pinned Codex engine and its executor, search utility,
+and platform sandbox helpers. They do not require a separate global npm installation.
+The binary resolver prefers an explicit `model.codex_bin`, then the installed PM
+Codex package, then an existing `codex` executable on `PATH`. Looking up an engine
+does not download or install anything.
+
+Source developers can provision the same pinned package with `hermes pm install codex`,
+or select an existing executable explicitly:
 
 ```yaml
 model:
   openai_runtime: codex_app_server
-  codex_bin: /Applications/Codex.app/Contents/Resources/codex   # default: "codex" from PATH
+  codex_bin: /path/to/codex-package/bin/codex   # optional override; bundled engine is found automatically
 ```
 
 `model.codex_bin` is used everywhere Hermes spawns codex: the `/codex-runtime` availability
 check, native plugin discovery during migration, and the long-lived app-server subprocess.
 The value is a single executable path, not a shell command — no quoting or extra arguments.
+Keep the full package beside that executable; copying only `codex` drops its
+executor and sandbox helpers. Project-specific tools such as Xcode, Android SDKs,
+or a project's own dependencies remain separate from the engine package.
 
 ## Self-improvement loop (memory + skill nudges)
 

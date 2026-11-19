@@ -100,3 +100,14 @@ def test_resumed_events_clear_only_this_requests_wait_notice(monkeypatch):
     assert "waiting for the first provider event" in notices[0]
     # Nonempty thinking.delta payloads enter TUI reasoning history.
     assert notices[1] == ""
+
+
+def test_managed_wait_notice_does_not_promise_replay():
+    from tests.agent.test_managed_operation_retry import credential
+
+    request, notices, _ = _request()
+    request.agent.api_key = credential()
+    request._emit_wait_notice(90.0)
+    assert len(notices) == 1
+    assert "no automatic resend" in notices[0]
+    assert "reconnect" not in notices[0]

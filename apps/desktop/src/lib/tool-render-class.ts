@@ -10,7 +10,12 @@
 
 import { generatedImageToolArgs } from '@/lib/generated-images'
 
-const FILE_EDIT_TOOL_NAMES = new Set(['edit_file', 'patch', 'write_file'])
+const FILE_EDIT_TOOL_NAMES = new Set(['edit_file', 'patch', 'write_file', 'apply_patch'])
+
+/** Presentation only: Codex still owns and executes its native shell tool. */
+export function isShellTool(toolName: string): boolean {
+  return toolName === 'terminal' || toolName === 'exec_command'
+}
 
 /** Renders a diff — the deliverable of the turn, and the one card whose cost scales. */
 export function isFileEditTool(toolName: string): boolean {

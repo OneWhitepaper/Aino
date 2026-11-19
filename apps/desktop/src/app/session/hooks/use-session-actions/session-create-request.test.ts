@@ -79,4 +79,78 @@ describe('createGatewaySession', () => {
       expect(requestGateway).toHaveBeenCalledTimes(1)
     }
   })
+
+  it('refuses Code on an older service without retrying as Work', async () => {
+    const requestGateway = vi.fn().mockRejectedValue(rejection('execution_mode'))
+
+    await expect(createGatewaySession(null, { ...params, execution_mode: 'code' }, requestGateway)).rejects.toThrow(
+      /does not support Aino Code/
+    )
+    expect(requestGateway).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires a Code service to acknowledge the requested mode', async () => {
+    for (const info of [undefined, { execution_mode: 'work' }]) {
+      const requestGateway = vi.fn().mockResolvedValueOnce({ session_id: 'fresh', info }).mockResolvedValueOnce({})
+
+      await expect(createGatewaySession(null, { ...params, execution_mode: 'code' }, requestGateway)).rejects.toThrow(
+        /does not support Aino Code/
+      )
+      expect(requestGateway.mock.calls).toEqual([
+        ['session.create', { ...params, execution_mode: 'code' }],
+        ['session.close', { session_id: 'fresh' }]
+      ])
+    }
+  })
+
+  it('cleans up an unacknowledged Code session on its captured owner route', async () => {
+    const requestGateway = vi.fn()
+
+    requestGatewayForAgent.mockResolvedValueOnce({ session_id: 'fresh' }).mockResolvedValueOnce({})
+    await expect(createGatewaySession(route, { ...params, execution_mode: 'code' }, requestGateway)).rejects.toThrow(
+      /does not support Aino Code/
+    )
+    expect(requestGatewayForAgent).toHaveBeenLastCalledWith(
+      'cloud',
+      'default',
+      'session.close',
+      { session_id: 'fresh' },
+      undefined,
+      undefined,
+      { spawnPriority: 'foreground' }
+    )
+    expect(requestGateway).not.toHaveBeenCalled()
+  })
+
+  it('keeps the unsupported-mode error when cleanup fails', async () => {
+    const cleanupFailure = new Error('connection closed')
+    const requestGateway = vi.fn().mockResolvedValueOnce({ session_id: 'fresh' }).mockRejectedValueOnce(cleanupFailure)
+
+    await expect(
+      createGatewaySession(null, { ...params, execution_mode: 'code' }, requestGateway)
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/does not support Aino Code/),
+      cause: cleanupFailure
+    })
+    expect(requestGateway).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts an acknowledged Code session without closing or recreating it', async () => {
+    const created = { session_id: 'code-session', info: { execution_mode: 'code' } }
+    const requestGateway = vi.fn().mockResolvedValueOnce(created)
+
+    await expect(createGatewaySession(null, { ...params, execution_mode: 'code' }, requestGateway)).resolves.toEqual(
+      created
+    )
+    expect(requestGateway).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not drop Code folder consent for a service that rejects cwd_explicit', async () => {
+    const requestGateway = vi.fn().mockRejectedValue(V0213_REJECTION)
+
+    await expect(createGatewaySession(null, { ...params, execution_mode: 'code' }, requestGateway)).rejects.toThrow(
+      /does not support Aino Code/
+    )
+    expect(requestGateway).toHaveBeenCalledTimes(1)
+  })
 })

@@ -12,12 +12,16 @@ import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { confirm } from '@/store/confirm'
 import { notify, notifyError } from '@/store/notifications'
-import type {
-  CustomEndpoint,
-  CustomEndpointApiMode,
-  CustomEndpointModelDetail,
-  CustomEndpointUpdate
-} from '@/types/hermes'
+import type { CustomEndpoint, CustomEndpointApiMode, CustomEndpointModelDetail } from '@/types/hermes'
+
+import {
+  prepareEndpointSave,
+  resolveEndpointValidation,
+  toEndpointPayload,
+  type ValidationNotice,
+  type VerifiedEndpointValidation
+} from './custom-endpoint-validation'
+import { customModelConfigCopy } from './custom-model-config-copy'
 
 export interface EndpointForm {
   apiKey: string
@@ -66,35 +70,12 @@ function formFromEndpoint(endpoint: CustomEndpoint, makeDefault: boolean): Endpo
   }
 }
 
-function toPayload(form: EndpointForm, models?: string[], details?: CustomEndpointModelDetail[]): CustomEndpointUpdate {
-  const contextLength = Number.parseInt(form.contextLength, 10)
-
-  return {
-    id: form.id.trim() || undefined,
-    name: form.name.trim(),
-    base_url: form.baseUrl.trim(),
-    model: form.model.trim(),
-    api_key: form.apiKey.trim() || undefined,
-    api_mode: form.apiMode,
-    context_length: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : undefined,
-    discover_models: form.discoverModels,
-    make_default: form.makeDefault,
-    models: models?.length ? models : undefined,
-    model_details: details?.length ? details : undefined
-  }
-}
-
 interface EditorOptions {
   autoSelect?: boolean
   makeDefault?: boolean
   onConfigSaved?: () => void
   onMainModelChanged?: (provider: string, model: string) => void
   scope?: ProfileScope
-}
-
-interface ValidationNotice {
-  kind: 'success' | 'warning' | 'error'
-  message: string
 }
 
 export function useCustomEndpointEditor({
@@ -104,13 +85,15 @@ export function useCustomEndpointEditor({
   onMainModelChanged,
   scope
 }: EditorOptions) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const copy = t.settings.customEndpoints
-  const latest = useRef({ copy, onConfigSaved, onMainModelChanged })
-  latest.current = { copy, onConfigSaved, onMainModelChanged }
+  const validationCopy = customModelConfigCopy(locale)
+  const latest = useRef({ copy, validationCopy, onConfigSaved, onMainModelChanged })
+  latest.current = { copy, validationCopy, onConfigSaved, onMainModelChanged }
   const generation = useRef(0)
   const revision = useRef(0)
   const validationRequest = useRef(0)
+  const verified = useRef<VerifiedEndpointValidation | null>(null)
   const [form, setForm] = useState(() => emptyForm(makeDefault))
   const formRef = useRef(form)
   const [endpoints, setEndpoints] = useState<CustomEndpoint[]>([])
@@ -129,6 +112,7 @@ export function useCustomEndpointEditor({
       : `${typeof scope}:${scope ?? ''}`
 
   function replaceForm(next: EndpointForm, nextModels: string[] = []) {
+    verified.current = null
     revision.current++
     validationRequest.current++
     formRef.current = next
@@ -140,6 +124,7 @@ export function useCustomEndpointEditor({
   }
 
   function updateForm(patch: Partial<EndpointForm>) {
+    verified.current = null
     const current = formRef.current
     const next = { ...current, ...patch }
     revision.current++
@@ -205,6 +190,7 @@ export function useCustomEndpointEditor({
     const currentGeneration = generation.current
     const currentRevision = revision.current
     const draft = formRef.current
+    const isCurrent = () => generation.current === currentGeneration && revision.current === currentRevision
 
     if (
       saving ||
@@ -221,9 +207,22 @@ export function useCustomEndpointEditor({
     setSaving(true)
 
     try {
-      const response = await saveCustomEndpoint(toPayload(draft, models, details), scope)
+      const payload = await prepareEndpointSave(
+        draft,
+        currentGeneration,
+        verified.current,
+        validateDraft,
+        models,
+        details
+      )
 
-      if (generation.current !== currentGeneration || revision.current !== currentRevision) {
+      if (!payload || !isCurrent()) {
+        return false
+      }
+
+      const response = await saveCustomEndpoint(payload, scope)
+
+      if (!isCurrent()) {
         return false
       }
 
@@ -244,7 +243,7 @@ export function useCustomEndpointEditor({
 
       return true
     } catch (error) {
-      if (generation.current === currentGeneration && revision.current === currentRevision) {
+      if (isCurrent()) {
         notifyError(error, latest.current.copy.saveFailed)
       }
 
@@ -256,17 +255,13 @@ export function useCustomEndpointEditor({
     }
   }
 
-  async function validate() {
+  async function validateDraft(publishSuccess = false): Promise<VerifiedEndpointValidation | null> {
     const currentGeneration = generation.current
     const currentRevision = revision.current
     const request = ++validationRequest.current
     const draft = formRef.current
 
-    if (saving || deleting || activating || !draft.baseUrl.trim()) {
-      return
-    }
-
-    setTesting(true)
+    verified.current = null
     setValidation(null)
 
     const isCurrent = () =>
@@ -275,61 +270,60 @@ export function useCustomEndpointEditor({
       validationRequest.current === request
 
     try {
-      const response = await validateCustomEndpoint(toPayload(draft), scope)
+      const response = await validateCustomEndpoint(toEndpointPayload(draft), scope)
 
       if (!isCurrent()) {
-        return
+        return null
       }
 
-      const c = latest.current.copy
+      const result = resolveEndpointValidation(
+        draft,
+        response,
+        latest.current.copy,
+        latest.current.validationCopy,
+        CUSTOM_ENDPOINT_API_MODES
+      )
 
-      if (response.ok) {
-        setModels(response.models)
-        setDetails(response.model_details ?? [])
+      formRef.current = result.form
+      setForm(result.form)
+      setModels(result.models)
+      setDetails(result.details)
+      setValidation(result.notice)
 
-        const next = {
-          ...draft,
-          baseUrl: response.resolved_base_url?.trim() || draft.baseUrl,
-          model: draft.model || response.models[0] || ''
-        }
-
-        formRef.current = next
-        setForm(next)
-        const transport = CUSTOM_ENDPOINT_API_MODES.find(option => option.id === response.transport_checked)?.label
-
-        const notice: ValidationNotice = {
-          kind: 'success',
-          message: transport
-            ? c.endpointReachableTransport(transport, response.models.length)
-            : response.models.length
-              ? c.endpointReachableModels(response.models.length)
-              : c.endpointReachable
-        }
-
-        setValidation(notice)
-        notify(notice)
-      } else {
-        setModels([])
-        setDetails([])
-
-        const notice: ValidationNotice = {
-          kind: response.reachable ? 'warning' : 'error',
-          message: response.message || c.endpointValidationFailed
-        }
-
-        setValidation(notice)
-        notify(notice)
+      if (publishSuccess || result.notice.kind !== 'success') {
+        notify(result.notice)
       }
+
+      if (!draft.apiMode && result.apiMode) {
+        verified.current = {
+          draft: result.form,
+          generation: currentGeneration,
+          payload: { ...toEndpointPayload(result.form, result.models, result.details), api_mode: result.apiMode }
+        }
+      }
+
+      return verified.current
     } catch (error) {
       if (isCurrent()) {
         setValidation({ kind: 'error', message: latest.current.copy.validationFailed })
         notifyError(error, latest.current.copy.validationFailed)
       }
+
+      return null
     } finally {
       if (isCurrent()) {
         setTesting(false)
       }
     }
+  }
+
+  async function validate() {
+    if (saving || deleting || activating || !formRef.current.baseUrl.trim()) {
+      return
+    }
+
+    setTesting(true)
+    await validateDraft(true)
   }
 
   async function activate(endpoint: CustomEndpoint) {

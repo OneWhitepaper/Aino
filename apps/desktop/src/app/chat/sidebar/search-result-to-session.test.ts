@@ -54,3 +54,19 @@ describe('searchResultToSession', () => {
     expect(s.preview).toBe('[{"id": "call_d632e8dc7bf740048f242bfe", "c...')
   })
 })
+
+it('preserves authoritative mode on unloaded search hits and keeps old payloads Work', () => {
+  const hit = {
+    session_id: 'old-code',
+    session_started: 1,
+    snippet: 'Found it',
+    role: 'user',
+    model: 'coder',
+    source: 'desktop',
+    execution_mode: 'code' as const
+  }
+
+  expect(searchResultToSession(hit).execution_mode).toBe('code')
+  const { execution_mode: _, ...legacy } = hit
+  expect(searchResultToSession(legacy).execution_mode).toBe('work')
+})

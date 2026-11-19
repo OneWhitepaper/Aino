@@ -2,6 +2,22 @@ import { expect, test, vi } from 'vitest'
 
 import { CanonicalDesktopProtocol, slashMutation } from './canonical-protocol'
 
+test('Code creation preserves mode and projectless intent through the canonical adapter', () => {
+  const protocol = new CanonicalDesktopProtocol()
+  const draft = { source: 'desktop', execution_mode: 'code', row_cwd: '', profile: 'default' }
+  const projectless = protocol.prepare('session.create', draft)
+  expect(projectless).toMatchObject({ source: 'gui', execution_mode: 'code', row_cwd: '' })
+  expect(projectless).not.toHaveProperty('cwd')
+  expect(protocol.prepare('session.create', draft)).toEqual(projectless)
+
+  const project = protocol.prepare('session.create', {
+    source: 'desktop', execution_mode: 'code', cwd: '/projects/chosen', cwd_explicit: true
+  })
+
+  expect(project).toMatchObject({ execution_mode: 'code', cwd: '/projects/chosen', cwd_explicit: true })
+  expect(project.request_id).not.toBe(projectless.request_id)
+})
+
 test('sibling routes survive every rebuilt control and compression follow-up', async () => {
   const protocol = new CanonicalDesktopProtocol()
   protocol.result(

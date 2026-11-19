@@ -2,6 +2,8 @@ import type { ConnectionRequestPayload, FreeTierChallengePayload, ToolLabel } fr
 
 import type { ToolResultMetadata } from '@/lib/tool-result-metadata'
 
+import type { WorkCodeHandoff, WorkCodeSessionLink } from '../../../shared/src/gateway-contract.generated'
+
 export type StoredToolCallLabels = Record<string, ToolLabel[]>
 
 import type { PlatformRuntimeFields } from '@/lib/platform-session-model'
@@ -317,6 +319,8 @@ export interface CustomEndpointUpdate {
 }
 
 export interface CustomEndpointValidationResponse {
+  /** Present only after an auto-mode model request succeeds. Legacy route probes are not evidence. */
+  detected_api_mode?: Exclude<CustomEndpointApiMode, ''>
   message: string
   /** Older backends send only `models`. */
   model_details?: CustomEndpointModelDetail[]
@@ -547,6 +551,7 @@ export interface SessionCreateResponse {
 }
 
 export interface SessionInfo {
+  execution_mode?: 'work' | 'code'
   archived?: boolean
   cwd?: null | string
   /** Git branch checked out in {@link cwd} when the session started/resumed.
@@ -846,6 +851,10 @@ export interface SessionResumeResult {
 }
 
 export interface SessionRuntimeInfo extends PlatformRuntimeFields {
+  title?: string | null
+  handoff?: WorkCodeHandoff | null
+  linked_sessions?: WorkCodeSessionLink[] | null
+  execution_mode?: 'work' | 'code'
   stored_session_id?: string
   pending_submissions?: unknown
   /** Canonical snapshot only: the session replay epoch and event sequence its pending set reflects. */
@@ -1422,6 +1431,7 @@ export interface ComputerUseStatus {
 }
 
 export interface SessionSearchResult {
+  execution_mode?: 'work' | 'code'
   /** Recency of the matched conversation, straight from the sessions row —
    *  present on hits backed by a rich row (the search endpoint fills it).
    *  Used to order unloaded hits honestly; falls back to session_started. */

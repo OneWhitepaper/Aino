@@ -2,12 +2,14 @@ import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
 
 import type { AppearancePageCopy } from './appearance-page'
+import type { ExecutionModeCopy } from './execution-mode'
 import type { NotificationCenterTranslations } from './notification-center'
 // health: allow FILE_LINES -- the copy contract for the usage-window plan keys every locale adds (allowance gauges, Large/Free tags, the limit card)
 // `Translations` is the single source of truth for every translatable string
 // surface. Fully translated locale files may satisfy this interface directly;
 // Partial locales use `defineLocale()` to fall back to English with typed keys.
 import type { ToolPanelCopy } from './tool-panel'
+import type { ArtifactCardCopy, ArtifactPreviewCopy, ArtifactsCopy } from './types/artifacts'
 import type { AccountLoginCopy, AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
 import type { BackupTransferTranslations } from './types_backup_transfer'
@@ -43,7 +45,6 @@ import type { ToolTitleCopy, ToolTitleKey } from './types_tool_titles'
 import type { UninstallSectionTranslations } from './types_uninstall_section'
 import type { UpdateChannelCopy } from './types_update_channel'
 import type { WorkspacePageCopy } from './workspace-page'
-
 /** The locales compiled into the app (`TRANSLATIONS`). */
 export type BundledLocale = 'en' | 'zh' | 'zh-hant' | 'ja' | 'ar' | 'ru' | 'fr' | 'de' | 'es'
 
@@ -71,6 +72,7 @@ interface ModeOptionCopy {
 export interface UpstreamTranslations extends NoticeTranslations {
   toolPanel: ToolPanelCopy
   appearancePage: AppearancePageCopy
+  executionMode: ExecutionModeCopy
   workspacePage: WorkspacePageCopy
   accountPage: AccountPageTranslations
   /** Shared-metrics consent: first-run dialog + Settings › Safety toggles. */
@@ -3056,66 +3058,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
     }
   }
 
-  artifacts: {
-    search: string
-    refresh: string
-    refreshing: string
-    indexing: string
-    tabAll: string
-    tabImages: string
-    tabFiles: string
-    tabLinks: string
-    noArtifactsTitle: string
-    noArtifactsDesc: string
-    failedLoad: string
-    openFailed: string
-    itemsImage: string
-    itemsLink: string
-    itemsFile: string
-    itemsGeneric: string
-    zero: string
-    rangeOf: (start: number, end: number, total: number) => string
-    goToPage: (itemLabel: string, page: number) => string
-    colTitleLink: string
-    colTitleFile: string
-    colTitleDefault: string
-    colLocationLink: string
-    colLocationFile: string
-    colLocationDefault: string
-    colSession: string
-    kindImage: string
-    kindFile: string
-    kindLink: string
-    chat: string
-    copyUrl: string
-    copyPath: string
-
-    partialLoadMessage: (failed: number, total: number) => string
-
-    safeLoadFailure: (count: number) => string
-
-    unreadableFailure: (count: number) => string
-  }
-
-  artifactCard: {
-    kind: Record<'code' | 'html' | 'svg', string>
-    generating: (lines: number) => string
-    versionBadge: (count: number) => string
-    open: string
-  }
-
-  artifactPreview: {
-    versionOf: (current: number, total: number) => string
-    olderVersion: string
-    newerVersion: string
-    latest: string
-    copyContent: string
-    download: string
-    openInBrowser: string
-    openInBrowserFailed: string
-    missingTitle: string
-    missingBody: string
-  }
+  artifacts: ArtifactsCopy
+  artifactCard: ArtifactCardCopy
+  artifactPreview: ArtifactPreviewCopy
 
   sidebar: {
     filter: {
@@ -4597,6 +4542,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
       errorSendDiagnostics: string
       filesChanged: (count: number) => string
       reviewChanges: string
+      recordedFileChanges: string
+      recordedFileEdit: (index: number) => string
+      reviewRepositoryChanges: string
       readAloudFailed: string
       preparingAudio: string
       stopReading: string

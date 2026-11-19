@@ -7,7 +7,7 @@ import tarfile
 
 import pytest
 
-from pm.store import extract
+from pm.store import Store, extract
 
 
 def _tar(tmp_path, members):
@@ -24,6 +24,27 @@ def _tar(tmp_path, members):
                 info.linkname = linkname
                 tf.addfile(info)
     return archive
+
+
+@pytest.mark.platforms("windows")
+def test_nested_tar_directory_metadata_survives_windows_store_staging(tmp_path):
+    archive = tmp_path / "pkg.tar.gz"
+    directory = "resources/nested/licenses"
+    timestamp = 1_700_000_000
+    with tarfile.open(archive, "w:gz") as tf:
+        entry = tarfile.TarInfo(directory)
+        entry.type = tarfile.DIRTYPE
+        entry.mtime = timestamp
+        tf.addfile(entry)
+        entry = tarfile.TarInfo(f"{directory}/NOTICE")
+        entry.size = 1
+        tf.addfile(entry, io.BytesIO(b"x"))
+
+    with Store(tmp_path / "tools").scratch() as scratch:
+        dest = scratch / "tree"
+        extract(archive, dest)
+        assert (dest / directory / "NOTICE").read_bytes() == b"x"
+        assert (dest / directory).stat().st_mtime == timestamp
 
 
 def test_relative_symlinks_resolve_from_their_own_directory(tmp_path):

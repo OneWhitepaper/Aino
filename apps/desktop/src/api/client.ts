@@ -61,6 +61,8 @@ const CANONICAL_PROMPT_EVENTS: Record<string, 'approval' | 'clarify'> = {
 
 const ATTACH_REQUIRED = new Set([
   'prompt.submit',
+  // Managed delegation requires this socket's subscription, not just a model metadata read.
+  'session.managed_model_ticket',
   'approval.respond',
   'clarify.respond',
   'session.interrupt',

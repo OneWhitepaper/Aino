@@ -1014,13 +1014,7 @@ class AIAgent(
         _quietly(self._close_cached_request_openai_client, reason=reason)
         _quietly(self._close_cached_request_anthropic_client, reason=reason)
 
-    def _close_codex_session(self) -> None:
-        """Close the Codex app-server session (else the child keeps running); the attribute is cleared BEFORE
-        close() so a concurrent reader can't grab a half-closed session."""
-        codex_session = getattr(self, "_codex_session", None)
-        if codex_session is not None:
-            self._codex_session = None
-            codex_session.close()
+    _close_codex_session = _forward("agent.codex_runtime", "_close_codex_session")
 
     @staticmethod
     def _trim_process_memory() -> None:

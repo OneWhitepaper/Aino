@@ -5,12 +5,20 @@ Extracted from ``hermes_cli.web_server``; helpers/state that tests monkeypatch o
 """
 
 import contextlib
+import json
 import logging
 import re
 import asyncio
 import time
 import urllib.parse
+from codecs import getincrementaldecoder
+from dataclasses import dataclass
+from io import IncrementalNewlineDecoder
+
+import httpx
 from fastapi import APIRouter
+from agent import anthropic_adapter
+from hermes_cli import runtime_provider
 from hermes_cli.web_routers._common import (
     REDACTED_CREDENTIAL_WRITE_DETAIL, config_scoped_to_thread, http_failure,
     is_redacted_credential_preview, redacted_credential_preview, scoped_to_thread,
@@ -28,10 +36,13 @@ from fastapi import HTTPException, Request
 from hermes_cli.config import DEFAULT_CONFIG, OPTIONAL_ENV_VARS, read_raw_config, require_readable_config_before_write, custom_endpoint_key_env, coerce_provider_id, find_provider_entry, get_compatible_custom_providers, _ENV_REF_RE, _deep_merge
 from hermes_cli.config_providers import (
     _CAMEL_ALIASES, ENDPOINT_ADDRESS_FIELDS, _canonical_api_mode, _custom_provider_entry_to_provider_config,
+    _normalize_custom_provider_entry,
 )
 from hermes_cli.providers import custom_provider_slug, is_builtin_provider_id
+from hermes_cli.route_identity import normalize_route_base_url
 from hermes_cli.web_models import ConfigUpdate, EnvVarUpdate, EnvVarDelete, EnvVarReveal, CustomEndpointUpdate
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from utils import same_base_url_origin
 
 _log = logging.getLogger("hermes_cli.web_server")
 config_router = APIRouter()
@@ -762,7 +773,7 @@ def _assign_endpoint_main(cfg: dict[str, Any], entry: dict[str, Any], endpoint_i
 
 def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> tuple[str, dict[str, Any]]:
     name = (body.name or "").strip()
-    base_url = (body.base_url or "").strip().rstrip("/")
+    base_url = _normalize_custom_endpoint_url(body.base_url)
     model = (body.model or "").strip()
 
     if not name:
@@ -808,13 +819,12 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     if existing is None:
         existing = {}
 
-
     # Merge onto the existing entry rather than replacing it: a providers.<name>
     # block can carry hand-written keys the dashboard has no field for
     # (``key_env``/``api_key_env``, ``extra_headers`` — possibly with
     # credentials — ``request_overrides``); rebuilding from scratch silently
     # dropped them on an unrelated edit.
-    entry: dict[str, Any] = dict(existing)
+    entry = _custom_endpoint_edit_entry(existing, body)
     _drop_stale_addresses(entry)
     entry.update({
         "name": name, "base_url": base_url, "model": model,
@@ -1062,52 +1072,99 @@ def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
         return response
 
 
+def _stored_probe_endpoint(cfg: dict[str, Any], endpoint_id: str) -> tuple[dict[str, Any], str]:
+    """Resolve the saved row the editor loaded, including legacy and direct-config rows."""
+    stored_key, entry = _resolve_custom_endpoint_entry(cfg.get("providers"), endpoint_id)
+    if entry is not None:
+        return (_normalize_custom_provider_entry(entry, provider_key=coerce_provider_id(stored_key)) or {},
+                custom_provider_slug(str(stored_key)))
+    for entry in get_compatible_custom_providers(cfg):
+        if not entry.get("provider_key") and _custom_endpoint_id(entry["name"]) == endpoint_id:
+            return entry, custom_provider_slug(entry["name"])
+    model = cfg.get("model")
+    if endpoint_id == "custom" and isinstance(model, dict) and str(model.get("provider")).lower() == "custom":
+        return _normalize_custom_provider_entry({**model, "name": "Custom"}) or {}, "custom"
+    return {}, ""
+
+
+def _custom_endpoint_probe_headers(body: CustomEndpointUpdate) -> tuple[dict[str, dict[str, str]], str]:
+    """Read saved credentials only inside their profile and for their original origin."""
+    cfg = load_config() if body.id else {}
+    entry, provider = _stored_probe_endpoint(cfg, body.id) if body.id else ({}, "")
+    if entry and (not same_base_url_origin(entry["base_url"], body.base_url)
+                  or not _normalization_keeps_saved_route(entry, body.base_url)):
+        entry = {}
+    mode = body.api_mode if body.api_mode is not None else _endpoint_api_mode(entry)
+    mode = _canonical_api_mode(mode).lower()
+    key = (body.api_key or "").strip()
+    if body.api_key is None and entry:
+        # Reuse runtime precedence (named key_env, token commands and credential pools),
+        # freezing the endpoint we just checked while credentials remain profile-scoped.
+        with runtime_provider.frozen_runtime_config(cfg):
+            credential = runtime_provider.resolve_runtime_provider(
+                requested=provider, target_model=body.model)["api_key"]
+        key = credential() if callable(credential) else credential
+
+    headers = {candidate: _protocol_probe_headers(key, _normalize_custom_endpoint_url(body.base_url), candidate,
+                                                 entry.get("extra_headers") or {})
+               for candidate in _TRANSPORT_ROUTES}
+    return headers, mode
+
+
+def _protocol_probe_headers(key: str, base_url: str, mode: str, extra_headers: dict) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if mode == "anthropic_messages":
+        headers.update(anthropic_adapter.anthropic_http_headers(key, base_url))
+    elif key:
+        headers["Authorization"] = f"Bearer {key}"
+    headers.update(extra_headers)
+    return headers
+
+
 @router.post("/api/providers/custom-endpoints/validate")
-async def validate_custom_endpoint(body: CustomEndpointUpdate):
-    """Probe a custom endpoint by calling its OpenAI-compatible /models URL."""
-    base_url = (body.base_url or "").strip().rstrip("/")
+async def validate_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = None):
+    """Discover models; in automatic mode verify the selected model's actual protocol."""
+    base_url = _normalize_custom_endpoint_url(body.base_url)
     if not base_url:
         return {"ok": False, "reachable": True, "message": "Enter an endpoint URL first.", "models": []}
 
-    headers = {"Accept": "application/json"}
-    if body.api_key and body.api_key.strip():
-        headers["Authorization"] = f"Bearer {body.api_key.strip()}"
+    protocol_headers, mode = await config_scoped_to_thread(profile, lambda: _custom_endpoint_probe_headers(body))
+    hint = _setup_protocol_hint(body.base_url)
+    headers = protocol_headers[mode or _auto_api_mode(body.base_url)]
 
     resolved, resp = await _probe_openai_compatible_models(base_url, headers)
+    if resp is not None and _catalog_probe_blocked(resp):
+        return {"ok": False, "reachable": True, "message": "The endpoint reported an authentication or quota error.", "models": []}
+    # Model catalogs are optional. A hand-entered model can prove inference on the
+    # exact configured base even when neither /models variant is exposed.
+    if body.model.strip() and (resp is None or resp.status_code in (404, 405, 501)):
+        result = {"models": [], "model_details": [], "resolved_base_url": base_url}
+        result.update(await _detect_endpoint_protocol(base_url, body.model.strip(), protocol_headers, mode, hint=hint))
+        return result
     if resp is None:
         return {"ok": False, "reachable": False, "message": f"Could not reach {base_url}/models.", "models": []}
-    if resp.status_code in (401, 403):
-        return {"ok": False, "reachable": True, "message": "The endpoint rejected the API key.", "models": []}
     if not resp.is_success:
         return {"ok": False, "reachable": True, "message": f"Endpoint returned HTTP {resp.status_code}.", "models": []}
     # ``models`` stays the bare id list older clients read; ``model_details`` keeps the
     # alias metadata (``canonical_model`` / ``reasoning_effort``) the id list flattens.
     entries = _parse_model_entries(resp)
     ids = [e["id"] for e in entries]
-    if not ids:
+    if not ids and not body.model.strip():
         # A 200 that parses to zero models is the SPA-catch-all signature (#83128): a real
         # OpenAI-compatible /models answers JSON with a usable list. ``_parse_model_entries``
         # is lenient by design, so classify the empty result here instead of reporting
-        # success. ok:false + reachable:true is a warning in the UI — Save stays possible
-        # for endpoints that legitimately expose no model list.
+        # success. With an explicitly entered model, automatic detection can instead
+        # establish compatibility through inference; the catalog is not required.
         return {"ok": False, "reachable": True, "message": _no_models_probe_message(resp, resolved),
                 "models": [], "model_details": [], "resolved_base_url": resolved}
-    # /models answering proves nothing about the transport the runtime will POST to:
-    # a Responses-only host lists models fine and 404s every /chat/completions (#93622).
-    # Probe the route the saved mode (or the runtime's URL auto-detect) actually uses, on the
-    # base that actually served /models (#65488) — that is the URL the runtime will persist.
-    mode = _canonical_api_mode(body.api_mode or "").lower() or _auto_api_mode(resolved)
-    probe_model = (body.model or "").strip() or (ids[0] if ids else "")
-    try:
-        async with _endpoint_probe_client(resolved, 8.0) as client:
-            missing = await _probe_transport_route(client, resolved, mode, probe_model, headers)
-    except Exception:
-        missing = ""  # inconclusive (see _probe_transport_route): never block on a transport error
-
     result = {"ok": True, "reachable": True, "message": "", "models": ids, "model_details": entries,
-              "transport_checked": mode, "resolved_base_url": resolved}
-    if missing:
-        result.update(ok=False, message=missing)
+              "resolved_base_url": resolved}
+    probe_model = body.model.strip() or (ids[0] if mode and ids else "")
+    if probe_model:
+        # Alias ids advertised by a relay need their canonical inference id.
+        selected = next((entry for entry in entries if entry["id"] == probe_model), {})
+        model = selected.get("canonical_model") or probe_model
+        result.update(await _detect_endpoint_protocol(resolved, model, protocol_headers, mode, hint=hint))
     return result
 
 def _no_models_probe_message(resp: Any, base_url: str) -> str:
@@ -1153,6 +1210,8 @@ async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]
             # there, key rejected", which beats the typed root's 404 (wrong path).
             if resp is None or candidate_resp.is_success or resp.status_code == 404:
                 resolved, resp = candidate, candidate_resp
+            if _catalog_probe_blocked(candidate_resp):
+                return candidate, candidate_resp
             if candidate_resp.is_success:
                 break
     return resolved, resp
@@ -1164,37 +1223,241 @@ _TRANSPORT_LABELS = {"chat_completions": "Chat Completions", "codex_responses": 
                      "anthropic_messages": "Anthropic Messages"}
 
 
-def _auto_api_mode(base_url: str) -> str:
-    """The transport the runtime falls back to for an endpoint without a pinned ``api_mode``
-    (same resolver as ``runtime_provider_custom._custom_runtime``)."""
-    from hermes_cli.runtime_provider import _detect_api_mode_for_url
-    return _detect_api_mode_for_url(base_url) or "chat_completions"
-
-
-async def _probe_transport_route(client, base_url: str, mode: str, model: str, headers: dict[str, str]) -> str:
-    """POST a 1-token request to ``mode``'s route; return a failure message when the host does
-    not serve it (404/405/501), ``""`` otherwise. Any other status — 200, 400 (bad body), 401,
-    422, 429 — means the route exists, which is all the check needs to know; a network error or
-    timeout (a local server still loading the model) is inconclusive and does not block."""
-    route = _TRANSPORT_ROUTES.get(mode)
-    if route is None:
-        return ""
-    if mode == "anthropic_messages":
-        payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}
-        token = headers.get("Authorization", "").removeprefix("Bearer ")
-        headers = {**headers, "anthropic-version": "2023-06-01", **({"x-api-key": token} if token else {})}
-    elif mode == "codex_responses":
-        payload = {"model": model, "input": "hi", "max_output_tokens": 16}
-    else:
-        payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}
+def _normalize_custom_endpoint_url(value: str) -> str:
+    """Strip only a pasted inference suffix, preserving the origin and tenant prefix."""
+    raw = (value or "").strip().rstrip("/")
     try:
-        resp = await client.post(base_url + route, json=payload, headers=headers)
-    except Exception:
-        return ""
-    if resp.status_code not in (404, 405, 501):
-        return ""
-    return (f"{base_url}/models answered, but POST {route} returned HTTP {resp.status_code}: this host "
-            f"does not serve the {_TRANSPORT_LABELS[mode]} API. Pick the API mode it does serve.")
+        parsed = urllib.parse.urlsplit(raw)
+    except ValueError:
+        return raw  # The route's existing URL validation owns malformed input.
+    path = parsed.path.rstrip("/")
+    for mode, route in _TRANSPORT_ROUTES.items():
+        # Chat's two-segment suffix also identifies non-v1 inference routes (e.g.
+        # /api/coding/paas/v4); bare /responses and /messages may name a base itself.
+        suffix = route if mode == "chat_completions" else "/v1" + route
+        if path.endswith(suffix):
+            return parsed._replace(path=path[:-len(route)]).geturl()
+    return raw
+
+
+def _normalization_keeps_saved_route(entry: dict[str, Any], submitted_url: str) -> bool:
+    """Pasting an inference URL must not grant saved secrets a new parent/tenant path."""
+    normalized = _normalize_custom_endpoint_url(submitted_url)
+    if normalized == submitted_url.strip().rstrip("/"):
+        return True
+    return all(normalize_route_base_url(str(entry[field]).strip()) == normalize_route_base_url(normalized)
+               for field in ENDPOINT_ADDRESS_FIELDS if entry.get(field))
+
+
+def _custom_endpoint_edit_entry(existing: dict[str, Any], body: CustomEndpointUpdate) -> dict[str, Any]:
+    entry = dict(existing)
+    if existing and not _normalization_keeps_saved_route(existing, body.base_url):
+        if body.api_key is None:
+            raise HTTPException(status_code=400, detail="Enter the API key for the normalized endpoint address.")
+        for field in _ORIGIN_BOUND_FIELDS:
+            if field != "key_env":  # The existing key writer clears or replaces this pointer.
+                entry.pop(field, None)
+    return entry
+
+
+def _protocol_probe_url(base_url: str, mode: str) -> str:
+    # The Anthropic SDK strips a terminal /v1 before appending /v1/messages.
+    if mode == "anthropic_messages":
+        return base_url.removesuffix("/v1") + "/v1/messages"
+    return base_url + _TRANSPORT_ROUTES[mode]
+
+
+def _auto_api_mode(base_url: str) -> str:
+    """Choose catalog auth using the runtime's URL hints and a pasted inference route."""
+    return _setup_protocol_hint(base_url) or "chat_completions"
+
+
+def _setup_protocol_hint(url: str) -> str:
+    hint = runtime_provider._detect_api_mode_for_url(url)
+    if hint:
+        return hint
+    # An explicitly pasted Messages route also identifies its auth family. Do not
+    # try Bearer on a gateway that expects x-api-key, then retry after its 401.
+    return "anthropic_messages" if urllib.parse.urlsplit(url).path.rstrip("/").endswith("/v1/messages") else ""
+
+
+@dataclass(frozen=True)
+class _ProtocolProbeResult:
+    mode: str
+    verified: bool
+    message: str = ""
+    stop: bool = False
+
+
+async def _detect_endpoint_protocol(base_url: str, model: str, headers: dict[str, dict[str, str]],
+                                    mode: str = "", *, hint: str = "") -> dict[str, Any]:
+    """A setup-only probe, never a conversation retry or a protocol converter."""
+    hint = hint or runtime_provider._detect_api_mode_for_url(base_url)
+    candidates = (mode,) if mode else dict.fromkeys(filter(None, (hint, "codex_responses", "chat_completions", "anthropic_messages")))
+    failures = []
+    async with _endpoint_probe_client(base_url, 12.0) as client:
+        for candidate in candidates:
+            try:
+                result = await asyncio.wait_for(_verify_protocol_reply(client, base_url, candidate, model, headers[candidate]), 12.0)
+            except (httpx.HTTPError, TimeoutError):
+                result = _ProtocolProbeResult(candidate, False, f"{_TRANSPORT_LABELS[candidate]}: connection failed or timed out", stop=True)
+            if result.verified:
+                return {"ok": True, "reachable": True, "message": "", "transport_checked": candidate,
+                        **({} if mode else {"detected_api_mode": candidate})}
+            failures.append(result.message)
+            if result.stop:
+                break
+    return {"ok": False, "reachable": True, **({"transport_checked": mode} if mode else {}),
+            "message": "Could not verify a working protocol for this model. " + "; ".join(failures)
+                       + ". Retry or select an API mode manually; no protocol was automatically selected."}
+
+
+async def _verify_protocol_reply(client, base_url: str, mode: str, model: str, headers: dict[str, str]) -> _ProtocolProbeResult:
+    prompt = "Reply only OK."
+    payloads = {
+        "codex_responses": {"model": model, "input": prompt, "stream": True, "store": False, "max_output_tokens": 128},
+        "chat_completions": {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 128},
+        "anthropic_messages": {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 128},
+    }
+    async with client.stream("POST", _protocol_probe_url(base_url, mode), json=payloads[mode], headers=headers) as response:
+        if not response.is_success:
+            payload = await _read_probe_json(response)
+            return _ProtocolProbeResult(mode, False, f"{_TRANSPORT_LABELS[mode]}: HTTP {response.status_code}",
+                                        stop=response.status_code in (401, 403, 429) or _probe_auth_or_quota_error(payload))
+        if mode == "codex_responses" and "text/event-stream" in response.headers.get("content-type", "").lower():
+            return await _verify_responses_stream(response)
+        else:
+            payload = await _read_probe_json(response)
+            if isinstance(payload, dict) and (payload.get("error") or payload.get("type") == "error"):
+                return _ProtocolProbeResult(mode, False, f"{_TRANSPORT_LABELS[mode]}: endpoint reported an error", stop=True)
+            valid = mode != "codex_responses" and _valid_protocol_message(payload, mode)
+    return _ProtocolProbeResult(mode, valid, "" if valid else f"{_TRANSPORT_LABELS[mode]}: invalid or incomplete reply")
+
+
+async def _read_probe_json(response: httpx.Response) -> Any:
+    data = bytearray()
+    async for chunk in response.aiter_bytes():
+        data.extend(chunk)
+        if len(data) > 128 * 1024:
+            return None
+    try:
+        return json.loads(data)
+    except (ValueError, RecursionError):
+        return None
+
+
+def _probe_auth_or_quota_error(payload: Any) -> bool:
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return False
+    return any(error.get(field) in ("authentication_error", "invalid_api_key", "permission_error",
+                                   "permission_denied", "insufficient_quota", "rate_limit_error",
+                                   "rate_limit_exceeded", "billing_error", "billing_hard_limit_reached")
+               for field in ("type", "code"))
+
+
+def _catalog_probe_blocked(response: httpx.Response) -> bool:
+    if response.status_code in (401, 403, 429):
+        return True
+    try:
+        return _probe_auth_or_quota_error(response.json())
+    except (ValueError, RecursionError):
+        return False
+
+
+def _has_probe_text(content: Any) -> bool:
+    if isinstance(content, str):
+        return bool(content.strip())
+    return isinstance(content, list) and any(
+        isinstance(item, dict) and isinstance(item.get("text"), str) and item["text"].strip()
+        for item in content
+    )
+
+
+def _valid_protocol_message(payload: Any, mode: str) -> bool:
+    if not isinstance(payload, dict) or payload.get("error"):
+        return False
+    if mode == "anthropic_messages":
+        return (payload.get("type") == "message" and payload.get("role") == "assistant"
+                and payload.get("stop_reason") in ("end_turn", "stop_sequence") and _has_probe_text(payload.get("content")))
+    choices = payload.get("choices")
+    if payload.get("object") != "chat.completion" or not isinstance(choices, list) or not choices:
+        return False
+    choice = choices[0]
+    message = choice.get("message") if isinstance(choice, dict) else None
+    return (isinstance(message, dict) and message.get("role") == "assistant"
+            and choice.get("finish_reason") == "stop" and _has_probe_text(message.get("content")))
+
+
+async def _verify_responses_stream(response: httpx.Response) -> _ProtocolProbeResult:
+    """HTTP 200 or a partial text delta is not a usable Codex Responses stream."""
+    failure = _ProtocolProbeResult("codex_responses", False, "Responses API: invalid or incomplete reply")
+    saw_message = False
+    try:
+        async for event in _iter_probe_sse_events(response):
+            kind = event["type"]
+            result = event.get("response")
+            if (kind in {"error", "response.failed"} or event.get("error")
+                    or (isinstance(result, dict) and result.get("error"))):
+                return _ProtocolProbeResult("codex_responses", False, "Responses API: endpoint reported an error", stop=True)
+            if kind == "response.incomplete":
+                return failure
+            if kind == "response.output_item.done":
+                saw_message |= _valid_response_probe_message(event.get("item"))
+            elif kind == "response.completed":
+                valid = saw_message and _valid_completed_response(result)
+                return _ProtocolProbeResult("codex_responses", True) if valid else failure
+    except (ValueError, RecursionError):
+        return failure
+    return failure
+
+
+def _valid_completed_response(payload: Any) -> bool:
+    if not isinstance(payload, dict) or payload.get("error") or payload.get("status") != "completed":
+        return False
+    output = payload.get("output")
+    return (isinstance(payload.get("id"), str) and bool(payload["id"]) and isinstance(output, list)
+            and any(_valid_response_probe_message(item) for item in output))
+
+
+def _valid_response_probe_message(item: Any) -> bool:
+    if not isinstance(item, dict) or item.get("type") != "message" or item.get("role") != "assistant":
+        return False
+    content = item.get("content")
+    return (item.get("status") == "completed" and isinstance(item.get("id"), str) and bool(item["id"]) and isinstance(content, list)
+            and any(isinstance(part, dict) and part.get("type") == "output_text"
+                    and isinstance(part.get("text"), str) and part["text"].strip() for part in content))
+
+
+async def _iter_probe_sse_events(response: httpx.Response) -> AsyncIterator[dict[str, Any]]:
+    data_lines = []
+    async for line in _bounded_probe_sse_lines(response):
+        if line.startswith("data:"):
+            data_lines.append(line[5:].lstrip(" "))
+        elif not line and data_lines:
+            event = json.loads("\n".join(data_lines))
+            data_lines.clear()
+            if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+                raise ValueError("Protocol probe received an invalid event")
+            yield event
+
+
+async def _bounded_probe_sse_lines(response: httpx.Response) -> AsyncIterator[str]:
+    # Bound bytes before decoding: a peer can stream forever without a newline.
+    # The standard decoder also preserves CR/LF/CRLF framing across chunk boundaries.
+    decoder = IncrementalNewlineDecoder(getincrementaldecoder("utf-8")(), translate=True)
+    pending = ""
+    size = 0
+    async for chunk in response.aiter_bytes():
+        size += len(chunk)
+        if size > 128 * 1024:
+            raise ValueError("Protocol probe exceeded its byte budget")
+        lines = (pending + decoder.decode(chunk)).split("\n")
+        pending = lines.pop()
+        for line in lines:
+            yield line
+    for line in (pending + decoder.decode(b"", final=True)).split("\n")[:-1]:
+        yield line
 
 
 def _endpoint_probe_client(url: str, timeout: float):

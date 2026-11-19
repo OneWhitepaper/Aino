@@ -4,9 +4,12 @@ import type { NavigateFunction } from 'react-router'
 
 import { $freshSessionRequest, refreshActiveProfile } from '@/store/profile'
 
+import { useHermesConfigRecord } from '../hooks/use-config-record'
 import { resetProjectTreeState } from '../right-sidebar/files/use-project-tree'
 import { SETTINGS_ROUTE } from '../routes'
+import type { FreshSessionDraftOptions } from '../session/hooks/use-session-actions/types'
 
+import { useExecutionModeWorkspace } from './hooks/use-execution-mode-workspace'
 import { $restartPreviewServer } from './panes'
 
 type RestartPreviewServer = NonNullable<ReturnType<typeof $restartPreviewServer.get>>
@@ -51,9 +54,22 @@ export function usePublishRestartPreviewServer(restartPreviewServer: RestartPrev
   }, [restartPreviewServer])
 }
 
+// Both navigation restorers must wait for the same profile config authority.
+export function useResumeLastSessionPreference(): boolean | undefined {
+  const configRecord = useHermesConfigRecord()
+
+  return configRecord.isPending
+    ? undefined
+    : (configRecord.data?.display as { resume_last_session?: unknown } | undefined)?.resume_last_session !== false
+}
+
 // A profile switch/create drops to a fresh new-session draft so the
 // previously open session doesn't bleed across contexts. Skip initial value.
-export function useFreshSessionRequest(startFreshSessionDraft: () => void) {
+export function useFreshSessionRequest(
+  startFreshSessionDraft: (options?: boolean | FreshSessionDraftOptions) => void,
+  resumeLastSession: boolean | undefined
+) {
+  useExecutionModeWorkspace(startFreshSessionDraft, resumeLastSession)
   const freshSessionRequest = useStore($freshSessionRequest)
   const lastFreshRef = useRef(freshSessionRequest)
 

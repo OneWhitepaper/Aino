@@ -3,11 +3,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 
 import { DropdownMenu, DropdownMenuContent } from '@/components/ui/dropdown-menu'
+import { queryClient } from '@/lib/query-client'
 import { $favoriteModels } from '@/store/favorite-models'
 import { platformModel } from '@/test/platform-model'
 
 import type { ModelMenuController } from './model-catalog-menu'
 import { type ModelMenuPreview, ModelMenuPreviewDetails } from './model-menu-preview'
+
+vi.mock('@/store/gateway', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requestGatewayForAgent: vi.fn(async () => ({ capabilities: ['code-model-protocol-bridge-v1'] })),
+  requestGatewayForProfile: vi.fn(async () => ({ capabilities: ['code-model-protocol-bridge-v1'] }))
+}))
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn()
@@ -17,6 +24,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup()
+  queryClient.clear()
   $favoriteModels.set([])
 })
 
@@ -114,4 +122,20 @@ it('omits unavailable reasoning controls and keeps real Aino pricing accessible'
   fireEvent.click(screen.getByText('Pricing & capabilities'))
   expect(screen.getByText(/Asia\/Shanghai/)).toBeDefined()
   expect(screen.getByText(/09:00 - 18:00: 1.5x/)).toBeDefined()
+})
+
+it.each([
+  ['responses', 'Code compatible'],
+  ['chat_completions', 'Code auto-adapted'],
+  ['anthropic_messages', 'Code auto-adapted']
+] as const)('shows %s protocol eligibility without certifying tool execution', async (api_mode, label) => {
+  const controller = renderPreview({ kind: 'aino', model: { ...platformModel(), api_mode } })
+  expect(await screen.findByText(label)).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Model settings' })).toBeDefined()
+  expect(controller.select).not.toHaveBeenCalled()
+})
+
+it('marks absent protocol metadata as unverified instead of guessing from the model id', () => {
+  renderPreview({ kind: 'custom', family: { id: 'm1', fastId: null }, provider })
+  expect(screen.getByText('Code unverified')).toBeDefined()
 })

@@ -71,6 +71,13 @@ const savedResponse: CustomEndpointsResponse = {
 
 beforeEach(() => {
   confirm.mockResolvedValue(true)
+  validateCustomEndpoint.mockResolvedValue({
+    ok: true,
+    reachable: true,
+    message: '',
+    models: [],
+    detected_api_mode: 'codex_responses'
+  })
   $activeGatewayProfile.set('default')
   $settingsScopeOverride.set(null)
   $profiles.set([])
@@ -110,7 +117,7 @@ describe('CustomEndpointsSettings', () => {
     expect(screen.getByText('API 模式')).toBeTruthy()
     expect(screen.getByRole('button', { name: '自動偵測' })).toBeTruthy()
     expect(saveCustomEndpoint).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '儲存' })))
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Fixture Ω',
@@ -150,7 +157,7 @@ describe('CustomEndpointsSettings', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     })
     fireEvent.change(screen.getByPlaceholderText('gpt-5.4'), { target: { value: 'gpt-5.6-sol-high' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
 
     expect(validateCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({ api_mode: 'codex_responses' }),
@@ -197,7 +204,7 @@ describe('CustomEndpointsSettings', () => {
       target: { value: 'https://studio.example.com/v1' }
     })
     fireEvent.change(await screen.findByPlaceholderText('gpt-5.4'), { target: { value: 'studio-model' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
 
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Studio gateway' }),
@@ -240,7 +247,7 @@ describe('CustomEndpointsSettings', () => {
     )
     expect(screen.getByLabelText<HTMLInputElement>('API Key').value).toBe('')
     fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Updated connection' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
 
     await waitFor(() => expect(saveCustomEndpoint).toHaveBeenCalledOnce())
     expect(saveCustomEndpoint).toHaveBeenCalledWith(
@@ -275,7 +282,7 @@ describe('CustomEndpointsSettings', () => {
     render(<CustomEndpointsSettings onMainModelChanged={onMainModelChanged} />)
 
     await screen.findByDisplayValue('saved-alias')
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
 
     await waitFor(() => expect(onMainModelChanged).toHaveBeenCalledWith('custom:deepseek', 'resolved-model'))
     expect(onMainModelChanged).toHaveBeenCalledOnce()
@@ -325,7 +332,7 @@ describe('CustomEndpointsSettings', () => {
       target: { value: 'http://profile-a.test/v1' }
     })
     fireEvent.change(screen.getByPlaceholderText('gpt-5.4'), { target: { value: 'model-a' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
     expect(saveCustomEndpoint).toHaveBeenCalledTimes(1)
 
     // SettingsView keys ProvidersSettings by the selected profile, so a profile

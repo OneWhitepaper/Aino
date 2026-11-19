@@ -66,6 +66,22 @@ Native desktop bundles stage the supported tool set and all target-compatible
 Python extras before packaging. `--extra all` and `--all-extras` are not
 synonyms. Platform markers still exclude dependencies that cannot run on a target.
 
+The `codex` tool is optional for source installs (`hermes pm install codex`) and
+included in native desktop bundles. Its PM pin selects the complete official
+Codex package for macOS, Windows, or Linux and verifies each downloaded artifact's
+SHA-256. The package keeps its executor, code-mode host, search binary, sandbox
+helpers, resources, and distribution notices together. A missing required helper
+or mismatched package manifest fails staging. Existing desktop signing and payload
+digest checks cover these files. Android/bionic has no upstream Codex package.
+
+Aino also keeps the complete upstream source as the pinned Git submodule
+`third_party/codex`. Initialize it with
+`git submodule update --init --recursive third_party/codex`. Its commit corresponds
+to the same release as the PM package. The current bundle consumes the official
+compiled package; changing the source alone does not replace the shipped engine.
+Update the source gitlink, package version/artifact hashes, and pinned notices
+together when upgrading. See `third_party/README.md` for the source-build boundary.
+
 The complete desktop builder composes PM with the Node/native packaging providers.
 From a clean checkout at a release tag, `python scripts/bundles/desktop.py --tag vX.Y.Z`
 prepares dependencies and builds the installer. Add `--prepare-only` to stop after

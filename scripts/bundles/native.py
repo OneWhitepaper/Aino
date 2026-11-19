@@ -32,8 +32,11 @@ def _bundle_package_names(target: str | None = None) -> list[str]:
         # Developer tools (just) are never part of a user install.
         if (not get_package(n).internal or n == "uv") and n not in DEVELOPER_TOOLS and n not in left_out
     ]
-    if "python" not in names:
-        names.append("python")
+    # Required engines stay in the request even if a broken lock drops a pin:
+    # PM must reject that build, not publish an app needing another install.
+    for name in ("python", "codex"):
+        if name not in names:
+            names.append(name)
     return names
 
 

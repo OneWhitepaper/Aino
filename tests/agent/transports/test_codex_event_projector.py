@@ -130,7 +130,7 @@ def test_successful_marker_ending_output_survives_persisted_replay(tmp_path):
         store._session_db.close()
     replay_tool = next(m for m in canonicalize_replay_history(raw) if m["role"] == "tool")
     assert replay_tool.get("effect_disposition") is None
-    assert json.loads(replay_tool["content"]) == {"exit_code": 0, "output": output}
+    assert json.loads(replay_tool["content"]) == {"exit_code": 0, "output": output, "status": "completed"}
 
 
 @pytest.mark.parametrize("exit_fields", [{"exitCode": 130}, {}])

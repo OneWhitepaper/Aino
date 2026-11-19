@@ -118,6 +118,8 @@ interface ModelOptionsRequest {
    *  surfaces). Chat pickers default to true so only explicitly configured
    *  providers are listed (#56974). */
   explicitOnly?: boolean
+  /** Read the existing session route alongside the shared catalog, without a model turn. */
+  includeSessionInfo?: boolean
   gateway?: HermesGateway
   /** Owner-routed RPC. When set, catalog reads hit this dispatcher instead of
    *  `gateway.request` — a tile's model menu must not query the ambient
@@ -156,8 +158,21 @@ function restModelOptions(
   return profileKey ? getGlobalModelOptions(opts, profileKey) : getGlobalModelOptions(opts)
 }
 
+/** Session metadata is an existing read-only part of the catalog response. */
+function sessionCatalogParams(
+  sessionId: string | null | undefined,
+  includeSessionInfo: boolean
+): Record<string, unknown> {
+  if (!sessionId) {
+    return {}
+  }
+
+  return { session_id: sessionId, ...(includeSessionInfo ? { include_session_info: true } : {}) }
+}
+
 export async function requestModelOptions({
   explicitOnly = true,
+  includeSessionInfo = false,
   gateway,
   profile,
   refresh = false,
@@ -167,11 +182,7 @@ export async function requestModelOptions({
   const dispatch = request ?? (gateway ? gateway.request.bind(gateway) : null)
 
   if (dispatch) {
-    const params: Record<string, unknown> = {}
-
-    if (sessionId) {
-      params.session_id = sessionId
-    }
+    const params = sessionCatalogParams(sessionId, includeSessionInfo)
 
     if (refresh) {
       params.refresh = true

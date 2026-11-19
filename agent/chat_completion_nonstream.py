@@ -2,6 +2,7 @@
 
 from agent import chat_completion_helpers as h
 from agent import chat_completion_wait_notice as wn
+from agent.auxiliary_billing_scope import ManagedCredential
 
 
 class _NonStreamRequest:
@@ -178,7 +179,8 @@ class _NonStreamRequest:
                 self.agent._touch_activity(f"waiting for provider response ({int(silence)}s, {phase})")
                 return
             self.agent._emit_wait_notice(wn.wait_notice_text(
-                self.api_kwargs.get('model', 'the provider'), silence, phase, watchdog))
+                self.api_kwargs.get('model', 'the provider'), silence, phase, watchdog,
+                reconnect=not isinstance(getattr(self.agent, "api_key", None), ManagedCredential)))
             self.wait_notice_started_ts = self.call_start + elapsed
         except Exception:
             h.logger.debug("wait-notice construction failed", exc_info=True)
@@ -194,9 +196,9 @@ class _NonStreamRequest:
             wd.ttfb_timeout, self._model())
         agent._buffer_diagnostic_status(
             f"⚠️ No first stream event from provider in {int(elapsed)}s (codex stream, model: {self._model()}). "
-            f"Reconnecting." + (f" {silent_hint}" if silent_hint else ""))
+            f"{wn.recovery_notice(agent)}" + (f" {silent_hint}" if silent_hint else ""))
         self._abort_request("codex_ttfb_kill")
-        agent._emit_diagnostic_wait(f"⚠ no response from provider in {int(elapsed)}s — reconnecting...")
+        agent._emit_diagnostic_wait(f"⚠ no response from provider in {int(elapsed)}s — {wn.recovery_notice(agent)}")
         agent._touch_activity(f"codex stream killed after {int(elapsed)}s with no first stream event")
         self._await_worker_after_kill(
             f"Codex stream produced no parsed stream event within {int(elapsed)}s "
@@ -211,7 +213,7 @@ class _NonStreamRequest:
             elapsed, wd.progress_timeout, self._model(), f"{wd.est_tokens:,}")
         agent._buffer_diagnostic_status(
             f"⚠️ Codex stream opened but made no model progress for {int(elapsed)}s "
-            f"(model: {self._model()}). Reconnecting.")
+            f"(model: {self._model()}). {wn.recovery_notice(agent)}")
         self._abort_request("codex_progress_kill")
         agent._touch_activity(f"codex stream killed after {int(elapsed)}s without model progress")
         self._await_worker_after_kill(
@@ -233,7 +235,7 @@ class _NonStreamRequest:
             self._model(), f"{wd.est_tokens:,}")
         agent._buffer_diagnostic_status(
             f"⚠️ Codex stream sent no events for {int(event_stale_elapsed)}s after {arm_point} "
-            f"(model: {self._model()}). Reconnecting.")
+            f"(model: {self._model()}). {wn.recovery_notice(agent)}")
         self._abort_request("codex_stream_idle_kill")
         agent._touch_activity(f"codex stream killed after {int(event_stale_elapsed)}s with no SSE events")
         self._await_worker_after_kill(

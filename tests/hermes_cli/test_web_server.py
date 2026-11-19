@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 import pytest
+import httpx
 import hermes_yaml as yaml
 
 from hermes_cli.config import (
@@ -34,11 +35,15 @@ import hermes_cli.web_server_memory as _web_server_memory
 import hermes_cli.web_server_messaging as _web_server_messaging
 import hermes_cli.web_server_sessions as _web_server_sessions
 from datetime import UTC
+from tests.hermes_cli import test_custom_endpoint_setup as endpoint_fixtures
 
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
+
+endpoint = endpoint_fixtures.endpoint
 
 
 # Path to the test-only example-dashboard plugin. Lives under
@@ -1765,59 +1770,45 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             {"id": "gpt-5.6-sol-high", "canonical_model": "gpt-5.6-sol", "reasoning_effort": "high"},
         ]
 
-    @staticmethod
-    def _responses_only_host(monkeypatch, posted):
-        """A gateway that lists models on GET /models and serves POST /responses but 404s
-        POST /chat/completions — the #93622 reporter's host."""
-        import contextlib
-
-        from hermes_cli.web_routers import config_env
-
-        class Resp:
-            def __init__(self, status):
-                self.status_code, self.is_success = status, status < 400
-
-            def json(self):
-                return {"data": [{"id": "gpt-5.6-sol"}]}
-
-        class Client:
-            async def get(self, url, headers=None):
-                return Resp(200)
-
-            async def post(self, url, json=None, headers=None):
-                posted.append((url, json))
-                return Resp(400 if url.endswith("/responses") else 404)
-
-        @contextlib.asynccontextmanager
-        async def probe_client(url, timeout):
-            yield Client()
-
-        monkeypatch.setattr(config_env, "_endpoint_probe_client", probe_client)
-
-    def test_custom_endpoint_validate_fails_when_the_transport_route_is_missing(self, monkeypatch):
+    def test_custom_endpoint_validate_fails_when_the_transport_route_is_missing(self, endpoint):
         """Test must exercise the leg the runtime will use: a Responses-only host answers /models
         fine, so validation also POSTs the resolved transport's route and fails on 404 (#93622)."""
-        posted = []
-        self._responses_only_host(monkeypatch, posted)
-        for api_mode in ("", "chat_completions"):  # auto-detect resolves to chat_completions here
-            body = self.client.post("/api/providers/custom-endpoints/validate", json={
-                "name": "x", "base_url": "https://gw.example.com/v1", "model": "", "api_mode": api_mode}).json()
-            assert body["ok"] is False and body["reachable"] is True
-            assert body["transport_checked"] == "chat_completions"
-            assert body["message"]
-            assert body["models"] == ["gpt-5.6-sol"], "discovered models still returned so the user can re-pick"
-        assert posted[-1][0] == "https://gw.example.com/v1/chat/completions"
-        assert posted[-1][1]["model"] == "gpt-5.6-sol"
+        endpoint.routes["GET", "/tenant/v1/models"] = (
+            200, {"data": [{"id": "fixture-model"}]}, "application/json")
+        endpoint.routes["POST", "/tenant/v1/responses"] = endpoint_fixtures.completed_reply("codex_responses")
+        response = self.client.post("/api/providers/custom-endpoints/validate", json={
+            "name": "x", "base_url": endpoint.base, "model": "", "api_mode": "chat_completions"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is False and body["reachable"] is True
+        assert body["transport_checked"] == "chat_completions"
+        assert body["message"]
+        assert not body.get("detected_api_mode")
+        assert body["models"] == ["fixture-model"], "discovered models still returned so the user can re-pick"
+        posted = [(path, json.loads(payload)) for method, path, _, payload in endpoint.requests if method == "POST"]
+        assert [path for path, _ in posted] == ["/tenant/v1/chat/completions"]
+        assert posted[0][1]["model"] == "fixture-model"
 
-    def test_custom_endpoint_validate_passes_when_the_pinned_transport_is_served(self, monkeypatch):
-        posted = []
-        self._responses_only_host(monkeypatch, posted)
-        body = self.client.post("/api/providers/custom-endpoints/validate", json={
-            "name": "x", "base_url": "https://gw.example.com/v1", "model": "", "api_mode": "codex_responses"}).json()
-        assert body["ok"] is True and body["message"] == ""
+    @pytest.mark.parametrize("upstream_status", [200, 400])
+    def test_custom_endpoint_validate_passes_when_the_pinned_transport_is_served(self, endpoint, upstream_status):
+        """A completed Responses stream proves the pinned route; HTTP 400 does not."""
+        endpoint.routes["GET", "/tenant/v1/models"] = (
+            200, {"data": [{"id": "fixture-model"}]}, "application/json")
+        endpoint.routes["POST", "/tenant/v1/responses"] = (
+            endpoint_fixtures.completed_reply("codex_responses") if upstream_status == 200 else
+            (400, {"error": {"type": "invalid_request_error", "message": "Invalid request"}}, "application/json"))
+        response = self.client.post("/api/providers/custom-endpoints/validate", json={
+            "name": "x", "base_url": endpoint.base, "model": "", "api_mode": "codex_responses"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is (upstream_status == 200)
+        assert bool(body["message"]) is (upstream_status != 200)
         assert body["transport_checked"] == "codex_responses"
-        assert [url for url, _ in posted] == ["https://gw.example.com/v1/responses"]
-        assert posted[0][1]["model"] == "gpt-5.6-sol"
+        assert not body.get("detected_api_mode")
+        posted = [(path, json.loads(payload)) for method, path, _, payload in endpoint.requests if method == "POST"]
+        assert [path for path, _ in posted] == ["/tenant/v1/responses"]
+        assert posted[0][1]["model"] == "fixture-model"
+        assert posted[0][1]["stream"] is True
 
     def test_custom_endpoint_save_leaves_a_hand_written_env_ref_alone(self, monkeypatch):
         """``api_key: ${MY_KEY}`` is already safe — don't copy it elsewhere.
@@ -5012,34 +5003,19 @@ class TestValidateProviderCredential:
     def test_named_custom_endpoint_probe_is_async(self, monkeypatch):
         """Custom endpoint validation must not block the dashboard event loop."""
         captured = {}
+        original_client = httpx.AsyncClient
 
-        class _Resp:
-            status_code = 200
-            is_success = True
+        async def handler(request):
+            if request.method == "GET":
+                captured["url"], captured["headers"] = str(request.url), request.headers
+                return httpx.Response(200, json={"data": [{"id": "local-model"}]})
+            if request.url.path.endswith("/responses"):
+                return httpx.Response(404)
+            return httpx.Response(200, json={"object": "chat.completion", "choices": [{
+                "message": {"role": "assistant", "content": "OK"}, "finish_reason": "stop"}]})
 
-            def json(self):
-                return {"data": [{"id": "local-model"}]}
-
-        class _Client:
-            def __init__(self, *args, **kwargs):
-                pass
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *args):
-                return False
-
-            async def get(self, url, *args, headers=None, **kwargs):
-                captured["url"] = url
-                captured["headers"] = headers
-                return _Resp()
-
-            async def post(self, url, *args, json=None, headers=None, **kwargs):
-                captured["posted"] = url
-                return _Resp()
-
-        monkeypatch.setattr("httpx.AsyncClient", _Client)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs:
+            original_client(*args, transport=httpx.MockTransport(handler), **kwargs))
 
         response = self.client.post(
             "/api/providers/custom-endpoints/validate",

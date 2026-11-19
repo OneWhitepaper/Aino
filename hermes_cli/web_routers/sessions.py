@@ -18,6 +18,8 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
+from gateway.session_handoff import work_code_links
+from gateway.session_picker_fields import fill_execution_modes
 from hermes_cli.session_listing import subagent_listing_scope
 from hermes_cli.web_deps import late
 from hermes_cli.web_server_gateway import _strip_session_list_rows
@@ -213,7 +215,7 @@ def get_sessions(
                 source=source or None, sources=source_list or None,
                 exclude_sources=exclude_list or None, cwd_prefix=(cwd_prefix or None),
                 min_message_count=min_message_count, include_archived=include_archived,
-                archived_only=archived_only, include_subagents=include_subagents)
+                archived_only=archived_only, include_subagents=include_subagents, include_handoff_drafts=True)
             sessions = db.list_sessions_rich(
                 limit=limit,
                 offset=offset,
@@ -224,6 +226,7 @@ def get_sessions(
                 include_pinned=True,
                 **scope)
             total = db.session_count(exclude_children=True, **scope)
+            fill_execution_modes(db, sessions, id_key='id')
             now = time.time()
             row_profile = profile_name or _cron_default_profile()
             for s in sessions:
@@ -457,7 +460,9 @@ async def search_sessions(
                     add_lineage_result(
                         sid, hit_payload(row, preview or f"Session title matched: {q.strip()}",
                                          None, row.get("started_at")))
-            return {"results": list(seen.values())}
+            results = list(seen.values())
+            fill_execution_modes(db, results)
+            return {"results": results}
 
         # FTS over a large state.db is the slowest read here; keep it off the loop (#60747).
         return await asyncio.to_thread(_with_db, profile, _search, read_only=True)
@@ -564,6 +569,10 @@ async def get_session_detail(session_id: str, profile: Optional[str] = None):
         session = db.get_session(sid) if sid else None
         if not session:
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        fill_execution_modes(db, [session], id_key='id')
+        if handoff := work_code_links(db, sid).get('handoff'):
+            # Recovery needs the verified creation receipt, not just a branch marker.
+            session['handoff'] = handoff
         # Always stamp the owner: unowned default-profile rows made multi-profile
         # clients resolve them to whichever gateway happened to be active.
         session["profile"] = _serving_profile(profile)

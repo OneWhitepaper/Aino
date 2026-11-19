@@ -143,3 +143,31 @@ def test_mid_voice_turn_reports_the_sessions_own_route(tmp_path, monkeypatch, se
         finally:
             end_voice_turn_route(agent)
         assert _session_info(agent, {})["reasoning_effort"] == "low"
+
+
+@pytest.mark.parametrize("separate_voice_model", [False, True])
+def test_code_voice_input_keeps_selected_model_credentials_and_effort(tmp_path, monkeypatch, separate_voice_model):
+    from agent.voice_turn_route import begin_voice_turn_route, end_voice_turn_route
+
+    with FakeLLMServer([]) as main, FakeLLMServer([]) as voice:
+        extra = ("auxiliary:\n  voice_chat:\n    provider: custom\n"
+                 f"    base_url: {voice.base_url}\n    model: voice-model\n    api_key: sk-fake-voice\n"
+                 if separate_voice_model else "")
+        home = write_hermes_home(tmp_path / ".hermes", main.base_url, extra_config=extra)
+        monkeypatch.setenv("HERMES_HOME", str(home))
+        agent = _agent(home, main.base_url)
+        agent.execution_mode = "code"
+        agent.api_mode = "codex_responses"
+        agent.reasoning_config = {"enabled": True, "effort": "high"}
+        selected = (agent.model, agent.provider, agent.base_url, agent.api_key, agent.api_mode)
+        agent._voice_turn_pending = True
+        try:
+            prompt = begin_voice_turn_route(agent, [{"role": "user", "content": "edit this file"}], "system")
+            assert (agent.model, agent.provider, agent.base_url, agent.api_key, agent.api_mode) == selected
+            assert agent.reasoning_config == {"enabled": True, "effort": "high"}
+            assert agent._voice_turn_pending is False
+            assert getattr(agent, "_voice_route_state", None) is None
+            assert prompt == "system"
+        finally:
+            end_voice_turn_route(agent)
+            agent.close()

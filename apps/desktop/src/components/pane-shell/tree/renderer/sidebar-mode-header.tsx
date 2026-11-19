@@ -2,6 +2,7 @@ import './sidebar-mode-header.css'
 
 import { ChevronDown, Search } from 'lucide-react'
 
+import { ExecutionModeSwitcher } from '@/app/shell/execution-mode-switcher'
 import { BrandMark } from '@/components/brand-mark'
 import {
   DropdownMenu,
@@ -60,7 +61,13 @@ export function SidebarModeHeader({
       data-bot-navigation={botNavigation || undefined}
       data-sidebar-mode-header=""
     >
-      {navigation === 'rail' || items.length < 2 ? (
+      {active.id === 'sessions' ? (
+        <ExecutionModeSwitcher
+          onOpenChange={onOpenChange}
+          onSelectPane={onSelect}
+          otherItems={navigation === 'rail' ? [] : items.filter(item => item.id !== 'sessions')}
+        />
+      ) : navigation === 'rail' || items.length < 2 ? (
         <div className="aino-sidebar-mode-static">{brand}</div>
       ) : (
         <DropdownMenu onOpenChange={onOpenChange}>

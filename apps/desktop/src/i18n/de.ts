@@ -31,6 +31,7 @@ import { deSharedMetrics } from './de_shared_metrics'
 import { deThemePicker } from './de_theme_picker'
 import { deUpdateChannel } from './de_update_channel'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introDe } from './intro-de'
 import { messagingDirectory } from './messaging-directory'
@@ -339,6 +340,7 @@ const deBaseOverrides = {
   appearancePage: appearancePage.de,
   home: homeGuidance.de,
   toolPanel: toolPanel['de'],
+  executionMode: executionModeCopy.de,
   workspacePage: workspacePage.de,
   accountPage: accountPage['de'],
   platformRecharge: {
@@ -3760,12 +3762,13 @@ const deBaseOverrides = {
   artifactCard: {
     kind: {
       code: 'Code',
-      html: 'Interaktive Seite',
+      html: 'Webvorschau',
       svg: 'Grafik'
     },
     generating: lines => `Wird generiert… ${lines} Zeilen`,
     versionBadge: count => `${count} Versionen`,
-    open: 'Öffnen'
+    open: 'Öffnen',
+    openWith: 'Öffnen mit'
   },
   artifactPreview: {
     versionOf: (current, total) => `v${current} von ${total}`,
@@ -3774,8 +3777,8 @@ const deBaseOverrides = {
     latest: 'Neueste',
     copyContent: 'Inhalt kopieren',
     download: 'Herunterladen',
-    openInBrowser: 'Im Browser öffnen',
-    openInBrowserFailed: 'Konnte nicht im Browser geöffnet werden',
+    openExternally: 'Extern öffnen',
+    openExternallyFailed: 'Konnte nicht extern geöffnet werden',
     missingTitle: 'Artifact nicht verfügbar',
     missingBody: 'Dieses Artifact ist nicht mehr in der lokalen Registry.'
   },
@@ -5341,7 +5344,11 @@ const deBaseOverrides = {
       errorOpenDesktopLogs: 'Desktop-Logs öffnen',
       errorSendDiagnostics: 'Diagnose senden',
       filesChanged: count => (count === 1 ? '1 Datei geändert' : `${count} Dateien geändert`),
-      reviewChanges: 'Prüfen',
+      reviewChanges: 'Änderungen anzeigen',
+      recordedFileChanges:
+        'Aufgezeichnete Änderungen dieser Runde. Mehrere Bearbeitungen einer Datei erscheinen der Reihe nach.',
+      recordedFileEdit: index => `Bearbeitung ${index}`,
+      reviewRepositoryChanges: 'Git-Änderungen anzeigen',
       readAloudFailed: 'Vorlesen fehlgeschlagen',
       preparingAudio: 'Bereitet Audio vor...',
       stopReading: 'Vorlesen stoppen',

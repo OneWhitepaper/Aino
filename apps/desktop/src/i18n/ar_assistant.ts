@@ -63,6 +63,10 @@ export const arAssistant = {
         streaming: 'خطأ في اتصال البث'
       },
       errorCodes: {
+        managed_operation_unknown: {
+          title: 'نتيجة الطلب غير مؤكدة',
+          body: 'لم يصل الرد كاملًا. تم حفظ المحادثة وما وصل من الرد. ربما نُفذ الطلب بالفعل، لذا لم يُعد Aino إرساله تلقائيًا. تحقق من نتائج الإجراءات قبل اتخاذ قرار بإعادة الإرسال.'
+        },
         managed_billing_unavailable: {
           title: 'حالة الاشتراك غير متاحة',
           body: 'تحقق من الاشتراك وتاريخ انتهائه في حسابي. بعد استعادة الوصول أرسل رسالتك مجددًا، أو اختر نموذجًا متاحًا.'
@@ -273,7 +277,10 @@ export const arAssistant = {
       errorOpenDesktopLogs: 'فتح سجلات سطح المكتب',
       errorSendDiagnostics: 'إرسال التشخيصات',
       filesChanged: count => `${count} ملفات تم تغييرها`,
-      reviewChanges: 'مراجعة',
+      reviewChanges: 'عرض التغييرات',
+      recordedFileChanges: 'التغييرات المسجلة في هذه الجولة. تظهر التعديلات المتكررة على الملف بالترتيب.',
+      recordedFileEdit: index => `التعديل ${index}`,
+      reviewRepositoryChanges: 'عرض تغييرات Git',
       readAloudFailed: 'فشلت القراءة بصوت عال',
       preparingAudio: 'جار تجهيز الصوت',
       stopReading: 'إيقاف القراءة',

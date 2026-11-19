@@ -9,6 +9,7 @@ tool cards depend on.
 Grafted from PR #65412 (@HaiderSultanArc) onto the merged bridge.
 """
 
+import json
 from types import SimpleNamespace
 
 from agent.codex_runtime import (
@@ -98,10 +99,10 @@ def test_failed_command_result_and_error_flag_are_preserved():
     bridge({"method": "item/completed", "params": {"item": item}})
 
     result, is_error = _codex_item_completion_payload(item)
-    assert result == "[exit 2]\nboom"
+    assert json.loads(result) == {"output": "boom", "exit_code": 2}
     assert is_error is True
     assert calls["tool_progress"][0][1]["is_error"] is True
-    assert calls["tool_complete"][0][3] == "[exit 2]\nboom"
+    assert json.loads(calls["tool_complete"][0][3]) == {"output": "boom", "exit_code": 2}
 
 
 

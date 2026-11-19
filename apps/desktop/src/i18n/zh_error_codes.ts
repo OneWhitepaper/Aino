@@ -4,6 +4,10 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const zhErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_operation_unknown: {
+    title: '本次请求结果未确认',
+    body: '未收到完整回复，聊天记录和已收到的内容均已保留。请求可能已经执行，Aino 未自动重发。请先检查已执行操作的结果，再决定是否重新发送。'
+  },
   managed_billing_unavailable: {
     title: '套餐状态不可用',
     body: '请到“我的账户”查看订阅和到期情况。恢复后重新发送，或选择其他可用模型。'
