@@ -44,11 +44,7 @@ import { dropStatusDrawersForProfile, migrateStatusDrawersForProfile } from './c
 import { registryConnectionKind } from './connection-registry-state'
 import { recordDislike } from './desktop-metrics'
 import { dialedGatewayModeFor } from './gateway'
-import {
-  adoptPendingRuntimeTabs,
-  rekeyPreviewTabsSession,
-  setPreviewScope
-} from './preview'
+import { adoptPendingRuntimeTabs, rekeyPreviewTabsSession, setPreviewScope } from './preview'
 import { forgetPendingRuntimeTabs } from './preview-ownership'
 import { dropPreviewArtifactsForProfile, migratePreviewArtifactsForProfile } from './preview-status'
 import { $activeGatewayProfile, normalizeProfileKey } from './profile'

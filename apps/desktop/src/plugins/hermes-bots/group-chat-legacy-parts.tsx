@@ -16,8 +16,14 @@ import type { GroupMember } from './types'
 export function LegacyTypingRow({ avatar, name, since }: { avatar: ReactNode; name: string; since?: number }) {
   const labels = useCanonicalGroupLabels()
 
-  return <RoomTypingRow avatar={avatar} labels={labels} name={name}
-    status={{ kind: 'working', startedAt: typeof since === 'number' ? since / 1000 : undefined }} />
+  return (
+    <RoomTypingRow
+      avatar={avatar}
+      labels={labels}
+      name={name}
+      status={{ kind: 'working', startedAt: typeof since === 'number' ? since / 1000 : undefined }}
+    />
+  )
 }
 
 /** While the room runs: the member on turn as a typing row, else waiting-for-you / working. */

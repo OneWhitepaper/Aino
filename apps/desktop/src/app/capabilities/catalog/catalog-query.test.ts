@@ -1,12 +1,25 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CatalogEntry } from './catalog-data'
-import { type CatalogFacets, catalogSortOptions, catalogSources, EMPTY_FACETS, filterCatalog, sortCatalog } from './catalog-query'
+import {
+  type CatalogFacets,
+  catalogSortOptions,
+  catalogSources,
+  EMPTY_FACETS,
+  filterCatalog,
+  sortCatalog
+} from './catalog-query'
 
 const entry = (name: string, source: string) =>
   ({ id: name, name, source, category: 'tools', tags: [], search: name }) as unknown as CatalogEntry
 
-const facets = (sources: string[]): CatalogFacets => ({ sources, categories: [], tags: [], installedOnly: false, updatesOnly: false })
+const facets = (sources: string[]): CatalogFacets => ({
+  sources,
+  categories: [],
+  tags: [],
+  installedOnly: false,
+  updatesOnly: false
+})
 
 const plugins = [
   entry('a', 'community'),
@@ -62,6 +75,8 @@ describe('installed-skill usage and updates', () => {
   })
 
   it('narrows to entries with an update', () => {
-    expect(filterCatalog(rows, { ...EMPTY_FACETS, updatesOnly: true }, '', () => true, 'skills').map(row => row.name)).toEqual(['hot'])
+    expect(
+      filterCatalog(rows, { ...EMPTY_FACETS, updatesOnly: true }, '', () => true, 'skills').map(row => row.name)
+    ).toEqual(['hot'])
   })
 })
