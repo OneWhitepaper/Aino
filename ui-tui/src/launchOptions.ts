@@ -77,7 +77,9 @@ export function localCreationOptions(env = process.env): Record<string, unknown>
 export async function launchRouteServes(rpc: GatewayRpc, env = process.env): Promise<boolean> {
   const { model, provider } = localCreationOptions(env)
 
-  if (!provider) { return false }
+  if (!provider) {
+    return false
+  }
 
   const check = await rpc<{ model?: null | string; ok?: boolean }>('setup.runtime_check', { provider })
 

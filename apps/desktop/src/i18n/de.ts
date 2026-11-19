@@ -3378,7 +3378,8 @@ const deBaseOverrides = {
     fieldDeliver: 'Zustellen an',
     fieldDeliverOnly: 'Nur die Payload zustellen',
     fieldSignature: 'Signatur',
-    fieldSignatureHint: 'Das einzige Signaturschema, das diese Route akzeptiert. GitHub-, GitLab- und Linear-Zustellungen brauchen ihre eigene Festlegung.',
+    fieldSignatureHint:
+      'Das einzige Signaturschema, das diese Route akzeptiert. GitHub-, GitLab- und Linear-Zustellungen brauchen ihre eigene Festlegung.',
     signatureOptions: {
       generic: 'Generisch (mit Zeitstempel)',
       github: 'GitHub',
@@ -4113,7 +4114,8 @@ const deBaseOverrides = {
       '/topup': 'Ihr Nous-Guthaben anzeigen und die Abrechnung im Portal verwalten',
       '/platform': 'Eine fehlerhafte Gateway-Plattform pausieren, fortsetzen oder auflisten',
       '/version': 'Hermes-Agent-Version anzeigen',
-      '/debug': 'Debug-Bericht (Versionen, Konfigurationsschlüssel, Fehlerzähler; kein Logtext): zeigt zuerst den Datenschutzhinweis; /debug upload teilt Links',
+      '/debug':
+        'Debug-Bericht (Versionen, Konfigurationsschlüssel, Fehlerzähler; kein Logtext): zeigt zuerst den Datenschutzhinweis; /debug upload teilt Links',
       '/model': 'Modell für diese Session wechseln'
     },
     hotkeyDescs: {

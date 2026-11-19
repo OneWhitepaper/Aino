@@ -203,12 +203,7 @@ export function CapabilityScopeSelector({
   }
 
   return (
-    <div
-      className={cn(
-        'flex min-w-0 items-center gap-2',
-        compact && 'flex-1'
-      )}
-    >
+    <div className={cn('flex min-w-0 items-center gap-2', compact && 'flex-1')}>
       {!compact && (
         <span className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
           {t.skills.configuringProfile}

@@ -11,7 +11,10 @@ test('Code creation preserves mode and projectless intent through the canonical 
   expect(protocol.prepare('session.create', draft)).toEqual(projectless)
 
   const project = protocol.prepare('session.create', {
-    source: 'desktop', execution_mode: 'code', cwd: '/projects/chosen', cwd_explicit: true
+    source: 'desktop',
+    execution_mode: 'code',
+    cwd: '/projects/chosen',
+    cwd_explicit: true
   })
 
   expect(project).toMatchObject({ execution_mode: 'code', cwd: '/projects/chosen', cwd_explicit: true })

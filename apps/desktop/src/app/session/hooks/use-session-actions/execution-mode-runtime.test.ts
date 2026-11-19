@@ -32,9 +32,13 @@ it('does not switch the foreground when a background Code session reports its ru
 })
 
 it('keeps the Code badge and history preview correct before the first list refresh', () => {
-  const row = buildOptimisticSession({
-    session_id: 'new-code', info: { execution_mode: 'code' }
-  }, 'new-code')
+  const row = buildOptimisticSession(
+    {
+      session_id: 'new-code',
+      info: { execution_mode: 'code' }
+    },
+    'new-code'
+  )
 
   expect(row.execution_mode).toBe('code')
   $sessions.set([row])

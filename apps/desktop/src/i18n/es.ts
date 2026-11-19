@@ -3367,7 +3367,8 @@ const esBaseOverrides = {
     fieldDeliver: 'Entregar a',
     fieldDeliverOnly: 'Entregar solo la carga útil',
     fieldSignature: 'Firma',
-    fieldSignatureHint: 'El único esquema de firma que acepta esta ruta. Las entregas de GitHub, GitLab y Linear necesitan su propio esquema.',
+    fieldSignatureHint:
+      'El único esquema de firma que acepta esta ruta. Las entregas de GitHub, GitLab y Linear necesitan su propio esquema.',
     signatureOptions: {
       generic: 'Genérica (con marca de tiempo)',
       github: 'GitHub',
@@ -4099,7 +4100,8 @@ const esBaseOverrides = {
       '/topup': 'Mostrar tu saldo de Nous y gestionar la facturación en el portal',
       '/platform': 'Pausar, reanudar o listar una plataforma del gateway que falla',
       '/version': 'Mostrar la versión de Hermes Agent',
-      '/debug': 'Informe de depuración (versiones, claves de configuración, recuentos de errores; sin texto de registros): muestra primero el aviso de privacidad; /debug upload comparte enlaces',
+      '/debug':
+        'Informe de depuración (versiones, claves de configuración, recuentos de errores; sin texto de registros): muestra primero el aviso de privacidad; /debug upload comparte enlaces',
       '/model': 'Cambiar el modelo de esta sesión'
     },
     hotkeyDescs: {
