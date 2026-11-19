@@ -10,30 +10,21 @@ store checkout in a worker thread: batched lookups and one indexed probe per seg
 """
 from __future__ import annotations
 
-import json
-
+from hermes_state_common import _sql_json_extract
 from hermes_state_local import POLICY_PREFIX, local_lineage_owner
-from hermes_state_runtime import RuntimeStoreError
 
 
 def fill_execution_modes(db, rows, *, id_key='session_id'):
-    """Project the immutable policy without restoring sessions or duplicating their stored identity."""
+    """Project display metadata without restoring sessions or letting one unreadable receipt hide the page."""
     if not rows:
         return
+    mode_expr = _sql_json_extract('value', '$.policy.execution_mode')
     with db._read_ctx() as conn:
         owners = {row[id_key]: local_lineage_owner(conn, row[id_key]) for row in rows}
         keys = list({POLICY_PREFIX + owner for owner in owners.values()})
-        saved = conn.execute('SELECT key,value FROM state_meta WHERE key IN (' + ','.join('?' for _ in keys) + ')',
-                             keys).fetchall()
-    modes = {}
-    for key, value in saved:
-        try:
-            mode = json.loads(value)['policy'].get('execution_mode', 'work')
-            if mode not in ('work', 'code'):
-                raise ValueError('invalid execution mode')
-            modes[key[len(POLICY_PREFIX):]] = mode
-        except (ValueError, TypeError, KeyError) as exc:
-            raise RuntimeStoreError('storage_unavailable') from exc
+        placeholders = ','.join('?' for _ in keys)
+        saved = conn.execute(f'SELECT key,{mode_expr} FROM state_meta WHERE key IN ({placeholders})', keys).fetchall()
+    modes = {key[len(POLICY_PREFIX):]: mode for key, mode in saved if mode in ('work', 'code')}
     for row in rows:
         row['execution_mode'] = modes.get(owners[row[id_key]], 'work')
 
