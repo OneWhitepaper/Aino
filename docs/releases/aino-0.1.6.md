@@ -10,14 +10,16 @@
 
 ## 本次提供的版本
 
-- **macOS Apple Silicon（arm64，M 系列芯片）**。
+- **macOS Apple Silicon（arm64，M 系列芯片）**：DMG 安装包。
 - **Windows x64**：ZIP 便携版，完整解压后启动。
 
 本次不提供 macOS Intel、Windows ARM64 或 Linux 的 0.1.6 安装包。历史版本文件保持不变。
 
 ## 安装与更新
 
-从 [Aino 官网下载页](https://petoi.cn/download.html) 获取对应版本。更新前退出 Aino，并保留现有用户数据；Windows 便携版不要直接在压缩包内运行。
+从 [Aino 官网下载页](https://petoi.cn/download.html) 获取对应版本。更新前退出 Aino，并保留现有用户数据；Mac 打开 DMG 后将应用拖入“应用程序”，Windows 便携版不要直接在压缩包内运行。
+
+本版提供手动安装更新。macOS 自动更新源保持原版本，不推送超过旧客户端安全大小上限的 ZIP。
 
 安装包文件名、大小和校验值以本发行版的 `release-files.json` 与 `SHA256SUMS` 为准。
 
