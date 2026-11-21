@@ -1100,6 +1100,17 @@ def _raise_if_provider_disabled(requested_provider: str) -> None:
                          f"(providers.{requested_provider}.enabled: false)")
 
 
+def _raise_if_session_managed_provider(provider: str) -> None:
+    profile = PROVIDER_REGISTRY.get(provider)
+    if profile and profile.auth_type == "session_managed":
+        # Missing session authority is not a missing API key: AuthError would
+        # authorize the resolution-time walker to spend a configured fallback.
+        raise ValueError(
+            f"Provider '{provider}' requires a live session-managed binding from its connected client; "
+            "environment/config credentials and automatic fallback cannot supply that binding."
+        )
+
+
 def _raise_if_local_alias_missing_endpoint(requested_provider: str, explicit_base_url: Optional[str]) -> None:
     """A local-server alias (``ollama``, ``vllm`` — anything ``auth.resolve_provider`` maps to
     ``custom`` without a rung of its own) with NO endpoint configured anywhere would otherwise walk
@@ -1216,7 +1227,7 @@ def resolve_runtime_provider(*, requested: Optional[str] = None, explicit_api_ke
                              explicit_base_url: Optional[str] = None, target_model: Optional[str] = None) -> dict[str, Any]:
     """Resolve runtime provider credentials for agent execution. Ladder (order is behavior — each
     rung returns or raises, else falls to the next):
-      1. disabled-provider guard (``providers.<name>.enabled: false``)
+      1. disabled-provider / session-managed authority guards
       2. requested-name shortcuts: moa, anthropic@azure, azure-foundry, vertex
       3. named custom provider / llamacpp alias / bare-custom direct alias
       4. local-endpoint bypass (no explicit creds, config base_url at a non-cloud host)
@@ -1234,6 +1245,7 @@ def resolve_runtime_provider(*, requested: Optional[str] = None, explicit_api_ke
     from hermes_cli.left_core_migration import recover_for_provider
     recover_for_provider(requested_provider)  # a provider whose plugin left core: install it before resolving
     _raise_if_provider_disabled(requested_provider)
+    _raise_if_session_managed_provider(requested_provider)
     # Same alias expansion the auxiliary client applies, so ``provider: openai`` means one thing on
     # every path (background review, curator, MoA slots, delegation) instead of "Unknown provider".
     # The pre-expansion name is what the codex_app_server overlay judges: ``openai`` is eligible,
@@ -1291,6 +1303,7 @@ def _ladder_rungs(requested_provider, explicit_api_key, explicit_base_url, targe
     if not explicit_base_url and not explicit_api_key:
         yield _local_endpoint_bypass(requested_provider, explicit_api_key, explicit_base_url)
     provider = resolve_provider(requested_provider, explicit_api_key=explicit_api_key, explicit_base_url=explicit_base_url)
+    _raise_if_session_managed_provider(provider)
     model_cfg = _get_model_config()
     yield _resolve_explicit_runtime(provider=provider, requested_provider=requested_provider, model_cfg=model_cfg,
                                     explicit_api_key=explicit_api_key, explicit_base_url=explicit_base_url,

@@ -2,8 +2,9 @@
 
 The provider list is NEVER hardcoded: :func:`discover_catalog` runs the real plugin discovery
 (``providers.list_providers()``) in a clean child interpreter, so a new plugin under
-``plugins/model-providers/`` joins every matrix automatically. Each row is driven through the
-real ``python -m hermes_cli.main`` in a hermetic HOME against
+``plugins/model-providers/`` joins every matrix automatically. API-key rows use the real oneshot
+CLI; session-managed rows use the existing real serve/WS driver and a live binding. Both run in
+a hermetic HOME against
 :class:`tests.fakes.providers.catalog_fake.CatalogFake`, redirected the way the product documents
 (``model.provider`` + ``model.base_url`` in config.yaml; ``/anthropic`` path for the Anthropic
 Messages dialect). Every other provider's key is present as a decoy, and all non-loopback egress
@@ -23,6 +24,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -32,6 +34,7 @@ import hermes_yaml as yaml
 
 from tests.e2e.core._pending_fixes import known_failure
 from tests.e2e.core._pm_dependencies import select_test_dependencies
+from tests.e2e.core.terminal._gateway_client import Backend, etype
 from tests.fakes.providers.catalog_fake import USAGE_IN, USAGE_OUT, CatalogFake, Recorded
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -260,7 +263,7 @@ def credential_values(rec: Recorded, secrets: set[str]) -> dict[str, str]:
 @dataclass
 class TurnResult:
     row: Row
-    rc: int
+    rc: int | None
     stdout: str
     stderr: str
     requests: list[Recorded]
@@ -271,6 +274,8 @@ class TurnResult:
     canary: str
     wall_s: float
     cells: dict[str, bool] = field(default_factory=dict)
+    # A WS completion is not a oneshot process exit; rc stays the backend's real poll result.
+    completion: dict[str, Any] | None = None
 
     def signature(self) -> str:
         """Observed facts a KNOWN bug's pattern keys on (one line, first in every gated message)."""
@@ -284,7 +289,9 @@ class TurnResult:
 
 
 def drive_turn(row: Row, root: Path, catalog: list[Row]) -> TurnResult:
-    """One oneshot turn with one tool round trip for ``row`` against its own fake."""
+    """One real turn, using the credential-source contract declared by the discovered row."""
+    if row.auth_type == "session_managed":
+        return drive_managed_turn(row, root, catalog)
     project = root / "project"
     project.mkdir(parents=True, exist_ok=True)
     canary = f"CANARY-{row.name}-{os.urandom(4).hex()}"
@@ -301,6 +308,68 @@ def drive_turn(row: Row, root: Path, catalog: list[Row]) -> TurnResult:
                       usage=session_usage(home), canary=canary, wall_s=round(time.monotonic() - started, 1))
 
 
+def drive_managed_turn(row: Row, root: Path, catalog: list[Row]) -> TurnResult:
+    """Use the existing real serve/WS fixture; credentials enter only via the binding RPC."""
+    project = root / "project"
+    project.mkdir(parents=True, exist_ok=True)
+    canary = f"CANARY-{row.name}-{os.urandom(4).hex()}"
+    (project / "canary.txt").write_text(canary + "\n", encoding="utf-8")
+    key = "sk-managed-lease-" + os.urandom(12).hex()
+    keys = decoy_keys(catalog)
+    started = time.monotonic()
+    # Managed leases constrain the endpoint to the owner's origin + /v1, not /<provider>/v1.
+    with CatalogFake(tool_args={"path": str(project / "canary.txt")}, final_text=FINAL,
+                     routes={"/v1/chat/completions": "chat"}) as fake:
+        home = write_home(root, {"provider": row.name})  # selects the pinned PM test dependencies
+        backend = Backend(root, [], env={**keys, **fake.proxy_env()}, extra_config=(
+            "updates:\n  check: false\nmodel_catalog:\n  enabled: false\n"
+            "auxiliary:\n  title_generation:\n    enabled: false\n"))
+        try:
+            backend.start()
+            chat, controller = backend.connect("managed-chat"), backend.connect("managed-controller")
+            draft = chat.call("session.create", source="desktop", cwd=str(project),
+                              model_source=row.name, model_id="catalog-model-a")
+            sid = draft["session_id"]
+            selection = {"session_id": sid, "model_id": "catalog-model-a",
+                         "owner": {"platform_origin": fake.origin, "user_id": "catalog-fixture"}}
+            refused = chat.request("prompt.submit", {"session_id": sid, "text": "not bound yet"})
+            assert refused["error"]["data"]["reason"] == "awaiting_managed_credentials", refused
+            assert not fake.inference() and not backend.llm.requests
+            ticket = chat.call("session.managed_model_ticket", **selection)["session_ticket"]
+            revision = controller.call("session.claim_managed_model", **selection,
+                                       session_ticket=ticket)["binding_revision"]
+            bound = controller.call("session.bind_managed_model", **selection, binding_revision=revision,
+                                    api_key=key, credential_id="catalog-fixture-lease", base_url=fake.origin + "/v1",
+                                    model="catalog-upstream", api_mode="chat_completions",
+                                    capabilities={"tools": True, "vision": False, "reasoning": False},
+                                    expires_at=(datetime.now(UTC) + timedelta(minutes=10)).isoformat())
+            assert bound["bound"], bound
+            submitted = chat.call("prompt.submit", session_id=sid, text="Read canary.txt and report.")
+            assert submitted["status"] == "streaming", submitted
+            event = chat.wait_for(lambda f: etype(f) == "message.complete" and f["params"].get("session_id") == sid,
+                                  timeout=TURN_TIMEOUT, what="managed catalog tool roundtrip")
+            completion = event["params"]["payload"]
+            assert not backend.llm.requests, "managed inference used the default BYOK endpoint"
+            # Real local-server context detection also POSTs /api/show without credentials.
+            # Keep it recorded and checked separately, never count it as an inference call.
+            assert all(r.body.get("model") == "catalog-upstream" for r in fake.inference()
+                       if r.path != "/api/show"), [(r.path, r.body.get("model")) for r in fake.inference()]
+            assert backend.proc is not None
+            rc = backend.proc.poll()
+            usage = session_usage(home)
+            requests, egress = list(fake.requests), fake.egress_hosts()
+            controller.call("session.clear_managed_model", session_id=sid, binding_revision=revision)
+            chat.call("session.close", session_id=sid)
+        finally:
+            backend.stop()
+        for path in (home / ".hermes").rglob("*"):
+            if path.is_file():
+                assert key.encode() not in path.read_bytes(), f"managed lease persisted in {path}"
+    return TurnResult(row=row, rc=rc, stdout=str(completion.get("text") or ""), stderr=backend.logs(),
+                      requests=requests, egress=egress, own_key=key, secrets={key, *keys.values()}, usage=usage,
+                      canary=canary, wall_s=round(time.monotonic() - started, 1), completion=completion)
+
+
 def provider_hosts(catalog: list[Row]) -> set[str]:
     """``host:443`` of every provider's canonical HTTPS endpoint (the egress sentinel's CONNECT form)."""
     return {r.vendor_host() for r in catalog} - {""}
@@ -308,7 +377,9 @@ def provider_hosts(catalog: list[Row]) -> set[str]:
 
 def evaluate(t: TurnResult, catalog: list[Row]) -> dict[str, bool]:
     """Every invariant of one row. Relationship checks only — never literals of today's output."""
-    inference = [r for r in t.requests if r.method == "POST"]
+    probes = [r for r in t.requests if t.completion is not None and r.method == "POST"
+              and r.path == "/api/show" and r.body == {"name": "catalog-upstream"}]
+    inference = [r for r in t.requests if r.method == "POST" and r not in probes]
     # A transport mandated by the provider's own host may fall back to chat at a foreign URL.
     expected = {t.row.dialect} | ({"chat"} if t.row.host_mandated else set())
     main = [r for r in inference if isinstance(r.body, dict) and r.body.get("tools")]
@@ -316,7 +387,9 @@ def evaluate(t: TurnResult, catalog: list[Row]) -> dict[str, bool]:
     foreign = t.secrets - {t.own_key}
     foreign_hosts = provider_hosts([r for r in catalog if r.name != t.row.name]) - provider_hosts([t.row])
     return {
-        "turn_completed": t.rc == 0 and FINAL in t.stdout,
+        "turn_completed": FINAL in t.stdout and (
+            t.rc == 0 if t.completion is None else t.rc is None and not t.completion.get("error")
+            and not t.completion.get("failure_reason")),
         # The fake answers ONLY the exact configured base path + dialect endpoint (else 404,
         # dialect "unknown"), so a mangled path under the right prefix is red here.
         "reached_own_endpoint": bool(inference) and all(r.dialect != "unknown" for r in inference),
@@ -325,6 +398,8 @@ def evaluate(t: TurnResult, catalog: list[Row]) -> dict[str, bool]:
         "own_key_in_auth_header": bool(inference) and all(
             t.own_key in r.headers.get(AUTH_HEADER_OF_DIALECT.get(r.dialect, "authorization"), "") for r in inference),
         "no_foreign_key_on_wire": not any(s in v for r in t.requests for v in r.headers.values() for s in foreign),
+        "local_context_probes_unauthenticated": all(
+            not r.headers.get("authorization") and not r.headers.get("x-api-key") for r in probes),
         # Egress sentinel: nothing may leave for ANOTHER provider's host (CONNECT target).
         "no_egress_to_foreign_provider_hosts": not [h for h in t.egress if h in foreign_hosts],
         # The session row charges exactly what the fake reported for every main-turn call it

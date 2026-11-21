@@ -13,6 +13,10 @@ processes per row call the real product functions:
 * listing degradation — for the rows that already list from the configured endpoint, a 404 and a
   hanging listing must still return (bounded) without crashing and without falling back to the
   vendor host.
+
+Session-managed rows remain in every applicable parameter set, but have a different contract:
+the generic CLI catalog is empty (the desktop bridge owns it), no /models request is made, and
+switching without a live binding is refused instead of resolving to another provider.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from pathlib import Path
 import pytest
 
 from tests.e2e.core.providers._catalog_helpers import (
-    Known, Row, decoy_keys, discover_catalog, gate, hermetic_env, known_gate, write_home,
+    Known, Row, decoy_keys, discover_catalog, gate, hermetic_env, known_gate, provider_hosts, write_home,
 )
 from tests.fakes.providers.catalog_fake import CatalogFake, bare_path
 
@@ -103,7 +107,8 @@ def _probe(row: Row, root: Path, kind: str) -> dict:
     line = next((ln for ln in out.splitlines() if ln.startswith("RESULT=")), None)
     res = json.loads(line[7:]) if line else {"error": f"probe crashed: {err[-1200:]}"}
     return {**res, "unique": unique, "base": base, "wall_s": wall, "egress": egress,
-            "listing_paths": [r.path for r in listings], "canonical_host_hit": row.vendor_host() in egress}
+            "listing_paths": [r.path for r in listings], "inference_paths": [r.path for r in fake.inference()],
+            "canonical_host_hit": row.vendor_host() in egress}
 
 
 @pytest.fixture(scope="module")
@@ -121,9 +126,18 @@ def _listing_facts(ls: dict) -> str:
             f"paths={ls['listing_paths']} egress={ls['egress']} wall={ls['wall_s']}s ids={(ls.get('ids') or [])[:6]}")
 
 
+def _check_managed_listing(ls: dict) -> None:
+    assert "error" not in ls and not ls.get("ids"), _listing_facts(ls)
+    assert not ls["listing_paths"] and not ls["inference_paths"], _listing_facts(ls)
+    assert not set(ls["egress"]).intersection(provider_hosts(CATALOG)), _listing_facts(ls)
+
+
 @pytest.mark.parametrize("row", [pytest.param(r, id=r.name) for r in ROWS])
 def test_listing_uses_configured_endpoint(row: Row, probes: dict) -> None:
     ls = probes[(row.name, "list")]
+    if row.auth_type == "session_managed":
+        _check_managed_listing(ls)
+        return
     routes = row.listing_routes()
     ok = (not row.supports_model_listing) or (
         "error" not in ls and bool(ls["listing_paths"]) and all(bare_path(p) in routes for p in ls["listing_paths"])
@@ -134,14 +148,22 @@ def test_listing_uses_configured_endpoint(row: Row, probes: dict) -> None:
 
 @pytest.mark.parametrize("row", [pytest.param(r, id=r.name) for r in CONTROL_ROWS])
 def test_listing_renders_relay_models(row: Row, probes: dict) -> None:
-    """The rows that list from the configured endpoint render the relay's own model ids."""
+    """BYOK renders the relay's models; managed models require the desktop catalog bridge."""
     ls = probes[(row.name, "list")]
+    if row.auth_type == "session_managed":
+        _check_managed_listing(ls)
+        return
     assert ls["unique"] in (ls.get("ids") or []), f"{row.name}: relay models not rendered\n{_listing_facts(ls)}"
 
 
 @pytest.mark.parametrize("row", [pytest.param(r, id=r.name) for r in ROWS])
 def test_switch_resolves_requested_provider(row: Row, probes: dict) -> None:
     sw = probes[(row.name, "switch")]
+    if row.auth_type == "session_managed":
+        assert not sw.get("ok") and "binding" in sw.get("error", "").lower(), sw
+        assert not sw.get("base_url") and not sw["inference_paths"], sw
+        assert not set(sw["egress"]).intersection(provider_hosts(CATALOG)), sw
+        return
     # Same provider (alias-normalised: ai-gateway == vercel) at the configured endpoint.
     ok = bool(sw.get("ok")) and bool(sw.get("want")) and sw.get("got") == sw["want"] and \
         str(sw.get("base_url") or "").rstrip("/") == sw["base"].rstrip("/")
@@ -157,6 +179,10 @@ def test_listing_failure_degrades_without_vendor_host(row: Row, kind: str, probe
     """A 404 or a hanging listing at the configured endpoint: the picker still returns (within
     ``HANG_BOUND_S``), asked the exact listing path, never crashed and never fell back to the vendor."""
     ls = probes[(row.name, kind)]
+    if row.auth_type == "session_managed":
+        _check_managed_listing(ls)
+        assert ls["wall_s"] < HANG_BOUND_S, _listing_facts(ls)
+        return
     routes = row.listing_routes()
     assert "error" not in ls, f"{row.name} [{kind}]: listing crashed\n{_listing_facts(ls)}"
     assert ls["wall_s"] < HANG_BOUND_S, f"{row.name} [{kind}]: listing blocked the picker\n{_listing_facts(ls)}"
