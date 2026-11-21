@@ -542,11 +542,13 @@ def _copy_tree(src: Path, dst: Path, names: list[str]) -> None:
             shutil.copy2(s, d)
 
     dst.mkdir(parents=True)
-    for name in names:
+    # Runtime imports need the shared brand resource even when desktop sources are omitted.
+    for name in [*names, "apps/desktop/brand.json"]:
         s = src / name
         if s.is_dir():
             shutil.copytree(s, dst / name, copy_function=_link_or_copy, ignore=shutil.ignore_patterns("__pycache__"))
         elif s.is_file():
+            (dst / name).parent.mkdir(parents=True, exist_ok=True)
             _link_or_copy(s, dst / name)
 
 
