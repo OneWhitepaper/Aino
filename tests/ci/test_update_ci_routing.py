@@ -588,6 +588,15 @@ def test_generated_e2e_matrices_run_each_owned_file_once():
     assert upgrade_job["body"]["runs-on"] == "windows-latest"
     assert _selected_test_files(windows_job, "Run Windows E2E suite") == windows
     assert _selected_test_files(upgrade_job, "Run Windows install + update E2E") == windows_update
+    install_plan = native["install-update-e2e"]["jobs"]["e2e-upgrade-plan"]
+    install_shards = json.loads(install_plan["outputs"]["shards"])
+    assert len(install_shards) == len(set(install_shards)), "Windows install: duplicate journeys"
+    assert {f"tests/e2e/core/windows_update/{name}" for name in install_shards} == windows_update
+    install_step = next(step for step in upgrade_job["body"]["steps"]
+                        if step.get("name") == "Run Windows install + update E2E")
+    for shard in install_shards:
+        assert workflow_steps.selected_files(install_step, {"matrix": {"shard": shard}, "inputs": {}}, _REPO) == {
+            f"tests/e2e/core/windows_update/{shard}"}
     assert core | upgrade | windows | windows_update | live == expected
 
 

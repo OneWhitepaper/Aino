@@ -211,6 +211,8 @@ class Machine:
             "APPDATA": str(roaming),
             "GIT_CONFIG_GLOBAL": str(self.root / "e2e-gitconfig"),
             "NO_COLOR": "1",
+            # The isolated environment drops CI; keep build output in the live transcript anyway.
+            "HERMES_VERBOSE": "1",
             # state.db lives under tmp; under a pytest ancestor the live-DB guard would refuse it.
             "HERMES_STATE_DB_GUARD_BYPASS": "1",
         })
