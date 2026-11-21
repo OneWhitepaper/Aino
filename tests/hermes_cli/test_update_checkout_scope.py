@@ -15,12 +15,14 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import psutil
 import pytest
 
 import hermes_cli.gateway as gateway_cli
 from hermes_cli import update_cmd_fleet as fleet
 from hermes_cli import update_launch_files
 from hermes_cli.update_receipt import _updater_code_root as _maybe_root
+from tests.waiting import wait_until
 
 
 def _updater_code_root() -> Path:
@@ -118,6 +120,12 @@ def test_ancestor_gateway_of_another_checkout_is_never_signalled(tmp_path, monke
                                 str(code_root / "hermes_cli" / "main.py")], executable=sys.executable)
     real_kill = os.kill  # the test records os.kill below; the stand-in gateway still has to die
     try:
+        # Checkout ownership is only observable once the child exposes its source argv.
+        process = psutil.Process(gateway.pid)
+        wait_until(
+            lambda: str(code_root / "hermes_cli" / "main.py") in process.cmdline(),
+            what="stand-in gateway exposes its source checkout in argv",
+        )
         signalled: list[int] = []
         monkeypatch.setattr(gateway_cli, "_is_pid_ancestor_of_current_process", lambda pid: pid == gateway.pid)
         monkeypatch.setattr(gateway_cli, "_request_gateway_self_restart", lambda pid: signalled.append(pid) or True)

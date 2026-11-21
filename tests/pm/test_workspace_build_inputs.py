@@ -263,6 +263,53 @@ def test_member_uv_lock_travels_with_its_member(tmp_path):
     assert not (destination / "uv.lock").exists(), "the root lock is seeded by lock_and_sync, not copied"
 
 
+@pytest.mark.parametrize("brand_location", ["apps/desktop/brand.json", "hermes_cli/data/brand.json"])
+def test_generated_workspace_imports_product_identity(tmp_path, monkeypatch, brand_location):
+    """Managed environments need branding even when desktop sources stay out."""
+    checkout = Path(__file__).resolve().parents[2]
+    core = tmp_path / "core"
+    package = core / "hermes_cli"
+    package.mkdir(parents=True)
+    for name in ("__init__.py", "_startup_fast.py", "product_identity.py"):
+        shutil.copy2(checkout / "hermes_cli" / name, package / name)
+    brand = core / brand_location
+    brand.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(checkout / "apps/desktop/brand.json", brand)
+    expected = json.loads(brand.read_text(encoding="utf-8-sig"))
+    desktop = core / "apps/desktop"
+    desktop.mkdir(parents=True, exist_ok=True)
+    (desktop / "desktop-only.txt").write_text("not a runtime input", encoding="utf-8")
+    (core / "pyproject.toml").write_text(
+        '[project]\nname="core"\nversion="1"\nrequires-python=">=3.11"\n'
+        '[tool.setuptools.packages.find]\ninclude=["hermes_cli", "hermes_cli.*"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HERMES_RUNTIME_DIR", str(tmp_path / "runtime"))
+    root = tmp_path / "workspace"
+    workspace._generate_pyproject([], root, source=core, python=Path(sys.executable))
+    shutil.rmtree(core)
+
+    probe = subprocess.run(
+        [sys.executable, "-I", "-S", "-c",
+         "import json, sys; sys.path.insert(0, sys.argv[1]); "
+         "from hermes_cli import product_identity as identity; "
+         "print(json.dumps({'name': identity.PRODUCT_NAME, 'app_id': identity.APP_ID, "
+         "'repository': identity.REPOSITORY_URL, 'creator': identity.CREATOR_NAME, "
+         "'module': identity.__file__}))", str(root)],
+        cwd=tmp_path, text=True, capture_output=True, check=False, timeout=30,
+    )
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    assert json.loads(probe.stdout) == {
+        "name": expected["productName"],
+        "app_id": expected["appId"],
+        "repository": expected["repositoryUrl"],
+        "creator": expected["creatorName"],
+        "module": str(root / "hermes_cli/product_identity.py"),
+    }
+    assert not (root / "apps/desktop/desktop-only.txt").exists()
+
+
 def test_nested_dist_travels_but_root_dist_stays_out(tmp_path):
     """Bundled dashboard plugins ship a tracked dashboard/dist/ the snapshot's code serves."""
     core = tmp_path / "core"

@@ -355,6 +355,26 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Admit the reviewed pre-PM upgrade baseline
+        env:
+          HANDOFF_TAG: v2026.9.24
+          HANDOFF_TAG_OBJECT: e3dd27ee2d8b011737a4eea8e3eb3d711ab78690
+          HANDOFF_COMMIT: f97608f178d1ffeca59860195ab7da295f7c8e5f
+        run: |
+          set -euo pipefail
+          # Fork release tags do not include every upstream updater generation.
+          # Restore only this reviewed baseline locally, never publish a tag.
+          ref="refs/tags/$HANDOFF_TAG"
+          if existing=$(git rev-parse --verify --quiet "$ref"); then
+            test "$existing" = "$HANDOFF_TAG_OBJECT"
+            test "$(git rev-parse "$ref^{commit}")" = "$HANDOFF_COMMIT"
+          else
+            git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "$ref"
+            test "$(git rev-parse FETCH_HEAD)" = "$HANDOFF_TAG_OBJECT"
+            test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$HANDOFF_COMMIT"
+            git update-ref "$ref" "$HANDOFF_TAG_OBJECT" ""
+          fi
+
       - name: Set up Node
         # `hermes update` builds the web UI / TUI workspaces.
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0

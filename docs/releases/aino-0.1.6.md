@@ -21,4 +21,4 @@
 
 安装包文件名、大小和校验值以本发行版的 `release-files.json` 与 `SHA256SUMS` 为准。
 
-源码提交：`d25081e161cfa78dbb03a1045ba224641ff4732d`。
+源码提交以本发行版 `release-files.json` 中记录的完整提交号为准。

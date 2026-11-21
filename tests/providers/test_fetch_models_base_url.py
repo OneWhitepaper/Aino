@@ -104,15 +104,15 @@ class TestFetchModelsBaseUrlOverride:
 class TestCustomProviderBaseUrlPassthrough:
     """Custom provider (ollama/local) should pass base_url through to super."""
 
-    def test_custom_passes_base_url(self):
-        """CustomProfile.fetch_models passes base_url to super()."""
+    def test_custom_passes_base_url(self, monkeypatch):
+        """The registered custom profile uses the caller URL, not its default."""
         server, port = _start_server([{"id": "ollama-model"}])
         try:
-            from plugins.model_providers.custom import CustomProfile
-            profile = CustomProfile(
-                name="custom",
-                base_url="http://127.0.0.1:1",  # wrong port
-            )
+            from providers import get_provider_profile
+
+            profile = get_provider_profile("custom")
+            assert profile is not None
+            monkeypatch.setattr(profile, "base_url", "http://127.0.0.1:1")
             result = profile.fetch_models(
                 api_key="",
                 base_url=f"http://127.0.0.1:{port}",
