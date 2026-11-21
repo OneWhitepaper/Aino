@@ -22,6 +22,7 @@ import { _electron, type ElectronApplication, expect, type Page } from '@playwri
 import { type CoreSandbox, type ProcInfo, providerConfigYaml, sandboxProcesses } from '../core/harness'
 import { processesRunningFrom } from '../core/process-census'
 import { type ScriptedProvider, startScriptedProvider } from '../core/provider'
+import { packagedBinaryCandidates } from '../packaged-paths'
 
 import { gatedOn, KNOWN } from './gates'
 import { type GithubEdge, startGithubEdge } from './github-edge'
@@ -145,16 +146,18 @@ export function releaseDir(facts: InstallFacts): string {
   return path.join(facts.checkout, 'apps', 'desktop', 'release', 'linux-unpacked')
 }
 
-/** The packaged executable `hermes desktop` built into the install (electron-builder names it after productName). */
+/** The packaged executable `hermes desktop` built into the install. */
 export function packagedExe(facts: InstallFacts): string {
   const dir = releaseDir(facts)
-  const name = fs.readdirSync(dir).find(entry => /^hermes$/i.test(entry))
 
-  if (!name) {
-    throw new Error(`no packaged Hermes executable in ${dir}: ${fs.readdirSync(dir).join(', ')}`)
+  const executable = packagedBinaryCandidates({ platform: 'linux', releaseRoot: path.dirname(dir) })
+    .find(candidate => fs.existsSync(candidate))
+
+  if (!executable) {
+    throw new Error(`no packaged desktop executable in ${dir}: ${fs.readdirSync(dir).join(', ')}`)
   }
 
-  return path.join(dir, name)
+  return executable
 }
 
 export function userDataDir(facts: InstallFacts): string {

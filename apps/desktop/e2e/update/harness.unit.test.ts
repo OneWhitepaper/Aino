@@ -5,7 +5,42 @@ import * as path from 'node:path'
 
 import { expect, test } from 'vitest'
 
-import { desktopMainProcesses, type InstallFacts, installProcesses, releaseDir } from './harness'
+import { desktopMainProcesses, type InstallFacts, installProcesses, packagedExe, releaseDir } from './harness'
+
+test.each(['aino', 'Aino', 'Hermes', 'hermes'])(
+  'the installed update harness finds the packaged %s executable without selecting helpers',
+  name => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update executable '))
+    const facts = { checkout: root } as InstallFacts
+    const dir = releaseDir(facts)
+    const executable = path.join(dir, name)
+
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'chrome_crashpad_handler'), 'helper', { mode: 0o755 })
+      fs.writeFileSync(executable, 'desktop', { mode: 0o755 })
+      const found = fs.statSync(packagedExe(facts))
+      const expected = fs.statSync(executable)
+      expect([found.dev, found.ino]).toEqual([expected.dev, expected.ino])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  }
+)
+
+test('the installed update harness refuses a release containing only helper executables', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update helpers '))
+  const facts = { checkout: root } as InstallFacts
+  const dir = releaseDir(facts)
+
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'chrome_crashpad_handler'), 'helper', { mode: 0o755 })
+    expect(() => packagedExe(facts)).toThrow(/no packaged .* executable/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 // Electron 44 zeroes its processes' /proc/<pid>/environ, so the installed app shows no
 // HERMES_HOME. A copy of node under the install's release dir, started with an empty
