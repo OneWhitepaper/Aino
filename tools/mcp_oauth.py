@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 import webbrowser
+from _thread import LockType
 from functools import partialmethod
 
 # Cross-process advisory file locking for the refresh fence. Mirrors
@@ -679,7 +680,7 @@ def _result_taken(result: dict) -> bool:
     return result.get("auth_code") is not None or result.get("error") is not None
 
 
-def _claim_result(result: dict, lock: threading.Lock, **values: Any) -> bool:
+def _claim_result(result: dict, lock: LockType, **values: Any) -> bool:
     """Write *values* unless a terminal result is already there; True when this caller won. Atomic under
     *lock*: callbacks are served on concurrent threads and race the paste reader."""
     with lock:
@@ -728,7 +729,7 @@ def _make_callback_handler() -> tuple[type, dict]:
     return _Handler, result
 
 
-def _paste_callback_reader(result: dict, lock: threading.Lock | None = None) -> None:
+def _paste_callback_reader(result: dict, lock: LockType | None = None) -> None:
     """Read one stdin line as an OAuth redirect (full URL, bare query, or a ``_SKIP_TOKENS`` word that
     exits without auth) into *result*. Parse failures, EOF and interrupts are swallowed — best-effort
     fallback racing the HTTP listener, which stays primary. *lock* is the flow's handler ``result_lock``."""

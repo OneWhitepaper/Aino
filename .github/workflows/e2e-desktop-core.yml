@@ -42,7 +42,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            xvfb \
+            xvfb dbus gnome-keyring libsecret-1-0 \
             libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
             xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Build the desktop app
         # The generator uses the runtime's Pillow + resvg-py, not a build-only venv.
-        run: just desktop-build && node apps/desktop/scripts/bundle-electron-main.mjs --dev
+        run: just desktop-build
 
       # webapp-gateway-attach.spec.ts drives the Webapp from a real browser: it needs the
       # Webapp renderer and a Chromium Playwright can launch.
@@ -85,6 +85,11 @@ jobs:
       - name: Package the desktop app (electron-builder --dir)
         working-directory: apps/desktop
         run: pnpm run builder --dir --publish never --linux
+
+      # Package the stamped production main first. A --dev bundle reads identity
+      # from the checkout, which is deliberately absent from the release archive.
+      - name: Prepare the unpackaged core development account adapter
+        run: node apps/desktop/scripts/bundle-electron-main.mjs --dev
 
       - name: Run the core suite under xvfb
         working-directory: apps/desktop

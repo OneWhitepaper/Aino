@@ -41,6 +41,11 @@ def _write_executable(path: Path, machine: int | None = None) -> Path:
             id="linux",
         ),
         pytest.param(
+            "linux-unpacked/aino", "linux-arm64-unpacked/hermes",
+            marks=pytest.mark.platforms("linux"),
+            id="linux-command-name",
+        ),
+        pytest.param(
             "win-unpacked/Aino.exe", "win-arm64-unpacked/Hermes.exe",
             marks=pytest.mark.platforms("windows"),
             id="windows",
@@ -62,6 +67,27 @@ def test_packaged_executable_prefers_current_product_with_legacy_fallback(
 
     primary.unlink()
     assert main_desktop._desktop_packaged_executable_in(release) == legacy
+
+
+@pytest.mark.platforms("linux")
+@pytest.mark.parametrize("unpacked", ["linux-unpacked", "linux-arm64-unpacked"])
+def test_linux_command_name_can_replace_the_previous_desktop(tmp_path, unpacked):
+    desktop = tmp_path / "apps" / "desktop"
+    previous = _write_executable(desktop / "release" / unpacked / "hermes")
+    previous.write_bytes(b"previous desktop")
+    staging = main_desktop._desktop_staging_dir(desktop)
+    _write_executable(staging / unpacked / "aino")
+    resources = staging / unpacked / "resources"
+    resources.mkdir()
+    (resources / "install-stamp.json").write_text('{"commit":"candidate"}', encoding="utf-8")
+
+    published = main_desktop._promote_staged_desktop_app(desktop, staging)
+
+    assert published == desktop / "release" / unpacked / "aino"
+    assert published.read_bytes() == b"desktop executable"
+    assert (published.parent / "resources" / "install-stamp.json").read_text() == '{"commit":"candidate"}'
+    assert not previous.exists()
+    assert not staging.exists()
 
 
 @pytest.mark.platforms("windows")

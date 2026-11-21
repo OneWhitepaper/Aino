@@ -57,7 +57,7 @@ const words = (marker: string, ...rest: string[]) => [
 ]
 
 const viewport = (page: Page) => page.locator('[data-slot="aui_thread-viewport"]').filter({ visible: true }).first()
-const stopButton = (page: Page) => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+const stopButton = (page: Page) => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
 const lostCard = (page: Page) => page.locator('[data-slot="queue-lost-note"]')
 const lostDiscard = (page: Page) => page.locator('[data-slot="queue-lost-discard"]')
 const queueHeader = (page: Page) => page.locator('.status-section-trigger').filter({ hasText: /Queued/ })
@@ -221,7 +221,7 @@ function recordTimeline(page: Page): Timeline {
 async function watchStop(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as unknown as { __stopLog?: string[]; __stopObs?: MutationObserver }
-    const query = () => document.querySelectorAll('[data-slot="composer-root"] button[aria-label="Stop"]').length
+    const query = () => document.querySelectorAll('[data-slot="composer-root"] button[aria-label="Pause task"]').length
     let last = query()
     w.__stopLog = [`${Date.now()} stop=${last}`]
     w.__stopObs?.disconnect()

@@ -36,7 +36,7 @@ function openssl(args: string[], cwd: string): void {
 }
 
 /** A throwaway root + an api.github.com leaf signed by it. */
-function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPem: string } {
+function makeCerts(dir: string, hosts: string[]): { key: Buffer; cert: Buffer; caPem: string } {
   fs.mkdirSync(dir, { recursive: true })
   // Build the CA and leaf with explicit extension sections. Passing -addext to
   // `req -x509` can merge with a runner's openssl.cnf and emit duplicate X.509
@@ -84,14 +84,14 @@ function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPe
     dir
   )
   openssl(
-    ['req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', `/CN=${host}`],
+    ['req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', `/CN=${hosts[0]}`],
     dir
   )
   fs.writeFileSync(
     path.join(dir, 'leaf.ext'),
     '[server_ext]\n' +
       'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' +
-      `subjectAltName=DNS:${host}\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n`
+      `subjectAltName=${hosts.map(host => `DNS:${host}`).join(',')}\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n`
   )
   openssl(
     [
@@ -192,22 +192,29 @@ function apiHandler(origin: string) {
 export async function startGithubEdge(
   workDir: string,
   origin: string,
-  baseCaBundle: string | undefined
+  baseCaBundle: string | undefined,
+  additionalHosts: Record<string, http.RequestListener> = {}
 ): Promise<GithubEdge> {
-  return startHttpsEdge(workDir, { host: 'api.github.com', handler: apiHandler(origin), baseCaBundle, tunnelOthers: true })
+  return startHttpsEdge(workDir, { host: 'api.github.com', handler: apiHandler(origin), baseCaBundle,
+    tunnelOthers: true, additionalHosts })
 }
 
 export interface HttpsEdgeOptions {
   host: string
   handler: http.RequestListener
+  /** Account API and GitHub must share the one HTTPS_PROXY slot. */
+  additionalHosts?: Record<string, http.RequestListener>
   baseCaBundle?: string
   tunnelOthers: boolean
 }
 
 /** Reuses the update suite's TLS transport without injecting code into the installed runtime. */
 export async function startHttpsEdge(workDir: string, options: HttpsEdgeOptions): Promise<GithubEdge> {
-  if (!/^[a-zA-Z0-9.-]+$/.test(options.host)) {throw new Error('Invalid TLS fixture hostname')}
-  const { key, cert, caPem } = makeCerts(path.join(workDir, 'edge-ca'), options.host)
+  const handlers = { ...options.additionalHosts, [options.host]: options.handler }
+  const hosts = Object.keys(handlers)
+
+  if (hosts.some(host => !/^[a-zA-Z0-9.-]+$/.test(host))) {throw new Error('Invalid TLS fixture hostname')}
+  const { key, cert, caPem } = makeCerts(path.join(workDir, 'edge-ca'), hosts)
   const caBundle = path.join(workDir, 'edge-ca', 'bundle.pem')
   const systemBundle = [options.baseCaBundle, '/etc/ssl/certs/ca-certificates.crt'].find(p => p && fs.existsSync(p))
   fs.writeFileSync(caBundle, `${systemBundle ? fs.readFileSync(systemBundle, 'utf8') : ''}\n${caPem}`)
@@ -216,10 +223,10 @@ export async function startHttpsEdge(workDir: string, options: HttpsEdgeOptions)
   const apiHits: string[] = []
   const deniedConnects: string[] = []
 
-  const api = http.createServer((req, res) => {
-    apiHits.push(`${req.method} ${new URL(req.url ?? '/', `https://${options.host}`).pathname}`)
-    options.handler(req, res)
-  })
+  const apis = new Map(Object.entries(handlers).map(([host, handler]) => [host, http.createServer((req, res) => {
+    apiHits.push(`${req.method} ${new URL(req.url ?? '/', `https://${host}`).pathname}`)
+    handler(req, res)
+  })]))
 
   const sockets = new Set<net.Socket>()
 
@@ -240,7 +247,9 @@ export async function startHttpsEdge(workDir: string, options: HttpsEdgeOptions)
     const port = Number(portText || 443)
     client.on('error', () => undefined)
 
-    if (host === options.host && port === 443) {
+    const api = apis.get(host)
+
+    if (api && port === 443) {
       client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
 
       if (head.length) {
@@ -299,7 +308,8 @@ export async function startHttpsEdge(workDir: string, options: HttpsEdgeOptions)
       }
 
       await new Promise<void>(resolve => proxy.close(() => resolve()))
-      api.close()
+
+      for (const api of apis.values()) { api.close() }
     }
   }
 }

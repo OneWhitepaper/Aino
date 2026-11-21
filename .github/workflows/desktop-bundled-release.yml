@@ -347,6 +347,13 @@ jobs:
                           '--reuse', '--native-toolchain', prepared.native_toolchain,
                           *[arg for name in workspaces for arg in ('--workspace', name)]],
                          cwd=prepared.request.source, env=env, check=True)
+      - name: Prepare native Windows process observer
+        if: matrix.target.platform == 'win32'
+        run: |
+          python -m scripts.ci.python_packages psutil==7.2.2
+      - name: Verify native Windows process observer
+        if: matrix.target.platform == 'win32'
+        run: python -I -c "import psutil; print(psutil.__version__)"
       - name: Extract Windows ZIP
         if: matrix.target.platform == 'win32'
         shell: pwsh

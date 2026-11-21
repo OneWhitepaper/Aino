@@ -121,6 +121,13 @@ jobs:
           cache-python: false
           cache-node: false
           archive-inputs: false
+      - name: Prepare native Windows process observer
+        if: inputs.platform == 'win32'
+        run: |
+          python -m scripts.ci.python_packages psutil==7.2.2
+      - name: Verify native Windows process observer
+        if: inputs.platform == 'win32'
+        run: python -I -c "import psutil; print(psutil.__version__)"
       - name: Install locked smoke dependencies
         if: inputs.format != 'deb'
         run: just js-install-tests

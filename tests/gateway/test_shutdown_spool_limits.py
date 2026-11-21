@@ -8,23 +8,40 @@ import pytest
 from gateway import shutdown_flush
 
 
+@pytest.mark.parametrize("live_drain", [False, True], ids=["restart", "live"])
 def test_recovery_payload_memory_does_not_scale_with_backlog(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, live_drain: bool,
 ) -> None:
     monkeypatch.setattr(shutdown_flush, "_get_flush_dir", lambda: tmp_path)
     content = "x" * (256 * 1024)
-    for seq in range(24):
-        shutdown_flush.spool_dropped_transcript_message(
-            "sess", {"role": "user", "content": content, "timestamp": seq},
-        )
 
     class Sink:
         def append_message(self, **kwargs: object) -> None:
             assert kwargs["content"] == content
 
+    sink = Sink()
+
+    def replay() -> int:
+        if live_drain:
+            recovered, remaining = shutdown_flush.drain_transcript_spool(
+                "sess", lambda message: sink.append_message(**message),
+            )
+            assert remaining == 0
+            return recovered
+        return shutdown_flush.recover_pending_to_db(sink)
+
+    # Load the writer's dependencies before measuring payload memory; cold module imports
+    # allocate independently of the backlog and would obscure retained decoded messages.
+    shutdown_flush.spool_dropped_transcript_message("sess", {"role": "user", "content": content})
+    assert replay() == 1
+    for seq in range(24):
+        shutdown_flush.spool_dropped_transcript_message(
+            "sess", {"role": "user", "content": content, "timestamp": seq},
+        )
+
     tracemalloc.start()
     try:
-        assert shutdown_flush.recover_pending_to_db(Sink()) == 24
+        assert replay() == 24
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()

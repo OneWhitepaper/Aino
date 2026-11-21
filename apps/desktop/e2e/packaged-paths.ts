@@ -15,6 +15,7 @@ function productNames(platform: string): string[] {
   const names = [identity.productName]
 
   if (platform === 'linux') {
+    names.unshift(identity.productName.toLowerCase())
     names.push(...LEGACY_DESKTOP_PRODUCT_NAMES)
   } else {
     names.push('Hermes')

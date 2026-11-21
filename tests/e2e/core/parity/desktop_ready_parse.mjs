@@ -6,7 +6,30 @@
 // stdout. Prints {"port": N} or {"error": "..."}. The Python side therefore never
 // re-implements or regexes the TS contract: if the parser changes, this follows.
 import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
+import { registerHooks } from 'node:module'
+import { extname } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+// Resolve the same extensionless TypeScript graph as the app. The native Node
+// loader also requires an explicit attribute for the shared JSON import.
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith('.') && context.parentURL) {
+      const candidate = new URL(specifier, context.parentURL)
+      if (!extname(candidate.pathname) && existsSync(new URL(`${candidate.href}.ts`))) {
+        return next(`${candidate.href}.ts`, context)
+      }
+    }
+    return next(specifier, context)
+  },
+  load(url, context, next) {
+    return next(
+      url,
+      url.endsWith('.json') ? { ...context, importAttributes: { ...context.importAttributes, type: 'json' } } : context
+    )
+  }
+})
 
 const [parserPath, timeoutMs] = process.argv.slice(2)
 const { waitForDashboardPort } = await import(pathToFileURL(parserPath).href)

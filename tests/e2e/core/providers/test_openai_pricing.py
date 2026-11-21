@@ -173,9 +173,9 @@ def _home(tmp_path: Path, catalog: FakeCatalog, dead: socket.socket) -> _ShimHom
         "providers": {
             "openrouter": {"name": "OpenRouter-Full", "base_url": f"{VENDOR_ORIGIN}/api/v1",
                            "api_key": "sk-or-fake-twin", "models": TWIN_MODELS},
-            # Decoys: serve a catalog model id, but are relays with no price catalog of their own.
+            # Distinct tenants keep both decoy rows visible instead of grouping one connection.
             **{key: {"name": f"Relay {key}", "base_url": f"{catalog.origin}/relay/v1",
-                     "api_key": "sk-relay-fake", "models": [RELAY_MODEL]} for key, _slug in DECOYS},
+                     "api_key": f"sk-relay-fake-{key}", "models": [RELAY_MODEL]} for key, _slug in DECOYS},
         },
     }, dotenv={"OPENROUTER_API_KEY": "sk-or-fake-builtin",
                # The picker lists a providers: entry keyed by a built-in name only while that

@@ -14,8 +14,8 @@
  *    as a `└─` branch row nested under its sealed parent (same shape as a
  *    user branch) — observed in a bounded window around the rotating turn.
  *  - Plain regression: after a reload the lineage is ONE sidebar row, it is
- *    the live tip (clicking it routes to the tip id from state.db) and it
- *    opens the continuation transcript.
+ *    the canonical creation id (whose receipt targets the tip in state.db)
+ *    and it opens the continuation transcript.
  *
  * Not covered here: collapseCompressionLineages (session-branch-tree.ts). No
  * real sequence tried (manual /compress, mid-turn auto-compaction, flat and
@@ -25,10 +25,14 @@
  * them — so sabotaging it does not turn this spec red.
  */
 
+import * as path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
 import { expect, type Page, test } from '@playwright/test'
 
 import {
   coreAppEnv,
+  type CoreSandbox,
   createCoreSandbox,
   currentSessionId,
   launchCoreApp,
@@ -117,7 +121,7 @@ async function readRowCountSampler(page: Page): Promise<{ max: number; atMax: st
 
 async function settled(page: Page) {
   await expect
-    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').count(), {
+    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').count(), {
       timeout: 60_000,
       message: 'turn settled'
     })
@@ -137,6 +141,26 @@ function lineageFromDb(rows: SessionRow[], rootId: string): string[] {
     }
 
     chain.push(next.id)
+  }
+}
+
+function creationReceipt(sandbox: CoreSandbox, sessionId: string): {
+  session_id: string
+  entry: { session_id: string }
+  lineage: string[]
+} {
+  const db = new DatabaseSync(path.join(sandbox.hermesHome, 'state.db'), { readOnly: true })
+
+  try {
+    const row = db
+      .prepare('SELECT value FROM state_meta WHERE key = ?')
+      .get(`gateway.local_policy.v1:${sessionId}`) as undefined | { value: string }
+
+    expect(row, 'the canonical creation receipt exists').toBeDefined()
+
+    return JSON.parse(row!.value)
+  } finally {
+    db.close()
   }
 }
 
@@ -204,9 +228,14 @@ test('lineage: a real compression rotation is one sidebar row per conversation (
       expect(seen.samples, 'row sampler observed the sidebar').toBeGreaterThan(0)
     })
 
-    await test.step('after reload the lineage is one row: the live tip, opening the continuation', async () => {
-      const tip = lineageFromDb(sessionRows(sandbox), rootId).at(-1)!
+    await test.step('after reload one canonical row opens its current continuation', async () => {
+      const lineage = lineageFromDb(sessionRows(sandbox), rootId)
+      const tip = lineage.at(-1)!
       expect(tip, 'rotation moved the tip off the root').not.toBe(rootId)
+      const receipt = creationReceipt(sandbox, rootId)
+      expect(receipt.session_id, 'admission ownership does not rotate').toBe(rootId)
+      expect(receipt.lineage, 'the receipt contains every physical continuation').toEqual(lineage)
+      expect(receipt.entry.session_id, 'the canonical route targets the current physical tip').toBe(tip)
       expect(
         messageRows(sandbox, tip).some(m => m.role === 'user' && m.content.includes(U(last + 1))),
         'follow-up persisted on the tip'
@@ -221,8 +250,8 @@ test('lineage: a real compression rotation is one sidebar row per conversation (
         })
         .toHaveLength(1)
 
-      // Record every route the click produces: a stale root row would route to
-      // the sealed root first (the backend then redirects the resume to the tip).
+      // Canonical sessions keep their creation id across physical compression
+      // (hermes_state_local_lineage). The receipt, not a URL rewrite, owns the tip.
       await page.evaluate(() => {
         window.location.hash = '#/'
       })
@@ -254,9 +283,9 @@ test('lineage: a real compression rotation is one sidebar row per conversation (
       await expect
         .poll(() => page.evaluate(() => (window as unknown as { __routes: string[] }).__routes.filter(Boolean)), {
           timeout: 30_000,
-          message: 'the sidebar row IS the live tip: clicking it routes straight to the tip id'
+          message: 'the sidebar routes directly to the canonical owner, without a physical-id detour'
         })
-        .toEqual([tip])
+        .toEqual([rootId])
       await expect(viewport(page)).toContainText(A(last + 1), { timeout: 60_000 })
       await expect(sessionRowsInSidebar(page)).toHaveCount(1)
     })

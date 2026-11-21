@@ -70,7 +70,7 @@ function viewport(page: Page) {
 }
 
 function stopButton(page: Page) {
-  return page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+  return page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
 }
 
 function finished(provider: ScriptedProvider, marker: string, step = 0) {

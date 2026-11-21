@@ -47,13 +47,14 @@ const A = (n: number) => `A${n}-${RUN}`
 test('clicking Update now moves the backend to the new commit, relaunches the app, and chat works after', async () => {
   test.setTimeout(20 * 60_000)
   const session = await startInstallSession()
-  const { facts, provider, env } = session
+  const { facts, provider, env, account } = session
   const before = git(facts.checkout, 'rev-parse', 'HEAD')
   const target = publishUpstream('release: next upstream main', 'UPSTREAM_RELEASE.md', `next release ${RUN}\n`)
   const explain = (extra = '') => diagnostics(facts, extra)
 
   try {
     let firstMainPid = 0
+    let accountRequestOffset = 0
 
     await test.step('the running app offers the new upstream commit and hands off on click', async () => {
       const launched = await launchInstalledApp(facts, env)
@@ -63,6 +64,7 @@ test('clicking Update now moves the backend to the new commit, relaunches the ap
       })
       await openAbout(launched.page)
       await waitForUpdateOffer(launched.page, target)
+      accountRequestOffset = account.requests.length
       await clickUpdateNowAndExpectHandoff(launched, facts)
     })
 
@@ -108,6 +110,10 @@ test('clicking Update now moves the backend to the new commit, relaunches the ap
         timeout: 3 * 60_000,
         explain
       })
+      const restored = account.requests.slice(accountRequestOffset)
+      expect(restored.some(request => request.authenticatedProfile), 'the automatic relaunch restored the authenticated account').toBe(true)
+      expect(restored.filter(request => request.method === 'POST' && request.path.startsWith('/api/v1/auth/')
+        && request.path !== '/api/v1/auth/refresh'), 'automatic relaunch must not log in again').toEqual([])
       expect(
         git(facts.checkout, 'status', '--porcelain', '--untracked-files=no'),
         'the updated checkout is clean'

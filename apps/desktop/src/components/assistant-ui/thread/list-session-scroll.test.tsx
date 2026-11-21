@@ -8,6 +8,8 @@ import { keybindAction } from '@/lib/keybinds/actions'
 import { setActiveProfile } from '@/store/profile'
 import {
   getThreadScrollPosition,
+  notifyThreadEditClose,
+  notifyThreadEditOpen,
   requestScrollToBottom,
   requestThreadPageScroll,
   saveThreadScrollPosition,
@@ -125,6 +127,122 @@ function ScrollHarness({
       </TranscriptWindowProvider>
     </AssistantRuntimeProvider>
   )
+}
+
+function renderResizeScrollHarness() {
+  const previousObserver = globalThis.ResizeObserver
+  const observers = new Set<{ callback: ResizeObserverCallback; targets: Set<Element> }>()
+
+  vi.useFakeTimers()
+
+  const raf = vi
+    .spyOn(globalThis, 'requestAnimationFrame')
+    .mockImplementation(callback => window.setTimeout(() => callback(performance.now()), 16))
+
+  const cancelRaf = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(id => window.clearTimeout(id))
+
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      targets = new Set<Element>()
+      constructor(public callback: ResizeObserverCallback) {
+        observers.add(this)
+      }
+      observe(target: Element) {
+        this.targets.add(target)
+      }
+      unobserve(target: Element) {
+        this.targets.delete(target)
+      }
+      disconnect() {
+        this.targets.clear()
+      }
+    }
+  )
+
+  scrollHeightValue = 1430
+
+  const messages = sessionMessages('viewport-resize')
+  const { container, rerender, unmount } = render(<ScrollHarness messages={messages} sessionKey="viewport-resize" />)
+  const viewport = viewportEl(container)
+
+  let clientHeight = 608
+  let scrollTop = viewport.scrollTop
+
+  Object.defineProperties(viewport, {
+    clientHeight: { configurable: true, get: () => clientHeight },
+    // jsdom has no layout: model the browser's scroll-range clamp, not the hook.
+    scrollTop: {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = Math.max(0, Math.min(value, scrollHeightValue - clientHeight))
+      }
+    }
+  })
+
+  const resize = () => {
+    for (const observer of observers) {
+      const targets = [...observer.targets].filter(el => el.getAttribute('data-slot') === 'aui_thread-content')
+
+      if (targets.length) {
+        observer.callback(
+          targets.map(target => ({ target, contentRect: { height: scrollHeightValue } })) as ResizeObserverEntry[],
+          observer as unknown as ResizeObserver
+        )
+      }
+    }
+  }
+
+  const advance = async (ms = 160) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  return {
+    viewport,
+    resize,
+    advance,
+    async start() {
+      await advance()
+      // A real run takes over from the cold-load restore observer.
+      rerender(<ScrollHarness isRunning messages={messages} sessionKey="viewport-resize" />)
+      await advance()
+      act(resize)
+      await advance()
+      act(() => viewport.dispatchEvent(new Event('scroll')))
+      await advance(5)
+    },
+    async clampAndPin() {
+      act(() => {
+        const topBeforeResize = viewport.scrollTop
+        clientHeight = 634
+        viewport.scrollTop = topBeforeResize
+        viewport.dispatchEvent(new Event('scroll'))
+      })
+      await advance(5)
+      expect(viewport.scrollTop).toBe(796)
+      // nearBottom can still report following while the internal lock escaped.
+      expect(viewport.dataset.following).toBe('true')
+
+      act(() => {
+        scrollHeightValue = 1477
+        resize()
+      })
+      expect(viewport.scrollTop).toBe(843) // The synchronous, pre-paint pin survives.
+      act(() => viewport.dispatchEvent(new Event('scroll')))
+      await advance()
+    },
+    cleanup() {
+      unmount()
+      window.getSelection()?.removeAllRanges()
+      raf.mockRestore()
+      cancelRaf.mockRestore()
+      vi.stubGlobal('ResizeObserver', previousObserver)
+      vi.useRealTimers()
+    }
+  }
 }
 
 describe('list session-scroll restore', () => {
@@ -249,6 +367,69 @@ describe('list session-scroll restore', () => {
       vi.stubGlobal('ResizeObserver', previousObserver)
     }
   })
+
+  it('rearms bottom-follow after a viewport-only clamp, beyond the next synchronous pin', async () => {
+    const fixture = renderResizeScrollHarness()
+
+    try {
+      await fixture.start()
+      expect(fixture.viewport.scrollTop).toBe(821)
+      await fixture.clampAndPin()
+
+      act(() => {
+        scrollHeightValue = 1591
+        // A queued scroll can consume the pre-growth metrics before RO. The
+        // real hook must keep following even when this resize cannot sync-pin.
+        fixture.viewport.dispatchEvent(new Event('scroll'))
+        fixture.resize()
+      })
+      await fixture.advance()
+
+      expect(fixture.viewport.scrollTop).toBeGreaterThanOrEqual(956)
+      expect(fixture.viewport.scrollTop).toBeLessThanOrEqual(957)
+      expect(fixture.viewport.dataset.following).toBe('true')
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it.each(['scroll-up', 'selection', 'edit'] as const)(
+    'does not override %s during streamed growth after a viewport clamp',
+    async hold => {
+      const fixture = renderResizeScrollHarness()
+
+      try {
+        await fixture.start()
+        await fixture.clampAndPin()
+
+        act(() => {
+          if (hold === 'scroll-up') {
+            fixture.viewport.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -160 }))
+            fixture.viewport.scrollTop -= 120
+            fixture.viewport.dispatchEvent(new Event('scroll'))
+          } else if (hold === 'selection') {
+            const range = window.document.createRange()
+            range.selectNodeContents(fixture.viewport.querySelector('[data-slot="aui_user-message-root"]')!)
+            window.getSelection()!.addRange(range)
+          } else {
+            notifyThreadEditOpen()
+          }
+        })
+        const heldTop = fixture.viewport.scrollTop
+
+        act(() => {
+          scrollHeightValue = 1591
+          fixture.resize()
+        })
+        await fixture.advance()
+
+        expect(fixture.viewport.scrollTop).toBe(heldTop)
+      } finally {
+        act(notifyThreadEditClose)
+        fixture.cleanup()
+      }
+    }
+  )
 
   it('does not follow a composer-only resize while a turn is running (#118482)', async () => {
     // Typing in the composer grows the clearance spacer, not the transcript.

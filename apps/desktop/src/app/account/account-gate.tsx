@@ -6,6 +6,7 @@ import { createLegacyDevelopmentAccountActions, platformAccountActions } from '@
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
+import { isBrowserHostedDesktop } from '@/lib/platform'
 import type { AccountActions, AccountState } from '@/store/account'
 import { $activeConnectionId } from '@/store/connections'
 import { requestGatewayForAgent } from '@/store/gateway'
@@ -97,7 +98,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
       // A late acknowledgment must never reveal another account's subtree.
       setWorkspace(null)
       void Promise.resolve()
-        .then(() => setMode?.('workspace', undefined, expectedOwner))
+        .then(() => (setMode ? setMode('workspace', undefined, expectedOwner) : isBrowserHostedDesktop()))
         .then(ready => {
           if (active) {
             if (ready === true) {
@@ -179,7 +180,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
               onVerifyPhoneCode={async input => {
                 const result = await actions.verifyPhoneCode(input)
 
-                if (result?.status === 'signed_in') {
+                if (result?.status === 'signed_in' && !isBrowserHostedDesktop()) {
                   navigate('/', { replace: true })
                 }
 

@@ -5,6 +5,7 @@ import stat
 import sys
 import time
 from io import BytesIO
+from typing import get_type_hints
 from unittest.mock import patch, MagicMock
 from urllib.parse import quote
 
@@ -23,6 +24,7 @@ from tools.mcp_oauth import (
     remove_oauth_tokens,
     _cached_redirect,
     _can_open_browser,
+    _claim_result,
     _is_interactive,
     _make_callback_handler,
     _paste_callback_reader,
@@ -942,6 +944,21 @@ class TestPasteCallbackReader:
         assert result["auth_code"] == "abc"
         assert result["state"] == "xyz"
         assert result["error"] is None
+
+    def test_shared_lock_has_runtime_types_and_preserves_paste_winner(self, monkeypatch):
+        handler, result = _make_callback_handler()
+        lock = handler.result_lock
+        assert isinstance(lock, get_type_hints(_claim_result)["lock"])
+        paste_lock_type = get_type_hints(_paste_callback_reader)["lock"]
+        assert isinstance(lock, paste_lock_type)
+        assert isinstance(None, paste_lock_type)
+
+        pasted = "http://127.0.0.1:37949/callback?code=pasted&state=s1\n"
+        monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: pasted))
+        _paste_callback_reader(result, lock)
+        assert not _claim_result(result, lock, auth_code="late-http", state="s2")
+        assert (result["auth_code"], result["state"], result["error"]) == ("pasted", "s1", None)
+        assert not lock.locked()
 
 
     def test_swallows_stdin_errors(self, monkeypatch):

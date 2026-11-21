@@ -65,7 +65,7 @@ async function renderedMarkers(page: Page): Promise<{ users: string[]; assistant
 
 async function settled(page: Page) {
   await expect
-    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').count(), {
+    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').count(), {
       timeout: 60_000,
       message: 'turn settled'
     })

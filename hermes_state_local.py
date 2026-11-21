@@ -401,6 +401,26 @@ def annotate_local_lineages(sessions, heads):
     return sessions
 
 
+def project_local_session_ids(db, sessions):
+    """UI rows use their receipt's owner; raw storage lists keep physical transcript ids.
+
+    Keep the representative segment's metadata and compression root (pin/archive scope),
+    and never infer a logical owner for legacy or messaging histories without a receipt.
+    """
+    if not sessions:
+        return sessions
+    with db._read_ctx() as conn:
+        _superseded, heads = _cached_local_lineage_index(db, conn)
+    # An adopted legacy tip can retain an older, unbound compression root. Only
+    # exact receipt membership identifies its owner; the projected root's chat_id cannot.
+    owners = {sid: owner for owner, lineage in heads.values() for sid in lineage}
+    projected = []
+    for row in sessions:
+        owner = owners.get(row['id'], row['id'])
+        projected.append({**row, 'id': owner} if owner != row['id'] else row)
+    return projected
+
+
 def local_receipt(db, session_id):
     with db._read_ctx() as conn:
         row = conn.execute('SELECT value FROM state_meta WHERE key=?', (POLICY_PREFIX + session_id,)).fetchone()

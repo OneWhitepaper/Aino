@@ -176,11 +176,13 @@ def drain_transcript_spool(session_id: str, replay, *, db_known_failing: bool = 
             logger.warning("Removing structurally invalid transcript spool file %s", path)
             path.unlink(missing_ok=True)
             continue
-        entries.append((_spool_sort_key(payload, path.name), path, message))
+        entries.append((_spool_sort_key(payload, path.name), path))
     ordered, replayed, remaining = sorted(entries, key=lambda e: e[0]), 0, 0
-    for idx, (_key, path, message) in enumerate(ordered):
+    for idx, (_key, path) in enumerate(ordered):
         try:
-            replay(message)
+            # As at startup, keep only ordering metadata and re-read one payload per replay.
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            replay(payload["data"]["message"])
         except Exception as exc:
             if is_row_rejection(exc):  # no retry can write it, so it must not hold the session back
                 _quarantine_spool_file(path, session_id, exc)

@@ -19,15 +19,16 @@ import * as path from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
+import { readChatIdentity } from '../../../../tests-js/scripts/desktop-chat-smoke'
+import { assertBackendOrigin, localBackendProcess } from '../../../../tests-js/scripts/desktop-smoke-process'
 import { recordWebSockets, send, waitForInteractive } from '../core/harness'
 
+import { accountHome } from './account-fixture'
 import {
   backendServeProcesses,
   closeQuietly,
   diagnostics,
-  firstRunScreensSeen,
   type InstallFacts,
-  installFirstRunSampler,
   installProcesses,
   launchInstalledApp,
   nonGatewayProcesses,
@@ -77,28 +78,40 @@ test('a healthy local install opens straight to chat on every launch: no setup c
         }
 
         const installer = startInstallerSampler(facts)
-        const { app, page, logTail } = await launchInstalledApp(facts, env)
+
+        const { app, page, logTail, firstRunScreensSeen } = await launchInstalledApp(facts, env).catch(error => {
+          installer.stop()
+          throw error
+        })
 
         try {
-          await installFirstRunSampler(page)
           const ws = recordWebSockets(page)
           await waitForInteractive(app, page, 180_000).catch(error => {
             throw new Error(`${(error as Error).message}\n${diagnostics(facts, logTail())}`)
           })
 
           expect(
-            await firstRunScreensSeen(page),
+            firstRunScreensSeen(),
             `launch ${launch} of a healthy install showed the first-run setup chooser\n${diagnostics(facts, logTail())}`
           ).toEqual([])
 
-          // The backend the app started is the user's install, not something it provisioned.
-          const serve = backendServeProcesses(facts)
-          expect(serve.length, `one backend for the install\n${diagnostics(facts)}`).toBe(1)
-          const cwd = fs.realpathSync(`/proc/${serve[0].pid}/cwd`)
-          expect(
-            [serve[0].cmdline, cwd].some(s => s.includes(facts.hermesHome)),
-            `backend runs from the install under ${facts.hermesHome}: ${serve[0].cmdline} (cwd ${cwd})`
-          ).toBe(true)
+          // Login changes the data home, not the installed code. gateway ensure may attach
+          // to the account's shared multiplexer; prove its actual listener and source tree.
+          const identity = await readChatIdentity(page)
+          expect(fs.realpathSync(identity.hermesHome!)).toBe(fs.realpathSync(accountHome(facts)))
+          expect(fs.realpathSync(identity.hermesRoot)).toBe(fs.realpathSync(facts.checkout))
+
+          const connection = await page.evaluate(() => (window as unknown as {
+            hermesDesktop: { getConnection: () => Promise<{ mode: string; baseUrl: string }> }
+          }).hermesDesktop.getConnection())
+
+          const base = new URL(connection.baseUrl)
+          expect(connection.mode).toBe('local')
+          expect(['127.0.0.1', 'localhost', '[::1]']).toContain(base.hostname)
+          const backend = localBackendProcess(Number(base.port), app.process().pid!, accountHome(facts))
+          assertBackendOrigin(backend, facts.checkout, 'source', { appReportedRoot: identity.hermesRoot,
+            installedCommit: facts.headSha })
+          expect(backendServeProcesses(facts).map(proc => proc.pid), `one gateway owner\n${diagnostics(facts)}`).toEqual([backend.pid])
 
           provider.script(U(launch), [{ text: [`${A(launch)} `, 'healthy ', 'install'] }])
           await send(page, `${U(launch)} hello`, 'Enter', ws)

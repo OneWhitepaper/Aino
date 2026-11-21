@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Mapping, NoReturn, Sequence
 
@@ -843,6 +844,76 @@ def _legacy_kill_process_tree(proc: subprocess.Popen) -> None:
             pass
 
 
+_OWNED_PROBE_EXEC = """\
+import os, sys
+gate, errors = map(int, sys.argv[1:3])
+if os.read(gate, 1) != b'x':
+    os._exit(0)
+os.close(gate)
+os.set_inheritable(errors, False)
+try:
+    os.execvpe(sys.argv[3], sys.argv[3:], os.environ)
+except OSError as exc:
+    os.write(errors, str(exc.errno).encode('ascii'))
+    os._exit(127)
+"""
+
+
+def _probe_control_pipe() -> tuple[int, int]:
+    """Keep control FDs clear of stdio, even when the caller has closed it."""
+    import fcntl  # POSIX-only: owned probes never use this launcher on Windows.
+
+    ends = list(os.pipe())
+    try:
+        for index, fd in enumerate(ends):
+            if fd < 3:
+                ends[index] = fcntl.fcntl(fd, fcntl.F_DUPFD_CLOEXEC, 3)
+                os.close(fd)
+        return ends[0], ends[1]
+    except BaseException:
+        for fd in ends:
+            os.close(fd)
+        raise
+
+
+@contextmanager
+def _spawn_probe(argv, *, owned, **kwargs):
+    from hermes_cli.local_runtime.processes import spawn_server
+
+    if not owned:
+        proc, job = spawn_server(list(argv), **kwargs)
+        yield proc, job, None
+        return
+    from hermes_cli.process_identity import own_process_groups, release_process_group_once_empty
+
+    # A daemon can disappear after Popen but before registration. Until the handoff, the
+    # launcher only reads our pipe: owner death gives it EOF, not permission to start git.
+    with ExitStack() as pipes:
+        gate_read, gate_write = _probe_control_pipe()
+        pipes.callback(os.close, gate_write)
+        try:
+            error_read, error_write = _probe_control_pipe()
+            pipes.callback(os.close, error_read)
+            try:
+                proc, job = spawn_server(
+                    [sys.executable, "-I", "-S", "-c", _OWNED_PROBE_EXEC,
+                     str(gate_read), str(error_write), argv[0], *argv[1:]],
+                    pass_fds=(gate_read, error_write), **kwargs,
+                )
+            finally:
+                os.close(error_write)
+        finally:
+            os.close(gate_read)
+        try:
+            own_process_groups([proc.pid])
+            os.write(gate_write, b"x")
+        except BaseException:
+            kill_and_drain(proc, 1)
+            release_process_group_once_empty(proc.pid, proc=proc)
+            raise
+        yield proc, job, error_read
+
+
 def bounded_probe_run(
     argv: Sequence[str], *, timeout: float, errors: str = "replace",
     env: Mapping[str, str] | None = None, cwd: str | os.PathLike[str] | None = None,
@@ -855,6 +926,7 @@ def bounded_probe_run(
     ``owned=True`` (POSIX) hands the probe's process group to the owner-death supervisor until it
     finishes, so a probe still running when this process exits (one started from a daemon thread,
     abandoned by a ``/exit``) dies with it instead of reparenting to init with its helpers.
+    The probe execs only after this handoff; owner death before it closes the launch gate.
 
     Returns a ``CompletedProcess`` when the child finished within *timeout* (any exit code), or
     ``None`` on spawn failure or timeout. With ``raise_on_spawn_failure=True`` the ``Popen``
@@ -870,44 +942,44 @@ def bounded_probe_run(
     """
     # detached-spawn: ok — awaited probe; a timeout or failure tree-kills its group (kill_and_drain)
     _popen_kwargs: dict = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {"process_group": 0}
-    job = None
-    try:
-        # Windows: contain the probe in a Job Object. `taskkill /T` walks LIVE parent pids, and a
-        # Cygwin/MSYS `exec` lets the forked stub exit once the new image runs, so a Git Bash grandchild
-        # (`sleep`, `cat`) has a dead parent and survives the tree-kill holding our pipes (#73403, proven
-        # on windows-latest). KILL_ON_JOB_CLOSE reaches it regardless of ancestry.
-        from hermes_cli.local_runtime.processes import spawn_server
-
-        proc, job = spawn_server(
-            list(argv), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
-            text=True, encoding="utf-8", errors=errors,
-            env=dict(env) if env is not None else None, cwd=cwd, **_popen_kwargs)
-    except Exception:
-        if raise_on_spawn_failure:
-            raise
-        return None
     owned = owned and not IS_WINDOWS
-    if owned:
-        from hermes_cli.process_identity import own_process_groups, release_process_group_once_empty
-
-        own_process_groups([proc.pid])
-    try:
-        stdout, stderr = proc.communicate(input=input, timeout=timeout)
-    except Exception:
-        # Timeout OR any other communicate() failure (torn-down pipe, decode error): tree-kill and
-        # drain bounded — leaving it running would leak the suspended-descendant class this guards.
-        _close_job(job)
-        kill_and_drain(proc, 1)
+    job = None
+    with ExitStack() as lifetime:
+        try:
+            # Windows retains spawn_server's suspended assignment to KILL_ON_JOB_CLOSE.
+            proc, job, exec_errors = lifetime.enter_context(_spawn_probe(
+                argv, owned=owned, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
+                text=True, encoding="utf-8", errors=errors,
+                env=dict(env) if env is not None else None, cwd=cwd, **_popen_kwargs))
+        except Exception:
+            if raise_on_spawn_failure:
+                raise
+            return None
         if owned:
-            release_process_group_once_empty(proc.pid, proc=proc)
-        return None
-    # The probe exited on its own; anything it left behind (`&` jobs) goes with the job.
-    _close_job(job)
-    if owned:
-        # A member it left running keeps the group covered, so it still dies with us.
-        release_process_group_once_empty(proc.pid, proc=proc, timeout=0)
-    return subprocess.CompletedProcess(list(argv), proc.returncode, stdout, stderr)
+            from hermes_cli.process_identity import release_process_group_once_empty
+
+        try:
+            stdout, stderr = proc.communicate(input=input, timeout=timeout)
+        except Exception:
+            # A failed capture still tree-kills and drains bounded; never join inherited pipes forever.
+            _close_job(job)
+            kill_and_drain(proc, 1)
+            if owned:
+                release_process_group_once_empty(proc.pid, proc=proc)
+            return None
+        # The probe exited on its own; anything it left behind (`&` jobs) goes with the job.
+        _close_job(job)
+        if owned:
+            # A member it left running keeps the group covered, so it still dies with us.
+            release_process_group_once_empty(proc.pid, proc=proc, timeout=0)
+            failure = os.read(exec_errors, 32)
+            if failure:
+                if raise_on_spawn_failure:
+                    number = int(failure)
+                    raise OSError(number, os.strerror(number), argv[0])
+                return None
+        return subprocess.CompletedProcess(list(argv), proc.returncode, stdout, stderr)
 
 
 def kill_and_drain(proc: subprocess.Popen, seconds: float) -> tuple | None:

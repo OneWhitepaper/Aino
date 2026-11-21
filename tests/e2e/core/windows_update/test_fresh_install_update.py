@@ -44,6 +44,8 @@ def journey(tmp_path_factory):
         j = Journey(machine)
         try:
             j.step("install", machine.install)
+            install = j["install"]  # An interrupted install must not launch a partially built runtime.
+            j.require("install", install.returncode == 0, f"install.ps1 exited {install.returncode}", install)
             # Snapshot what the installer left before the update moves the checkout on.
             j.step("installed", lambda: _installed_state(machine))
             j.step("version", lambda: machine.hermes("--version"))

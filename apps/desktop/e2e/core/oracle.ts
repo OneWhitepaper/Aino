@@ -201,16 +201,26 @@ interface RenderedView {
   userBubbles: string[]
 }
 
-async function renderedView(page: Page): Promise<RenderedView> {
+export async function renderedView(page: Page, ownerSessionId?: string): Promise<RenderedView> {
   // Settled activity is intentionally folded in the UI. Read the message
   // roots' textContent so the oracle checks every persisted row without
   // mutating disclosure state or stealing navigation focus.
-  return page.evaluate(() => {
-    const viewport = ([...document.querySelectorAll('[data-slot="aui_thread-viewport"]')] as HTMLElement[]).find(
-      el => el.getClientRects().length > 0
+  return page.evaluate(owner => {
+    const viewports = ([...document.querySelectorAll('[data-slot="aui_thread-viewport"]')] as HTMLElement[]).filter(
+      el =>
+        el.getClientRects().length > 0 &&
+        getComputedStyle(el).visibility === 'visible' &&
+        !el.closest('[data-pane-hidden], [inert]')
     )
 
-    if (!viewport) {
+    // Kept-alive panes retain their box while hidden. Choose the foreground
+    // independently of the expected owner, then fail closed on wrong/ambiguous UI.
+    const viewport = viewports.length === 1 ? viewports[0] : undefined
+
+    if (
+      !viewport ||
+      (owner && viewport.closest('[data-chat-surface]')?.getAttribute('data-stored-session-id') !== owner)
+    ) {
       return { text: '', userBubbles: [] }
     }
 
@@ -220,7 +230,7 @@ async function renderedView(page: Page): Promise<RenderedView> {
         (el.textContent ?? '').replace(/\s+/g, ' ').trim()
       )
     }
-  })
+  }, ownerSessionId)
 }
 
 // ─── Wire check ─────────────────────────────────────────────────────────
@@ -437,7 +447,7 @@ const NOTICE_KINDS = new Set([
 const isNotice = (m: PersistedMessage) => m.displayKind !== undefined && NOTICE_KINDS.has(m.displayKind)
 
 export interface OracleTarget {
-  /** Stored session id (the route id). */
+  /** Stored session id, also the foreground chat surface's owner (not necessarily the URL). */
   sessionId: string
   profile?: string
   /** User markers this session must contain (guards against an empty/wrong session passing vacuously). */
@@ -554,7 +564,7 @@ export async function assertTranscriptOracle(
     .poll(
       async () => {
         const persisted = await persistedTranscript(page, target.sessionId, target.profile)
-        const view = await renderedView(page)
+        const view = await renderedView(page, target.sessionId)
         last = { problems: transcriptViolations(persisted, view, target), persisted, view }
 
         return last.problems

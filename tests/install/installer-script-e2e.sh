@@ -203,20 +203,9 @@ env_key_names() { # label
 assert_desktop_artifact() {
   # $1: label. After a +desktop install the built app must exist under the
   # checkout -- install.sh builds it there and registers no OS entry point.
-  local release_dir="$INSTALL_DIR/apps/desktop/release"
-  local found=""
-  local cand
-  for cand in \
-    "$release_dir/linux-unpacked/Hermes" \
-    "$release_dir/linux-unpacked/hermes" \
-    "$release_dir/mac-arm64/Hermes.app" \
-    "$release_dir/mac/Hermes.app"; do
-    if [ -x "$cand" ] || [ -d "$cand" ]; then
-      found="$cand"
-      break
-    fi
-  done
-  [ -n "$found" ] || fail "no desktop app under $release_dir after $1 (+desktop install)"
+  local found
+  found="$("$HERMES_E2E_NODE" "$ASSETS/desktop-artifact.cjs" "$INSTALL_DIR")" \
+    || fail "no configured desktop app after $1 (+desktop install)"
   ok "desktop app built by installer at $1: $found"
 }
 

@@ -29,6 +29,10 @@ export const REPO_ROOT = path.resolve(DESKTOP_ROOT, '..', '..')
 
 // Core uses the existing unpackaged development account in its isolated home.
 const CORE_ACCOUNT_CONFIG = 'account:\n  dev_mode: true\ndisplay:\n  language: en\n'
+// Only a newly created sandbox gets a login prerequisite. A later launch must
+// restore its own identity, not have a broken cold restore repaired by the test.
+const FRESH_ACCOUNT_HOMES = new Set<string>()
+const INITIAL_ACCOUNT_PAGES = new WeakSet<Page>()
 
 // ─── Sandbox ────────────────────────────────────────────────────────────
 
@@ -72,6 +76,7 @@ export function createCoreSandbox(label: string): CoreSandbox {
   fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\necho "no oauth token found for github.com" >&2\nexit 1\n', {
     mode: 0o755
   })
+  FRESH_ACCOUNT_HOMES.add(hermesHome)
 
   return {
     root,
@@ -80,6 +85,7 @@ export function createCoreSandbox(label: string): CoreSandbox {
     hermesHome,
     userDataDir,
     cleanup: () => {
+      FRESH_ACCOUNT_HOMES.delete(hermesHome)
       // Attach-mode Desktop never stops the gateway it dialled, so without this
       // every spec left its sandbox `gateway run` behind (~20 per suite run).
       stopSandboxGatewayDaemons(root, hermesHome)
@@ -235,6 +241,10 @@ export async function launchCoreApp(env: Record<string, string>): Promise<{ app:
   APP_LOGS.set(app, lines)
 
   const page = await app.firstWindow()
+
+  if (FRESH_ACCOUNT_HOMES.delete(env.HERMES_HOME)) {
+    INITIAL_ACCOUNT_PAGES.add(page)
+  }
 
   return { app, page }
 }
@@ -554,6 +564,7 @@ export async function signInCoreAccount(page: Page): Promise<void> {
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(login).toHaveCount(0)
+  INITIAL_ACCOUNT_PAGES.delete(page)
 }
 
 export function composer(page: Page) {
@@ -563,6 +574,21 @@ export function composer(page: Page) {
 /** Composer mounted, no full-viewport overlay above it, window visible. */
 export async function waitForInteractive(app: ElectronApplication, page: Page, timeout = 180_000): Promise<void> {
   try {
+    if (INITIAL_ACCOUNT_PAGES.delete(page)) {
+      // Callers have now attached their socket observers. Development auth is
+      // same-window: a replaced/closed page must fail, never change the recorder's owner.
+      expect(await app.evaluate(({ app }) => app.isPackaged), 'core development launch is unpackaged').toBe(false)
+      await expect.poll(() => page.evaluate(() => (window as Window & {
+        hermesDesktop?: { accountAdapter?: string }
+      }).hermesDesktop?.accountAdapter), { timeout }).toBe('legacy-development')
+      const login = page.locator('[data-account-login-card]')
+      await expect.poll(async () => await login.isVisible() || await composer(page).isVisible(), { timeout }).toBe(true)
+
+      if (await login.isVisible()) {
+        await signInCoreAccount(page)
+      }
+    }
+
     await expect(composer(page)).toBeVisible({ timeout })
     await page.waitForFunction(
       () => {

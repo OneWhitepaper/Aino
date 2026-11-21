@@ -32,6 +32,8 @@ from hermes_cli.web_routers._common import (
 from hermes_state import is_malformed_db_error
 from hermes_state_errors import SessionActiveWriteGuardError, StateDbReplacedError, is_transient_sqlite_error
 from hermes_state_health import STORAGE_CORRUPT, note_storage_error, storage_state
+from hermes_state_local import project_local_session_ids
+from hermes_state_local_lineage import local_physical_target
 
 list_router = APIRouter()
 search_router = APIRouter()
@@ -227,6 +229,7 @@ def get_sessions(
                 **scope)
             total = db.session_count(exclude_children=True, **scope)
             fill_execution_modes(db, sessions, id_key='id')
+            sessions = project_local_session_ids(db, sessions)
             now = time.time()
             row_profile = profile_name or _cron_default_profile()
             for s in sessions:
@@ -566,9 +569,13 @@ async def get_session_stats(profile: Optional[str] = None):
 async def get_session_detail(session_id: str, profile: Optional[str] = None):
     def _detail(db):
         sid = _resolve_session_id(db, session_id)
-        session = db.get_session(sid) if sid else None
+        with db._read_ctx() as conn:
+            target = local_physical_target(conn, sid) if sid else None
+        session = db.get_session(target) if target else None
         if not session:
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        # Current metadata does not change the logical address the client opened.
+        session['id'] = sid
         fill_execution_modes(db, [session], id_key='id')
         if handoff := work_code_links(db, sid).get('handoff'):
             # Recovery needs the verified creation receipt, not just a branch marker.
@@ -769,7 +776,7 @@ async def get_session_messages(
         sid = _resolve_session_id(db, session_id)
         if not sid:
             return None
-        sid = db.resolve_resume_session_id(sid)
+        sid = db.resolve_resume_session_id(db.session_current_segments([sid]).get(sid, sid))
         # Always page (an omitted limit used to load whole transcripts). Explicit
         # pagination anchors at the start; the default view is the latest page.
         default_page = limit is None
@@ -807,7 +814,7 @@ def _timeline_session_id(db, session_id: str, owner: str) -> str:
 
     if not owned(session_id):
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
-    sid = db.resolve_resume_session_id(session_id)
+    sid = db.resolve_resume_session_id(db.session_current_segments([session_id]).get(session_id, session_id))
     if not owned(sid):
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return sid
@@ -959,6 +966,8 @@ async def export_session_endpoint(session_id: str, profile: Optional[str] = None
     """Stream a single session (metadata + messages) as JSON."""
     def _prepare_export(db):
         sid = _resolve_session_id(db, session_id)
+        with db._read_ctx() as conn:
+            sid = local_physical_target(conn, sid) if sid else None
         return (sid, db.get_session(sid)) if sid else None
 
     prepared = await asyncio.to_thread(_with_db, profile, _prepare_export, read_only=True)

@@ -102,7 +102,8 @@ def _copy_core_inputs(source: Path, destination: Path) -> None:
     package_roots = {pattern.split(".", 1)[0] for pattern in patterns}
     # A ``where`` root (``src``) holds packages the include patterns name below it, not by its own name.
     where_roots = {Path(where).parts[0] for where in find.get("where", ["."]) if Path(where).parts}
-    files = {"pyproject.toml", "setup.py", "setup.cfg"}
+    # Product identity needs the desktop's shared resource without the rest of the app sources.
+    files = {"pyproject.toml", "setup.py", "setup.cfg", "apps/desktop/brand.json"}
     readme = project.get("readme")
     if isinstance(readme, str):
         files.add(readme)

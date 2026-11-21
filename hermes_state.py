@@ -143,7 +143,7 @@ class SessionExportTooLargeError(ValueError):
 
 
 def _compression_lock_holder_process_is_dead(holder: str) -> bool:
-    """True only when a ``pid=<n>`` lock holder's local PID is provably gone.
+    """True only when a ``pid=<n>`` lock holder's local process is provably dead.
     Reclaim on kernel proof only: unstructured/same-process holders (another
     thread's live lease) and any probe doubt keep the lease until TTL expiry
     (PID reuse must never steal a live lease; a wrongly-kept one self-heals).
@@ -156,7 +156,11 @@ def _compression_lock_holder_process_is_dead(holder: str) -> bool:
         return False  # foreign / unknown namespace: defer to TTL
     if psutil is not None:
         try:
-            return not psutil.pid_exists(pid)  # recycled PIDs read as alive (conservative)
+            if not psutil.pid_exists(pid):
+                return True
+            # A killed gateway may remain unreaped under a container init. Its
+            # PID still exists, but a zombie can neither write nor renew a lease.
+            return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
         except Exception:
             return False
     # psutil-less fallback is POSIX-only: on Windows os.kill(pid, 0) maps sig=0 to

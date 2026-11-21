@@ -14,36 +14,42 @@ import subprocess
 import sys
 
 
-def _live_app_dirs(app: Path, patterns: tuple[str, ...]) -> list[Path]:
-    # electron-builder's appOutDir names (win-unpacked, linux-arm64-unpacked,
-    # mac-arm64) never hold a dot; rollback copies beside them do: a raw
-    # Windows pack's before-pack keeps `<appOutDir>.bak`, which a later
-    # stage-and-swap update leaves alone, and the swap's `.previous` aside.
-    # The product never launches those, so neither may the verifier judge them.
-    return [path for pattern in patterns for path in app.glob(pattern)
-            if "." not in path.relative_to(app / "release").parts[0]]
+def _desktop_candidates(root: Path, node: Path | None = None) -> list[dict[str, str]]:
+    if not (root / "apps/desktop/package.json").is_file():
+        return []
+    # Driver tooling reads the installed config without running build hooks or
+    # launch-time recovery. Exact appOutDirs exclude .bak/.previous siblings.
+    result = subprocess.run(
+        [os.environ.get("HERMES_E2E_NODE") or str(node or "node"),
+         str(Path(__file__).with_name("desktop-artifact.cjs")), str(root), "all", "candidates"],
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError(f"desktop artifact discovery failed: {result.stderr.strip()}")
+    return json.loads(result.stdout)
 
 
-def desktop_outputs(root: Path) -> list[Path]:
-    return _live_app_dirs(root / "apps/desktop", (
-        "release/*/resources/app.asar.unpacked/dist",
-        "release/mac*/Hermes.app/Contents/Resources/app.asar.unpacked/dist",
-    ))
+def desktop_outputs(root: Path, candidates: list[dict[str, str]] | None = None) -> list[Path]:
+    if candidates is None:
+        candidates = _desktop_candidates(root)
+    return [Path(candidate["rendererPath"]) for candidate in candidates
+            if Path(candidate["rendererPath"]).is_dir()]
 
 
 def verify_products(root: Path, desktop: str, node: Path | None = None) -> None:
     app = root / "apps/desktop"
-    outputs = desktop_outputs(root)
+    outputs = []
     has_desktop = (app / "dist/index.html").exists() or any((app / "release").glob("*"))
     if desktop == "absent" and has_desktop:
         raise RuntimeError("unexpected desktop output in a no-desktop scenario")
     if desktop == "present":
+        candidates = _desktop_candidates(root, node)
+        outputs = desktop_outputs(root, candidates)
         if not outputs or not any((out / "index.html").is_file() for out in outputs):
             raise RuntimeError("desktop packaged renderer is missing or incomplete")
-        executables = [path for path in _live_app_dirs(app, (
-            "release/*/Hermes.exe", "release/*/Hermes", "release/*/hermes",
-            "release/mac*/Hermes.app/Contents/MacOS/Hermes",
-        )) if path.is_file() and path.stat().st_size]
+        executables = [path for candidate in candidates
+                       if (path := Path(candidate["executablePath"])).is_file() and path.stat().st_size
+                       and (candidate["platform"] == "win32" or os.access(path, os.X_OK))]
         if not executables:
             raise RuntimeError("desktop executable is missing or empty")
     if node is None:

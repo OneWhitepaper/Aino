@@ -105,7 +105,7 @@ function viewport(page: Page) {
 
 async function settled(page: Page) {
   await expect
-    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').count(), {
+    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').count(), {
       timeout: 90_000,
       message: 'turn never settled'
     })

@@ -148,6 +148,9 @@ def test_observer_judges_only_the_live_app_not_rollback_copies_beside_it(tmp_pat
         dist.mkdir(parents=True)
         (dist / "index.html").write_text("<html></html>", encoding="utf-8")
         (release / name / "Hermes.exe").write_bytes(b"MZ fixture")
+    (release.parent / "package.json").write_text(json.dumps({
+        "name": "hermes", "productName": "Hermes", "build": {"directories": {"output": "release"}},
+    }), encoding="utf-8")
     assert driver["desktop_outputs"](tmp_path / "source") == [
         release / "win-unpacked/resources/app.asar.unpacked/dist"]
     driver["verify_products"](tmp_path / "source", "present")
@@ -157,6 +160,42 @@ def test_observer_judges_only_the_live_app_not_rollback_copies_beside_it(tmp_pat
     shutil.rmtree(release / "win-unpacked")
     with pytest.raises(RuntimeError, match="desktop"):
         driver["verify_products"](tmp_path / "source", "present")
+
+
+@pytest.mark.parametrize("relative,renderer", [
+    ("linux-unpacked/aino", "linux-unpacked/resources/app.asar.unpacked/dist"),
+    ("linux-arm64-unpacked/aino", "linux-arm64-unpacked/resources/app.asar.unpacked/dist"),
+    ("mac-arm64/Aino.app/Contents/MacOS/Aino", "mac-arm64/Aino.app/Contents/Resources/app.asar.unpacked/dist"),
+    ("win-unpacked/Aino.exe", "win-unpacked/resources/app.asar.unpacked/dist"),
+])
+def test_observer_accepts_configured_desktop_and_rejects_empty_or_previous_executable(tmp_path, relative, renderer):
+    driver = runpy.run_path(str(ASSETS / "source_driver.py"))
+    root = tmp_path / "source"
+    app = root / "apps/desktop"
+    release = app / "release"
+    out = release / renderer
+    out.mkdir(parents=True)
+    (out / "index.html").write_text("<html>current renderer</html>", encoding="utf-8")
+    executable = release / relative
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    executable.write_bytes(b"current desktop")
+    executable.chmod(0o755)
+    (app / "package.json").write_text(json.dumps({"name": "hermes", "productName": "Aino"}), encoding="utf-8")
+    (app / "electron-builder.config.cjs").write_text(
+        "module.exports = {executableName: 'Aino', linux: {executableName: 'aino'}, directories: {output: 'release'}}",
+        encoding="utf-8",
+    )
+    assert driver["desktop_outputs"](root) == [out]
+    driver["verify_products"](root, "present")
+    previous = release / (relative.split("/")[0] + ".previous")
+    previous.mkdir()
+    shutil.copy2(executable, previous / executable.name)
+    executable.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="desktop executable is missing or empty"):
+        driver["verify_products"](root, "present")
+    executable.unlink()
+    with pytest.raises(RuntimeError, match="desktop executable is missing or empty"):
+        driver["verify_products"](root, "present")
 
 
 @pytest.mark.platforms("posix")
@@ -218,6 +257,13 @@ ensure_install_launchers(root, root / '.hermes/bin')
     build.mkdir(parents=True)
     for name in ("freshness.mjs", "frontend-common.mjs"):
         shutil.copy2(repo / "scripts/build" / name, build / name)
+    app = root / "apps/desktop"
+    app.mkdir(parents=True)
+    (app / "package.json").write_text(json.dumps({"name": "hermes", "productName": "Aino"}), encoding="utf-8")
+    (app / "electron-builder.config.cjs").write_text(
+        "module.exports = {executableName: 'Aino', linux: {executableName: 'aino'}, directories: {output: 'release'}}",
+        encoding="utf-8",
+    )
     record = '''import { mkdirSync, writeFileSync } from 'node:fs';
 import { buildInputs, recordProduct } from './scripts/build/freshness.mjs';
 const source = process.cwd();
@@ -227,7 +273,8 @@ for (const [product, out] of [['tui', 'ui-tui/dist'], ['web', 'hermes_cli/web_di
 }
 '''
     subprocess.run([node, "--input-type=module", "-e", record], cwd=root, env=env, check=True, timeout=30)
-    (root / "apps/desktop/release/linux-unpacked/hermes").write_bytes(b"fixture executable")
+    (app / "release/linux-unpacked/aino").write_bytes(b"fixture executable")
+    (app / "release/linux-unpacked/aino").chmod(0o755)
     command = [sys.executable, "-B", str(ASSETS / "source_driver.py"), "--root", str(root),
                "--launcher", str(root / ".hermes/bin/hermes"), "--desktop", "present"]
     if fault == "no-desktop":
