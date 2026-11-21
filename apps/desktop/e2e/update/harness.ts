@@ -34,6 +34,8 @@ import { type GithubEdge, startGithubEdge } from './github-edge'
 export const DESKTOP_ROOT = path.resolve(import.meta.dirname, '..', '..')
 export const REPO_ROOT = path.resolve(DESKTOP_ROOT, '..', '..')
 const SEED = path.join(import.meta.dirname, 'seed.py')
+// A lost credential file never earns another first-login prerequisite.
+const ACCOUNT_LOGIN_ATTEMPTS = new Set<string>()
 
 /** Where the seeded install lives. Short on purpose: the install bakes it into AF_UNIX socket paths. */
 export const UPDATE_ROOT = process.env.HERMES_E2E_UPDATE_ROOT || path.join(os.tmpdir(), 'hdu-e2e')
@@ -82,6 +84,7 @@ export function restoreInstall(): InstallFacts {
   killInstallProcesses(readFacts())
   const facts = JSON.parse(seed(['restore', UPDATE_ROOT], 10 * 60_000)) as InstallFacts
   fs.rmSync(userDataDir(facts), { recursive: true, force: true })
+  ACCOUNT_LOGIN_ATTEMPTS.delete(facts.sandboxRoot)
 
   return facts
 }
@@ -245,7 +248,8 @@ export interface LaunchedApp {
 
 export async function launchInstalledApp(facts: InstallFacts, env: Record<string, string>): Promise<LaunchedApp> {
   const logs: string[] = []
-  const requireExisting = fs.existsSync(path.join(userDataDir(facts), 'platform-tokens.json'))
+  const requireExisting = ACCOUNT_LOGIN_ATTEMPTS.has(facts.sandboxRoot)
+  ACCOUNT_LOGIN_ATTEMPTS.add(facts.sandboxRoot)
 
   const app = await _electron.launch({
     executablePath: packagedExe(facts),

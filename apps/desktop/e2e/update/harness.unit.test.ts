@@ -4,19 +4,107 @@ import { createRequire } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-import { type Page } from '@playwright/test'
+import { _electron, type ElectronApplication, type Page } from '@playwright/test'
 import yaml from 'js-yaml'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 
+import * as platformAccountFixture from '../../../../tests-js/scripts/platform-account-fixture'
 import { resolveDesktopHermesHome } from '../../electron/data-paths.mjs'
 
-import { configureProvider, desktopMainProcesses, type InstallFacts, installFirstRunSampler, installProcesses, packagedExe, releaseDir } from './harness'
+import { configureProvider, desktopMainProcesses, type InstallFacts, installFirstRunSampler, installProcesses, launchInstalledApp, packagedExe, releaseDir } from './harness'
 
 interface TestDom { window: Window & typeof globalThis }
 
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as {
   JSDOM: new (html: string, options: { runScripts: string }) => TestDom
 }
+
+function installedAccountLaunchFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update account launch '))
+  const facts = { sandboxRoot: root, home: path.join(root, 'home'), checkout: path.join(root, 'checkout') } as InstallFacts
+  const tokenFile = path.join(root, 'user-data', 'platform-tokens.json')
+  fs.mkdirSync(releaseDir(facts), { recursive: true })
+  fs.mkdirSync(path.dirname(tokenFile), { recursive: true })
+  fs.writeFileSync(path.join(releaseDir(facts), 'aino'), 'not an executable')
+  const events: string[] = []
+  const context = { exposeBinding: async () => {}, addInitScript: async () => {} }
+  let workspace: Page
+
+  // Keep launchInstalledApp -> signInUpdateAccount real; only the native launch
+  // and UI handoff are doubled. The encrypted session's loss is a real file deletion.
+  const launch = vi.spyOn(_electron, 'launch').mockImplementation(async () => {
+    const login = { context: () => context, evaluate: async () => {}, isClosed: () => false } as unknown as Page
+    workspace = {
+      evaluate: async () => ({
+        phase: 'signed_in', userId: '17', mode: 'production', rememberState: 'encrypted', hasError: false
+      })
+    } as unknown as Page
+
+    return {
+      process: () => ({}), firstWindow: async () => login, windows: () => [login], close: async () => {}
+    } as unknown as ElectronApplication
+  })
+
+  const signIn = vi.spyOn(platformAccountFixture, 'signInPlatformFixture').mockImplementation(async () => {
+    events.push('phone-login')
+    fs.writeFileSync(tokenFile, 'encrypted fixture session')
+
+    return workspace
+  })
+
+  const restore = vi.spyOn(platformAccountFixture, 'platformLoginWorkspace').mockImplementation(async (_app, _page, submit) => {
+    events.push('restore')
+    await submit()
+
+    if (!fs.existsSync(tokenFile)) { throw new Error('Persisted platform session was lost') }
+
+    return workspace
+  })
+
+  return { facts, tokenFile, get workspace() { return workspace }, events, close() {
+    launch.mockRestore()
+    signIn.mockRestore()
+    restore.mockRestore()
+    fs.rmSync(root, { recursive: true, force: true })
+  } }
+}
+
+test('a cold same-user launch with deleted credentials fails restore instead of signing in again', async () => {
+  const fixture = installedAccountLaunchFixture()
+
+  try {
+    const first = await launchInstalledApp(fixture.facts, {})
+    expect(first.page).toBe(fixture.workspace)
+    await first.app.close()
+    fs.rmSync(fixture.tokenFile)
+
+    await expect(launchInstalledApp({ ...fixture.facts }, {})).rejects.toThrow('Persisted platform session was lost')
+    expect(fixture.events).toEqual(['phone-login', 'restore'])
+    expect(fs.existsSync(fixture.tokenFile), 'a lost remembered session must not be repaired by OTP').toBe(false)
+  } finally {
+    fixture.close()
+  }
+})
+
+test('each genuinely fresh sandbox permits first login and then restores the same account without OTP', async () => {
+  for (const _launch of [1, 2]) {
+    const fixture = installedAccountLaunchFixture()
+
+    try {
+      expect(fs.existsSync(fixture.tokenFile)).toBe(false)
+      const first = await launchInstalledApp(fixture.facts, {})
+      expect(first.page).toBe(fixture.workspace)
+      await first.app.close()
+      const restored = await launchInstalledApp({ ...fixture.facts }, {})
+      expect(restored.app).not.toBe(first.app)
+      expect(restored.page).toBe(fixture.workspace)
+      expect(fixture.events).toEqual(['phone-login', 'restore'])
+      await restored.app.close()
+    } finally {
+      fixture.close()
+    }
+  }
+})
 
 test('bootstrap sampling survives the login renderer being replaced and records branded as well as historical flashes', async () => {
   // JSDOM executes the same serialized init script as Playwright. Only the native
