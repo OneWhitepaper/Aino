@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from types import SimpleNamespace
 
+import psutil
 import pytest
 
 import hermes_state
 from hermes_state import SessionDB
 from hermes_state_errors import SessionTurnLeaseLostError
+from hermes_state_pidns import holder_namespace_token
 
 
 def test_turn_lease_serializes_separate_session_db_instances(tmp_path):
@@ -467,6 +471,39 @@ def test_non_expired_turn_lease_from_dead_pid_is_reclaimed(
         "shared", fresh_holder, ttl_seconds=300
     ) is True
     assert probed == [424242]
+
+
+@pytest.mark.platforms("linux")
+@pytest.mark.parametrize("lock_kind", ["turn", "compression"])
+def test_killed_unreaped_holder_releases_its_lease_before_ttl(tmp_path, lock_kind):
+    """A zombie cannot run or renew its lease, even while its PID still exists."""
+    db = SessionDB(tmp_path / "state.db")
+    db.create_session("shared", source="test")
+    acquire = {
+        "turn": db.try_acquire_session_turn_lease,
+        "compression": db.try_acquire_compression_lock,
+    }[lock_kind]
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.buffer.read()"], stdin=subprocess.PIPE,
+    )
+    holder = f"pid={proc.pid}{holder_namespace_token()}:turn=crashed"
+    successor = f"pid={os.getpid()}{holder_namespace_token()}:turn=successor"
+    try:
+        assert acquire("shared", holder, ttl_seconds=300)
+        assert not acquire("shared", successor, ttl_seconds=300), "a live owner must remain protected"
+        proc.kill()
+        os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT)
+        assert psutil.pid_exists(proc.pid)
+        assert psutil.Process(proc.pid).status() == psutil.STATUS_ZOMBIE
+        assert acquire("shared", successor, ttl_seconds=300), "a dead owner must not block a follow-up"
+        assert not acquire("shared", holder, ttl_seconds=300), "the new owner's lease remains fenced"
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+        proc.wait(timeout=10)
+        if proc.stdin is not None:
+            proc.stdin.close()
+        db.close()
 
 
 def test_turn_lease_fences_stale_transcript_flush_after_reclaim(tmp_path):
