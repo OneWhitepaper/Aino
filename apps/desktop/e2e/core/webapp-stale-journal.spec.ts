@@ -17,7 +17,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-import { type Browser, type BrowserContext, chromium, expect, type Page, test } from '@playwright/test'
+import { type Browser, type BrowserContext, chromium, expect, type Page, type Response, test } from '@playwright/test'
+import { parseDocument } from 'yaml'
 
 import {
   backendProcesses,
@@ -209,21 +210,35 @@ async function phoneReopens(
   phone: Phone,
   sandbox: CoreSandbox,
   account: WebappAccountFixture
-): Promise<{ tab: Page; newestPage: Promise<string> }> {
+): Promise<{ tab: Page; newestPage: () => Promise<string> }> {
   const tab = await phone.context.newPage()
+  let newestResponse: Response | undefined
+
+  // Account login may already restore this chat. Observe before either navigation, not after
+  // the composer is visible, when that first hydration request can already have finished.
+  tab.on('response', response => {
+    if (
+      !newestResponse &&
+      response.url().includes(`/sessions/${encodeURIComponent(phone.sessionId)}/messages?`) &&
+      response.url().includes('order=latest')
+    ) {
+      newestResponse = response
+    }
+  })
   await tab.goto(webappLaunchLink(sandbox))
   await account.signIn(tab)
   await expect(composer(tab)).toBeVisible({ timeout: 180_000 })
 
-  const newestPage = tab
-    .waitForResponse(
-      response =>
-        response.url().includes(`/sessions/${encodeURIComponent(phone.sessionId)}/messages?`) &&
-        response.url().includes('order=latest'),
-      { timeout: 60_000 }
-    )
-    .then(response => response.text())
-    .catch(() => '')
+  const newestPage = async () => {
+    await expect
+      .poll(() => newestResponse?.status(), {
+        timeout: 60_000,
+        message: 'the renderer read the newest transcript page'
+      })
+      .toBe(200)
+
+    return newestResponse!.text()
+  }
 
   await tab.evaluate(id => {
     window.location.hash = `#/${encodeURIComponent(id)}`
@@ -251,6 +266,12 @@ async function withWebapp(
   const provider = await startScriptedProvider()
   const sandbox = createCoreSandbox(label)
   writeProviderHome(sandbox.hermesHome, provider.url)
+  // This fixture exercises transcript pagination, not compaction: its scripted model cannot
+  // summarize a turn or recover its marker from a restored task list after compression.
+  const configFile = path.join(sandbox.hermesHome, 'config.yaml')
+  const config = parseDocument(fs.readFileSync(configFile, 'utf8'))
+  config.setIn(['providers', 'mock', 'context_length'], 128000)
+  fs.writeFileSync(configFile, config.toString())
   // todo_list is deferred behind tool_search by default; the scripted model calls it directly.
   fs.appendFileSync(
     path.join(sandbox.hermesHome, 'config.yaml'),
@@ -333,7 +354,7 @@ test('a Webapp tab that died mid-turn does not replay that turn after the newest
       await expect(viewport(tab)).toContainText(`${A(3)} the newest reply`, { timeout: 60_000 })
 
       // The newest page the reopened renderer hydrated with no longer reaches the old prompt.
-      const pageText = await newestPage
+      const pageText = await newestPage()
       expect(pageText, 'the newest page holds the newest turn').toContain(U(3))
       expect(pageText, 'the old prompt is older than the newest page').not.toContain(U(1))
 

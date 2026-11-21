@@ -49,7 +49,7 @@ import {
   writeProviderHome
 } from './harness'
 import { assertTranscriptOracle, installDuplicateSampler } from './oracle'
-import { shellQuote } from './process-census'
+import { isSandboxProcess, shellQuote } from './process-census'
 import { gate, startScriptedProvider } from './provider'
 import { startWebappAccountFixture } from './webapp-account-fixture'
 
@@ -67,16 +67,6 @@ const PYTHON = process.env.HERMES_E2E_PYTHON || 'python3'
 /** A signed-in Webapp tab acts as the machine owner, the OS subject native Desktop's ticket carries
  * (`gateway/owner_identity.py`): sign-in decides who may open the Webapp, it names no second user. */
 const OWNER_SUBJECT = `uid:${process.getuid?.()}`
-
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
 
 /** `hermes webapp <args>` in the sandbox. */
 function hermesWebapp(sandbox: CoreSandbox, ...args: string[]): { code: number | null; output: string } {
@@ -182,7 +172,7 @@ test('the gateway serves the Webapp and runs every turn its browser sends', asyn
     // A gateway killed and started again (here by `hermes webapp`, whose new link this tab never
     // uses): the tab's gateway grant survives. Its separate, memory-only Aino account signs in again.
     process.kill(gateway.pid, 'SIGKILL')
-    await expect.poll(() => alive(gateway.pid), { timeout: 30_000 }).toBe(false)
+    await expect.poll(() => isSandboxProcess(gateway.pid, sandbox.hermesHome), { timeout: 30_000 }).toBe(false)
     webappLaunchLink(sandbox)
     await page.reload()
     await account.signIn(page)
@@ -364,6 +354,9 @@ test("the Webapp and Electron Desktop answer and stop each other's turns on one 
     // Electron Desktop attaches to the same gateway and opens the same chat.
     desktop = await launchCoreApp(coreAppEnv(sandbox))
     const desktopWs = recordWebSockets(desktop.page)
+    // firstWindow can already have dialled. Reload on this same Page after installing the recorder
+    // so the approval/interrupt assertions cover every socket, not just later pool dials.
+    await desktop.page.reload()
     await waitForInteractive(desktop.app, desktop.page)
     expect(
       backendProcesses(sandbox).map(proc => proc.pid),
@@ -537,7 +530,6 @@ test('signing out of a Webapp behind sign-in signs the browser out', async () =>
     expect(signedOut.output).toMatch(/closed [1-9]\d* browser connections?\./)
     expect(signedOut.output).toContain('Every browser login behind sign-in has ended')
     expect((await page.request.get(`${origin}/api/sessions`)).status()).toBe(401)
-    await page.reload()
     await expect(page).toHaveURL(/\/login/, { timeout: 60_000 })
     await expect(composer(page)).toBeHidden()
 
