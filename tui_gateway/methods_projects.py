@@ -3,6 +3,8 @@ Bodies are rebound onto server.py's globals at install (method_ctx.bind_module).
 
 from __future__ import annotations
 
+from hermes_state_local import project_local_session_ids as _project_local_session_ids
+
 from .method_ctx import HandlerRegistry, bind_module
 
 _registry = HandlerRegistry()
@@ -359,7 +361,7 @@ def _project_tree_inputs(
         limit=session_limit, offset=0, order_by_last_active=True, min_message_count=1,
         include_children=False, exclude_sources=_PROJECT_TREE_EXCLUDED_SOURCES,
         include_archived=False, compact_rows=True)
-    sessions = [_project_tree_row(r) for r in rows]
+    sessions = [_project_tree_row(r) for r in _project_local_session_ids(db, rows)]
     # Parallel-warm the git cache so build_tree's resolver doesn't cold-probe each cwd in turn.
     git_probe.warm_roots(s["cwd"] for s in sessions if s.get("cwd"))
     from hermes_cli import projects_db as pdb

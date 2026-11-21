@@ -40,6 +40,7 @@ from hermes_cli.web_server_profiles import (
 )
 from hermes_cli.web_server_sessions import _open_session_db_at_path
 from hermes_state_health import STORAGE_CORRUPT, note_storage_error, storage_state
+from hermes_state_local import project_local_session_ids
 from starlette.concurrency import run_in_threadpool
 from hermes_cli.web_models import (
     ProfileCreate, ProfileActiveUpdate, ProfileExport, ProfileImport, ProfileRename,
@@ -435,6 +436,7 @@ def get_profiles_sessions(
                 compact_rows=not full, include_pinned=True, **scoped)
             totals[name] = db.session_count(exclude_children=True, **scoped)
             fill_execution_modes(db, rows, id_key='id')
+            rows = project_local_session_ids(db, rows)
             merged.extend(_tag_rows(rows, name, now))
         _read_profile_db(name, home, errors, _read)
 
@@ -499,7 +501,7 @@ def get_profiles_sessions_sidebar(
             order_by_last_active=True, compact_rows=True, include_pinned=True,
             include_subagents=include_subagents, include_handoff_drafts=key == 'recents')
         fill_execution_modes(db, rows, id_key='id')
-        return rows
+        return project_local_session_ids(db, rows)
 
     def _build_slices(db, cache_key, recents_subagents):
         # ``usage`` is aggregated in SQL rather than over the recents window: the window is a

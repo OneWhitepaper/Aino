@@ -1,5 +1,6 @@
 """Closed action handlers inside the runtime mutation receipt transaction."""
 import time
+from hermes_state_local_lineage import local_physical_target
 from hermes_state_runtime import RuntimeStoreError
 
 METADATA_FIELDS = {'title': str, 'archived': bool, 'hidden': bool, 'pinned': bool, 'unread': bool}
@@ -105,20 +106,22 @@ def apply_action(db, conn, session_id, operation, payload, *, prepared=None):
     handlers = {'delete': _delete, 'import': _import, 'rewind': _rewind, 'reset': reset_in_transaction}
     if operation in handlers:
         return handlers[operation](db, conn, session_id, payload)
-    affected = set()
+    # A local receipt owns the fence; sidebar metadata belongs to its current reset/compression segment.
+    target = local_physical_target(conn, session_id)
+    affected = {session_id}
     result = {}
     for key, value in payload.items():
         if key == 'title':
             affected.update(db._set_session_title_in_transaction(
-                conn, session_id, value, source=db.TITLE_SOURCE_USER))
-            result[key] = conn.execute('SELECT title FROM sessions WHERE id=?', (session_id,)).fetchone()[0]
+                conn, target, value, source=db.TITLE_SOURCE_USER))
+            result[key] = conn.execute('SELECT title FROM sessions WHERE id=?', (target,)).fetchone()[0]
         else:
             column = 'last_read_at' if key == 'unread' else key
             stored = (0.0 if value else time.time()) if key == 'unread' else int(value)
-            affected.update(db._set_lineage_column_in_transaction(conn, column, session_id, stored))
+            affected.update(db._set_lineage_column_in_transaction(conn, column, target, stored))
             if key == 'archived' and value:
                 # Desktop's Archive lands here, not in set_session_archived: same retire (#139779).
-                affected.update(db._retire_canonical_bot_chat_in_transaction(conn, session_id))
+                affected.update(db._retire_canonical_bot_chat_in_transaction(conn, target))
             result[key] = value
     return affected, result
 
@@ -133,7 +136,6 @@ def _delete(db, conn, session_id, payload):
 def _rewind(db, conn, session_id, payload):
     from hermes_state_mutation_guards import require_idle
     from hermes_state_mutation_transcript import rewind_in_transaction
-    from hermes_state_local_lineage import local_physical_target
     physical = local_physical_target(conn, session_id)
     require_idle(db, conn, list({session_id, physical}))
     # The client names the row: like a branch boundary it must be an active row of the physical
