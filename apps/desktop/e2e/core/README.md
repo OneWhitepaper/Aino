@@ -55,8 +55,10 @@ A small, deterministic Electron suite that guards three issue classes end to end
   part (in-page sampler). `lineage-rotation.spec.ts`: REAL rotated
   compression rows (`hermes chat -q` with `compression.in_place: false` on the
   same `HERMES_HOME`, compacting against the fake provider), then the Desktop
-  shows one row per lineage live, after rotations, after reload and after a
-  cold relaunch (#121148). `lineage-compaction-prompt.spec.ts`: a redirect
+  shows one row per lineage live and after reload (#121148). The canonical
+  creation id remains the navigation/admission owner; its persisted receipt
+  must name every physical compression child and target the current tip.
+  `lineage-compaction-prompt.spec.ts`: a redirect
   prompt acknowledged mid-turn whose turn then compacts; the refresh passes
   through `preserveLocalPendingTurnMessages` (#121088).
 - **Remote topology** — `remote-topology.spec.ts`: the whole app on a remote
@@ -69,17 +71,21 @@ A small, deterministic Electron suite that guards three issue classes end to end
   (unprivileged user namespaces; without them the test is annotated
   `fidelity` because a same-host path would resolve on the backend).
   `fleet-condensed-default.spec.ts`: local primary + a remote connection with
-  enough profiles to condense the sidebar rail; the profile menu lists the
-  ACTIVE gateway's default (checked, home glyph) on both sides of a switch
+  a large named roster. Bot management keeps both defaults reachable through
+  local → remote → local switches, and each explicit Open Bot Chat routes its
+  turn to one captured socket and one canonical chat in the owning database
   (#106017, #131632).
 - **Transcript images** — `transcript-image-frame.spec.ts`: a portrait image
   reply, reloaded so it mounts cold in its reserved 4:3 frame, scales into the
   frame instead of painting over the text below it (#154409).
 - **Packaged build** — `packaged-smoke.spec.ts`: asarUnpack contract of the
   `electron-builder --dir` output (#121097) and the packaged binary booting to
-  a first chat (≤60 s to interactive, main-process log tail on failure). It
-  runs this checkout's Python backend, so it proves the packaged shell and
-  renderer, not a bundled runtime. Skipped without a build unless
+  a first chat (≤60 s to interactive, main-process log tail on failure) after
+  production-bridge login against the platform fixture and private OS keyring.
+  SQLite, REST and transcript/socket oracles use the authenticated account
+  home, never the installation home. The local listener must run this
+  checkout's Python backend, so it proves the packaged shell and renderer,
+  not a bundled runtime. Skipped without a build unless
   `HERMES_E2E_REQUIRE_PACKAGED=1`.
 
 Known open bugs (`known.ts`): a scenario that reproduces an OPEN issue keeps
@@ -109,23 +115,37 @@ xvfb-run -a pnpm exec playwright test -c e2e/core/playwright.config.ts
 
 Aino account setup: these unpackaged, loopback-only tests opt in to the existing
 legacy development adapter with account.dev_mode: true in the sandbox config.
-Each fresh sandbox signs in through the real login UI using its local development
-code before exercising the upstream chat/onboarding flows. The WebSocket recorder
-is attached before login; relaunch tests reuse the same sandbox identity and
-verify its persistence. Packaged/platform authentication is unchanged and belongs
-to the separate platform-account suite.
+Only a freshly created sandbox gets an automatic login prerequisite through the
+real UI using its local development code. The WebSocket recorder is attached
+before login; reload, logout and same-home relaunch never earn another automatic
+sign-in. `account-prerequisite.spec.ts` keeps those failures observable rather than
+silently repairing a broken restore. Packaged smoke uses the production platform
+bridge instead, without enabling the development adapter.
 
 The release bundle intentionally bakes packaged mode into Electron main and
 rejects the development account adapter even when launched with electron . .
-Core therefore rebundles main/preload with the existing --dev command after
-building the renderer. This does not change release authentication policy.
+Core therefore packages the production main first, then rebundles main/preload
+with the existing --dev command for unpackaged tests. This does not change release
+authentication policy.
 
 The transcript oracle reads message-root textContent, including intentionally
 folded settled activity, without changing disclosure state or navigation focus.
 Aino may fold activity after a final answer; no interim rows are excluded from
 the persisted ordering and duplicate checks.
 
-The shared-profile step selects the existing visible data-tree-tab contract, matching the other Desktop fixtures, so localization and sidebar presentation cannot make a valid Bots pane look absent.
+The shared-profile step uses Manage Bots → source-qualified preview → Open Bot
+Chat, the same explicit entry as the remote-secondary and fleet scenarios. Bot
+tiles have their own stored owner; the ordinary Sessions URL is not their
+identity. The oracle selects the foreground viewport independently of that
+expected owner, rejects ambiguous/wrong owners, and ignores hidden kept-alive
+panes rather than reading their retained layout boxes.
+
+Browser-hosted Webapp scenarios use the real browser bridge and platform-account
+sign-in flow against the existing external account-service fixture. Only the
+platform origin's `/api/v1/` requests are intercepted; gateway HTTP, WebSockets,
+launch grants, passwords, revocation and relay credentials remain real. Every
+new document signs in explicitly because platform credentials are memory-only;
+that does not renew or replace its gateway grant.
 
 The transcript scenario alone sets `HERMES_DESKTOP_ISOLATED_BACKEND=0` after
 creating its temporary HOME/HERMES_HOME. That is intentional: it tests the
