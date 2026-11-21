@@ -1,11 +1,131 @@
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
+import { createRequire } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
+import { type Page } from '@playwright/test'
+import yaml from 'js-yaml'
 import { expect, test } from 'vitest'
 
-import { desktopMainProcesses, type InstallFacts, installProcesses, packagedExe, releaseDir } from './harness'
+import { resolveDesktopHermesHome } from '../../electron/data-paths.mjs'
+
+import { configureProvider, desktopMainProcesses, type InstallFacts, installFirstRunSampler, installProcesses, packagedExe, releaseDir } from './harness'
+
+interface TestDom { window: Window & typeof globalThis }
+
+const { JSDOM } = createRequire(import.meta.url)('jsdom') as {
+  JSDOM: new (html: string, options: { runScripts: string }) => TestDom
+}
+
+test('bootstrap sampling survives the login renderer being replaced and records branded as well as historical flashes', async () => {
+  // JSDOM executes the same serialized init script as Playwright. Only the native
+  // context boundary is adapted here; mutation observation runs in each real DOM.
+  const windows: TestDom[] = []
+  let binding: (_source: unknown, screen: string) => void
+  let init: { script: (screens: string[]) => void; screens: string[] } | undefined
+
+  const context = {
+    exposeBinding: async (_name: string, callback: typeof binding) => { binding = callback },
+    addInitScript: async (script: (screens: string[]) => void, screens: string[]) => { init = { script, screens } }
+  }
+
+  const open = () => {
+    const dom = new JSDOM('<body></body>', { runScripts: 'outside-only' })
+    windows.push(dom)
+    Object.assign(dom.window, { __updateFirstRunScreen: (screen: string) => binding({}, screen) })
+
+    const evaluate = async (script: (screens: string[]) => void, screens: string[]) => {
+      dom.window.eval(`(${script.toString()})`)(screens)
+    }
+
+    return { dom, page: { context: () => context, evaluate } as unknown as Page, evaluate }
+  }
+
+  const paint = async (dom: TestDom, text: string) => {
+    dom.window.document.body.innerText = text
+    dom.window.document.body.textContent = text
+    await new Promise(resolve => setImmediate(resolve))
+  }
+
+  const close = (dom: TestDom) => {
+    dom.window.dispatchEvent(new dom.window.Event('pagehide'))
+    dom.window.close()
+  }
+
+  try {
+    const login = open()
+    const seen = await installFirstRunSampler(login.page)
+    expect(typeof seen, 'the observation must outlive the replaced login page').toBe('function')
+    await paint(login.dom, 'AINO Send code')
+    expect(seen()).toEqual([])
+    const workspace = open()
+    await workspace.evaluate(init!.script, init!.screens)
+    await paint(workspace.dom, 'Aino needs a one-time install')
+    await paint(workspace.dom, 'Set up Hermes Desktop')
+    await paint(workspace.dom, 'Native member Chat')
+    close(login.dom)
+    expect(seen()).toEqual(['Aino needs a one-time install', 'Set up Hermes Desktop'])
+  } finally {
+    for (const dom of windows) {
+      if (dom.window.document) { close(dom) }
+    }
+  }
+})
+
+test('update provider setup seeds the authenticated account without borrowing shared state or dropping the update channel', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update account '))
+  const facts = { sandboxRoot: root, home: path.join(root, 'home'), hermesHome: path.join(root, 'install') } as InstallFacts
+
+  const accountHome = resolveDesktopHermesHome({ home: facts.home, accountWorkspace: {
+    userData: path.join(root, 'user-data'), origin: 'https://api.agentera.com.cn', userId: '17'
+  } })
+  const update = { installs: { ['1'.repeat(16)]: { path: path.join(root, 'checkout'), channel: 'main' } } }
+
+  try {
+    fs.mkdirSync(facts.hermesHome, { recursive: true })
+    fs.writeFileSync(path.join(facts.hermesHome, 'config.yaml'), yaml.dump({ update, plugins: { enabled: ['retained'] } }))
+    fs.writeFileSync(path.join(facts.hermesHome, 'state.db'), 'private installation history')
+    configureProvider(facts, 'http://127.0.0.1:45678')
+
+    expect(fs.existsSync(path.join(accountHome, 'config.yaml')), 'the signed-in workspace needs its own provider').toBe(true)
+    const account = yaml.load(fs.readFileSync(path.join(accountHome, 'config.yaml'), 'utf8')) as Record<string, unknown>
+    expect(account.model).toMatchObject({ provider: 'custom', default: 'mock-model', base_url: 'http://127.0.0.1:45678/v1' })
+    expect(account.account).toBeUndefined()
+    expect(account.plugins).toBeUndefined()
+    expect(account.update, 'source update subscriptions belong to the installation, not the account').toBeUndefined()
+    expect(fs.existsSync(path.join(accountHome, 'state.db'))).toBe(false)
+    expect(fs.readFileSync(path.join(accountHome, '.env'), 'utf8')).toContain('OPENAI_API_KEY=update-e2e-key\n')
+    const installation = yaml.load(fs.readFileSync(path.join(facts.hermesHome, 'config.yaml'), 'utf8')) as Record<string, unknown>
+    expect(installation.update).toEqual(update)
+    expect(installation.plugins).toEqual({ enabled: ['retained'] })
+    expect(installation.account).toBeUndefined()
+    expect(fs.readFileSync(path.join(facts.hermesHome, 'state.db'), 'utf8')).toBe('private installation history')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test.skipIf(process.platform !== 'linux')('install cleanup includes the account gateway but not a neighbouring account', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update account census '))
+  const facts = { sandboxRoot: root, home: path.join(root, 'home'), hermesHome: path.join(root, 'install'), checkout: path.join(root, 'checkout') } as InstallFacts
+
+  const accountHome = resolveDesktopHermesHome({ home: facts.home, accountWorkspace: {
+    userData: path.join(root, 'user-data'), origin: 'https://api.agentera.com.cn', userId: '17'
+  } })
+
+  const gateway = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: { HERMES_HOME: accountHome }, stdio: 'ignore' })
+  const neighbour = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: { HERMES_HOME: `${accountHome}-other` }, stdio: 'ignore' })
+
+  try {
+    await expect.poll(() => installProcesses(facts).map(proc => proc.pid)).toContain(gateway.pid)
+    expect(installProcesses(facts).map(proc => proc.pid)).not.toContain(neighbour.pid)
+  } finally {
+    gateway.kill('SIGKILL')
+    neighbour.kill('SIGKILL')
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test.each(['aino', 'Aino', 'Hermes', 'hermes'])(
   'the installed update harness finds the packaged %s executable without selecting helpers',
@@ -51,6 +171,8 @@ test.skipIf(process.platform !== 'linux')(
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update census '))
 
     const facts = {
+      sandboxRoot: root,
+      home: path.join(root, 'home'),
       hermesHome: path.join(root, 'home', '.hermes'),
       checkout: path.join(root, 'checkout')
     } as InstallFacts
@@ -78,10 +200,14 @@ test.skipIf(process.platform !== 'linux')(
   "the packaged app's crash handler is not a Desktop main process",
   async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update census '))
+
     const facts = {
+      sandboxRoot: root,
+      home: path.join(root, 'home'),
       hermesHome: path.join(root, 'home', '.hermes'),
       checkout: path.join(root, 'checkout')
     } as InstallFacts
+
     fs.mkdirSync(releaseDir(facts), { recursive: true })
     const exe = path.join(releaseDir(facts), 'Hermes')
     const handlerExe = path.join(releaseDir(facts), 'chrome_crashpad_handler')

@@ -19,11 +19,15 @@ import * as path from 'node:path'
 
 import { _electron, type ElectronApplication, expect, type Page } from '@playwright/test'
 
-import { type CoreSandbox, type ProcInfo, providerConfigYaml, sandboxProcesses } from '../core/harness'
+import { writeEnvFile, writeMockProviderConfig } from '../../../../tests-js/scripts/mock-provider-config'
+import { startPlatformServer } from '../../../../tests-js/scripts/platform-account-fixture'
+import brand from '../../brand.json' with { type: 'json' }
+import { type CoreSandbox, type ProcInfo, sandboxProcesses } from '../core/harness'
 import { processesRunningFrom } from '../core/process-census'
 import { type ScriptedProvider, startScriptedProvider } from '../core/provider'
 import { packagedBinaryCandidates } from '../packaged-paths'
 
+import { accountHome, signInUpdateAccount, startPrivateSecretService } from './account-fixture'
 import { gatedOn, KNOWN } from './gates'
 import { type GithubEdge, startGithubEdge } from './github-edge'
 
@@ -110,6 +114,7 @@ export interface InstallSession {
   facts: InstallFacts
   provider: ScriptedProvider
   edge: GithubEdge
+  account: Awaited<ReturnType<typeof startPlatformServer>>
   /** The environment the user's desktop session starts the app with. */
   env: Record<string, string>
   close: () => Promise<void>
@@ -122,21 +127,29 @@ export interface InstallSession {
 export async function startInstallSession(): Promise<InstallSession> {
   const facts = restoreInstall()
   const provider = await startScriptedProvider()
-  configureProvider(facts, provider.url)
-  const edge = await startGithubEdge(facts.sandboxRoot, facts.origin, facts.env.SSL_CERT_FILE)
-  // The install's own shell env (a user who works behind the proxy) sees the same edge.
-  const env = appEnv(facts, edge.env)
+  let account: Awaited<ReturnType<typeof startPlatformServer>> | undefined
+  let secrets: Awaited<ReturnType<typeof startPrivateSecretService>> | undefined
+  let edge: GithubEdge | undefined
 
-  return {
-    facts,
-    provider,
-    edge,
-    env,
-    close: async () => {
-      killInstallProcesses(facts)
-      await provider.close()
-      await edge.close()
-    }
+  const close = async () => {
+    killInstallProcesses(facts)
+    await Promise.all([provider.close(), account?.close(), edge?.close(), secrets?.close()])
+  }
+
+  try {
+    account = await startPlatformServer()
+    configureProvider(facts, provider.url)
+    secrets = await startPrivateSecretService(facts.sandboxRoot, facts.env)
+    edge = await startGithubEdge(facts.sandboxRoot, facts.origin, facts.env.SSL_CERT_FILE, {
+      'api.agentera.com.cn': account.handler
+    })
+    // One proxy serves both real native account requests and the source updater.
+    const env = appEnv(facts, { ...secrets.env, ...edge.env, NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
+
+    return { facts, provider, edge, account, env, close }
+  } catch (error) {
+    await close()
+    throw error
   }
 }
 
@@ -214,12 +227,12 @@ export function appEnv(facts: InstallFacts, extra: Record<string, string> = {}):
 
 /** A user who configured a custom OpenAI-compatible endpoint (the scripted provider). */
 export function configureProvider(facts: InstallFacts, providerUrl: string): void {
-  const config = path.join(facts.hermesHome, 'config.yaml')
-  // Keep the seed's top-level `update:` block (the install's `--set-channel main` record): the
-  // specs publish commits on main, never a release, so the stable default would offer nothing.
-  const update = /^update:\n(?:[ \t].*\n?)*/m.exec(readText(config))?.[0] ?? ''
-  fs.writeFileSync(config, providerConfigYaml(providerUrl, update.endsWith('\n') || !update ? update : `${update}\n`))
-  fs.writeFileSync(path.join(facts.hermesHome, '.env'), 'MOCK_API_KEY=update-e2e-key\n')
+  // Preserve installation channel/config; only the known account gets fresh fixture settings.
+  // Shared history and credentials are never adopted by the authenticated workspace.
+  for (const home of [facts.hermesHome, accountHome(facts)]) {
+    writeMockProviderConfig(home, providerUrl, '  language: en')
+    writeEnvFile(home, 'update-e2e-key', providerUrl)
+  }
 }
 
 export interface LaunchedApp {
@@ -227,10 +240,12 @@ export interface LaunchedApp {
   page: Page
   logs: string[]
   logTail: () => string
+  firstRunScreensSeen: () => string[]
 }
 
 export async function launchInstalledApp(facts: InstallFacts, env: Record<string, string>): Promise<LaunchedApp> {
   const logs: string[] = []
+  const requireExisting = fs.existsSync(path.join(userDataDir(facts), 'platform-tokens.json'))
 
   const app = await _electron.launch({
     executablePath: packagedExe(facts),
@@ -254,17 +269,28 @@ export async function launchInstalledApp(facts: InstallFacts, env: Record<string
     throw new Error(`installed app never opened a window: ${(error as Error).message.split('\n')[0]}\n${logTail()}`)
   })
 
-  return { app, page, logs, logTail }
+  try {
+    // Login replaces the window. Observe before submission, including each new document.
+    const firstRunScreensSeen = await installFirstRunSampler(page)
+    const workspace = await signInUpdateAccount(app, page, requireExisting)
+
+    return { app, page: workspace, logs, logTail, firstRunScreensSeen }
+  } catch (error) {
+    await app.close().catch(() => undefined)
+    throw new Error(`installed app account setup failed: ${String(error)}\n${logTail()}`)
+  }
 }
 
 // ─── Observation ───────────────────────────────────────────────────────
 
 /**
- * Processes carrying this install's HERMES_HOME, plus every process of its packaged app:
+ * Processes carrying the installation or fixture account home, plus the packaged app:
  * Electron 44 zeroes the app's /proc environ, so only the executable path names those.
  */
 export function installProcesses(facts: InstallFacts): ProcInfo[] {
-  const census = sandboxProcesses({ hermesHome: facts.hermesHome } as CoreSandbox)
+  const census = [facts.hermesHome, accountHome(facts)].flatMap(hermesHome =>
+    sandboxProcesses({ hermesHome } as CoreSandbox))
+
   const known = new Set(census.map(proc => proc.pid))
 
   return [...census, ...processesRunningFrom(releaseDir(facts)).filter(proc => !known.has(proc.pid))]
@@ -322,7 +348,9 @@ export function nonGatewayProcesses(facts: InstallFacts): ProcInfo[] {
 
 /** `hermes gateway stop` with the install's own CLI: attach-mode Desktop never owns the gateway. */
 export function stopInstallGateway(facts: InstallFacts): { code: number | null; output: string } {
-  const result = spawnSync(facts.hermes, ['gateway', 'stop'], { env: facts.env, encoding: 'utf8', timeout: 90_000 })
+  const result = spawnSync(facts.hermes, ['gateway', 'stop'], {
+    env: { ...facts.env, HERMES_HOME: accountHome(facts) }, encoding: 'utf8', timeout: 90_000
+  })
 
   return { code: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` }
 }
@@ -336,7 +364,7 @@ export function readText(file: string): string {
 }
 
 export function desktopLog(facts: InstallFacts): string {
-  return readText(path.join(facts.hermesHome, 'logs', 'desktop.log'))
+  return readText(path.join(accountHome(facts), 'logs', 'desktop.log'))
 }
 
 export function handoffLog(facts: InstallFacts): string {
@@ -349,7 +377,6 @@ function tail(text: string, n: number): string {
 
 /** Everything a red cell needs to explain itself. */
 export function diagnostics(facts: InstallFacts, extra = ''): string {
-  const logsDir = path.join(facts.hermesHome, 'logs')
   const parts: string[] = [extra]
 
   try {
@@ -359,9 +386,13 @@ export function diagnostics(facts: InstallFacts, extra = ''): string {
     parts.push(String(error))
   }
 
-  for (const name of fs.existsSync(logsDir) ? fs.readdirSync(logsDir) : []) {
-    if (/\.log$/.test(name)) {
-      parts.push(`── ${name} (tail) ──\n${tail(readText(path.join(logsDir, name)), 40)}`)
+  for (const home of [facts.hermesHome, accountHome(facts)]) {
+    const logsDir = path.join(home, 'logs')
+
+    for (const name of fs.existsSync(logsDir) ? fs.readdirSync(logsDir) : []) {
+      if (/\.log$/.test(name)) {
+        parts.push(`── ${path.join(logsDir, name)} (tail) ──\n${tail(readText(path.join(logsDir, name)), 40)}`)
+      }
     }
   }
 
@@ -382,7 +413,7 @@ export function diagnostics(facts: InstallFacts, extra = ''): string {
   return parts.filter(Boolean).join('\n')
 }
 
-/** SIGKILL every process that carries this install's HERMES_HOME (end of every spec). */
+/** SIGKILL the installation/account processes (end of every spec); private fixture services close separately. */
 export function killInstallProcesses(facts: InstallFacts | null): void {
   if (!facts) {
     return
@@ -427,39 +458,44 @@ export const FIRST_RUN_SCREENS = [
   'Hermes needs a one-time install',
   'Setting up Hermes Agent',
   'Install Hermes locally',
-  'Use Hermes on this computer'
+  'Use Hermes on this computer',
+  `Set up ${brand.productName}`,
+  `${brand.productName} needs a one-time install`,
+  `Setting up ${brand.agentName}`,
+  `Install ${brand.productName} locally`,
+  `Use ${brand.productName} on this computer`
 ]
 
 /**
  * Record every first-run/bootstrap screen that is ever painted, even for a
  * frame (the #123888 chooser flashed before the backend won on some boots).
  */
-export async function installFirstRunSampler(page: Page): Promise<void> {
-  await page.evaluate(screens => {
-    const w = window as unknown as { __firstRunSeen?: string[] }
-    w.__firstRunSeen = []
+export function observeFirstRunScreens(screens: string[]): void {
+  const report = (window as unknown as { __updateFirstRunScreen: (screen: string) => Promise<void> }).__updateFirstRunScreen
+  const seen = new Set<string>()
 
-    const scan = () => {
-      const text = document.body?.innerText ?? ''
+  const scan = () => {
+    const text = document.body?.innerText ?? ''
 
-      for (const screen of screens) {
-        if (text.includes(screen) && !w.__firstRunSeen!.includes(screen)) {
-          w.__firstRunSeen!.push(screen)
-        }
-      }
+    for (const screen of screens) {
+      if (text.includes(screen) && !seen.has(screen)) { seen.add(screen); void report(screen) }
     }
+  }
 
-    scan()
-    new MutationObserver(scan).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    })
-  }, FIRST_RUN_SCREENS)
+  scan()
+  const observer = new MutationObserver(scan)
+  observer.observe(document, { childList: true, subtree: true, characterData: true })
+  window.addEventListener('pagehide', () => observer.disconnect(), { once: true })
 }
 
-export async function firstRunScreensSeen(page: Page): Promise<string[]> {
-  return page.evaluate(() => (window as unknown as { __firstRunSeen?: string[] }).__firstRunSeen ?? [])
+export async function installFirstRunSampler(page: Page): Promise<() => string[]> {
+  const seen = new Set<string>()
+  const context = page.context()
+  await context.exposeBinding('__updateFirstRunScreen', (_source, screen: string) => { seen.add(screen) })
+  await context.addInitScript(observeFirstRunScreens, FIRST_RUN_SCREENS)
+  await page.evaluate(observeFirstRunScreens, FIRST_RUN_SCREENS)
+
+  return () => [...seen]
 }
 
 export async function openAbout(page: Page): Promise<void> {
