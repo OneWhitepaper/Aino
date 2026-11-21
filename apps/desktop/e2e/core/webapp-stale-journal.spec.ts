@@ -36,6 +36,7 @@ import {
   writeProviderHome
 } from './harness'
 import { gate, type Gate, type ScriptedProvider, startScriptedProvider } from './provider'
+import { startWebappAccountFixture, type WebappAccountFixture } from './webapp-account-fixture'
 
 const nonce = Math.random()
   .toString(36)
@@ -150,11 +151,19 @@ interface Phone {
 }
 
 /** The phone signs in, sends a prompt, and its tab dies while the reply streams. */
-async function phoneDiesMidTurn(browser: Browser, sandbox: CoreSandbox, provider: ScriptedProvider, hold: Gate) {
+async function phoneDiesMidTurn(
+  browser: Browser,
+  sandbox: CoreSandbox,
+  provider: ScriptedProvider,
+  hold: Gate,
+  account: WebappAccountFixture
+) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+  await account.install(context)
   const tab = await context.newPage()
   const ws = recordWebSockets(tab)
   await tab.goto(webappLaunchLink(sandbox))
+  await account.signIn(tab)
   await expect(composer(tab)).toBeVisible({ timeout: 180_000 })
 
   provider.script(U(1), [{ text: [`${A(1)} `, 'the ', 'old ', 'turn'], holdAfterFirstChunk: hold }])
@@ -196,9 +205,14 @@ async function phoneDiesMidTurn(browser: Browser, sandbox: CoreSandbox, provider
 /** A new tab on the phone opens the chat: its sign-in grant lives in the tab's own
  *  sessionStorage, so it signs in with a launch link first. `newestPage` is the body of the
  *  first newest-page transcript read the reopened renderer makes for the chat. */
-async function phoneReopens(phone: Phone, sandbox: CoreSandbox): Promise<{ tab: Page; newestPage: Promise<string> }> {
+async function phoneReopens(
+  phone: Phone,
+  sandbox: CoreSandbox,
+  account: WebappAccountFixture
+): Promise<{ tab: Page; newestPage: Promise<string> }> {
   const tab = await phone.context.newPage()
   await tab.goto(webappLaunchLink(sandbox))
+  await account.signIn(tab)
   await expect(composer(tab)).toBeVisible({ timeout: 180_000 })
 
   const newestPage = tab
@@ -221,7 +235,12 @@ async function phoneReopens(phone: Phone, sandbox: CoreSandbox): Promise<{ tab: 
 
 async function withWebapp(
   label: string,
-  body: (sandbox: CoreSandbox, provider: ScriptedProvider, browser: Browser) => Promise<void>
+  body: (
+    sandbox: CoreSandbox,
+    provider: ScriptedProvider,
+    browser: Browser,
+    account: WebappAccountFixture
+  ) => Promise<void>
 ) {
   test.skip(process.platform !== 'linux', 'runs with the other Webapp journeys (Linux CI)')
   expect(
@@ -238,12 +257,14 @@ async function withWebapp(
     `\nwebapp:\n  enabled: true\n  port: ${await freePort()}\ntools:\n  tool_search:\n    defer: []\n`
   )
   let browser: Browser | null = null
+  const account = await startWebappAccountFixture()
 
   try {
     browser = await chromium.launch({ executablePath: process.env.HERMES_E2E_CHROMIUM || undefined })
-    await body(sandbox, provider, browser)
+    await body(sandbox, provider, browser, account)
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const proc of sandboxProcesses(sandbox)) {
       try {
@@ -262,9 +283,9 @@ test('a Webapp tab that died mid-turn does not replay that turn after the newest
   test.setTimeout(480_000)
   const hold = gate()
 
-  await withWebapp('webapp-journal', async (sandbox, provider, browser) => {
+  await withWebapp('webapp-journal', async (sandbox, provider, browser, account) => {
     try {
-      const phone = await phoneDiesMidTurn(browser, sandbox, provider, hold)
+      const phone = await phoneDiesMidTurn(browser, sandbox, provider, hold, account)
 
       // The turn finishes on the gateway with no tab watching it.
       hold.open()
@@ -272,9 +293,12 @@ test('a Webapp tab that died mid-turn does not replay that turn after the newest
 
       // Another device, minutes later: a tool-heavy turn pushes the old prompt out of the newest
       // page, then a newer turn completes.
-      const other = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage()
+      const otherContext = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+      await account.install(otherContext)
+      const other = await otherContext.newPage()
       const otherWs = recordWebSockets(other)
       await other.goto(webappLaunchLink(sandbox))
+      await account.signIn(other)
       await expect(composer(other)).toBeVisible({ timeout: 180_000 })
       await other.evaluate(id => {
         window.location.hash = `#/${encodeURIComponent(id)}`
@@ -305,7 +329,7 @@ test('a Webapp tab that died mid-turn does not replay that turn after the newest
       await expect.poll(() => assistantPersisted(sandbox, `${A(3)} the newest reply`), { timeout: 120_000 }).toBe(true)
       await expect(viewport(other)).toContainText(`${A(3)} the newest reply`, { timeout: 60_000 })
 
-      const { tab, newestPage } = await phoneReopens(phone, sandbox)
+      const { tab, newestPage } = await phoneReopens(phone, sandbox, account)
       await expect(viewport(tab)).toContainText(`${A(3)} the newest reply`, { timeout: 60_000 })
 
       // The newest page the reopened renderer hydrated with no longer reaches the old prompt.
@@ -325,6 +349,7 @@ test('a Webapp tab that died mid-turn does not replay that turn after the newest
 
       // A second open is clean as well.
       await tab.reload()
+      await account.signIn(tab)
       await expect(composer(tab)).toBeVisible({ timeout: 120_000 })
       await expect(viewport(tab)).toContainText(`${A(3)} the newest reply`, { timeout: 60_000 })
       const { bubbles } = await renderedTranscript(tab)
@@ -340,9 +365,9 @@ test('a Webapp tab whose gateway died mid-turn still shows the streamed reply af
   test.setTimeout(480_000)
   const hold = gate()
 
-  await withWebapp('webapp-journal-crash', async (sandbox, provider, browser) => {
+  await withWebapp('webapp-journal-crash', async (sandbox, provider, browser, account) => {
     try {
-      const phone = await phoneDiesMidTurn(browser, sandbox, provider, hold)
+      const phone = await phoneDiesMidTurn(browser, sandbox, provider, hold, account)
 
       // The gateway dies with the turn: the streamed reply was never stored.
       const [gateway] = backendProcesses(sandbox)
@@ -352,7 +377,7 @@ test('a Webapp tab whose gateway died mid-turn still shows the streamed reply af
       expect(assistantPersisted(sandbox, A(1)), 'the streamed reply exists only in the journal').toBe(false)
 
       // The restarted owner fences the turn it lost as `unknown` and keeps listing it.
-      const { tab } = await phoneReopens(phone, sandbox)
+      const { tab } = await phoneReopens(phone, sandbox, account)
       await expect.poll(() => admissionStatuses(sandbox, phone.sessionId), { timeout: 60_000 }).toEqual(['unknown'])
 
       await expect(viewport(tab)).toContainText(`${U(1)} start the old turn`, { timeout: 60_000 })

@@ -180,7 +180,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
               onVerifyPhoneCode={async input => {
                 const result = await actions.verifyPhoneCode(input)
 
-                if (result?.status === 'signed_in') {
+                if (result?.status === 'signed_in' && !isBrowserHostedDesktop()) {
                   navigate('/', { replace: true })
                 }
 

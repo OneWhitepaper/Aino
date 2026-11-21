@@ -41,6 +41,7 @@ import {
   writeProviderHome
 } from './harness'
 import { type ScriptedProvider, startScriptedProvider } from './provider'
+import { startWebappAccountFixture } from './webapp-account-fixture'
 
 const nonce = Math.random()
   .toString(36)
@@ -174,6 +175,7 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
 
   const password = `throwaway-${Math.random().toString(36).slice(2, 14)}`
   const gateways: Gateway[] = []
+  const account = await startWebappAccountFixture()
   let browser: Browser | null = null
 
   try {
@@ -191,6 +193,8 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
       ...(VIDEO_DIR ? { recordVideo: { dir: VIDEO_DIR, size: { width: 1280, height: 820 } } } : {})
     })
 
+    await account.install(context)
+
     const page = await context.newPage()
     const ws = recordWebSockets(page)
     const requests: string[] = []
@@ -201,11 +205,15 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
 
     await signIn(page, hub, password)
     await page.goto(`${hub.origin}/`)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     await beat(page)
 
     // Add Mini from Settings → Gateways, as on native Desktop: a remote gateway with its token.
-    await page.goto(`${hub.origin}/#/settings?tab=gateway`)
+    // Navigate inside this document: the separate browser platform login is memory-only.
+    await page.evaluate(() => {
+      window.location.hash = '#/settings?tab=gateway'
+    })
     await page.getByRole('button', { name: 'Add connection' }).click()
     await page.getByPlaceholder('Homelab', { exact: true }).fill('Mini')
     await page.getByLabel('Gateway URL').fill(mini.origin)
@@ -218,9 +226,15 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
     const id = saved!.id
     await beat(page)
 
-    // Mini joins the switcher; switching opens its socket through the hub.
-    await page.goto(`${hub.origin}/`)
+    // Aino keeps the ordinary-workspace gateway switcher in its optional diagnostics bar.
+    // Open that bar through the real shell menu, not a Bot chat (which has a different owner scope).
+    await page.evaluate(() => {
+      window.location.hash = '#/'
+    })
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
+    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Toggle status bar', exact: true }).click()
+    await expect(page.locator('[data-slot="statusbar"]')).toBeVisible()
     const switcher = page.locator('[data-slot="connection-switcher"]')
     await expect(switcher).toBeVisible({ timeout: 60_000 })
     await switcher.getByRole('button').first().click()
@@ -339,6 +353,7 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
     await context.close()
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const gateway of gateways) {
       for (const proc of sandboxProcesses(gateway.sandbox)) {

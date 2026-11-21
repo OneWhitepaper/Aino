@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPlatformAccountActions } from '@/api/platform'
@@ -75,10 +75,14 @@ function bridge(current: PlatformAccountSnapshot) {
   return value
 }
 
-function renderFlow(actions: ReturnType<typeof createPlatformAccountActions>, child = <p>Workspace</p>) {
+function renderFlow(
+  actions: ReturnType<typeof createPlatformAccountActions>,
+  child = <p>Workspace</p>,
+  initialRoute = '/'
+) {
   return render(
     <I18nProvider configClient={null} initialLocale="zh">
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialRoute]}>
         <AccountFlow actions={actions}>{child}</AccountFlow>
       </MemoryRouter>
     </I18nProvider>
@@ -104,7 +108,7 @@ afterEach(() => {
 })
 
 describe('standalone Aino account flow', () => {
-  it('opens a browser workspace after real platform sign-in without a native window acknowledgment', async () => {
+  it('restores the browser session route after real platform sign-in without a native window acknowledgment', async () => {
     const platform = await startPlatformServer()
 
     const browser = createBrowserPlatformBridge({
@@ -123,7 +127,19 @@ describe('standalone Aino account flow', () => {
     window.document.documentElement.dataset.hermesDesktopHost = 'browser'
     Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: browser.bridge })
     const actions = createPlatformAccountActions(browser.bridge.platformAccount)
-    const view = renderFlow(actions)
+
+    function Workspace() {
+      const location = useLocation()
+
+      return (
+        <>
+          <p>Workspace</p>
+          <output aria-label="Workspace route">{`${location.pathname}${location.search}${location.hash}`}</output>
+        </>
+      )
+    }
+
+    const view = renderFlow(actions, <Workspace />, '/stored-session-17?panel=files#reply')
 
     try {
       const agreement = await screen.findByRole('checkbox', { name: '同意用户协议和隐私政策' })
@@ -146,6 +162,7 @@ describe('standalone Aino account flow', () => {
       expect(platform.requests.some(request => request.authenticatedProfile)).toBe(true)
       expect(window.hermesDesktop.setAccountWindowMode).toBeUndefined()
       expect(screen.getByText('Workspace')).toBeTruthy()
+      expect(screen.getByLabelText('Workspace route').textContent).toBe('/stored-session-17?panel=files#reply')
       expect(window.document.querySelector('[data-account-restoring-page]')).toBeNull()
     } finally {
       view.unmount()
