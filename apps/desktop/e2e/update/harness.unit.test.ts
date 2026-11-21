@@ -11,13 +11,40 @@ import { expect, test, vi } from 'vitest'
 import * as platformAccountFixture from '../../../../tests-js/scripts/platform-account-fixture'
 import { resolveDesktopHermesHome } from '../../electron/data-paths.mjs'
 
-import { configureProvider, desktopMainProcesses, type InstallFacts, installFirstRunSampler, installProcesses, launchInstalledApp, packagedExe, releaseDir } from './harness'
+import { appEnv, configureProvider, desktopMainProcesses, type InstallFacts, installFirstRunSampler, installProcesses, launchInstalledApp, packagedExe, releaseDir } from './harness'
 
 interface TestDom { window: Window & typeof globalThis }
 
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as {
   JSDOM: new (html: string, options: { runScripts: string }) => TestDom
 }
+
+test('the installed desktop permits PM to prepare the newly authenticated account environment', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update account environment '))
+
+  const facts = {
+    sandboxRoot: root, home: path.join(root, 'home'), hermesHome: path.join(root, 'install'),
+    checkout: path.join(root, 'checkout'), hermes: path.join(root, 'bin', 'hermes'),
+    origin: path.join(root, 'origin.git'), headSha: 'a'.repeat(40),
+    env: { HOME: path.join(root, 'home'), HERMES_HOME: path.join(root, 'install'),
+      HERMES_DISABLE_LAZY_INSTALLS: '1', PATH: '/usr/bin', GIT_CONFIG_GLOBAL: path.join(root, 'gitconfig') }
+  } satisfies InstallFacts
+
+  try {
+    // The private keyring returns baseEnv plus its own overrides, as the real
+    // startInstallSession call passes it; this must not restore the old flag.
+    const env = appEnv(facts, { ...facts.env, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/private-test-bus' })
+    expect(env.HERMES_DISABLE_LAZY_INSTALLS, 'a new account has no committed dependency generation yet').toBeUndefined()
+    expect(env.HOME).toBe(facts.env.HOME)
+    expect(env.HERMES_HOME).toBe(facts.env.HERMES_HOME)
+    expect(env.GIT_CONFIG_GLOBAL).toBe(facts.env.GIT_CONFIG_GLOBAL)
+    expect(env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/private-test-bus')
+    expect(env.HERMES_DESKTOP_USER_DATA_DIR).toBe(path.join(root, 'user-data'))
+    expect(facts.env.HERMES_DISABLE_LAZY_INSTALLS, 'other upgrade fixtures retain their acquisition policy').toBe('1')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 function installedAccountLaunchFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update account launch '))

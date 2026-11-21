@@ -121,6 +121,15 @@ jobs:
           mkdir -p apps/desktop/test-results/update/install-logs
           cp -r "${{ runner.temp }}/hdu/sb/home/.hermes/logs" apps/desktop/test-results/update/install-logs/ 2>/dev/null || true
           cp "${{ runner.temp }}/hdu/sb/terminal-update.log" apps/desktop/test-results/update/install-logs/ 2>/dev/null || true
+          # Login re-homes the gateway and desktop logs; installation logs alone
+          # cannot explain an account workspace's startup failure. Never copy tokens.
+          for logs in "${{ runner.temp }}/hdu/sb/user-data/account-workspaces/"*/home/logs; do
+            [ -d "$logs" ] || continue
+            scope=$(basename "$(dirname "$(dirname "$logs")")")
+            target="apps/desktop/test-results/update/install-logs/accounts/$scope"
+            mkdir -p "$target"
+            cp -r "$logs" "$target/"
+          done
 
       - name: Upload failure artifacts
         if: failure() || cancelled()

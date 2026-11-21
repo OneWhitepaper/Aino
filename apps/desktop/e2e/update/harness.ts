@@ -216,7 +216,7 @@ export function appEnv(facts: InstallFacts, extra: Record<string, string> = {}):
     fs.writeFileSync(windowState, JSON.stringify({ x: 0, y: 0, width: 1280, height: 860, isMaximized: false }))
   }
 
-  return {
+  const env: Record<string, string> = {
     ...facts.env,
     ...displayEnv(),
     HERMES_DESKTOP_USER_DATA_DIR: userDataDir(facts),
@@ -226,6 +226,13 @@ export function appEnv(facts: InstallFacts, extra: Record<string, string> = {}):
     HERMES_DESKTOP_CDP_PORT: 'off',
     ...extra
   }
+
+  // Upgrade fixtures suppress lazy acquisition, but a first account sign-in
+  // re-homes data and must let PM prepare that account's dependency generation.
+  // The keyring's extra environment also carries the original fixture policy.
+  delete env.HERMES_DISABLE_LAZY_INSTALLS
+
+  return env
 }
 
 /** A user who configured a custom OpenAI-compatible endpoint (the scripted provider). */
