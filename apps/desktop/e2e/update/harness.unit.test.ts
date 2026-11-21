@@ -80,6 +80,7 @@ test('update provider setup seeds the authenticated account without borrowing sh
   const accountHome = resolveDesktopHermesHome({ home: facts.home, accountWorkspace: {
     userData: path.join(root, 'user-data'), origin: 'https://api.agentera.com.cn', userId: '17'
   } })
+
   const update = { installs: { ['1'.repeat(16)]: { path: path.join(root, 'checkout'), channel: 'main' } } }
 
   try {

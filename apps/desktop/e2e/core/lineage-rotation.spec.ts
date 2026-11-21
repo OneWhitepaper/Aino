@@ -117,7 +117,7 @@ async function readRowCountSampler(page: Page): Promise<{ max: number; atMax: st
 
 async function settled(page: Page) {
   await expect
-    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').count(), {
+    .poll(() => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').count(), {
       timeout: 60_000,
       message: 'turn settled'
     })

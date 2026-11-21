@@ -67,7 +67,7 @@ async function settled(page: Page, ws: WsRecorder, marker: string) {
       message: `message.complete for ${marker}`
     })
     .toBe(true)
-  await expect(page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')).toHaveCount(0, {
+  await expect(page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')).toHaveCount(0, {
     timeout: 30_000
   })
 }

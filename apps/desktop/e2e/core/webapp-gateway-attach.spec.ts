@@ -285,7 +285,7 @@ function approvalRun(page: Page) {
 }
 
 function stopButton(page: Page) {
-  return page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').filter({ visible: true })
+  return page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').filter({ visible: true })
 }
 
 /**
