@@ -45,7 +45,9 @@ def validate_action(operation, payload):
         return
     if operation in {'delete', 'reset'} and not payload:
         return
-    if operation == 'import' and set(payload) == {'sessions'} and isinstance(payload['sessions'], list):
+    if (operation == 'import' and not set(payload) - {'sessions', 'restore_execution'}
+            and isinstance(payload.get('sessions'), list)
+            and type(payload.get('restore_execution', False)) is bool):
         return
     if (operation == 'rewind' and 'target_message_id' in payload
             and not set(payload) - {'target_message_id', 'preserve_compaction_handoff'}

@@ -78,3 +78,7 @@ def test_after_sign_out_the_tokens_the_browsers_cookies_held_work_nowhere(signed
 
 def test_the_browser_can_sign_in_again(signed_out):
     assert (signed_out["sign_in_again_status"], signed_out["sessions_after_sign_in_again"]) == (200, 200)
+
+
+def test_the_gateway_closes_its_session_database_before_exit(signed_out):
+    assert signed_out["database_closed"] is True

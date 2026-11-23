@@ -20,7 +20,13 @@ export interface HistoryRecoveryScope {
 
 interface RecoveryGroup {
   name: string
-  batches: Array<Array<{ id: string; messages: unknown[] }>>
+  batches: RecoverySession[][]
+}
+
+interface RecoverySession {
+  id: string
+  messages: unknown[]
+  _recovery_revision?: number
 }
 
 interface RecoveryPlan {
@@ -67,6 +73,32 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
 
       return result
     })
+  }
+
+  async function restoreRuntime(
+    scope: HistoryRecoveryScope,
+    input: LegacyHistoryRestoreInput,
+    group: RecoveryGroup,
+    batch: RecoverySession[]
+  ) {
+    const runtime = await helper(scope, 'runtime', {
+      plan_id: input.planId,
+      profile: group.name,
+      confirm_unowned: input.includeUnowned,
+      session_ids: batch.map(session => session.id)
+    })
+
+    if (runtime.ok !== true || !Array.isArray(runtime.sessions) || runtime.sessions.length !== batch.length) {
+      throw new Error('history_import_failed')
+    }
+
+    const sessions: RecoverySession[] = runtime.sessions
+
+    if (sessions.some((session, index) => session.id !== batch[index].id)) {
+      throw new Error('history_import_failed')
+    }
+
+    return { sessions, revision: sessions[0]._recovery_revision ?? 0 }
   }
 
   async function restore(input: LegacyHistoryRestoreInput): Promise<LegacyHistoryResult> {
@@ -137,8 +169,9 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
           for (const batch of group.batches) {
             assertCurrent(scope)
 
+            const { sessions, revision } = await restoreRuntime(scope, input, group, batch)
             const digest = createHash('sha256')
-              .update(JSON.stringify([scope.origin, scope.owner.userId, scope.sourceHome, group.name, batch]))
+              .update(JSON.stringify([scope.origin, scope.owner.userId, scope.sourceHome, group.name, sessions]))
               .digest('hex')
 
             const receipt = await request(
@@ -147,8 +180,9 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
               {
                 profile: group.name,
                 request_id: `legacy-history-${digest}`,
-                expected_revision: 0,
-                sessions: batch
+                expected_revision: revision,
+                restore_execution: true,
+                sessions
               },
               scope
             )

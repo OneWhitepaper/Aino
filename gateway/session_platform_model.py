@@ -16,10 +16,13 @@ logger = logging.getLogger(__name__)
 def selection_for_policy(policy):
     if policy is None:
         return None
-    model = (policy.config().get("model") or {})
+    return selection_from_policy_data(policy.config().get("model") or {}, json.loads(policy.request_json))
+
+
+def selection_from_policy_data(model, request):
+    """Read the selected catalog identity before or after its first ephemeral credential bind."""
     if model.get("model_source") == "aino":
         return {"model_source": "aino", "model_id": model.get("model_id")}
-    request = json.loads(policy.request_json)
     if request.get("model_source") == "aino" and model.get("provider") == "aino":
         return {"model_source": "aino", "model_id": request.get("model_id")}
     return None

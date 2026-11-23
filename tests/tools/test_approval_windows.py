@@ -15,6 +15,7 @@ import pytest
 
 from tools import approval
 from tools.approval import detect_dangerous_command, detect_hardline_command
+from tools.approval_detection import _execution_flag_findings
 
 
 def _is_dangerous(cmd: str) -> bool:
@@ -220,15 +221,27 @@ class TestPowerShellPositionalScriptAndAbbreviatedSwitches:
 
 
     @pytest.mark.parametrize("command", [
-        'echo "' + "wmic shadowcopy " * 2000 + 'list"; echo ok',
-        'echo "' + "ssh -x " * 2000 + 'cat"; echo ok',
-        "; ssh -x" * 3000,
-        "\n ssh -x" * 3000,
+        pytest.param('echo "' + "wmic shadowcopy " * 2000 + 'list"; echo ok', id="quoted-wmic"),
+        pytest.param('echo "' + "ssh -x " * 2000 + 'cat"; echo ok', id="quoted-ssh"),
+        pytest.param("; ssh -x" * 3000, id="semicolon-ssh"),
+        pytest.param("\n ssh -x" * 3000, id="newline-ssh"),
     ])
     def test_repeated_launcher_words_scan_in_linear_time(self, command):
         start = time.perf_counter()
         assert not _is_dangerous(command)
         assert time.perf_counter() - start < 2, command[:30]
+
+    @pytest.mark.parametrize(("tail", "expected"), [
+        pytest.param("ssh -x", [], id="unrelated-command"),
+        pytest.param('pwsh -c "Get-Date"', [("script execution via -e/-c flag", "Get-Date")],
+                     id="powershell-payload"),
+    ])
+    def test_execution_flags_behind_many_wrappers_scan_in_linear_time(self, tail, expected):
+        # Tokenizing every wrapper's remaining arguments rescans successively shorter tails.
+        command = "sudo " * 4000 + tail
+        start = time.perf_counter()
+        assert list(_execution_flag_findings(command)) == expected
+        assert time.perf_counter() - start < 2
 
 
 class TestDriveLetterRoots:

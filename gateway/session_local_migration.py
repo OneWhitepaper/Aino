@@ -86,6 +86,7 @@ def legacy_launch_params(row):
     params = {key: row[key] for key in ('cwd', 'model') if row.get(key)}
     from hermes_state_sessions import _parse_model_config
     saved = _parse_model_config(row.get('model_config'))
+    params.update(_legacy_execution_params(row, saved, params))
     from hermes_state_gateway import SessionGatewayMixin
     route = SessionGatewayMixin.session_gateway_runtime(row)
     route = {key: value.strip() for key, value in route.items() if isinstance(value, str) and value.strip()}
@@ -108,8 +109,6 @@ def legacy_launch_params(row):
         # Without a provider, adoption below heals it to the entry serving the model, else the profile.
         route.pop('provider')
         route.pop('api_mode', None)
-    if row['source'] == 'acp' and 'cwd' not in params and Path(str(saved.get('cwd') or '')).is_absolute():
-        params['cwd'] = saved['cwd']
     params.update({key: route[key] for key in ('provider', 'base_url') if key in route})
     reasoning = saved.get('reasoning_config')
     if isinstance(reasoning, dict):
@@ -128,6 +127,22 @@ def legacy_launch_params(row):
         else:
             params['service_tier'] = tier
     return params, route.get('api_mode')
+
+
+def _legacy_execution_params(row, saved, existing):
+    params = {}
+    mode = saved.get('execution_mode')
+    if mode in ('work', 'code'):
+        params.update(execution_mode=mode, cwd_explicit=True)
+        # The row can be only a display/workspace stamp. The saved policy cwd owns execution.
+        if Path(str(saved.get('cwd') or '')).is_absolute():
+            params['cwd'] = saved['cwd']
+        if 'row_cwd' in saved:
+            params['row_cwd'] = saved['row_cwd']
+    elif row['source'] == 'acp' and 'cwd' not in existing and Path(str(saved.get('cwd') or '')).is_absolute():
+        params['cwd'] = saved['cwd']
+    params.update({key: saved[key] for key in ('model_source', 'model_id') if saved.get(key)})
+    return params
 
 
 def bot_chat_row(row):
@@ -159,7 +174,7 @@ def legacy_bot_chat_launch(row, params, api_mode, config):
     if not bot_chat_row(row):
         return params, api_mode
     if not ('model' in params and composer_pick_holds(row, config)):
-        params = {key: params[key] for key in ('cwd', 'source') if key in params}
+        params = {key: params[key] for key in ('cwd', 'source', 'execution_mode', 'cwd_explicit', 'row_cwd') if key in params}
         api_mode = None
     return {**params, 'follow_profile_config': True}, api_mode
 

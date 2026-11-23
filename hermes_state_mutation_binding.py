@@ -130,3 +130,47 @@ def same_history_owner(conn, anchor_id, session_id):
     return binding is not None or (
         (_history_row(row) or routeless_peer)
         and (_owner_user(row) in (None, '') or owners_agree(_owner_user(row), anchor['user_id'])))
+
+
+def restore_import_execution(db, conn, actor, sessions):
+    """Repair only this importer's untouched transcript-only copies, inside the import transaction.
+
+    Never rewrite a live policy, a native/messaging route, a foreign import or edited history.
+    Generic imports remain insert/skip; native recovery opts into this narrow repair explicitly.
+    """
+    from hermes_state_local import POLICY_PREFIX
+    from hermes_state_local_migration import LEGACY_LOCAL_SOURCES
+    from hermes_state_sessions import _parse_model_config
+    for session in sessions:
+        sid = session['id']
+        row = conn.execute('SELECT * FROM sessions WHERE id=?', (sid,)).fetchone()
+        if (row is None or row['source'] not in LEGACY_LOCAL_SOURCES | {'local'}
+                or any(row[key] for key in ('session_key', 'chat_id', 'origin_json'))
+                or conn.execute('SELECT 1 FROM state_meta WHERE key=?', (POLICY_PREFIX + sid,)).fetchone()):
+            continue
+        config = _parse_model_config(session.get('model_config'))
+        if config.get('execution_mode') not in ('work', 'code') or session.get('source') not in LEGACY_LOCAL_SOURCES:
+            continue
+        binding = history_binding(conn, sid)
+        if binding is None or not binding_names(binding, actor.subject):
+            raise RuntimeStoreError('permission_denied')
+        if _parse_model_config(row['model_config']).get('platform_owner') != config.get('platform_owner'):
+            raise RuntimeStoreError('permission_denied')
+        _require_matching_import(db, conn, sid, session)
+        revision = session.get('_recovery_revision')
+        if type(revision) is not int or revision != row['runtime_revision']:
+            raise RuntimeStoreError('revision_conflict')
+        from hermes_state_mutation_guards import require_idle
+        require_idle(db, conn, [sid])
+        conn.execute('UPDATE sessions SET source=?,user_id=NULL,model=?,model_config=?,cwd=?,runtime_revision=runtime_revision+1 WHERE id=?',
+                     (session['source'], session.get('model'), json.dumps(config), session.get('cwd'), sid))
+
+
+def _require_matching_import(db, conn, sid, session):
+    rows = conn.execute('SELECT * FROM messages WHERE session_id=? ORDER BY id', (sid,)).fetchall()
+    current = [db._row_to_message_dict(row, warn_context='history recovery', summary_flag=True) for row in rows]
+    def portable(messages):
+        return json.dumps([{key: value for key, value in message.items() if key not in ('id', 'session_id')}
+                           for message in messages], sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    if portable(current) != portable(session.get('messages', [])):
+        raise RuntimeStoreError('admission_conflict', detail='history changed since recovery inspection')
