@@ -513,7 +513,8 @@ async def import_sessions_endpoint(request: Request):
     anchor = body.sessions[0].get('id', '') if body.sessions else ''
     return await _mutate_session_request(request, body.profile, anchor,
         request_id=body.request_id, expected_revision=body.expected_revision,
-        operation='import', payload={'sessions': body.sessions})
+        operation='import', payload={'sessions': body.sessions, **(
+            {'restore_execution': True} if body.restore_execution else {})})
 
 
 @manage_router.get("/api/sessions/empty/count")

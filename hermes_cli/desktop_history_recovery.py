@@ -26,7 +26,7 @@ def _target_snapshot(target, profile, directory):
     home = plain_path(profile_home(target, profile))
     if profile != "default":
         plain_path(target / "profiles")
-    return snapshot_sessions(home, directory / f"target-{profile}-{uuid.uuid4().hex}.db")
+    return snapshot_sessions(home, directory / f"target-{profile}-{uuid.uuid4().hex}.db", import_bindings=True)
 
 
 def _inspect(source, target, owner, recovery):
@@ -38,7 +38,7 @@ def _inspect(source, target, owner, recovery):
     counts = {"owned": 0, "unowned": 0, "foreign": 0, "conflicts": 0, "existing": 0, "deleted": 0, "oversized": 0}
     profiles = discover_profiles(source)
     for name, home in profiles:
-        sessions, _ = snapshot_sessions(home, directory / f"source-{name}.db", include_groups=True)
+        sessions, _ = snapshot_sessions(home, directory / f"source-{name}.db", include_groups=True, recover_execution=True)
         target_sessions, deleted = _target_snapshot(target, name, directory)
         components, profile_counts = filter_components(sessions, owner, target_sessions, deleted)
         components = _inspect_claims(components, home, owner, recovery, profile_counts)
@@ -165,6 +165,29 @@ def _metadata(request, target, plan):
     return {"ok": True, "applied": apply_metadata(home, group["metadata"])}
 
 
+def _runtime(request, source, target, owner, recovery, directory, plan):
+    """Copy only a currently approved batch; paths and launch data never come from the renderer."""
+    from hermes_cli.desktop_history_runtime import migrate_code_files
+    name = request.get('profile', 'default')
+    group = next((group for group in plan['groups'] if group['name'] == name), None)
+    ids = request.get('session_ids')
+    if (group is None or not isinstance(ids, list) or not ids
+            or any(not isinstance(sid, str) for sid in ids) or len(set(ids)) != len(ids)):
+        raise ValueError('invalid runtime recovery batch')
+    prepared, _counts = _prepare_group(request, source, target, owner, recovery, directory, group)
+    approved = {session['id']: session for batch in prepared['batches'] for session in batch}
+    if not set(ids) <= approved.keys():
+        raise ValueError('runtime recovery sessions are no longer approved')
+    rows = [approved[sid] for sid in ids]
+    batches, oversized = bounded_batches([rows])
+    if oversized or len(batches) != 1:
+        raise ValueError('runtime recovery batch exceeds import limits')
+    rows, runtime = migrate_code_files(profile_home(source, name), profile_home(target, name), rows)
+    if any(thread['status'] == 'missing' for thread in runtime['threads']):
+        raise ValueError('native Code thread files are missing; restore the original Code home before syncing')
+    return {'ok': True, 'sessions': rows, 'runtime': runtime}
+
+
 def run(request):
     """Native-only JSON API; all account/path validation happens before data reads."""
     if not isinstance(request, dict):
@@ -178,6 +201,8 @@ def run(request):
         return record_choice(request, plan, recovery, source, owner)
     if action == "prepare":
         return _prepare(request, source, target, owner, recovery, directory, plan)
+    if action == "runtime":
+        return _runtime(request, source, target, owner, recovery, directory, plan)
     if action == "backup":
         return _backup(request, target, directory)
     if action == "metadata":

@@ -24,9 +24,14 @@ def fill_execution_modes(db, rows, *, id_key='session_id'):
         keys = list({POLICY_PREFIX + owner for owner in owners.values()})
         placeholders = ','.join('?' for _ in keys)
         saved = conn.execute(f'SELECT key,{mode_expr} FROM state_meta WHERE key IN ({placeholders})', keys).fetchall()
+        ids = list(owners)
+        history_mode = _sql_json_extract('model_config', '$.execution_mode')
+        history = dict(conn.execute(
+            f"SELECT id,{history_mode} FROM sessions WHERE id IN ({','.join('?' for _ in ids)})", ids).fetchall())
     modes = {key[len(POLICY_PREFIX):]: mode for key, mode in saved if mode in ('work', 'code')}
     for row in rows:
-        row['execution_mode'] = modes.get(owners[row[id_key]], 'work')
+        fallback = history.get(row[id_key])
+        row['execution_mode'] = modes.get(owners[row[id_key]], fallback if fallback in ('work', 'code') else 'work')
 
 
 def workspace_members(db, session_ids, workspace):

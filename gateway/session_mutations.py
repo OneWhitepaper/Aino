@@ -175,6 +175,9 @@ async def _mutate_session(authority, actor, ref, params, *, commit_lock=None, ow
         from hermes_state_mutation_binding import authorize_history, import_history_control
         if operation == 'import':
             import_history_control(conn, actor, imported_ids)
+            if params['payload'].get('restore_execution') is True:
+                from hermes_state_mutation_binding import restore_import_execution
+                restore_import_execution(authority.db, conn, actor, params['payload']['sessions'])
             return
         if not authorize_history(conn, actor, ref.session_id, claim=True):
             raise RuntimeStoreError('permission_denied')

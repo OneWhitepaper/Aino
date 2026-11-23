@@ -11,6 +11,17 @@ function harness() {
       return { planId: 'plan', conflicts: 0, groups: [{ name: 'default', batches: [[{ id: 'old', messages: [] }]] }] }
     }
 
+    if (input.action === 'runtime') {
+      return {
+        ok: true,
+        sessions: (input.session_ids as string[]).map(id => ({
+          id,
+          messages: [],
+          model_config: { execution_mode: 'code', cwd: '/account/10/code/workspaces/' + id }
+        }))
+      }
+    }
+
     if (input.action === 'backup') {
       return { backupPath: '/backups/history' }
     }
@@ -120,11 +131,13 @@ describe('legacy chat recovery', () => {
     const input = { expectedOwner: h.owner, planId: 'plan', includeUnowned: false }
     const result = await h.controller.restore(input)
     expect(result.imported).toBe(1)
-    expect(h.run.mock.calls.map(([input]) => input.action)).toEqual(['prepare', 'backup'])
+    expect(h.run.mock.calls.map(([input]) => input.action)).toEqual(['prepare', 'backup', 'runtime'])
     expect(h.run.mock.invocationCallOrder[1]).toBeLessThan(h.request.mock.invocationCallOrder[0])
     const first = h.request.mock.calls[0][2] as any
     expect(first.sessions[0].id).toBe('old')
     expect(first.expected_revision).toBe(0)
+    expect(first.restore_execution).toBe(true)
+    expect(first.sessions[0].model_config).toEqual({ execution_mode: 'code', cwd: '/account/10/code/workspaces/old' })
     await h.controller.restore(input)
     expect((h.request.mock.calls[1][2] as any).request_id).toBe(first.request_id)
     expect(h.run.mock.calls[0][0]).toMatchObject({
@@ -132,6 +145,41 @@ describe('legacy chat recovery', () => {
       target_home: '/account/10',
       confirm_unowned: false
     })
+  })
+
+  it('uses the target revision when repairing an earlier transcript-only import', async () => {
+    const h = harness()
+    h.run.mockResolvedValueOnce({ groups: [{ name: 'default', batches: [[{ id: 'old', messages: [] }]] }] })
+    h.run.mockResolvedValueOnce({ backupPath: '/backups/history' })
+    h.run.mockResolvedValueOnce({ ok: true, sessions: [{ id: 'old', messages: [], _recovery_revision: 7 }] })
+    await h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false })
+    expect(h.request.mock.calls[0][2]).toMatchObject({ expected_revision: 7, restore_execution: true })
+  })
+
+  it('does not import after a runtime copy finishes for a stale account', async () => {
+    const h = harness()
+    h.run.mockResolvedValueOnce({ groups: [{ name: 'default', batches: [[{ id: 'old', messages: [] }]] }] })
+    h.run.mockResolvedValueOnce({ backupPath: '/backups/history' })
+    h.run.mockImplementationOnce(async () => {
+      h.changeAccount()
+
+      return { ok: true, sessions: [{ id: 'old', messages: [] }] }
+    })
+    await expect(
+      h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false })
+    ).rejects.toThrow('platform_account_changed')
+    expect(h.request).not.toHaveBeenCalled()
+  })
+
+  it('rejects a runtime result that names a different session', async () => {
+    const h = harness()
+    h.run.mockResolvedValueOnce({ groups: [{ name: 'default', batches: [[{ id: 'old', messages: [] }]] }] })
+    h.run.mockResolvedValueOnce({ backupPath: '/backups/history' })
+    h.run.mockResolvedValueOnce({ ok: true, sessions: [{ id: 'different', messages: [] }] })
+    await expect(
+      h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false })
+    ).rejects.toThrow('history_import_failed')
+    expect(h.request).not.toHaveBeenCalled()
   })
 
   it('refuses an import after the account changes during snapshot preparation', async () => {
@@ -160,6 +208,10 @@ describe('legacy chat recovery', () => {
     const h = harness()
     let page = 0
     h.run.mockImplementation(async input => {
+      if (input.action === 'runtime') {
+        return { ok: true, sessions: (input.session_ids as string[]).map(id => ({ id, messages: [] })) }
+      }
+
       if (input.action === 'backup') {
         return { backupPath: '/backups/history' }
       }
@@ -170,7 +222,13 @@ describe('legacy chat recovery', () => {
     })
     const result = await h.controller.restore({ expectedOwner: h.owner, planId: 'plan', includeUnowned: false })
     expect(result.imported).toBe(2)
-    expect(h.run.mock.calls.map(([input]) => input.action)).toEqual(['prepare', 'backup', 'prepare'])
+    expect(h.run.mock.calls.map(([input]) => input.action)).toEqual([
+      'prepare',
+      'backup',
+      'runtime',
+      'prepare',
+      'runtime'
+    ])
     expect(h.request).toHaveBeenCalledTimes(2)
   })
 

@@ -100,7 +100,7 @@ def discover_profiles(source):
             if any(plain_path(home / database).is_file() for database in ("state.db", "shared-state.db"))]
 
 
-def snapshot_sessions(home, destination, *, include_groups=False):
+def snapshot_sessions(home, destination, *, include_groups=False, recover_execution=False, import_bindings=False):
     """Only a private snapshot is writer-opened to upgrade legacy schemas."""
     source = plain_path(home / "state.db")
     if not source.is_file():
@@ -116,6 +116,16 @@ def snapshot_sessions(home, destination, *, include_groups=False):
             deleted = {row[0][len(RETIRED_PREFIX):] for row in connection.execute(
                 "SELECT key FROM state_meta WHERE key LIKE ?", (RETIRED_PREFIX + "%",))}
         sessions = db.export_all(include_inactive=True)
+        if import_bindings:
+            from hermes_state_mutation_binding import BINDING_PREFIX
+            with db._read_ctx() as conn:
+                imported = {row[0][len(BINDING_PREFIX):] for row in conn.execute(
+                    'SELECT key FROM state_meta WHERE key LIKE ?', (BINDING_PREFIX + '%',))}
+            for session in sessions:
+                session['_recovery_imported'] = session['id'] in imported
+        if recover_execution:
+            from hermes_cli.desktop_history_runtime.execution import project_execution
+            project_execution(db, sessions)
         if include_groups:
             sessions.extend(_group_history(db, home, destination))
         return sessions, deleted

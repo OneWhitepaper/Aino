@@ -85,13 +85,30 @@ def filter_components(sessions, owner, target_sessions, deleted):
         blocked = _target_conflicts(component, target, deleted, counts)
         if blocked:
             continue
-        new = [session for session in component if session["id"] not in target]
+        new = []
+        for session in component:
+            existing = target.get(session['id'])
+            if existing is None:
+                new.append(session)
+            elif _needs_execution_restore(session, existing, owner):
+                new.append({**session, '_recovery_revision': existing.get('runtime_revision', 0)})
         counts["existing"] += len(component) - len(new)
         if new:
             category = "unowned" if any(stamp is None for stamp in stamps) else "owned"
             counts[category] += len(new)
             eligible.append({"ownership": category, "sessions": new})
     return eligible, counts
+
+
+def _needs_execution_restore(source, target, owner):
+    if (not target.get('_recovery_imported') or session_owner(target) != owner
+            or any(target.get(key) for key in ('session_key', 'chat_id', 'origin_json'))):
+        return False
+    original, current = (session.get('model_config') or {} for session in (source, target))
+    original = json.loads(original) if isinstance(original, str) else original
+    current = json.loads(current) if isinstance(current, str) else current
+    return original.get('execution_mode') in ('work', 'code') and (
+        target.get('source') == 'local' or current.get('execution_mode') != original['execution_mode'])
 
 
 def _target_conflicts(component, target, deleted, counts):
