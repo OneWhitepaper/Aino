@@ -1,0 +1,67 @@
+name: macOS Intel update architecture rejection
+
+on:
+  workflow_dispatch:
+    inputs:
+      arm64-url:
+        description: Real v0.1.6 arm64 ZIP URL (metadata only; the new ZIP is never downloaded)
+        type: string
+        required: true
+        default: https://cdn.petoi.cn/releases/tag/v0.1.6/AinoBundled-0.1.6-mac-arm64.zip
+      arm64-sha512:
+        description: Base64 SHA-512 of that exact arm64 ZIP
+        type: string
+        required: true
+      arm64-size:
+        description: Exact arm64 ZIP size in bytes
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  intel-negative:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up the locked driver toolchain
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          cache: false
+          cache-python: false
+          cache-node: false
+
+      - name: Install locked driver dependencies
+        run: just js-install-tests
+
+      - name: Exercise the real old Intel app against an arm64-only feed
+        shell: bash
+        env:
+          ARCH_CHECK_OUT: ${{ runner.temp }}/macos-update-architecture-evidence
+          ARM64_URL: ${{ inputs.arm64-url }}
+          ARM64_SHA512: ${{ inputs.arm64-sha512 }}
+          ARM64_SIZE: ${{ inputs.arm64-size }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARCH_CHECK_OUT"
+          node tests/install/e2e-assets/mac-update-architecture-check.mjs \
+            --out "$ARCH_CHECK_OUT" --arm64-url "$ARM64_URL" \
+            --arm64-sha512 "$ARM64_SHA512" --arm64-size "$ARM64_SIZE" \
+            2>&1 | tee "$ARCH_CHECK_OUT/driver-output.log"
+
+      - name: Preserve native rejection evidence and app output
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-intel-update-architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/macos-update-architecture-evidence
+          retention-days: 14
+          if-no-files-found: warn
