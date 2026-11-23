@@ -283,7 +283,7 @@ function renderMenu(props: Partial<PlatformModelListProps> = {}) {
 }
 
 it.each(['picker', 'menu'] as const)(
-  'shows the account-effective multiplier in the %s model rows',
+  'scopes account-rate badges to the intended %s presentation while retaining pricing',
   async presentation => {
     const discounted = platformModel()
     discounted.pricing.effective_user_rate = '0.2500'
@@ -293,14 +293,29 @@ it.each(['picker', 'menu'] as const)(
     free.pricing.effective_user_rate = '0'
     await installPlatform(async () => [discounted, free])
 
+    const inspect = vi.fn()
+
     if (presentation === 'menu') {
-      renderMenu()
+      renderMenu({ onInspect: inspect })
     } else {
       render(<PlatformModelList managedCapability="supported" onSelect={vi.fn()} />)
     }
 
     const role = presentation === 'menu' ? 'menuitem' : 'option'
     const row = await screen.findByRole(role, { name: /Fixture Model/ })
+
+    if (presentation === 'menu') {
+      expect(within(row).queryByLabelText(/Account rate:/)).toBeNull()
+      expect(within(row).queryByText('0.25×')).toBeNull()
+      expect(within(await screen.findByRole(role, { name: /Free Model/ })).queryByText('0×')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Price and capabilities: Fixture Model' }))
+      expect(inspect).toHaveBeenCalledWith(
+        expect.objectContaining({ pricing: expect.objectContaining({ effective_user_rate: '0.2500' }) })
+      )
+
+      return
+    }
+
     expect(within(row).getByText('0.25×')).toBeTruthy()
     expect(within(row).getByLabelText('Account rate: 0.25×')).toBeTruthy()
     expect(within(await screen.findByRole(role, { name: /Free Model/ })).getByText('0×')).toBeTruthy()

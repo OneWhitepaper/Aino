@@ -122,7 +122,6 @@ function PlatformModelMenuRows({
               <Codicon name="brain" size="1rem" />
               <span className="aino-model-menu-name">{model.display_name}</span>
               {showCodeStatus && <CodeModelStatus model={model.id} platformModel={model} provider="aino" />}
-              <PlatformModelRate model={model} />
               {model.state !== 'available' && (
                 <span className="text-xs text-muted-foreground">{copy[model.state]}</span>
               )}
