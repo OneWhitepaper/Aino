@@ -149,7 +149,6 @@ async def across_sign_out(runner, origin, ask):
 async def probe(port):
     from gateway.control_socket import GatewayControlServer
     from gateway.run import GatewayRunner
-    from gateway.run_api import stop_gateway_api
     from gateway.run_runtime import start_gateway_runtime_api
     from gateway.session_authority import initialize_session_authority
     from hermes_cli.dashboard_auth import list_providers
@@ -184,7 +183,9 @@ async def probe(port):
     try:
         report.update(await across_sign_out(runner, api.api_origin, ask))
     finally:
-        await stop_gateway_api(api)
+        # Shared stores must close before interpreter teardown runs their import-dependent finalizers.
+        await runner.stop()
+    report["database_closed"] = runner.session_authority.db._conn is None
     return report
 
 

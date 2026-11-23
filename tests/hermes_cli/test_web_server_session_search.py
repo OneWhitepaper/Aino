@@ -28,7 +28,7 @@ class _FakeSessionDB:
         conn = sqlite3.connect(':memory:')
         try:
             conn.execute('CREATE TABLE state_meta(key TEXT, value TEXT)')
-            conn.execute('CREATE TABLE sessions(id TEXT, chat_id TEXT)')
+            conn.execute('CREATE TABLE sessions(id TEXT, chat_id TEXT, model_config TEXT)')
             yield conn
         finally:
             conn.close()

@@ -1261,9 +1261,12 @@ def _execution_flag_findings(command: str):
     for segment in _iter_top_level_shell_segments(command):
         for start, _, word in _iter_shell_command_word_spans(segment):
             executable = _deobfuscate_shell_word_for_detection(word)
-            tokens = _shell_segment_tokens(segment, start)
             executable_name = os.path.basename(executable).lower()
             family = _interpreter_family(executable)
+            # Only these programs own execution flags; parsing each wrapper's tail is quadratic.
+            if family is None and executable_name not in _SHELL_NAMES and executable_name not in _READ_TOOL_EXEC_FLAGS:
+                continue
+            tokens = _shell_segment_tokens(segment, start)
             if tokens is None:
                 if family is not None or executable_name in _READ_TOOL_EXEC_FLAGS:
                     yield (_MALFORMED_EXEC_DESCRIPTION, None)
