@@ -66,7 +66,7 @@ function viewport(page: Page) {
 }
 
 function stopButton(page: Page) {
-  return page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+  return page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
 }
 
 async function settled(page: Page, ws: WsRecorder, marker: string) {
@@ -107,11 +107,10 @@ async function withApp(
 
 /**
  * How often each marker shows in the visible thread, whether they read in
- * order, and whether the thread still follows its bottom. innerText skips the
- * off-screen turns content-visibility leaves unrendered, so the marker count is
- * only meaningful while the view sits at the newest turn: nothing here scrolls,
- * and a view that stopped following is the symptom itself (a settled turn's
- * row-height jump read as a scroll-up), reported as such.
+ * order, and whether the thread still follows its bottom. Settled activity is
+ * intentionally folded; textContent checks those persisted narration rows too,
+ * without expanding them or changing scroll/focus. A view that stopped following
+ * is still a separate symptom (a settled turn's row-height jump read as a scroll-up).
  */
 async function turnShape(
   page: Page,
@@ -124,7 +123,7 @@ async function turnShape(
 
     return {
       offBottom: el ? Math.round(el.scrollHeight - el.clientHeight - el.scrollTop) : -1,
-      text: el ? el.innerText.replace(/\s+/g, ' ') : ''
+      text: (el?.textContent ?? '').replace(/\s+/g, ' ')
     }
   })
 

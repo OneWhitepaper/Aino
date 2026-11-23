@@ -56,8 +56,12 @@ jobs:
           unit=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
           # Paid live canaries belong to live-providers.yml; pytest's default
           # 'not live' filter leaves that file with no runnable tests here.
+          # Windows process/installer suites already run on their native host in
+          # tests-os.yml; assigning them to Ubuntu only produces zero-test jobs.
           core_files=()
-          while IFS= read -r file; do core_files+=("$file"); done < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' -not -path 'tests/e2e/core/live/*' | sort)
+          while IFS= read -r file; do core_files+=("$file"); done < <(find tests/e2e -name 'test_*.py' \
+            -not -path 'tests/e2e/core/upgrade/*' -not -path 'tests/e2e/core/live/*' \
+            -not -path 'tests/e2e/core/windows/*' -not -path 'tests/e2e/core/windows_update/*' | sort)
           upgrade_files=()
           while IFS= read -r file; do upgrade_files+=("$file"); done < <(find tests/e2e/core/upgrade -name 'test_*.py' | sort)
           test "${#core_files[@]}" -gt 0
@@ -354,6 +358,26 @@ jobs:
           # The upgrade start version is the newest release behind HEAD (tests/e2e/core/upgrade/_install_helpers.upgrade_base).
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Admit the reviewed pre-PM upgrade baseline
+        env:
+          HANDOFF_TAG: v2026.9.24
+          HANDOFF_TAG_OBJECT: e3dd27ee2d8b011737a4eea8e3eb3d711ab78690
+          HANDOFF_COMMIT: f97608f178d1ffeca59860195ab7da295f7c8e5f
+        run: |
+          set -euo pipefail
+          # Fork release tags do not include every upstream updater generation.
+          # Restore only this reviewed baseline locally, never publish a tag.
+          ref="refs/tags/$HANDOFF_TAG"
+          if existing=$(git rev-parse --verify --quiet "$ref"); then
+            test "$existing" = "$HANDOFF_TAG_OBJECT"
+            test "$(git rev-parse "$ref^{commit}")" = "$HANDOFF_COMMIT"
+          else
+            git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "$ref"
+            test "$(git rev-parse FETCH_HEAD)" = "$HANDOFF_TAG_OBJECT"
+            test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$HANDOFF_COMMIT"
+            git update-ref "$ref" "$HANDOFF_TAG_OBJECT" ""
+          fi
 
       - name: Set up Node
         # `hermes update` builds the web UI / TUI workspaces.

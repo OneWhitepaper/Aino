@@ -49,10 +49,16 @@ import {
   writeProviderHome
 } from './harness'
 import { assertTranscriptOracle, installDuplicateSampler } from './oracle'
-import { shellQuote } from './process-census'
+import { isSandboxProcess, shellQuote } from './process-census'
 import { gate, startScriptedProvider } from './provider'
+import { startWebappAccountFixture } from './webapp-account-fixture'
 
-const nonce = Math.random().toString(36).slice(2, 8).replace(/[^a-z0-9]/g, 'x').padEnd(4, 'q')
+const nonce = Math.random()
+  .toString(36)
+  .slice(2, 8)
+  .replace(/[^a-z0-9]/g, 'x')
+  .padEnd(4, 'q')
+
 const U = (n: number) => `U${n}-webapp${nonce}`
 const A = (n: number) => `A${n}-webapp${nonce}`
 const AI = (n: number) => `A${n}i-webapp${nonce}`
@@ -61,16 +67,6 @@ const PYTHON = process.env.HERMES_E2E_PYTHON || 'python3'
 /** A signed-in Webapp tab acts as the machine owner, the OS subject native Desktop's ticket carries
  * (`gateway/owner_identity.py`): sign-in decides who may open the Webapp, it names no second user. */
 const OWNER_SUBJECT = `uid:${process.getuid?.()}`
-
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
 
 /** `hermes webapp <args>` in the sandbox. */
 function hermesWebapp(sandbox: CoreSandbox, ...args: string[]): { code: number | null; output: string } {
@@ -109,15 +105,19 @@ test('the gateway serves the Webapp and runs every turn its browser sends', asyn
   const port = await freePort()
   fs.appendFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `\nwebapp:\n  enabled: true\n  port: ${port}\n`)
   const ancestry = path.join(sandbox.root, 'tool-ancestry.txt')
+  const account = await startWebappAccountFixture()
   let browser: Browser | null = null
 
   try {
     const link = webappLaunchLink(sandbox)
     expect(new URL(link).port).toBe(String(port))
     browser = await chromium.launch({ executablePath: process.env.HERMES_E2E_CHROMIUM || undefined })
-    const page: Page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+    await account.install(context)
+    const page: Page = await context.newPage()
     const ws = recordWebSockets(page)
     await page.goto(link)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     expect(page.url()).not.toContain('ticket=')
     expect(page.url()).not.toContain('hermes-session=')
@@ -164,16 +164,18 @@ test('the gateway serves the Webapp and runs every turn its browser sends', asyn
 
     // Reload resumes the chat on the same gateway.
     await page.reload()
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
     await expect(page.getByText(A(1)).first()).toBeVisible({ timeout: 60_000 })
     expect(backendProcesses(sandbox).map(proc => proc.pid)).toEqual([gateway.pid])
 
     // A gateway killed and started again (here by `hermes webapp`, whose new link this tab never
-    // uses): the same tab is still signed in and the next turn runs on the new gateway.
+    // uses): the tab's gateway grant survives. Its separate, memory-only Aino account signs in again.
     process.kill(gateway.pid, 'SIGKILL')
-    await expect.poll(() => alive(gateway.pid), { timeout: 30_000 }).toBe(false)
+    await expect.poll(() => isSandboxProcess(gateway.pid, sandbox.hermesHome), { timeout: 30_000 }).toBe(false)
     webappLaunchLink(sandbox)
     await page.reload()
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
     provider.script(U(2), [{ text: [`${A(2)} `, 'after ', 'the ', 'gateway ', 'came ', 'back'] }])
     await send(page, `${U(2)} still there`, 'Enter', ws)
@@ -191,9 +193,13 @@ test('the gateway serves the Webapp and runs every turn its browser sends', asyn
     const signedOut = hermesWebapp(sandbox, '--sign-out')
     expect(signedOut.code, signedOut.output).toBe(0)
     await page.reload()
+    // A platform login must not hide whether the gateway actually revoked this browser's grant.
+    await account.signIn(page)
+    await expect(page.getByRole('heading', { name: 'Connect this browser', exact: true })).toBeVisible()
     await expect(composer(page)).toBeHidden({ timeout: 60_000 })
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const proc of sandboxProcesses(sandbox)) {
       try {
@@ -227,15 +233,19 @@ test('a Webapp tab opened on a named profile runs and reads that profile', async
   writeProviderHome(path.join(sandbox.hermesHome, 'profiles', 'p2'), provider.url)
   const port = await freePort()
   fs.appendFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `\nwebapp:\n  enabled: true\n  port: ${port}\n`)
+  const account = await startWebappAccountFixture()
   let browser: Browser | null = null
 
   try {
     webappLaunchLink(sandbox)
     const link = webappLaunchLink(sandbox, 'p2')
     browser = await chromium.launch({ executablePath: process.env.HERMES_E2E_CHROMIUM || undefined })
-    const page: Page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+    await account.install(context)
+    const page: Page = await context.newPage()
     const ws = recordWebSockets(page)
     await page.goto(link)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     await expect.poll(() => new URL(page.url()).searchParams.get('profile')).toBe('p2')
 
@@ -257,11 +267,13 @@ test('a Webapp tab opened on a named profile runs and reads that profile', async
     await expect(ended).toHaveCount(0)
 
     await page.reload()
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
     expect(new URL(page.url()).searchParams.get('profile')).toBe('p2')
     await expect(page.getByText(A(1)).first()).toBeVisible({ timeout: 60_000 })
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const proc of sandboxProcesses(sandbox)) {
       try {
@@ -285,7 +297,7 @@ function approvalRun(page: Page) {
 }
 
 function stopButton(page: Page) {
-  return page.locator('[data-slot="composer-root"] button[aria-label="Stop"]').filter({ visible: true })
+  return page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]').filter({ visible: true })
 }
 
 /**
@@ -307,14 +319,18 @@ test("the Webapp and Electron Desktop answer and stop each other's turns on one 
   const port = await freePort()
   fs.appendFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `\nwebapp:\n  enabled: true\n  port: ${port}\n`)
   const hold = gate()
+  const account = await startWebappAccountFixture()
   let browser: Browser | null = null
   let desktop: Awaited<ReturnType<typeof launchCoreApp>> | null = null
 
   try {
     browser = await chromium.launch({ executablePath: process.env.HERMES_E2E_CHROMIUM || undefined })
-    const page: Page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+    await account.install(context)
+    const page: Page = await context.newPage()
     const ws = recordWebSockets(page)
     await page.goto(webappLaunchLink(sandbox))
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     await installDuplicateSampler(page)
     await expect.poll(() => backendProcesses(sandbox).length, { message: 'one gateway serves the sandbox' }).toBe(1)
@@ -338,20 +354,24 @@ test("the Webapp and Electron Desktop answer and stop each other's turns on one 
     // Electron Desktop attaches to the same gateway and opens the same chat.
     desktop = await launchCoreApp(coreAppEnv(sandbox))
     const desktopWs = recordWebSockets(desktop.page)
+    // firstWindow can already have dialled. Reload on this same Page after installing the recorder
+    // so the approval/interrupt assertions cover every socket, not just later pool dials.
+    await desktop.page.reload()
     await waitForInteractive(desktop.app, desktop.page)
-    expect(backendProcesses(sandbox).map(proc => proc.pid), 'Electron attached to the serving gateway').toEqual([
-      gateway.pid
-    ])
+    expect(
+      backendProcesses(sandbox).map(proc => proc.pid),
+      'Electron attached to the serving gateway'
+    ).toEqual([gateway.pid])
     await desktop.page.evaluate(id => {
       window.location.hash = `#/${encodeURIComponent(id)}`
     }, sessionId)
     await expect.poll(() => currentSessionId(desktop!.page)).toBe(sessionId)
 
     // Electron answers the Webapp's approval: it resolves once and the Webapp's card clears.
-    await expect(approvalRun(desktop.page), `Electron shows the pending approval\n${appLogTail(desktop.app)}`).toHaveCount(
-      1,
-      { timeout: 60_000 }
-    )
+    await expect(
+      approvalRun(desktop.page),
+      `Electron shows the pending approval\n${appLogTail(desktop.app)}`
+    ).toHaveCount(1, { timeout: 60_000 })
     expect(fs.existsSync(victim), 'the gated command waits for the answer').toBe(true)
     await approvalRun(desktop.page).click()
     await expect
@@ -391,16 +411,21 @@ test("the Webapp and Electron Desktop answer and stop each other's turns on one 
     hold.open()
     await expect(stopButton(desktop.page)).toHaveCount(0, { timeout: 30_000 })
     await expect(stopButton(page)).toHaveCount(0, { timeout: 30_000 })
-    expect(provider.completions.find(c => c.marker === U(2))?.finished, 'the held reply never streamed to its end').toBe(
-      false
-    )
-    expect(ws.sent.some(frame => frame.method === 'session.interrupt'), 'the Webapp sent the interrupt').toBe(true)
+    expect(
+      provider.completions.find(c => c.marker === U(2))?.finished,
+      'the held reply never streamed to its end'
+    ).toBe(false)
+    expect(
+      ws.sent.some(frame => frame.method === 'session.interrupt'),
+      'the Webapp sent the interrupt'
+    ).toBe(true)
     expect(desktopWs.sent.some(frame => frame.method === 'session.interrupt')).toBe(false)
     expect(backendProcesses(sandbox).map(proc => proc.pid)).toEqual([gateway.pid])
   } finally {
     hold.open()
     await desktop?.app.close().catch(() => undefined)
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const proc of sandboxProcesses(sandbox)) {
       try {
@@ -470,13 +495,16 @@ test('signing out of a Webapp behind sign-in signs the browser out', async () =>
     signInGateYaml(port, `http://hermes-webapp.test:${port}`, 'owner', hash, secret)
   )
   let browser: Browser | null = null
+  const account = await startWebappAccountFixture()
 
   try {
     const started = hermesWebapp(sandbox, '--no-open', '--skip-build')
     expect(started.code, started.output).toBe(0)
     expect(started.output).toContain('sign in with your dashboard account')
     browser = await chromium.launch({ executablePath: process.env.HERMES_E2E_CHROMIUM || undefined })
-    const page: Page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+    await account.install(context)
+    const page: Page = await context.newPage()
     const ws = recordWebSockets(page)
 
     const signIn = () =>
@@ -487,6 +515,7 @@ test('signing out of a Webapp behind sign-in signs the browser out', async () =>
 
     expect((await signIn()).status()).toBe(200)
     await page.goto(`${origin}/`)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     await expect
       .poll(() => ws.sockets.some(socket => socket.url.startsWith(`ws://127.0.0.1:${port}/api/ws`)))
@@ -501,15 +530,16 @@ test('signing out of a Webapp behind sign-in signs the browser out', async () =>
     expect(signedOut.output).toMatch(/closed [1-9]\d* browser connections?\./)
     expect(signedOut.output).toContain('Every browser login behind sign-in has ended')
     expect((await page.request.get(`${origin}/api/sessions`)).status()).toBe(401)
-    await page.reload()
     await expect(page).toHaveURL(/\/login/, { timeout: 60_000 })
     await expect(composer(page)).toBeHidden()
 
     expect((await signIn()).status()).toBe(200)
     await page.goto(`${origin}/`)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const proc of sandboxProcesses(sandbox)) {
       try {

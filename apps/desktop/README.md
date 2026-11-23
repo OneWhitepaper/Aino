@@ -57,6 +57,18 @@ payload. See [BUILDING.md](BUILDING.md) for package and release contracts.
 
 ---
 
+## Recovering saved sign-in credentials
+
+If Desktop cannot read an earlier login, enter your email and password to sign
+in again. With **Keep me signed in** enabled, only a successful authentication
+and profile verification may replace unreadable credentials. Desktop first saves
+an owner-only copy of the original encrypted file under
+`platform-tokens.json.recovery/` beside `platform-tokens.json` in Electron's
+userData directory. Failed authentication or backup leaves the original intact;
+no plaintext credentials, project files, chats, or model settings are changed.
+
+---
+
 ## Screenshot shortcut (macOS)
 
 Enable **Settings → Keyboard Shortcuts → Screenshot shortcut**, then press the

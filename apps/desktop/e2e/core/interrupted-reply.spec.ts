@@ -128,7 +128,7 @@ test('Stop mid-stream renders exactly the partial reply the session persisted', 
         { polling: 'raf', timeout: 60_000 }
       )
       await page
-        .locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+        .locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
         .filter({ visible: true })
         .first()
         .click()

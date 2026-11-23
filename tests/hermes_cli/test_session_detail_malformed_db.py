@@ -166,14 +166,19 @@ class _EmptyDB:
 
 
 @pytest.mark.asyncio
-async def test_absent_session_is_still_404(monkeypatch):
+@pytest.mark.parametrize(
+    "endpoint",
+    [sessions_router.get_session_detail, sessions_router.export_session_endpoint],
+    ids=["detail", "export"],
+)
+async def test_absent_session_is_still_404(monkeypatch, endpoint):
     monkeypatch.setattr(
         _web_server_sessions,
         "_open_session_db_for_profile",
         lambda profile, *, read_only: _EmptyDB(),
     )
     with pytest.raises(HTTPException) as excinfo:
-        await sessions_router.get_session_detail("does_not_exist")
+        await endpoint("does_not_exist")
     assert excinfo.value.status_code == 404
 
 

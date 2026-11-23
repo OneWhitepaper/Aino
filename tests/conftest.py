@@ -1608,15 +1608,20 @@ def _moa_caches_isolated():
     runtime at module level (keyed on config mtime / provider+model) so the
     tool loop doesn't re-resolve them serially on every iteration. Tests
     monkeypatch resolvers and config paths, so a cache entry leaked from one
-    test would poison the next. Clear both around every test.
+    test would poison the next. Clear both around every test that loads MoA.
+    Probe rather than import: installer acceptance runs without agent dependencies.
     """
-    import agent.moa_loop as moa
+    moa = sys.modules.get("agent.moa_loop")
 
-    moa._preset_cache.clear()
-    moa._runtime_cache.clear()
+    if moa is not None:
+        moa._preset_cache.clear()
+        moa._runtime_cache.clear()
     yield
-    moa._preset_cache.clear()
-    moa._runtime_cache.clear()
+    if moa is None:
+        moa = sys.modules.get("agent.moa_loop")
+    if moa is not None:
+        moa._preset_cache.clear()
+        moa._runtime_cache.clear()
 
 
 # ── Real-home tripwire (universal read/write guard) ──────────────────────────

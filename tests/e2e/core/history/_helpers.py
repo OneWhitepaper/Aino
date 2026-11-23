@@ -75,10 +75,12 @@ def _calls(tool_calls: Any) -> tuple:
 def identity(msg: dict[str, Any]) -> tuple:
     """Logical identity of one conversation message as the MODEL sees it.
 
-    User rows replay their ``api_content`` sidecar when present (surface notes, attachments),
-    so that is the text the identity uses.
+    User and assistant rows replay their ``api_content`` sidecar when present (surface notes,
+    attachments, sanitized replies), so that is the text the identity uses.
     """
-    content = msg.get("api_content") if msg.get("role") == "user" and msg.get("api_content") else msg.get("content")
+    content = msg.get("content")
+    if msg.get("role") in ("user", "assistant") and msg.get("api_content"):
+        content = msg["api_content"]
     return (msg.get("role"), _text(content or ""), msg.get("tool_call_id") or None, _calls(msg.get("tool_calls")))
 
 

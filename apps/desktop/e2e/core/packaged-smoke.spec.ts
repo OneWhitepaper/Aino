@@ -18,9 +18,10 @@
  *     is proven from the dependency's installed files, not assumed. The main
  *     entry the archive's own package.json names must be present.
  *  2. Boot to first chat: the PACKAGED binary (release/linux-unpacked/<exe>,
- *     `app.isPackaged` asserted) with a sandboxed HOME/HERMES_HOME and only
- *     the LLM faked (scripted loopback provider) completes a first turn: the
- *     reply is rendered, persisted (state.db + REST), and passes the core
+ *     `app.isPackaged` asserted) signs in through the real production account
+ *     bridge against a local platform fixture and a private OS keyring. Its
+ *     isolated account workspace uses a scripted loopback LLM and completes a
+ *     first turn: the reply is rendered, persisted (state.db + REST), and passes the core
  *     transcript oracle. The packaged app is pointed at THIS checkout's
  *     Python backend (HERMES_DESKTOP_HERMES_ROOT = repo root, selected PM interpreter), so
  *     this proves the packaged Electron shell + renderer, not a bundled
@@ -39,17 +40,26 @@ import * as path from 'node:path'
 
 import { _electron, type ElectronApplication, expect, type Page, test } from '@playwright/test'
 
+import { readChatIdentity } from '../../../../tests-js/scripts/desktop-chat-smoke'
+import { assertBackendOrigin, localBackendProcess, readInstallationCommit } from '../../../../tests-js/scripts/desktop-smoke-process'
+import { writeEnvFile, writeMockProviderConfig } from '../../../../tests-js/scripts/mock-provider-config'
+import { readFixturePlatformSession, signInPlatformFixture, startPlatformServer } from '../../../../tests-js/scripts/platform-account-fixture'
+import { stopSandboxGatewayDaemons } from '../run-tmp-reaper'
+import { accountHome, startPrivateSecretService } from '../update/account-fixture'
+import { startHttpsEdge } from '../update/github-edge'
+
 import {
   coreAppEnv,
   createCoreSandbox,
   currentSessionId,
   DESKTOP_ROOT,
   recordWebSockets,
+  REPO_ROOT,
   sandboxProcesses,
   send,
   storedSessionForMarker,
   waitForInteractive,
-  writeProviderHome
+  type WsRecorder
 } from './harness'
 import { assertTranscriptOracle, installDuplicateSampler } from './oracle'
 import { startScriptedProvider } from './provider'
@@ -487,20 +497,66 @@ test('packaged binary boots against a scripted provider and completes a first ch
   const build = packagedBuildOrSkip()
   const provider = await startScriptedProvider()
   const sandbox = createCoreSandbox('packaged')
-  writeProviderHome(sandbox.hermesHome, provider.url)
+  const workspaceHome = accountHome({ home: sandbox.home, sandboxRoot: sandbox.root })
+  const accountSandbox = { ...sandbox, hermesHome: workspaceHome }
   let app: ElectronApplication | undefined
+  let account: Awaited<ReturnType<typeof startPlatformServer>> | undefined
+  let edge: Awaited<ReturnType<typeof startHttpsEdge>> | undefined
+  let keyring: Awaited<ReturnType<typeof startPrivateSecretService>> | undefined
 
   try {
-    const launched = await launchPackaged(build, coreAppEnv(sandbox), sandbox.root)
-    const { app: electronApp, page, logs } = launched
+    // The unpackaged core fixtures use a development account. Release artifacts
+    // deliberately reject that adapter and never adopt the installation's config.
+    fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'display:\n  language: en\n')
+    writeMockProviderConfig(workspaceHome, provider.url, '  language: en')
+    writeEnvFile(workspaceHome, 'core-e2e-key', provider.url)
+    account = await startPlatformServer()
+    edge = await startHttpsEdge(sandbox.root, {
+      host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false
+    })
+    const runtimeDir = path.join(sandbox.root, 'runtime')
+    fs.mkdirSync(runtimeDir, { mode: 0o700 })
+    keyring = await startPrivateSecretService(sandbox.root, coreAppEnv(sandbox, {
+      ...edge.env, NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle,
+      XDG_CONFIG_HOME: path.join(sandbox.home, '.config'),
+      XDG_DATA_HOME: path.join(sandbox.home, '.local', 'share'),
+      XDG_CACHE_HOME: path.join(sandbox.home, '.cache'), XDG_RUNTIME_DIR: runtimeDir
+    }))
+
+    const launched = await launchPackaged(build, keyring.env, sandbox.root)
+    const { app: electronApp, page: loginPage, logs } = launched
     app = electronApp
-    const ws = recordWebSockets(page)
     const logTail = () => logs.slice(-60).join('\n')
 
     await test.step('it is the packaged app, loaded from the archive', async () => {
       const facts = await electronApp.evaluate(({ app }) => ({ isPackaged: app.isPackaged, appPath: app.getAppPath() }))
       expect(facts, 'launched the packaged app, not a dev tree').toEqual({ isPackaged: true, appPath: build.asarPath })
     })
+
+    // Subscribe before submission, so the replacement renderer's first socket
+    // cannot precede its recorder. Never fall back to recording an already-open page.
+    const recorders = new Map<Page, WsRecorder>()
+
+    const recordPage = (candidate: Page) => {
+      if (!recorders.has(candidate)) { recorders.set(candidate, recordWebSockets(candidate)) }
+    }
+
+    electronApp.context().on('page', recordPage)
+    recordPage(loginPage)
+    let page: Page
+
+    try {
+      page = await signInPlatformFixture(electronApp, loginPage, { keepSignedIn: true })
+    } finally {
+      electronApp.context().off('page', recordPage)
+    }
+
+    expect(page, 'platform login replaces the login renderer').not.toBe(loginPage)
+    expect(loginPage.isClosed(), 'the login window retired').toBe(true)
+    expect(electronApp.windows(), 'only the authenticated workspace remains').toEqual([page])
+    const ws = recorders.get(page)
+    expect(ws, 'the authenticated renderer was observed before login handed it back').toBeDefined()
+    await readFixturePlatformSession(page)
 
     await test.step('boots to an interactive composer', async () => {
       // 60 s, not the harness default 180 s: a warm packaged boot is well under
@@ -509,6 +565,24 @@ test('packaged binary boots against a scripted provider and completes a first ch
         throw new Error(`${(error as Error).message}\npackaged main-process log tail:\n${logTail()}`)
       })
       await installDuplicateSampler(page)
+    })
+
+    await test.step('the account uses this source checkout and its own local gateway', async () => {
+      const identity = await readChatIdentity(page)
+      expect(fs.realpathSync(identity.hermesHome!)).toBe(fs.realpathSync(workspaceHome))
+      expect(fs.realpathSync(identity.hermesRoot)).toBe(fs.realpathSync(REPO_ROOT))
+
+      const connection = await page.evaluate(() => (window as unknown as {
+        hermesDesktop: { getConnection: () => Promise<{ mode: string; baseUrl: string }> }
+      }).hermesDesktop.getConnection())
+
+      const base = new URL(connection.baseUrl)
+      expect(connection.mode).toBe('local')
+      expect(['127.0.0.1', 'localhost', '[::1]']).toContain(base.hostname)
+      const backend = localBackendProcess(Number(base.port), electronApp.process().pid!, workspaceHome)
+      assertBackendOrigin(backend, REPO_ROOT, 'source', {
+        appReportedRoot: identity.hermesRoot, installedCommit: readInstallationCommit(REPO_ROOT, 'source')
+      })
     })
 
     await test.step('first turn: reply rendered and persisted', async () => {
@@ -523,16 +597,19 @@ test('packaged binary boots against a scripted provider and completes a first ch
       await expect.poll(() => currentSessionId(page)).not.toBe('')
       const sessionId = await currentSessionId(page)
       await expect
-        .poll(() => storedSessionForMarker(sandbox, 'default', U(1)), { message: 'first turn persisted to state.db' })
+        .poll(() => storedSessionForMarker(accountSandbox, 'default', U(1)), { message: 'first turn persisted to account state.db' })
         .toBe(sessionId)
+      expect(storedSessionForMarker(sandbox, 'default', U(1)), 'chat must not use the installation home').toBeNull()
       await expect(page.getByText(`${A(1)} packaged reply`)).toBeVisible()
-      await assertTranscriptOracle(page, ws, provider, { sessionId, expectUserMarkers: [U(1)] }, 'packaged first turn')
+      await assertTranscriptOracle(page, ws!, provider, { sessionId, expectUserMarkers: [U(1)] }, 'packaged first turn')
     })
   } finally {
     await app?.close().catch(() => undefined)
 
+    stopSandboxGatewayDaemons(sandbox.root, workspaceHome)
+
     // Never leave a test-made process behind (only this sandbox's).
-    for (const proc of sandboxProcesses(sandbox)) {
+    for (const proc of [...sandboxProcesses(accountSandbox), ...sandboxProcesses(sandbox)]) {
       try {
         process.kill(proc.pid, 'SIGKILL')
       } catch {
@@ -540,7 +617,8 @@ test('packaged binary boots against a scripted provider and completes a first ch
       }
     }
 
-    await provider.close()
+    const closed = await Promise.allSettled([keyring?.close(), edge?.close(), account?.close(), provider.close()])
     sandbox.cleanup()
+    expect(closed.filter(result => result.status === 'rejected'), 'all private fixture services exited').toEqual([])
   }
 })

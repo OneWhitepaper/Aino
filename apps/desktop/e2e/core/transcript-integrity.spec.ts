@@ -38,6 +38,7 @@ import {
 } from './harness'
 import { assertTranscriptOracle, installDuplicateSampler, type OracleTarget } from './oracle'
 import { gate, startScriptedProvider } from './provider'
+import { sessionRows } from './remote-helpers'
 
 const nonce = Math.random()
   .toString(36)
@@ -70,8 +71,9 @@ async function openSession(page: Page, sessionId: string, mustShow: string) {
 test('transcript oracle holds across every transition', async () => {
   const provider = await startScriptedProvider()
   const sandbox = createCoreSandbox('transcript')
+  const p2Home = path.join(sandbox.hermesHome, 'profiles', 'p2')
   writeProviderHome(sandbox.hermesHome, provider.url)
-  writeProviderHome(path.join(sandbox.hermesHome, 'profiles', 'p2'), provider.url)
+  writeProviderHome(p2Home, provider.url)
   // This scenario explicitly exercises the shared-host profile route. Keep
   // the sandbox HOME/HERMES_HOME/user-data isolation, but let p2 ride the
   // isolated primary backend so splitProfileRoute can create the second
@@ -245,16 +247,37 @@ test('transcript oracle holds across every transition', async () => {
     let sessionP2: OracleTarget = { sessionId: '', profile: 'p2', expectUserMarkers: [] }
 
     await test.step('non-default profile on the shared host backend: one socket per session', async () => {
-      const botsTab = page.locator('[data-tree-tab="hermes-bots:pane"]:visible')
-      await expect(botsTab).toHaveCount(1, { timeout: 60_000 })
-      await botsTab.click()
-      const row = page.locator('[data-slot="bots-roster"] [data-roster-key="local::p2"]')
+      await page
+        .getByRole('navigation', { name: 'Switch conversation mode' })
+        .getByRole('button', { name: 'Manage Bots', exact: true })
+        .click()
+      const manager = page.getByRole('region', { name: 'Bot management', exact: true })
+      const label = 'P2 · This device'
+      const row = manager.getByRole('button', { name: label, exact: true })
       await expect(row).toBeVisible({ timeout: 60_000 })
       await row.click()
-      // The tab is named by its title; its status dot carries the draft state.
-      await expect(
-        page.getByRole('tab', { exact: true, name: 'P2', selected: true }).getByLabel(/Draft/)
-      ).toBeVisible({ timeout: 60_000 })
+      await expect(row).toHaveAttribute('aria-pressed', 'true')
+      await manager
+        .getByRole('complementary', { name: label, exact: true })
+        .getByRole('button', { name: 'Open Bot Chat', exact: true })
+        .click()
+      await expect(manager).not.toBeVisible()
+      // Explicit Open Bot Chat enters the canonical p2 chat, not an ordinary draft.
+      const chat = page.locator('[data-chat-surface][data-bot-chat]').filter({ visible: true })
+      await expect(chat).toHaveCount(1)
+      await expect
+        .poll(
+          async () => {
+            const id = await chat.getAttribute('data-stored-session-id')
+
+            return sessionRows({ ...sandbox, hermesHome: p2Home }).some(
+              row => row.id === id && row.title === 'Bot Chat'
+            )
+          },
+          { timeout: 60_000, message: "the open chat is p2's canonical Bot Chat" }
+        )
+        .toBe(true)
+      const p2Chat = await chat.getAttribute('data-stored-session-id')
       provider.script(U(9), [{ text: words(A(9), 'profile', 'two', 'first') }])
       await send(page, `${U(9)} on p2`, 'Enter', ws)
       await finished(U(9))
@@ -265,6 +288,7 @@ test('transcript oracle holds across every transition', async () => {
           message: 'p2 turn persisted in the p2 state.db'
         })
         .not.toBeNull()
+      expect(p2Session, 'the p2 turn stayed in the explicitly opened canonical chat').toBe(p2Chat)
       sessionP2 = { sessionId: p2Session!, profile: 'p2', expectUserMarkers: [U(9)] }
       await assertTranscriptOracle(page, ws, provider, sessionP2, 'p2 first turn')
 
@@ -326,6 +350,11 @@ test('transcript oracle holds across every transition', async () => {
       await page.reload()
       await waitForInteractive(app, page)
       await installDuplicateSampler(page)
+      // Bot tiles preserve the ordinary Sessions URL; return through its real mode entry.
+      await page
+        .getByRole('navigation', { name: 'Switch conversation mode' })
+        .getByRole('button', { name: 'Aino', exact: true })
+        .click()
       await openSession(page, sessionA.sessionId, A(8))
       await assertTranscriptOracle(page, ws, provider, sessionA, 'final reload A')
       await openSession(page, sessionB.sessionId, A(7))

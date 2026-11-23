@@ -57,7 +57,7 @@ function viewport(page: Page) {
 }
 
 function stopButton(page: Page) {
-  return page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+  return page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
 }
 
 async function settled(page: Page, ws: WsRecorder, marker: string) {
@@ -344,9 +344,36 @@ test('a tool completion redelivered under a newer seq renders one tool row', asy
     expect(redelivery.redelivered).toBe(true)
     await page.screenshot({ path: test.info().outputPath('redelivered-turn.png') })
     await assertTranscriptOracle(page, ws, provider, session, 'redelivered tool completion')
+    // Settled activity and tool results have separate, user-controlled disclosures.
+    const process = viewport(page).locator('[data-slot="aui_response-process-control"]').getByRole('button')
+    await expect(process).toHaveCount(1)
+
+    if ((await process.getAttribute('aria-expanded')) === 'false') {
+      await process.click()
+    }
+
+    await expect(process).toHaveAttribute('aria-expanded', 'true')
+    const run = viewport(page).locator('[data-tool-summary]').getByRole('button')
+    await expect(run).toHaveCount(1)
+
+    if ((await run.getAttribute('aria-expanded')) === 'false') {
+      await run.click()
+    }
+
+    await expect(run).toHaveAttribute('aria-expanded', 'true')
+    const allRows = viewport(page).locator('[data-tool-row]')
+    await expect(allRows).toHaveCount(1)
+    const result = allRows.locator('button[data-slot="disclosure-toggle"]')
+
+    if ((await result.getAttribute('aria-expanded')) === 'false') {
+      await result.click()
+    }
+
+    await expect(result).toHaveAttribute('aria-expanded', 'true')
     await page.screenshot({ path: test.info().outputPath('redelivered-tool-row.png') })
     const rows = viewport(page).locator('[data-tool-row]').filter({ hasText: `core-${tag}` })
     await expect(rows).toHaveCount(1)
+    await expect(rows.locator('[data-terminal-output]')).toHaveText(`core-${tag}`)
   })
 })
 

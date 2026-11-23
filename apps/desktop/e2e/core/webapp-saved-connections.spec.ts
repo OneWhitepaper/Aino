@@ -6,7 +6,7 @@
  * with no setting for this at all, reached at the loopback address it binds with the session token
  * its Webapp keeps. A TCP forwarder serves the hub's alias, so the browser reaches the hub at the
  * address it names. Mini is added from the hub's Settings → Gateways → Add connection, the
- * page native Desktop has, and joins the hub's gateway switcher. Proof:
+ * page native Desktop has, and selected as the startup primary through that page. Proof:
  *  - the connection lands in the hub's one saved-connections file, which native Desktop reads too;
  *  - the browser reaches Mini only through the hub: every socket and request the tab opens is on the
  *    hub's origin, under `/api/relay/<connection id>`;
@@ -41,6 +41,7 @@ import {
   writeProviderHome
 } from './harness'
 import { type ScriptedProvider, startScriptedProvider } from './provider'
+import { startWebappAccountFixture } from './webapp-account-fixture'
 
 const nonce = Math.random()
   .toString(36)
@@ -174,6 +175,7 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
 
   const password = `throwaway-${Math.random().toString(36).slice(2, 14)}`
   const gateways: Gateway[] = []
+  const account = await startWebappAccountFixture()
   let browser: Browser | null = null
 
   try {
@@ -191,6 +193,8 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
       ...(VIDEO_DIR ? { recordVideo: { dir: VIDEO_DIR, size: { width: 1280, height: 820 } } } : {})
     })
 
+    await account.install(context)
+
     const page = await context.newPage()
     const ws = recordWebSockets(page)
     const requests: string[] = []
@@ -201,11 +205,15 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
 
     await signIn(page, hub, password)
     await page.goto(`${hub.origin}/`)
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 180_000 })
     await beat(page)
 
     // Add Mini from Settings → Gateways, as on native Desktop: a remote gateway with its token.
-    await page.goto(`${hub.origin}/#/settings?tab=gateway`)
+    // Navigate inside this document: the separate browser platform login is memory-only.
+    await page.evaluate(() => {
+      window.location.hash = '#/settings?tab=gateway'
+    })
     await page.getByRole('button', { name: 'Add connection' }).click()
     await page.getByPlaceholder('Homelab', { exact: true }).fill('Mini')
     await page.getByLabel('Gateway URL').fill(mini.origin)
@@ -218,14 +226,31 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
     const id = saved!.id
     await beat(page)
 
-    // Mini joins the switcher; switching opens its socket through the hub.
-    await page.goto(`${hub.origin}/`)
+    // The current shell has no ordinary-workspace switcher. Use the real startup-primary UI,
+    // not a Bot chat (whose owner does not re-home ordinary terminal/file operations).
+    const miniRow = page.locator('[data-settings-row]').filter({ has: page.getByText('Mini', { exact: true }) })
+    await miniRow.getByRole('button', { name: 'Make primary', exact: true }).click()
+    await expect(miniRow.getByText('Primary', { exact: true })).toBeVisible()
+
+    const lastUsed = page.getByRole('switch', {
+      name: 'At startup, return to Sessions on the last-used gateway',
+      exact: true
+    })
+
+    if ((await lastUsed.getAttribute('aria-checked')) === 'true') {
+      await lastUsed.click()
+    }
+
+    await expect(lastUsed).toHaveAttribute('aria-checked', 'false')
+    await expect
+      .poll(() => page.evaluate(() => (window as any).hermesDesktop.connections.list()))
+      .toMatchObject({ primary: id, launchMode: 'primary' })
+    await page.evaluate(() => {
+      window.location.hash = '#/'
+    })
+    await page.reload()
+    await account.signIn(page)
     await expect(composer(page)).toBeVisible({ timeout: 120_000 })
-    const switcher = page.locator('[data-slot="connection-switcher"]')
-    await expect(switcher).toBeVisible({ timeout: 60_000 })
-    await switcher.getByRole('button').first().click()
-    await beat(page)
-    await page.getByRole('menuitemradio', { name: /Mini/ }).click()
     await expect
       .poll(
         () =>
@@ -238,11 +263,20 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
         }
       )
       .toBe(true)
-    // The switch has committed: the switcher is idle and names Mini.
-    const switchStarted = Date.now()
-    await expect(switcher).toHaveAttribute('aria-busy', 'false', { timeout: 60_000 })
-    await expect(switcher.getByRole('button').first()).toContainText('Mini')
-    console.log(`switch committed ${Date.now() - switchStarted} ms after Mini's socket opened`)
+    // The published ordinary-workspace source, not merely a pooled Bot owner, is Mini.
+    await page.evaluate(() => {
+      window.location.hash = '#/settings?tab=gateway'
+    })
+    await expect(miniRow.getByText('Current', { exact: true })).toBeVisible()
+    await page.evaluate(() => {
+      window.location.hash = '#/'
+    })
+    await expect(composer(page)).toBeVisible()
+    // Startup restore must not steal the Hub draft's captured owner. The real /new action
+    // selects Aino on the current service and starts an ordinary session, not a Bot chat.
+    await composer(page).fill('/new')
+    await composer(page).press('Enter')
+    await expect(composer(page)).toBeEmpty()
     await beat(page)
 
     // A turn on Mini: Mini's model answers, Mini's gateway runs the tool, Mini stores the session.
@@ -263,6 +297,12 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
       { text: [`${A(1)} `, 'ran ', 'on ', 'Mini'] }
     ])
     await send(page, `${U(1)} where do you run`, 'Enter', ws)
+
+    const submissions = () =>
+      ws.sent.filter(frame => frame.method === 'prompt.submit' && JSON.stringify(frame.params).includes(U(1)))
+
+    await expect.poll(() => submissions().length).toBe(1)
+    expect(ws.sockets[submissions()[0].socket].url).toContain(`/api/relay/${id}/api/ws`)
 
     try {
       await expect(page.getByText(`${A(1)} ran on Mini`).first()).toBeVisible({ timeout: 150_000 })
@@ -339,6 +379,7 @@ test("a Webapp reaches a saved gateway through its own, with that gateway's save
     await context.close()
   } finally {
     await browser?.close().catch(() => undefined)
+    await account.close()
 
     for (const gateway of gateways) {
       for (const proc of sandboxProcesses(gateway.sandbox)) {

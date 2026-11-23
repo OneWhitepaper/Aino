@@ -3,8 +3,9 @@
 Every runnable provider is the PRIMARY of one row, its catalog neighbour the fallback (both at
 their own loopback fakes, both configured through the documented ``model.base_url`` /
 ``fallback_providers[].base_url`` keys). The primary answers HTTP 500 to every inference request.
-The oneshot must still deliver the fallback's answer after one tool round trip, the fallback must
-be called with ITS OWN key only, and the primary's key must never reach the fallback's endpoint.
+API-key rows must deliver the fallback's answer with its own key after a tool round trip.
+Session-managed rows instead require a binding: neither an unbound primary nor an unbound backup
+may infer or turn a missing session authority into permission to spend another credential.
 """
 
 from __future__ import annotations
@@ -16,7 +17,8 @@ from pathlib import Path
 import pytest
 
 from tests.e2e.core.providers._catalog_helpers import (
-    AUTH_HEADER_OF_DIALECT, FINAL, Known, Row, decoy_keys, discover_catalog, gate, known_gate, run_hermes, write_home,
+    AUTH_HEADER_OF_DIALECT, FINAL, Known, Row, decoy_keys, discover_catalog, gate, known_gate, provider_hosts,
+    run_hermes, write_home,
 )
 from tests.fakes.providers.catalog_fake import CatalogFake
 
@@ -53,7 +55,27 @@ def _drive(primary: Row, fallback: Row, root: Path) -> dict:
         proc = run_hermes(home, project, {**keys, **dead.proxy_env()}, "-z", "Read canary.txt and report.")
         dead_reqs, alive_reqs = dead.inference(), alive.inference()
         egress = dead.egress_hosts()
-    pk, fk = keys[primary.key_env or ""], keys[fallback.key_env or ""]
+    if primary.auth_type == "session_managed" or fallback.auth_type == "session_managed":
+        primary_managed = primary.auth_type == "session_managed"
+        if primary_managed:
+            primary_ok = not dead_reqs and "binding" in (proc.stdout + proc.stderr).lower()
+        else:
+            assert primary.key_env, f"{primary.name}: API-key row has no declared credential"
+            primary_ok = bool(dead_reqs) and keys[primary.key_env] in dead_reqs[0].headers.get(
+                AUTH_HEADER_OF_DIALECT.get(dead_reqs[0].dialect, "authorization"), "")
+        return {
+            "rc": proc.returncode, "stdout": proc.stdout[-400:], "stderr": proc.stderr[-1200:], "egress": egress,
+            "alive_inference": len(alive_reqs),
+            "cells": {
+                "primary_refused_unbound" if primary_managed else "primary_tried_first": primary_ok,
+                "unbound_managed_did_not_infer": not alive_reqs,
+                "no_unbound_fallback_success": proc.returncode != 0 and FINAL not in proc.stdout,
+                "no_foreign_provider_egress": not set(egress).intersection(
+                    provider_hosts(CATALOG) - {primary.vendor_host()}),
+            },
+        }
+    assert primary.key_env and fallback.key_env, "API-key catalog rows must declare their credentials"
+    pk, fk = keys[primary.key_env], keys[fallback.key_env]
     return {
         "rc": proc.returncode, "stdout": proc.stdout[-400:], "stderr": proc.stderr[-1200:], "egress": egress,
         "alive_inference": len(alive_reqs), "dead_paths": [f"{r.path} [{r.dialect}]" for r in dead_reqs],

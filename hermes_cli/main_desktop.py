@@ -180,7 +180,8 @@ def _desktop_packaged_executable_in(release_dir: Path) -> Optional[Path]:
         candidates = [
             release_dir / d / n
             for d in ("linux-unpacked", "linux-arm64-unpacked")
-            for n in (DESKTOP_PRODUCT_NAME, LEGACY_DESKTOP_PRODUCT_NAME, LEGACY_DESKTOP_PRODUCT_NAME.lower())
+            for n in (DESKTOP_PRODUCT_NAME, DESKTOP_PRODUCT_NAME.lower(),
+                      LEGACY_DESKTOP_PRODUCT_NAME, LEGACY_DESKTOP_PRODUCT_NAME.lower())
         ]
 
     existing = [p for p in candidates if p.exists()]

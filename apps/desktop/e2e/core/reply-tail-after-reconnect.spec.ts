@@ -47,7 +47,7 @@ const words = (marker: string, ...rest: string[]) => [
 ]
 
 const viewport = (page: Page) => page.locator('[data-slot="aui_thread-viewport"]').filter({ visible: true }).first()
-const stopButton = (page: Page) => page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')
+const stopButton = (page: Page) => page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')
 
 const RESUME_HOLD_MS = 1500
 const FINISH_DELAY_MS = 800

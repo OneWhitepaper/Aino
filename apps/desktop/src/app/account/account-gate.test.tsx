@@ -1,16 +1,19 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPlatformAccountActions } from '@/api/platform'
 import { HermesGateway } from '@/hermes'
 import { I18nProvider } from '@/i18n'
+import { createBrowserPlatformBridge } from '@/lib/browser-platform-account'
 import { setPrimaryGateway, setPrimaryGatewayConnection } from '@/store/gateway'
 import { $gatewayState, setConnection, setGatewayState } from '@/store/session'
 import { deferred } from '@/test/deferred'
 import { stubResizeObserver } from '@/test/jsdom'
 
+import { startPlatformServer } from '../../../../../tests-js/scripts/platform-account-fixture'
+import { createPlatformClient, PLATFORM_PRODUCTION_ORIGIN } from '../../../shared/platform-client'
 import type {
   PlatformAccountBridge,
   PlatformAccountSnapshot,
@@ -72,10 +75,14 @@ function bridge(current: PlatformAccountSnapshot) {
   return value
 }
 
-function renderFlow(actions: ReturnType<typeof createPlatformAccountActions>, child = <p>Workspace</p>) {
+function renderFlow(
+  actions: ReturnType<typeof createPlatformAccountActions>,
+  child = <p>Workspace</p>,
+  initialRoute = '/'
+) {
   return render(
     <I18nProvider configClient={null} initialLocale="zh">
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialRoute]}>
         <AccountFlow actions={actions}>{child}</AccountFlow>
       </MemoryRouter>
     </I18nProvider>
@@ -101,6 +108,76 @@ afterEach(() => {
 })
 
 describe('standalone Aino account flow', () => {
+  it('restores the browser session route after real platform sign-in without a native window acknowledgment', async () => {
+    const platform = await startPlatformServer()
+
+    const browser = createBrowserPlatformBridge({
+      bootstrap: { authRequired: true, basePath: '', privateSession: false, token: '' },
+      client: createPlatformClient({
+        origin: PLATFORM_PRODUCTION_ORIGIN,
+        fetchImpl: (input, init) => {
+          const url = new URL(String(input))
+
+          return fetch(`${platform.origin}${url.pathname}${url.search}`, init)
+        }
+      })
+    })
+
+    const previousHost = window.document.documentElement.dataset.hermesDesktopHost
+    window.document.documentElement.dataset.hermesDesktopHost = 'browser'
+    Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: browser.bridge })
+    const actions = createPlatformAccountActions(browser.bridge.platformAccount)
+
+    function Workspace() {
+      const location = useLocation()
+
+      return (
+        <>
+          <p>Workspace</p>
+          <output aria-label="Workspace route">{`${location.pathname}${location.search}${location.hash}`}</output>
+        </>
+      )
+    }
+
+    const view = renderFlow(actions, <Workspace />, '/stored-session-17?panel=files#reply')
+
+    try {
+      const agreement = await screen.findByRole('checkbox', { name: '同意用户协议和隐私政策' })
+      const phone = screen.getByLabelText('手机号')
+      fireEvent.change(phone, { target: { value: '+8613800138000' } })
+      fireEvent.click(agreement)
+      fireEvent.click(screen.getByRole('button', { name: '发送验证码' }))
+      fireEvent.change(await screen.findByLabelText('验证码'), { target: { value: '246810' } })
+      fireEvent.click(screen.getByRole('button', { name: '登录' }))
+      await waitFor(() => expect(actions.state.get().authenticated).toBe(true))
+      await act(async () => {})
+
+      expect(actions.snapshot.get()).toMatchObject({
+        phase: 'signed_in',
+        account: { id: '17' },
+        mode: 'production',
+        remember_state: 'session_only',
+        error: null
+      })
+      expect(platform.requests.some(request => request.authenticatedProfile)).toBe(true)
+      expect(window.hermesDesktop.setAccountWindowMode).toBeUndefined()
+      expect(screen.getByText('Workspace')).toBeTruthy()
+      expect(screen.getByLabelText('Workspace route').textContent).toBe('/stored-session-17?panel=files#reply')
+      expect(window.document.querySelector('[data-account-restoring-page]')).toBeNull()
+    } finally {
+      view.unmount()
+      browser.dispose()
+
+      if (previousHost === undefined) {
+        delete window.document.documentElement.dataset.hermesDesktopHost
+      } else {
+        window.document.documentElement.dataset.hermesDesktopHost = previousHost
+      }
+
+      await platform.close()
+    }
+  })
+
   it('waits for restored identity without showing sign-in or shrinking the window', async () => {
     const current = deferred<PlatformAccountSnapshot>()
     const bounds = deferred<boolean>()
@@ -350,24 +427,48 @@ describe('standalone Aino account flow', () => {
     expect(currentDraft.value).toBe('')
   })
 
-  it.each(['refused', 'rejected'] as const)('keeps account contents gated when native scope is %s', async result => {
-    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
-    const platformBridge = bridge(snapshot('signed_in', account))
-    const native = vi.mocked(window.hermesDesktop.setAccountWindowMode!)
+  it.each(['refused', 'rejected', 'thrown'] as const)(
+    'keeps account contents gated when native scope is %s',
+    async result => {
+      const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+      const platformBridge = bridge(snapshot('signed_in', account))
+      const native = vi.mocked(window.hermesDesktop.setAccountWindowMode!)
 
-    if (result === 'refused') {
-      native.mockResolvedValue(false)
-    } else {
-      native.mockRejectedValue(new Error('scope switch failed'))
+      if (result === 'refused') {
+        native.mockResolvedValue(false)
+      } else if (result === 'thrown') {
+        native.mockImplementation(() => {
+          throw new Error('scope switch failed')
+        })
+      } else {
+        native.mockRejectedValue(new Error('scope switch failed'))
+      }
+
+      renderFlow(createPlatformAccountActions(platformBridge), <p>Private account workspace</p>)
+      await waitFor(() =>
+        expect(native).toHaveBeenCalledWith('workspace', undefined, { userId: 'a', mode: 'development', revision: 1 })
+      )
+      await act(async () => {})
+      expect(screen.queryByText('Private account workspace')).toBeNull()
+      expect(screen.getByRole('status').textContent).toBe('无法连接账户服务，请检查连接后重试。')
     }
+  )
 
-    renderFlow(createPlatformAccountActions(platformBridge), <p>Private account workspace</p>)
-    await waitFor(() =>
-      expect(native).toHaveBeenCalledWith('workspace', undefined, { userId: 'a', mode: 'development', revision: 1 })
-    )
-    await act(async () => {})
-    expect(screen.queryByText('Private account workspace')).toBeNull()
-  })
+  it.each(['bridge', 'capability'] as const)(
+    'keeps native account contents gated when its window scope %s is missing',
+    async missing => {
+      const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+      Object.defineProperty(window, 'hermesDesktop', {
+        configurable: true,
+        value: missing === 'bridge' ? undefined : { ...window.hermesDesktop, setAccountWindowMode: undefined }
+      })
+      renderFlow(createPlatformAccountActions(bridge(snapshot('signed_in', account))), <p>Private account workspace</p>)
+      await act(async () => {})
+
+      expect(screen.queryByText('Private account workspace')).toBeNull()
+      expect(screen.getByRole('status').textContent).toBe('无法连接账户服务，请检查连接后重试。')
+    }
+  )
 
   it('ignores an old native acknowledgment after the account changes', async () => {
     const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }

@@ -25,6 +25,7 @@ def elevated(request, monkeypatch):
     return spawned
 
 
+@pytest.mark.platforms("windows")
 def test_ensure_from_an_elevated_client_refuses_instead_of_starting(tmp_path, monkeypatch, elevated):
     from hermes_cli import gateway_runtime as runtime, gateway_runtime_service as service
 
@@ -36,6 +37,7 @@ def test_ensure_from_an_elevated_client_refuses_instead_of_starting(tmp_path, mo
     assert elevated == []
 
 
+@pytest.mark.platforms("windows")
 def test_detached_restart_from_an_elevated_client_names_the_remedy(tmp_path, capsys, elevated):
     from hermes_cli import gateway_runtime_start as start
 
@@ -45,6 +47,7 @@ def test_detached_restart_from_an_elevated_client_names_the_remedy(tmp_path, cap
     assert elevated == []
 
 
+@pytest.mark.platforms("windows")
 def test_an_elevated_client_still_starts_the_registered_task(tmp_path, monkeypatch, elevated):
     from hermes_cli import gateway_runtime as runtime, gateway_runtime_service as service
 
@@ -59,13 +62,13 @@ def test_an_elevated_client_still_starts_the_registered_task(tmp_path, monkeypat
     assert time.monotonic() - before < 10 and elevated == []
 
 
+@pytest.mark.platforms("windows")
 def test_an_elevated_client_without_a_split_token_still_starts(tmp_path, monkeypatch):
     import hermes_dir_acl
     from hermes_cli import gateway_runtime_start as start
 
     monkeypatch.setattr(hermes_dir_acl, "process_is_elevated", lambda: True)
     monkeypatch.setattr(hermes_dir_acl, "process_elevation_type", lambda: hermes_dir_acl.TOKEN_ELEVATION_TYPE_DEFAULT)
-    monkeypatch.setattr(start, "start_gateway_job", lambda *a, **k: None)  # macOS: the direct spawn, too
     spawned = []
     monkeypatch.setattr(start.subprocess, "Popen", lambda *a, **k: spawned.append(a) or object())
     start.spawn_unmanaged_gateway(tmp_path / "profile", deadline=time.monotonic() + 5)

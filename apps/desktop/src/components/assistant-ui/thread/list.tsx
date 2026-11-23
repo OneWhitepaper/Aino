@@ -943,6 +943,9 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
         !hasTranscriptTextSelection(el)
       ) {
         el.scrollTop = threadScrollTargetTop(THREAD_SCROLL_BOTTOM, nextResizeMetrics)
+        // A viewport-only clamp can escape the hook while nearBottom still
+        // reports following. Keep its lock in sync with this eligible pin.
+        void scrollToBottomUnlessSelecting('instant')
       }
 
       previousResizeMetrics = nextResizeMetrics
@@ -957,7 +960,7 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
       el.removeEventListener('scroll', update)
       observer.disconnect()
     }
-  }, [contentRef, paneVisible, scrollRef])
+  }, [contentRef, paneVisible, scrollRef, scrollToBottomUnlessSelecting])
 
   // Persist the live position on app close, so a reading position survives a
   // quit without a session switch (the switch cleanup below only runs on

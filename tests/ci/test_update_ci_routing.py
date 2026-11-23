@@ -567,7 +567,10 @@ def test_generated_e2e_matrices_run_each_owned_file_once():
     run = _run_workflow(".github/workflows/tests.yml", inputs={"e2e": True, "e2e_upgrade": True})
     expected = {path.relative_to(_REPO).as_posix() for path in (_REPO / "tests/e2e").rglob("test_*.py")}
     upgrade = {path for path in expected if path.startswith("tests/e2e/core/upgrade/")}
-    core = {path for path in expected - upgrade if not path.startswith("tests/e2e/core/live/")}
+    windows = {path for path in expected if path.startswith("tests/e2e/core/windows/")}
+    windows_update = {path for path in expected if path.startswith("tests/e2e/core/windows_update/")}
+    live = {path for path in expected if path.startswith("tests/e2e/core/live/")}
+    core = expected - upgrade - windows - windows_update - live
     matrix = json.loads(run["test-matrix"]["outputs"]["e2e"])
     planned = [path for cell in matrix["slice"] for path in cell["files"].split(":")]
     assert len(planned) == len(set(planned)), "e2e: duplicate test files across slices"
@@ -577,6 +580,24 @@ def test_generated_e2e_matrices_run_each_owned_file_once():
     shards = json.loads(run["e2e-upgrade-plan"]["outputs"]["shards"])
     assert len(shards) == len(set(shards)), "upgrade: duplicate suite shards"
     assert _selected_test_files(run["e2e-upgrade"], "Run upgrade e2e tests") == upgrade
+
+    native = _run_workflow(".github/workflows/tests-os.yml", inputs={"e2e": True, "e2e_upgrade": True})
+    windows_job = native["e2e-windows"]
+    upgrade_job = native["install-update-e2e"]["jobs"]["install-update"]
+    assert windows_job["body"]["runs-on"] == "windows-latest"
+    assert upgrade_job["body"]["runs-on"] == "windows-latest"
+    assert _selected_test_files(windows_job, "Run Windows E2E suite") == windows
+    assert _selected_test_files(upgrade_job, "Run Windows install + update E2E") == windows_update
+    install_plan = native["install-update-e2e"]["jobs"]["e2e-upgrade-plan"]
+    install_shards = json.loads(install_plan["outputs"]["shards"])
+    assert len(install_shards) == len(set(install_shards)), "Windows install: duplicate journeys"
+    assert {f"tests/e2e/core/windows_update/{name}" for name in install_shards} == windows_update
+    install_step = next(step for step in upgrade_job["body"]["steps"]
+                        if step.get("name") == "Run Windows install + update E2E")
+    for shard in install_shards:
+        assert workflow_steps.selected_files(install_step, {"matrix": {"shard": shard}, "inputs": {}}, _REPO) == {
+            f"tests/e2e/core/windows_update/{shard}"}
+    assert core | upgrade | windows | windows_update | live == expected
 
 
 @_NATIVE_WINDOWS_TOO

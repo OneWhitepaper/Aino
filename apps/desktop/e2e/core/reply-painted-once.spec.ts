@@ -32,7 +32,11 @@
  * - control: a different final after a tool keeps both responses.
  */
 
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
 import { type ElectronApplication, expect, type Page, test } from '@playwright/test'
+import { parseDocument } from 'yaml'
 
 import {
   coreAppEnv,
@@ -79,9 +83,7 @@ const echo = (tag: string) => ({ name: 'terminal', args: { command: `echo core-$
 // interim_assistant_messages toggles the live seal; review off keeps the
 // background memory fork from adding rows that are not part of the turn;
 // tool search off keeps todo_list directly callable (it is deferred otherwise).
-const config = (interim: boolean) => `display:
-  interim_assistant_messages: ${interim}
-memory:
+const config = `memory:
   nudge_interval: 0
 tools:
   tool_search:
@@ -124,7 +126,7 @@ async function settled(page: Page, ws: WsRecorder, marker: string, provider?: Sc
     throw new Error(`${(error as Error).message}\n${wireTail(ws, provider)}`)
   }
 
-  await expect(page.locator('[data-slot="composer-root"] button[aria-label="Stop"]')).toHaveCount(0, {
+  await expect(page.locator('[data-slot="composer-root"] button[aria-label="Pause task"]')).toHaveCount(0, {
     timeout: 30_000
   })
 }
@@ -153,6 +155,27 @@ async function expectPaintedOnce(page: Page, marker: string, label: string) {
     .toEqual([expect.objectContaining({ count: 1 })])
 }
 
+/** Completed turns fold process text; reveal it through the owning turn's real control. */
+async function revealProcess(page: Page, finalMarker: string) {
+  const group = viewport(page)
+    .locator('[data-slot="aui_response-group"]')
+    .filter({ has: page.locator('[data-slot="aui_assistant-message-root"]').filter({ hasText: finalMarker }) })
+
+  await expect(group).toHaveCount(1)
+
+  if (!(await group.locator('[data-slot="aui_response-process-header"][data-process-foldable="true"]').count())) {
+    return
+  }
+
+  const toggle = group.locator('[data-slot="aui_response-process-control"]').getByRole('button')
+
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click()
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+}
+
 async function withApp(
   label: string,
   interim: boolean,
@@ -166,7 +189,13 @@ async function withApp(
 ) {
   const provider = await startScriptedProvider()
   const sandbox = createCoreSandbox(label)
-  writeProviderHome(sandbox.hermesHome, provider.url, config(interim))
+  writeProviderHome(sandbox.hermesHome, provider.url, config)
+  // The core fixture already owns display.language. Merge the seal toggle;
+  // duplicate display mappings make the canonical loader reject the whole config.
+  const configPath = path.join(sandbox.hermesHome, 'config.yaml')
+  const document = parseDocument(fs.readFileSync(configPath, 'utf8'))
+  document.setIn(['display', 'interim_assistant_messages'], interim)
+  fs.writeFileSync(configPath, document.toString())
   const { app, page } = await launchCoreApp(coreAppEnv(sandbox))
   const ws = recordWebSockets(page)
 
@@ -235,6 +264,7 @@ for (const interim of [true, false]) {
           await settled(page, ws, turn.once.at(-1)!, provider)
           session.sessionId ||= await currentSessionId(page)
           session.expectUserMarkers.push(U(turn.n))
+          await revealProcess(page, turn.once.at(-1)!)
 
           for (const marker of turn.once) {
             await expectPaintedOnce(page, marker, `live: ${turn.label}`)
@@ -251,6 +281,8 @@ for (const interim of [true, false]) {
         await installDuplicateSampler(page)
 
         for (const turn of TURNS) {
+          await revealProcess(page, turn.once.at(-1)!)
+
           for (const marker of turn.once) {
             await expectPaintedOnce(page, marker, `reload: ${turn.label}`)
           }

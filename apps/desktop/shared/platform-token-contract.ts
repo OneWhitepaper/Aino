@@ -23,6 +23,10 @@ export interface PlatformTokenSet {
 }
 export interface PlatformTokenStore {
   load(origin: string): Promise<PlatformTokenSet | null>
-  save(origin: string, tokens: PlatformTokenSet): Promise<'encrypted' | 'session_only'>
+  save(
+    origin: string,
+    tokens: PlatformTokenSet,
+    options?: { recoverUnreadable: true }
+  ): Promise<'encrypted' | 'session_only'>
   clear(origin: string): Promise<void>
 }

@@ -61,9 +61,13 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            xvfb bubblewrap \
+            xvfb bubblewrap dbus gnome-keyring libsecret-1-0 \
             libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
             xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64
+          # The account's remembered session must survive the automatic app relaunch.
+          # The fixture starts a private bus/keyring; basic_text is intentionally refused.
+          command -v dbus-daemon
+          command -v gnome-keyring-daemon
           # bwrap (the installer/updater sandbox) needs unprivileged user namespaces.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
@@ -117,6 +121,15 @@ jobs:
           mkdir -p apps/desktop/test-results/update/install-logs
           cp -r "${{ runner.temp }}/hdu/sb/home/.hermes/logs" apps/desktop/test-results/update/install-logs/ 2>/dev/null || true
           cp "${{ runner.temp }}/hdu/sb/terminal-update.log" apps/desktop/test-results/update/install-logs/ 2>/dev/null || true
+          # Login re-homes the gateway and desktop logs; installation logs alone
+          # cannot explain an account workspace's startup failure. Never copy tokens.
+          for logs in "${{ runner.temp }}/hdu/sb/user-data/account-workspaces/"*/home/logs; do
+            [ -d "$logs" ] || continue
+            scope=$(basename "$(dirname "$(dirname "$logs")")")
+            target="apps/desktop/test-results/update/install-logs/accounts/$scope"
+            mkdir -p "$target"
+            cp -r "$logs" "$target/"
+          done
 
       - name: Upload failure artifacts
         if: failure() || cancelled()

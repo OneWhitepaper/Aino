@@ -193,15 +193,23 @@ test('bot on a remote secondary connection: a client-only image reaches it as by
       )
     })
 
-    await test.step('open the remote bot from the Bots roster', async () => {
+    await test.step('open the remote bot through Bot management', async () => {
       await page
-        .getByRole('button', { name: 'Bots', exact: true })
-        .or(page.getByRole('tab', { name: 'Bots', exact: true }))
-        .first()
+        .getByRole('navigation', { name: 'Switch conversation mode' })
+        .getByRole('button', { name: 'Manage Bots', exact: true })
         .click()
-      const row = page.locator(`[data-slot="bots-roster"] [data-roster-key="${REMOTE_ID}::${BOT}"]`)
+      const manager = page.getByRole('region', { name: 'Bot management', exact: true })
+      const label = `S120730bot · ${REMOTE_LABEL}`
+      const row = manager.getByRole('button', { name: label, exact: true })
       await expect(row, 'the remote connection enumerated its bot').toBeVisible({ timeout: 60_000 })
       await row.click()
+      // Selection only previews configuration; opening explicitly captures this source.
+      await expect(row).toHaveAttribute('aria-pressed', 'true')
+      await manager
+        .getByRole('complementary', { name: label, exact: true })
+        .getByRole('button', { name: 'Open Bot Chat', exact: true })
+        .click()
+      await expect(manager).not.toBeVisible()
       // The bot's canonical chat is resumed on a socket to the REMOTE backend, scoped to the bot profile.
       await expect
         .poll(
@@ -230,7 +238,8 @@ test('bot on a remote secondary connection: a client-only image reaches it as by
         .filter({ visible: true })
         .first()
         .click()
-      await page.getByRole('menuitem', { name: /image/i }).first().click()
+      await page.getByRole('menuitem', { name: 'More attachments', exact: true }).hover()
+      await page.getByRole('menuitem', { name: 'Images…', exact: true }).click()
       const chip = page.locator('[data-slot="composer-root"]').getByText(`shot-${nonce}.png`).first()
       await expect(chip).toBeVisible()
       provider.script(U1, [{ text: [`${A1} `, 'saw ', 'it'] }])

@@ -9,8 +9,8 @@
  *   - the app refuses and says an update is already running (no second
  *     updater process is started, the app stays up);
  *   - the terminal update finishes successfully;
- *   - afterwards the same running app reports the install as current on the
- *     new commit (no stale "Update now") and a chat turn completes.
+ *   - afterwards the reopened app attaches to the updated account gateway,
+ *     reports the install as current (no stale "Update now"), and chat works.
  */
 
 import { spawn } from 'node:child_process'
@@ -19,8 +19,11 @@ import * as path from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
+import { readChatIdentity } from '../../../../tests-js/scripts/desktop-chat-smoke'
+import { assertBackendOrigin, localBackendProcess } from '../../../../tests-js/scripts/desktop-smoke-process'
 import { recordWebSockets, send, waitForInteractive } from '../core/harness'
 
+import { accountHome } from './account-fixture'
 import {
   backendServeProcesses,
   closeQuietly,
@@ -74,6 +77,7 @@ test('Update now while a terminal update runs is refused, and the panel is truth
         throw new Error(`${(error as Error).message}\n${explain()}`)
       })
       const oldBackends = backendServeProcesses(facts).map(proc => proc.pid)
+      expect(oldBackends, `one account gateway before updating\n${explain()}`).toHaveLength(1)
       await openAbout(page)
       await waitForUpdateOffer(page, target)
 
@@ -129,17 +133,12 @@ test('Update now while a terminal update runs is refused, and the panel is truth
 
       await test.step('reopened after the terminal update, the app is truthful: current, no stale Update now, chat works', async () => {
         // The terminal update's stage-and-swap stops a Desktop running from the release tree it
-        // replaces (#109643); if it did not, the user quits it. Either way nothing from before
-        // the update may keep running.
+        // replaces (#109643); if it did not, the user quits it. The account's canonical
+        // gateway outlives its viewer; reopening must detect and replace its stale code.
         if (!appExited) {
           await closeQuietly(app)
         }
 
-        await waitFor(
-          'the pre-update backend to be gone once its app is',
-          () => oldBackends.every(pid => !isAlive(pid)),
-          { timeout: 60_000, explain }
-        )
         const reopened = await launchInstalledApp(facts, env)
 
         try {
@@ -147,6 +146,26 @@ test('Update now while a terminal update runs is refused, and the panel is truth
           await waitForInteractive(reopened.app, reopened.page).catch(error => {
             throw new Error(`${(error as Error).message}\n${explain(reopened.logTail())}`)
           })
+          await waitFor(
+            'reopening to replace the pre-update account gateway',
+            () => oldBackends.every(pid => !isAlive(pid)),
+            { timeout: 60_000, explain }
+          )
+          const identity = await readChatIdentity(reopened.page)
+          expect(fs.realpathSync(identity.hermesHome!)).toBe(fs.realpathSync(accountHome(facts)))
+          expect(fs.realpathSync(identity.hermesRoot)).toBe(fs.realpathSync(facts.checkout))
+
+          const connection = await reopened.page.evaluate(() => (window as unknown as {
+            hermesDesktop: { getConnection: () => Promise<{ mode: string; baseUrl: string }> }
+          }).hermesDesktop.getConnection())
+
+          expect(connection.mode).toBe('local')
+          const backend = localBackendProcess(Number(new URL(connection.baseUrl).port), reopened.app.process().pid!, accountHome(facts))
+
+          assertBackendOrigin(backend, facts.checkout, 'source', { appReportedRoot: identity.hermesRoot,
+            installedCommit: target })
+          expect(backend.codeSha, 'the replacement gateway booted the updated code').toBe(target)
+          expect(backendServeProcesses(facts).map(proc => proc.pid), 'one updated account gateway').toEqual([backend.pid])
           await expect
             .poll(() => currentAs(reopened.page), {
               timeout: 120_000,
