@@ -569,8 +569,10 @@ async def get_session_stats(profile: Optional[str] = None):
 async def get_session_detail(session_id: str, profile: Optional[str] = None):
     def _detail(db):
         sid = _resolve_session_id(db, session_id)
+        if not sid:
+            raise HTTPException(status_code=404, detail=_NOT_FOUND)
         with db._read_ctx() as conn:
-            target = local_physical_target(conn, sid) if sid else None
+            target = local_physical_target(conn, sid)
         session = db.get_session(target) if target else None
         if not session:
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
@@ -966,8 +968,10 @@ async def export_session_endpoint(session_id: str, profile: Optional[str] = None
     """Stream a single session (metadata + messages) as JSON."""
     def _prepare_export(db):
         sid = _resolve_session_id(db, session_id)
+        if not sid:
+            return None
         with db._read_ctx() as conn:
-            sid = local_physical_target(conn, sid) if sid else None
+            sid = local_physical_target(conn, sid)
         return (sid, db.get_session(sid)) if sid else None
 
     prepared = await asyncio.to_thread(_with_db, profile, _prepare_export, read_only=True)
