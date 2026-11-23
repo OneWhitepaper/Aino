@@ -20,12 +20,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { runUpdateWindowChat } from './update-window-chat.mjs';
 import { updateWindowEnvironment } from './smoke-env.mjs';
 import { prepareNativeLaunchEnvironment } from './mac-native-launch-env.mjs';
-import { prepareSmokeWindow } from './desktop-smoke.ts';
+import { prepareSmokeWindow, seedSmokeAccount } from './desktop-smoke.ts';
 import { signInPlatformFixture } from '../../../tests-js/scripts/platform-account-fixture.ts';
 import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts';
 import { execFileSync } from 'node:child_process';
@@ -37,101 +38,114 @@ const { observeProcessClose, recordProcessOutput } = require('./process-close.cj
 const { prepareWindowForInput } = require('./window-input.cjs');
 const { openAbout, waitForUpdate, waitForMacUpdateClose } = require('./update-ui.cjs');
 
-const { values } = parseArgs({
-  options: {
-    'app-bin': { type: 'string' },
-    shots: { type: 'string', default: '.' },
-    'old-sha': { type: 'string' },
-    'chat-out': { type: 'string' },
-    'mock-url': { type: 'string' },
-    'platform-account-env': { type: 'string' },
-    'native-env-state': { type: 'string' },
-    'close-timeout-ms': { type: 'string', default: '420000' },
-    'retry-legacy-verification-timeout': { type: 'boolean', default: process.env.HERMES_E2E_LEGACY_RETRY === 'true' },
-  },
-});
+// Keep the native launch boundary injectable: contract tests stop before opening an app.
+export async function runMacBundledUpdate(values, launchApp = options => _electron.launch(options)) {
+  const log = message => console.log(`[mac-bundled-update] ${message}`);
+  const shot = async (page, name) => {
+    try { await page.screenshot({ path: path.join(values.shots, `${name}.png`), fullPage: true }); } catch { /* window may be gone */ }
+  };
 
-const log = message => console.log(`[mac-bundled-update] ${message}`);
-const shot = async (page, name) => {
-  try { await page.screenshot({ path: path.join(values.shots, `${name}.png`), fullPage: true }); } catch { /* window may be gone */ }
-};
+  const appBin = values['app-bin'];
+  if (!appBin || !values['old-sha'] || !values['chat-out'] || !values['mock-url']) {
+    throw new Error('--app-bin, --old-sha, --chat-out and --mock-url are required');
+  }
+  fs.mkdirSync(values.shots, { recursive: true });
+  fs.mkdirSync(values['chat-out'], { recursive: true });
 
-const appBin = values['app-bin'];
-if (!appBin || !values['old-sha'] || !values['chat-out'] || !values['mock-url']) {
-  throw new Error('--app-bin, --old-sha, --chat-out and --mock-url are required');
+  log(`launching ${appBin}`);
+  // Preserve the exact environment for post-launch identity assertions. The
+  // driver process itself may name a different userData path.
+  const launchEnv = updateWindowEnvironment(
+    process.env,
+    path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
+    'bundled',
+  );
+  if (values['platform-account-env']) {
+    Object.assign(launchEnv, JSON.parse(fs.readFileSync(values['platform-account-env'], 'utf8')));
+    writeMockProviderConfig(launchEnv.HERMES_HOME, values['mock-url'], 'language: en');
+    // v0.1.5's signed-in backend reads its own home, not the installation feed home.
+    seedSmokeAccount({
+      exe: appBin, root: path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
+      home: launchEnv.HERMES_HOME, 'user-data': launchEnv.HERMES_DESKTOP_USER_DATA_DIR,
+      out: values['chat-out'], origin: 'bundled', phase: 'old',
+      'expect-commit': values['old-sha'], 'platform-account': true,
+    }, undefined, values['mock-url']);
+  }
+  if (values['native-env-state']) {
+    if (process.platform !== 'darwin' || process.env.GITHUB_ACTIONS !== 'true') throw new Error('Native relaunch sandbox is CI-only');
+    prepareNativeLaunchEnvironment(launchEnv, values['native-env-state']);
+  }
+  const app = await launchApp({
+    executablePath: appBin,
+    cwd: path.dirname(appBin),
+    // Inherit the driver env: HERMES_HOME / HOME / updates feed config must
+    // reach the main process exactly as a user's double-click would.
+    env: launchEnv,
+    chromiumSandbox: true,
+    args: [`--user-data-dir=${launchEnv.HERMES_DESKTOP_USER_DATA_DIR}`],
+    timeout: 120_000,
+  });
+  const child = app.process();
+  recordProcessOutput(child, path.join(values['chat-out'], 'old-app-output.log'));
+  const waitForProcessClose = observeProcessClose(child);
+  const oldPid = await app.evaluate(() => process.pid);
+  log(`launched Electron pid=${oldPid}`);
+  fs.writeFileSync(path.join(values['chat-out'], 'old-pid'), `${oldPid}\n`);
+
+  const page = await prepareSmokeWindow(
+    app, values['platform-account-env'] ? { signIn: signInPlatformFixture } : undefined, log,
+  );
+
+  await runUpdateWindowChat(app, page, {
+    mockUrl: values['mock-url'], outDir: values['chat-out'],
+    expectCommit: values['old-sha'],
+    origin: 'bundled', executable: appBin,
+    root: path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
+    userData: launchEnv.HERMES_DESKTOP_USER_DATA_DIR,
+  });
+  const oldStamp = JSON.parse(fs.readFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/install-stamp.json'), 'utf8'));
+  execFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/agent-payload', oldStamp.runtime.storePython), [
+    '-B', path.join(import.meta.dirname, 'bundled-chat-preservation.py'), 'snapshot',
+    path.join(values['chat-out'], 'desktop-chat-old.json'), path.join(values['chat-out'], 'legacy-chat-snapshot.json'),
+  ], { encoding: 'utf8', timeout: 30_000 });
+  await shot(page, '01-app-booted');
+
+  await openAbout(page, { log, shot, prepare: () => prepareWindowForInput(app, page) });
+  const updateNow = await waitForUpdate(page, { log, shot });
+
+  // ── The click under test ────────────────────────────────────────────────
+  await updateNow.click();
+  log('clicked: Update now');
+  await new Promise(resolve => setTimeout(resolve, 1_200));
+  await shot(page, '05-updating-overlay');
+
+  // The MacStrategy signs off with quitAndInstall: the app quits and
+  // Squirrel.Mac swaps the bundle and relaunches. Wait for the native close
+  // (never the renderer's close event) and exit WITHOUT killing anything —
+  // observeProcessClose released our pipes, so ShipIt's relaunch survives.
+  const outcome = await waitForMacUpdateClose(page, waitForProcessClose, {
+    timeoutMs: Number(values['close-timeout-ms']),
+    allow: values['retry-legacy-verification-timeout'], log, shot,
+  });
+  fs.writeFileSync(path.join(values['chat-out'], 'apply-attempts.json'), JSON.stringify(outcome, null, 2) + '\n');
+  log('old Electron process closed — Squirrel.Mac owns the swap and relaunch');
+  fs.writeFileSync(path.join(values['chat-out'], 'old-exited'), new Date().toISOString() + '\n');
 }
-fs.mkdirSync(values.shots, { recursive: true });
-fs.mkdirSync(values['chat-out'], { recursive: true });
 
-log(`launching ${appBin}`);
-// Preserve the exact environment for post-launch identity assertions. The
-// driver process itself may name a different userData path.
-const launchEnv = updateWindowEnvironment(
-  process.env,
-  path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
-  'bundled',
-);
-if (values['platform-account-env']) {
-  Object.assign(launchEnv, JSON.parse(fs.readFileSync(values['platform-account-env'], 'utf8')));
-  writeMockProviderConfig(launchEnv.HERMES_HOME, values['mock-url'], 'language: en');
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const { values } = parseArgs({
+    options: {
+      'app-bin': { type: 'string' },
+      shots: { type: 'string', default: '.' },
+      'old-sha': { type: 'string' },
+      'chat-out': { type: 'string' },
+      'mock-url': { type: 'string' },
+      'platform-account-env': { type: 'string' },
+      'native-env-state': { type: 'string' },
+      'close-timeout-ms': { type: 'string', default: '420000' },
+      'retry-legacy-verification-timeout': { type: 'boolean', default: process.env.HERMES_E2E_LEGACY_RETRY === 'true' },
+    },
+  });
+  await runMacBundledUpdate(values);
+  process.exit(0);
 }
-if (values['native-env-state']) {
-  if (process.platform !== 'darwin' || process.env.GITHUB_ACTIONS !== 'true') throw new Error('Native relaunch sandbox is CI-only');
-  prepareNativeLaunchEnvironment(launchEnv, values['native-env-state']);
-}
-const app = await _electron.launch({
-  executablePath: appBin,
-  cwd: path.dirname(appBin),
-  // Inherit the driver env: HERMES_HOME / HOME / updates feed config must
-  // reach the main process exactly as a user's double-click would.
-  env: launchEnv,
-  chromiumSandbox: true,
-  args: [`--user-data-dir=${launchEnv.HERMES_DESKTOP_USER_DATA_DIR}`],
-  timeout: 120_000,
-});
-const child = app.process();
-recordProcessOutput(child, path.join(values['chat-out'], 'old-app-output.log'));
-const waitForProcessClose = observeProcessClose(child);
-const oldPid = await app.evaluate(() => process.pid);
-log(`launched Electron pid=${oldPid}`);
-fs.writeFileSync(path.join(values['chat-out'], 'old-pid'), `${oldPid}\n`);
-
-const page = await prepareSmokeWindow(
-  app, values['platform-account-env'] ? { signIn: signInPlatformFixture } : undefined, log,
-);
-
-await runUpdateWindowChat(app, page, {
-  mockUrl: values['mock-url'], outDir: values['chat-out'],
-  expectCommit: values['old-sha'],
-  origin: 'bundled', executable: appBin,
-  root: path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
-  userData: launchEnv.HERMES_DESKTOP_USER_DATA_DIR,
-});
-const oldStamp = JSON.parse(fs.readFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/install-stamp.json'), 'utf8'));
-execFileSync(path.resolve(path.dirname(appBin), '..', 'Resources/agent-payload', oldStamp.runtime.storePython), [
-  '-B', path.join(import.meta.dirname, 'bundled-chat-preservation.py'), 'snapshot',
-  path.join(values['chat-out'], 'desktop-chat-old.json'), path.join(values['chat-out'], 'legacy-chat-snapshot.json'),
-], { encoding: 'utf8', timeout: 30_000 });
-await shot(page, '01-app-booted');
-
-await openAbout(page, { log, shot, prepare: () => prepareWindowForInput(app, page) });
-const updateNow = await waitForUpdate(page, { log, shot });
-
-// ── The click under test ────────────────────────────────────────────────
-await updateNow.click();
-log('clicked: Update now');
-await new Promise(resolve => setTimeout(resolve, 1_200));
-await shot(page, '05-updating-overlay');
-
-// The MacStrategy signs off with quitAndInstall: the app quits and
-// Squirrel.Mac swaps the bundle and relaunches. Wait for the native close
-// (never the renderer's close event) and exit WITHOUT killing anything —
-// observeProcessClose released our pipes, so ShipIt's relaunch survives.
-const outcome = await waitForMacUpdateClose(page, waitForProcessClose, {
-  timeoutMs: Number(values['close-timeout-ms']),
-  allow: values['retry-legacy-verification-timeout'], log, shot,
-});
-fs.writeFileSync(path.join(values['chat-out'], 'apply-attempts.json'), JSON.stringify(outcome, null, 2) + '\n');
-log('old Electron process closed — Squirrel.Mac owns the swap and relaunch');
-fs.writeFileSync(path.join(values['chat-out'], 'old-exited'), new Date().toISOString() + '\n');
-process.exit(0);

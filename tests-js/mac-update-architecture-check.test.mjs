@@ -1,13 +1,16 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import yaml from 'js-yaml'
 import { afterEach, expect, test } from 'vitest'
+import { resolveDesktopHermesHome } from '../apps/desktop/electron/data-paths.mjs'
 import {
   assertArchitectureRejection,
   createArchitectureFeed,
+  prepareArchitectureSandbox,
   startArchitectureFeed,
 } from '../tests/install/e2e-assets/mac-update-architecture-check.mjs'
 
@@ -75,6 +78,73 @@ test('serves only feed metadata and records even rejected ZIP requests without s
     await server.close()
   }
 })
+
+test('prepares separate installation and fixture account homes with only local feed and model configuration', async () => {
+  const work = scratch()
+  const sandbox = await prepareArchitectureSandbox(work, 'http://127.0.0.1:49339', {
+    PATH: process.env.PATH, OPENAI_API_KEY: 'must-not-leak', HERMES_HOME: '/not-this-run',
+    HERMES_DESKTOP_REMOTE_URL: 'https://production.example', NODE_EXTRA_CA_CERTS: '/not-this-run.pem',
+  })
+  try {
+    const { env, accountHome } = sandbox
+    expect(env).toMatchObject({ HERMES_HOME: path.join(work, 'hermes-home'),
+      HERMES_DESKTOP_USER_DATA_DIR: path.join(work, 'user-data'), HERMES_RUNTIME_DIR: path.join(work, 'runtime') })
+    expect(env.OPENAI_API_KEY).toBeUndefined()
+    expect(env.HERMES_DESKTOP_REMOTE_URL).toBeUndefined()
+    expect(accountHome).toBe(resolveDesktopHermesHome({ home: env.HOME, accountWorkspace: {
+      userData: env.HERMES_DESKTOP_USER_DATA_DIR, origin: 'https://api.agentera.com.cn', userId: '17',
+    } }))
+    for (const home of [env.HOME, env.HERMES_HOME, env.HERMES_RUNTIME_DIR, env.HERMES_DESKTOP_USER_DATA_DIR, accountHome]) {
+      expect(path.relative(work, home)).not.toMatch(/^\.\./)
+      expect(fs.statSync(home).isDirectory()).toBe(true)
+    }
+    for (const home of [env.HERMES_HOME, accountHome]) {
+      const config = yaml.load(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'))
+      expect(config).toMatchObject({
+        updates: { desktop_feed_base_url: 'http://127.0.0.1:49339' },
+        model: { default: 'mock-model', provider: 'custom', base_url: `${sandbox.mockUrl}/v1` },
+        display: { language: 'en' }, onboarding: { run: false }, auxiliary: { title_generation: { enabled: false } },
+      })
+      expect(fs.readFileSync(path.join(home, '.env'), 'utf8')).toContain('OPENAI_API_KEY=e2e-mock-key\n')
+      expect(fs.readFileSync(path.join(home, '.env'), 'utf8')).not.toContain('must-not-leak')
+    }
+  } finally {
+    await sandbox.close()
+  }
+})
+
+test('launch environment authenticates against the local TLS account fixture and keeps the loopback feed reachable', async () => {
+  const work = scratch()
+  const server = await startArchitectureFeed(createArchitectureFeed(candidate), path.join(work, 'requests.jsonl'))
+  let sandbox
+  try {
+    sandbox = await prepareArchitectureSandbox(work, server.url, { PATH: process.env.PATH })
+    expect(new URL(sandbox.env.HTTPS_PROXY).hostname).toBe('127.0.0.1')
+    expect(sandbox.env.NODE_USE_ENV_PROXY).toBe('1')
+    expect(sandbox.env.NO_PROXY).toBe('127.0.0.1,localhost,::1')
+    expect(path.relative(work, sandbox.env.NODE_EXTRA_CA_CERTS)).not.toMatch(/^\.\./)
+    const result = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+      const profile = await (await fetch('https://api.agentera.com.cn/api/v1/user/profile', {
+        headers: { Authorization: 'Bearer native-access-token' }
+      })).json();
+      const feed = await (await fetch(${JSON.stringify(server.url + feedPath)})).text();
+      console.log(JSON.stringify({ userId: profile.data.id, feed }));
+    `], { env: sandbox.env, timeout: 30_000 })
+    const observed = JSON.parse(result.stdout)
+    expect(observed.userId).toBe(17)
+    expect(yaml.load(observed.feed).version).toBe('0.1.6')
+    expect(sandbox.account.proof()).toMatchObject({
+      authenticatedProfileRequests: 1, proxyHits: ['GET /api/v1/user/profile'], blockedConnects: [],
+    })
+    const caBundle = sandbox.env.NODE_EXTRA_CA_CERTS
+    await sandbox.close()
+    sandbox = undefined
+    expect(fs.existsSync(caBundle)).toBe(false)
+  } finally {
+    await sandbox?.close()
+    await server.close()
+  }
+}, 40_000)
 
 // These fixtures test receipt admission, never emulate the native file selector.
 function evidence() {

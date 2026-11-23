@@ -9,12 +9,14 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
+import { startMockServer } from '../../../tests-js/scripts/mock-server.ts'
 import { downloadArtifact } from './bundle-inputs.mjs'
+import { prepareAccountFixture, prepareSmokeWindow, seedSmokeAccount } from './desktop-smoke.ts'
 import { buildMacFeedText } from './mac-bundled-feed.mjs'
 import { stampAssertions } from './mac-bundled-manifest.cjs'
 import { observeProcessClose, recordProcessOutput } from './process-close.cjs'
 import { isolatedElectronArgs, smokeEnvironment } from './smoke-env.mjs'
-import { pickAppWindow } from './update-ui.cjs'
 
 const OLD = Object.freeze({
   url: 'https://github.com/OneWhitepaper/Aino/releases/download/rc.2-v0.1.5/AinoBundled-0.1.5-mac-x64.zip',
@@ -64,6 +66,33 @@ export async function startArchitectureFeed(feed, logFile) {
   })
   return { url: `http://127.0.0.1:${server.address().port}`, requests,
     close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }
+}
+
+export async function prepareArchitectureSandbox(work, feedUrl, inherited = process.env) {
+  const feedConfig = `updates:\n  desktop_feed_base_url: ${validateMockUrl(feedUrl)}\n`
+  const env = smokeEnvironment(inherited, path.join(work, 'hermes-home'), path.join(work, 'user-data'))
+  env.HERMES_RUNTIME_DIR = path.join(work, 'runtime')
+  for (const folder of [env.HOME, env.HERMES_HOME, env.HERMES_DESKTOP_USER_DATA_DIR, env.HERMES_RUNTIME_DIR]) fs.mkdirSync(folder, { recursive: true })
+  const mock = await startMockServer()
+  let account
+  const close = async () => {
+    try { await account?.close() } finally { await mock.close() }
+  }
+  try {
+    const accountHome = seedSmokeAccount({ home: env.HERMES_HOME, 'user-data': env.HERMES_DESKTOP_USER_DATA_DIR,
+      'platform-account': true, phase: 'old' }, undefined, mock.url)
+    // OLD reads the feed from INSTALLATION_HOME, while login rehomes the backend.
+    // Seed both without adopting any pre-existing account or production provider.
+    for (const home of [env.HERMES_HOME, accountHome]) {
+      writeMockProviderConfig(home, mock.url, 'language: en', feedConfig)
+      writeEnvFile(home, 'e2e-mock-key', mock.url)
+    }
+    account = await prepareAccountFixture(true, path.join(work, 'account-fixture'), env)
+    return { env, accountHome, mockUrl: mock.url, account, close }
+  } catch (error) {
+    await close()
+    throw error
+  }
 }
 
 export function assertArchitectureRejection(evidence) {
@@ -152,7 +181,7 @@ async function runArchitectureCheck(values) {
   const evidence = { schema: 1, status: 'failed', startedAt: new Date().toISOString(),
     driverCommit: process.env.GITHUB_SHA, baseline: OLD, candidate, host, work, errors: [] }
   const recordError = error => evidence.errors.push(error.stack || String(error))
-  let app, server, appPath, waitForClose
+  let app, server, sandbox, appPath, waitForClose
   try {
     writeJson(path.join(out, 'evidence.json'), evidence)
     const archive = path.join(work, 'old-x64.zip')
@@ -167,12 +196,10 @@ async function runArchitectureCheck(values) {
     evidence.before = verifyOldApp(appPath, out, 'old-before')
     server = await startArchitectureFeed(candidate, path.join(out, 'feed-requests.jsonl'))
     fs.writeFileSync(path.join(out, 'stable-mac.yml'), candidate.text)
-    const env = smokeEnvironment(process.env, path.join(work, 'hermes-home'), path.join(work, 'user-data'))
-    env.HERMES_RUNTIME_DIR = path.join(work, 'runtime')
-    for (const folder of [env.HOME, env.HERMES_HOME, env.HERMES_DESKTOP_USER_DATA_DIR, env.HERMES_RUNTIME_DIR]) fs.mkdirSync(folder, { recursive: true })
-    fs.writeFileSync(path.join(env.HERMES_HOME, 'config.yaml'),
-      `language: en\nupdates:\n  desktop_feed_base_url: ${server.url}\n`, { flag: 'wx', mode: 0o600 })
-    evidence.sandbox = { home: env.HOME, hermesHome: env.HERMES_HOME, userData: env.HERMES_DESKTOP_USER_DATA_DIR }
+    sandbox = await prepareArchitectureSandbox(work, server.url)
+    const { env } = sandbox
+    evidence.sandbox = { home: env.HOME, hermesHome: env.HERMES_HOME, userData: env.HERMES_DESKTOP_USER_DATA_DIR,
+      accountHome: sandbox.accountHome, mockUrl: sandbox.mockUrl }
     const { _electron } = createRequire(new URL('../../../tests-js/package.json', import.meta.url))('@playwright/test')
     app = await _electron.launch({ executablePath: evidence.before.executablePath, cwd: path.dirname(evidence.before.executablePath),
       args: isolatedElectronArgs([], env.HERMES_DESKTOP_USER_DATA_DIR), env, chromiumSandbox: true, timeout: 120_000 })
@@ -188,7 +215,9 @@ async function runArchitectureCheck(values) {
     assert.equal(evidence.runtime.hermesHome, env.HERMES_HOME)
     assert.equal(evidence.runtime.userData, env.HERMES_DESKTOP_USER_DATA_DIR)
     assert.equal(fs.realpathSync(evidence.runtime.executable), fs.realpathSync(evidence.before.executablePath))
-    const page = await pickAppWindow(app, message => console.log(`[architecture-check] ${message}`))
+    const page = await prepareSmokeWindow(app, sandbox.account, message => console.log(`[architecture-check] ${message}`))
+    evidence.account = sandbox.account.proof()
+    assert.ok(evidence.account.authenticatedProfileRequests > 0, 'The old app must authenticate with the local account fixture')
     await page.waitForFunction(() => globalThis.hermesDesktop?.updates?.check && globalThis.hermesDesktop?.updates?.apply,
       undefined, { timeout: 120_000 })
     evidence.check = await bounded(page.evaluate(() => globalThis.hermesDesktop.updates.check({ force: true })), 'updates.check')
@@ -213,6 +242,10 @@ async function runArchitectureCheck(values) {
     if (server) {
       try { await server.close() } catch (error) { recordError(error) }
       evidence.requests = server.requests
+    }
+    if (sandbox) {
+      try { evidence.account = sandbox.account.proof() } catch (error) { recordError(error) }
+      try { await sandbox.close() } catch (error) { recordError(error) }
     }
     if (evidence.errors.length === 0) {
       try { evidence.verdict = assertArchitectureRejection(evidence); evidence.status = 'passed' } catch (error) { recordError(error) }
