@@ -177,13 +177,18 @@ export function createPlatformAuth({
     return result
   }
 
-  async function storeTokens(next: PlatformTokenSet, remember: boolean, expected: number) {
+  async function storeTokens(
+    next: PlatformTokenSet,
+    remember: boolean,
+    expected: number,
+    options?: Parameters<PlatformTokenStore['save']>[2]
+  ) {
     if (expected !== generation) {
       return false
     }
 
     const rememberState = remember
-      ? await persist(() => tokenStore.save(client.origin, next))
+      ? await persist(() => tokenStore.save(client.origin, next, options))
       : await persist(async () => {
           await tokenStore.clear(client.origin)
 
@@ -231,7 +236,8 @@ export function createPlatformAuth({
     }
 
     next.deviceAccount = profile
-    const rememberState = await storeTokens(next, remember, expected)
+    // Only a new server-verified identity may replace unreadable saved credentials.
+    const rememberState = await storeTokens(next, remember, expected, { recoverUnreadable: true })
 
     if (!rememberState || expected !== generation) {
       throw new PlatformClientError('auth_attempt_superseded')

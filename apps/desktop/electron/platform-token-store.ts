@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -149,6 +150,17 @@ export function createPlatformTokenStore({
     }
   }
 
+  function backupUnreadable() {
+    try {
+      const raw = fs.readFileSync(filePath)
+      const directory = `${filePath}.recovery`
+      fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
+      fs.writeFileSync(path.join(directory, `${randomUUID()}.json`), raw, { mode: 0o600, flag: 'wx' })
+    } catch {
+      throw new PlatformTokenStoreError('secure_store_write_failed')
+    }
+  }
+
   return {
     async load(origin) {
       const entry = read().accounts[origin]
@@ -175,14 +187,32 @@ export function createPlatformTokenStore({
         throw new PlatformTokenStoreError('secure_store_read_failed')
       }
     },
-    async save(origin, tokens) {
-      if (unreadable) {
+    async save(origin, tokens, options) {
+      if (unreadable && !options?.recoverUnreadable) {
         throw new PlatformTokenStoreError('secure_store_read_failed')
       }
 
-      const value = read()
+      let value: StoredFile
+
+      try {
+        value = read()
+      } catch (error) {
+        if (!options?.recoverUnreadable || !(error instanceof PlatformTokenStoreError)) {
+          throw error
+        }
+
+        value = { version: 1, accounts: {} }
+      }
+
+      if (unreadable && !validTokens(tokens)) {
+        throw new PlatformTokenStoreError('secure_store_write_failed')
+      }
 
       if (!crypto.isAvailable() || crypto.backend() === 'basic_text') {
+        if (unreadable) {
+          throw new PlatformTokenStoreError('secure_store_read_failed')
+        }
+
         if (value.accounts[origin]) {
           delete value.accounts[origin]
           write(value)
@@ -200,7 +230,13 @@ export function createPlatformTokenStore({
         throw new PlatformTokenStoreError('secure_store_write_failed')
       }
 
+      if (unreadable) {
+        // Keep the original ciphertext recoverable; never archive plaintext or overwrite a backup.
+        backupUnreadable()
+      }
+
       write(value)
+      unreadable = false
 
       return 'encrypted'
     },

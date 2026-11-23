@@ -38,7 +38,10 @@ afterEach(() => {
   delete globalThis.document.documentElement.dataset.hermesDesktopHost
 })
 
-function renderCard(overrides: Partial<React.ComponentProps<typeof AccountLoginCard>> = {}) {
+function renderCard(
+  overrides: Partial<React.ComponentProps<typeof AccountLoginCard>> = {},
+  locale: 'zh' | 'en' = 'zh'
+) {
   const props: React.ComponentProps<typeof AccountLoginCard> = {
     capabilities,
     error: null,
@@ -59,7 +62,7 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof AccountLoginC
   return {
     props,
     ...render(
-      <I18nProvider configClient={null} initialLocale="zh">
+      <I18nProvider configClient={null} initialLocale={locale}>
         <AccountLoginCard {...props} />
       </I18nProvider>
     )
@@ -67,6 +70,51 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof AccountLoginC
 }
 
 describe('AccountLoginCard', () => {
+  it.each([
+    ['zh', '邮箱或密码不正确。'],
+    ['en', 'The email or password is incorrect.']
+  ] as const)('explains rejected credentials and keeps email sign-in available in %s', (locale, message) => {
+    const { props, rerender } = renderCard(
+      { capabilities: { ...capabilities, phone_login_enabled: false }, error: { code: 'INVALID_CREDENTIALS' } },
+      locale
+    )
+
+    expect(screen.getByRole('alert').textContent).toBe(message)
+    expect(screen.getByLabelText(TRANSLATIONS[locale].settings.account.passwordLabel).hasAttribute('disabled')).toBe(
+      false
+    )
+
+    rerender(
+      <I18nProvider configClient={null} initialLocale={locale}>
+        <AccountLoginCard {...props} error={{ code: 'invalid_credentials' }} />
+      </I18nProvider>
+    )
+    expect(screen.getByRole('alert').textContent).toBe(message)
+  })
+
+  it.each([
+    ['zh', 'secure_store_read_failed', '无法读取此设备原有的登录凭据。请重新输入邮箱和密码登录。'],
+    [
+      'en',
+      'secure_store_read_failed',
+      'Could not read your previous sign-in credentials. Enter your email and password to sign in again.'
+    ],
+    [
+      'zh',
+      'secure_store_write_failed',
+      '无法更新此设备保存的登录凭据。请检查系统钥匙串或凭据管理器及存储权限，然后重试。'
+    ],
+    [
+      'en',
+      'secure_store_write_failed',
+      'Could not update saved sign-in credentials. Check your system keychain or credential manager and storage permissions, then retry.'
+    ]
+  ] as const)('distinguishes %s %s from a rejected password', (locale, code, message) => {
+    renderCard({ error: { code } }, locale)
+
+    expect(screen.getByRole('alert').textContent).toBe(message)
+  })
+
   it.each(['phone', 'existing'] as const)('explains browser session-only login in the %s flow', async flow => {
     globalThis.document.documentElement.dataset.hermesDesktopHost = 'browser'
     const { props } = renderCard()
