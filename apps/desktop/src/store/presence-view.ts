@@ -52,7 +52,11 @@ function ownerChannel(owner: SessionOwnerScope): PresenceChannel | null | undefi
   const connectionId = isSessionOwnerRoute(owner) ? owner.connectionId : null
   const profile = isSessionOwnerRoute(owner) ? owner.profile : String(owner)
   const route = gatewayRouteState(connectionId, profile)
-  const primary = { connectionId: $primaryGatewayRoute.get().connectionId, gateway: route.gateway, profile: primaryGatewayProfile() }
+  const primary = {
+    connectionId: $primaryGatewayRoute.get().connectionId,
+    gateway: route.gateway,
+    profile: primaryGatewayProfile()
+  }
 
   if (isPrimaryRider(registryBackendScopeKey(connectionId, profile), primary)) {
     return undefined

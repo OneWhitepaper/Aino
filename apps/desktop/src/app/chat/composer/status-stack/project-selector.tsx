@@ -244,9 +244,7 @@ export function ComposerProjectSelector({ cwd, label, presentation = 'pill' }: C
           size="inline"
           variant="ghost"
         >
-          <span className="max-w-56 truncate text-[length:var(--aino-text-ui)] font-normal">
-            {projectLabel}
-          </span>
+          <span className="max-w-56 truncate text-[length:var(--aino-text-ui)] font-normal">{projectLabel}</span>
           <Codicon name="chevron-down" size="0.75rem" />
         </Button>
       </DropdownMenuTrigger>

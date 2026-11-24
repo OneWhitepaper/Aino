@@ -315,11 +315,14 @@ export function prefetchCatalogWhenIdle(kind: CatalogKind, profile?: ProfileScop
   if (typeof window.requestIdleCallback === 'function') {
     let cancelled = false
 
-    const id = window.requestIdleCallback(() => {
-      if (!cancelled) {
-        prefetch()
-      }
-    }, { timeout: 5_000 })
+    const id = window.requestIdleCallback(
+      () => {
+        if (!cancelled) {
+          prefetch()
+        }
+      },
+      { timeout: 5_000 }
+    )
 
     return () => {
       cancelled = true

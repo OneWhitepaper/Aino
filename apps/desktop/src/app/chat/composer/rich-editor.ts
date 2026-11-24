@@ -297,12 +297,15 @@ export function textAfterSelection(editor: HTMLElement): string {
 
   const scratch = document.createElement('div')
   scratch.append(probe.cloneContents())
+
   for (const chip of scratch.querySelectorAll('[data-ref-text]')) {
     chip.replaceWith(document.createTextNode('\uFFFC'))
   }
+
   for (const br of scratch.querySelectorAll('br')) {
     br.replaceWith(document.createTextNode('\n'))
   }
+
   return scratch.textContent ?? ''
 }
 

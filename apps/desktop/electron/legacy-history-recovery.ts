@@ -170,6 +170,7 @@ export function createLegacyHistoryRecovery({ capture, run, request }: RecoveryD
             assertCurrent(scope)
 
             const { sessions, revision } = await restoreRuntime(scope, input, group, batch)
+
             const digest = createHash('sha256')
               .update(JSON.stringify([scope.origin, scope.owner.userId, scope.sourceHome, group.name, sessions]))
               .digest('hex')

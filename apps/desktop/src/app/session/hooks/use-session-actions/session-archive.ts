@@ -102,6 +102,7 @@ export async function restoreArchivedSession(
     const resolvedOwner = options.owner
       ? undefined
       : (rowOwner(archived) ?? (await resolveSessionOwner(storedSessionId)))
+
     const owner = options.owner ?? profileScopeForSessionOwner(resolvedOwner)
     // The REST scope can name a different backend profile. Sidebar metadata
     // keeps the Desktop alias that owns this conversation.

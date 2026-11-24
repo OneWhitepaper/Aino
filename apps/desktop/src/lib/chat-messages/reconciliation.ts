@@ -328,6 +328,7 @@ export function reconcileLocalAssistantTimeline(
       durationS: message.durationS ?? local.durationS,
       ...resolvedErrorMetadata(message, local)
     }
+
     const result =
       mergedParts === message.parts &&
       Object.entries(metadata).every(([key, value]) => message[key as keyof typeof metadata] === value)

@@ -251,9 +251,17 @@ describe('resolved window routes share one dial claim (#90812)', () => {
 it('waits for an in-flight claim before retiring an account workspace', async () => {
   const claims = new BackendDialClaims()
   let finishDial: (value: string) => void = () => undefined
-  const dial = claims.run('default', () => new Promise<string>(resolve => { finishDial = resolve }))
+  const dial = claims.run(
+    'default',
+    () =>
+      new Promise<string>(resolve => {
+        finishDial = resolve
+      })
+  )
   let drained = false
-  const drain = claims.drain().then(() => { drained = true })
+  const drain = claims.drain().then(() => {
+    drained = true
+  })
 
   await new Promise(resolve => setImmediate(resolve))
   expect(drained).toBe(false)

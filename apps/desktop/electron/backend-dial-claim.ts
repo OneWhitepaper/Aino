@@ -94,12 +94,14 @@ export class BackendDialClaims {
     }
 
     this.#inflightByKey.set(key, claim)
+
     // The claim ends when the dial itself settles, in the same microtask as
     // before forget existed; its callers hear one microtask later (the race).
     const settled = () => {
       this.#pendingDials.delete(dialed)
       release()
     }
+
     void dialed.then(settled, settled)
     // Release on both outcomes without creating an unhandled rejected branch.
     void pending.then(release, release)

@@ -206,16 +206,20 @@ it('recovers a legacy plugin launcher even though its loopback transport is desc
   $profileRemoteOverrides.set({
     work: { host: '127.0.0.1:47911', url: 'http://127.0.0.1:47911', launcher: { plugin: 'acme' } }
   })
+
   const send = vi
     .mocked(requestGatewayForProfile)
     .mockRejectedValueOnce(new Error('connection closed'))
     .mockResolvedValue({ ok: true })
+
   beginBackendTransition('work', 'restarting', { source: 'launcher' })
   const pending = requestForSessionProfile('work', vi.fn(), 'session.resume', { session_id: 'stored-work' })
+
   const observed = pending.then(
     value => value,
     error => error
   )
+
   await new Promise(resolve => setTimeout(resolve, 0))
   expect(send).toHaveBeenCalledTimes(1)
   endBackendTransition('work', { source: 'launcher' })

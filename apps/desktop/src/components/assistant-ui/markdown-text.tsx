@@ -910,27 +910,27 @@ function MarkdownTextSurface({
         </div>
       ) : (
         <MarkdownStreamingContext value={isStreaming}>
-        <TextMessagePartProvider isRunning={isStreaming} text={text}>
-          <StreamdownTextPrimitive
-            components={components}
-            containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
-            containerProps={surfaceContainerProps}
-            lineNumbers={false}
-            mode="streaming"
-            // Incomplete-markdown repair runs in preprocessWithTailRepair on the
-            // full accumulated text; the built-in tail-bounded remend is disabled
-            // because a custom parseMarkdownIntoBlocksFn is supplied, and
-            // parseIncompleteMarkdown stays false to avoid a second full-text
-            // remend pass.
-            parseIncompleteMarkdown={false}
-            parseMarkdownIntoBlocksFn={
-              isStreaming ? parseMarkdownIntoBlocksCached : parseSettledMarkdownIntoBlocksCached
-            }
-            plugins={plugins}
-            preprocess={preprocessWithTailRepair}
-            remarkPlugins={REMARK_PLUGINS}
-          />
-        </TextMessagePartProvider>
+          <TextMessagePartProvider isRunning={isStreaming} text={text}>
+            <StreamdownTextPrimitive
+              components={components}
+              containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
+              containerProps={surfaceContainerProps}
+              lineNumbers={false}
+              mode="streaming"
+              // Incomplete-markdown repair runs in preprocessWithTailRepair on the
+              // full accumulated text; the built-in tail-bounded remend is disabled
+              // because a custom parseMarkdownIntoBlocksFn is supplied, and
+              // parseIncompleteMarkdown stays false to avoid a second full-text
+              // remend pass.
+              parseIncompleteMarkdown={false}
+              parseMarkdownIntoBlocksFn={
+                isStreaming ? parseMarkdownIntoBlocksCached : parseSettledMarkdownIntoBlocksCached
+              }
+              plugins={plugins}
+              preprocess={preprocessWithTailRepair}
+              remarkPlugins={REMARK_PLUGINS}
+            />
+          </TextMessagePartProvider>
         </MarkdownStreamingContext>
       )}
     </ErrorBoundary>

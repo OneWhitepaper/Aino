@@ -90,7 +90,6 @@ export function handleDeferredPickEvent(ctx: GatewayEventContext): boolean {
     const target = String(update.target_model ?? pick.model ?? '')
     const committed = typeof update.committed_model === 'string' ? update.committed_model : ''
 
-
     void surfaceModelSwitchConfirm({
       confirmMessage: typeof update.confirm_message === 'string' ? update.confirm_message : undefined,
       failureMessage: translateNow('desktop.modelSwitchFailed'),

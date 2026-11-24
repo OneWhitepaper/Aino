@@ -74,7 +74,11 @@ export function useRuntimeMessageRepository(messages: ChatMessage[]): ExportedMe
         // row on each streamed delta is pure waste.
         const deduped = withUniqueToolCallIdsWithinMessage(message)
 
-        runtimeMessage = fromThreadMessageLike(toRuntimeMessage(recovery ? { ...deduped, errorResolved: recovery } : deduped), message.id, FALLBACK_STATUS)
+        runtimeMessage = fromThreadMessageLike(
+          toRuntimeMessage(recovery ? { ...deduped, errorResolved: recovery } : deduped),
+          message.id,
+          FALLBACK_STATUS
+        )
         cacheRef.current.set(message, runtimeMessage)
       }
 

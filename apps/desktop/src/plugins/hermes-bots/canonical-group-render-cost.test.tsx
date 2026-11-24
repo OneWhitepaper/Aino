@@ -158,6 +158,7 @@ it('turns a quiet member stalled on the clock alone, and back to working on its 
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
   vi.setSystemTime(new Date(2_000_000_000))
   const now = 2_000_000
+
   const busy = (lastSignAt: number) => (
     <ul>
       <MemberStatusChip
@@ -168,6 +169,7 @@ it('turns a quiet member stalled on the clock alone, and back to working on its 
       />
     </ul>
   )
+
   const view = render(busy(now - 115))
   const chip = () => view.container.querySelector('[data-member-status]')?.getAttribute('data-member-status')
   expect(chip()).toBe('working')
@@ -218,6 +220,7 @@ it('does not rescan the log for handoffs on each keystroke in the composer', asy
 it('derives the next round when only groups.state changes and the log stays the same', async () => {
   const { renderHook } = await import('@testing-library/react')
   const { useCanonicalRoomLive } = await import('./canonical-group-activity')
+
   const events = [
     {
       seq: 1,
@@ -227,14 +230,17 @@ it('derives the next round when only groups.state changes and the log stays the 
       payload: { text: 'go', thread_id: 't' }
     }
   ]
+
   const driver = (round: number) => ({
     working: true,
     max_rounds: 3,
     member_activity: [{ member_id: 'ops', status: 'running', thread_id: 't', round_index: round, started_at: 1 }]
   })
+
   const room = renderHook(({ state }) => useCanonicalRoomLive(events, state, members), {
     initialProps: { state: driver(0) }
   })
+
   expect(room.result.current.cycle).toMatchObject({ kind: 'working', round: 1 })
   room.rerender({ state: driver(1) })
   expect(room.result.current.cycle).toMatchObject({ kind: 'working', round: 2 })
@@ -293,11 +299,13 @@ it('ticks every busy part of one member on one clock: the chip and its details r
   vi.setSystemTime(new Date(4_000_000_000))
   const labels = CANONICAL_GROUP_LOCALES.en as never
   const status = { kind: 'working' as const, startedAt: 4_000_000 - 3 }
+
   const view = render(
     <ul>
       <MemberStatusChip avatar={null} labels={labels} name="Ops" status={status} />
     </ul>
   )
+
   await act(async () => {
     vi.advanceTimersByTime(500)
   }) // the second view mounts mid-second
@@ -333,6 +341,7 @@ it('shows a chip that turns busy with fresh elapsed time before its first busy p
       <MemberStatusChip avatar={null} labels={labels} name="Ops" status={{ kind: 'idle' }} />
     </ul>
   )
+
   vi.setSystemTime(new Date(3_000_090_000)) // 90 s later, with no tick on the idle chip
   view.rerender(
     <ul>
@@ -358,9 +367,11 @@ it('turns a requested Stop into stopped when the state confirms it, with the sam
     pending_actions: [],
     counts: { stopping }
   })
+
   const room = renderHook(({ state }) => useCanonicalRoomLive(events, state, []), {
     initialProps: { state: driver(1) }
   })
+
   expect(room.result.current.cycle).toEqual({ kind: 'stopRequested' })
   room.rerender({ state: driver(0) }) // the memo's inputs (log, live rows, focus) are unchanged
   expect(room.result.current.cycle).toEqual({ kind: 'stopped' })
@@ -391,6 +402,7 @@ it('commits a consistent clock snapshot when busy views render across the stall 
       <Probe />
     </>
   )
+
   expect([...view.container.querySelectorAll('[data-clock-view]')].map(node => node.textContent)).toEqual([
     'stalled',
     'stalled'
@@ -420,12 +432,14 @@ it('synchronises existing busy views when another mounts across a second boundar
   await act(async () => {
     vi.advanceTimersByTime(200)
   })
+
   // A separate root leaves the first view untouched by this render; the interval has not fired.
   const second = render(
     <ul>
       <MemberStatusChip {...props} />
     </ul>
   )
+
   const chips = [first, second].map(view => view.container.querySelector('li'))
   expect(chips.map(chip => chip?.getAttribute('data-member-status'))).toEqual(['stalled', 'stalled'])
   expect(chips[0]?.textContent).toBe(chips[1]?.textContent)
@@ -463,13 +477,16 @@ it('keeps existing subscribers on the published second during independent render
       <MemberStatusChip {...props} />
     </ul>
   )
+
   const second = render(
     <ul>
       <MemberStatusChip {...props} />
     </ul>
   )
+
   const kinds = () =>
     [first, second].map(view => view.container.querySelector('li')?.getAttribute('data-member-status'))
+
   await act(async () => {
     vi.advanceTimersByTime(200)
   })
@@ -497,6 +514,7 @@ it('preserves fractional start and progress times through elapsed, stall and rec
       <MemberStatusChip {...props} status={{ kind: 'working', startedAt: 1000.1, lastSignAt: 1000.1 }} />
     </ul>
   )
+
   expect(view.container.textContent).toContain('30s')
   await act(async () => {
     vi.advanceTimersByTime(90_000)

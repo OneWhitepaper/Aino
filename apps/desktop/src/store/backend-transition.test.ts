@@ -77,7 +77,13 @@ describe('planned backend transitions', () => {
     vi.setSystemTime(5_000)
     beginBackendTransition('work', 'restarting', { source: 'launcher' })
 
-    expect(backendTransitionFor('work')).toEqual({ kind: 'restarting', connectionId: 'local', profile: 'work', since: 1_000, source: 'launcher' })
+    expect(backendTransitionFor('work')).toEqual({
+      kind: 'restarting',
+      connectionId: 'local',
+      profile: 'work',
+      since: 1_000,
+      source: 'launcher'
+    })
   })
 
   it.each([
