@@ -11,7 +11,9 @@ from gateway.run import GatewayRunner
 from gateway.run_turn_runner import TurnRunner
 from gateway.session import SessionSource
 from gateway.turn_context import TurnContext
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_read import transcript_rows
+from tests.fixtures.storage_seed import seed_session
 from run_agent import AIAgent
 from tests.gateway.test_local_viewer_events_submit import _gateway_runner, _RecordingAgent
 
@@ -24,13 +26,14 @@ PNG = bytes.fromhex(
 
 def _flush(db, message, override):
     agent = AIAgent.__new__(AIAgent)
+    agent.persistence = db
     agent._session_db, agent._session_db_created = db, True
     agent.session_id, agent._last_flushed_db_idx = 'sid', 0
     agent._persist_disabled = False
     agent._persist_user_message_idx = 0
     agent._persist_user_message_override = override
     agent._flush_messages_to_session_db([{'role': 'user', 'content': message}], [])
-    return db.get_messages('sid')[0]
+    return transcript_rows(db, 'sid')[0]
 
 
 def _context(message, override, history=None):
@@ -60,8 +63,8 @@ async def test_vision_description_stays_in_api_sidecar_not_authored_row(tmp_path
     message = await runner._prepare_inbound_message_text(event=event, source=event.source, history=[], session_key='key')
     message, override, _ = runner._hmwa_apply_message_timestamp(event, message)
     assert 'VISION-ONLY-DESCRIPTION' in message
-    with SessionDB(db_path=tmp_path / 'state.db') as db:
-        db.create_session('sid', source='local')
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        seed_session(db, 'sid', 'local')
         row = _flush(db, message, override)
         assert row['content'] == (caption + '\n' if caption else '') + f'@image:`{images[0]}`\n@image:{images[1]}'
         assert row['api_content'] == message
@@ -94,8 +97,8 @@ async def test_queued_image_persists_the_same_clean_caption(tmp_path):
         ctx, adapter=None, pending='caption', pending_event=event, response='resp',
         result={'interrupted': True, 'messages': []}, stream_task=None)
     call = runner._run_agent.await_args.kwargs
-    with SessionDB(db_path=tmp_path / 'state.db') as db:
-        db.create_session('sid', source='local')
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        seed_session(db, 'sid', 'local')
         row = _flush(db, call['message'], call['persist_user_message'])
         assert row['content'] == f'caption\n@image:{image}'
         assert row['api_content'] == 'VISION-ONLY-DESCRIPTION\ncaption'
@@ -116,8 +119,8 @@ def test_native_pixels_and_clean_display_survive_recovery(tmp_path, recovery):
     TurnRunner(runner, ctx).run_sync()
     [(message, kwargs)] = ctx.agent_holder[0].calls
     assert any(part.get('type') == 'image_url' for part in message)
-    with SessionDB(db_path=tmp_path / 'state.db') as db:
-        db.create_session('sid', source='local')
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        seed_session(db, 'sid', 'local')
         row = _flush(db, message, kwargs['persist_user_message'])
         assert clean in row['content']
         assert 'Image attached at:' not in row['content']

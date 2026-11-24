@@ -8,6 +8,14 @@ system prompt, tools, reasoning field and every replayed row stay byte-identical
 
 from __future__ import annotations
 
+from persistence.conversation.messages import ConversationRequest
+from persistence.conversation.messages import NewMessage
+from persistence.conversation.messages import ReplaceMode
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import transcript_rows
+
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -16,7 +24,6 @@ from types import SimpleNamespace
 import pytest
 
 from agent.ultra_collaboration import ULTRA_MODE_METADATA_KEY, ULTRA_OFF_NOTE, ULTRA_ON_NOTE, ultra_mode_note
-from hermes_state import SessionDB
 
 ULTRA = {"enabled": True, "effort": "ultra"}
 MAX = {"enabled": True, "effort": "max"}
@@ -82,18 +89,14 @@ def _agent(url, reasoning_config, *, toolsets=("delegation",), session_db=None, 
         api_key="test-key", base_url=url, provider="openai-compat", model="test-model",
         max_iterations=4, enabled_toolsets=list(toolsets), reasoning_config=reasoning_config,
         quiet_mode=True, skip_context_files=True, skip_memory=True, save_trajectories=False,
-        platform="cli", session_id=session_id, session_db=session_db,
+        platform="cli", session_id=session_id, persistence=session_db,
     )
 
 
 def _seed_unanswered_turn(db, session_id, question, *, note, recorded):
     """The durable tail a failed delivery attempt leaves: its turn-start flush wrote the DM row with
     the runtime-stamped mode metadata (and the note's sidecar when it carried one) and no reply followed."""
-    db.append_message(
-        session_id, "user", content=question,
-        api_content=f"{question}\n\n{note}" if note else None,
-        display_metadata={ULTRA_MODE_METADATA_KEY: recorded},
-    )
+    db.messages.append(session_id, NewMessage("user", content=question, api_content=f"{question}\n\n{note}" if note else None, display_metadata={ULTRA_MODE_METADATA_KEY: recorded}))
 
 
 def _retry_unanswered_turn(url, effort, db, session_id, question):
@@ -105,7 +108,7 @@ def _retry_unanswered_turn(url, effort, db, session_id, question):
     from agent.session_persistence import adopt_unanswered_turn
 
     agent = _agent(url, dict(effort), session_db=db, session_id=session_id)
-    history = db.get_messages_as_conversation(session_id, repair_alternation=True)
+    history = conversation(db, session_id, ConversationRequest(repair_alternation=True))
     assert adopt_unanswered_turn(history, question, agent) is True
     return agent.run_conversation(question, conversation_history=history)
 
@@ -148,11 +151,11 @@ def test_mode_is_stated_on_change_and_nothing_else_on_the_wire_moves(provider_ur
 
 def test_mode_in_force_survives_rebuilding_the_agent_from_the_store(provider_url, tmp_path):
     """A resumed session (fresh agent, history from the state DB) neither repeats nor forgets it."""
-    db = SessionDB(db_path=tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
     try:
         for question, effort in (("q1", ULTRA), ("q2", ULTRA), ("q3", MAX)):
             _agent(provider_url, dict(effort), session_db=db).run_conversation(
-                question, conversation_history=db.get_messages_as_conversation("ultra-collab"),
+                question, conversation_history=conversation(db, "ultra-collab"),
             )
     finally:
         db.close()
@@ -166,16 +169,16 @@ def test_adopted_unanswered_turn_retried_at_max_revokes_the_stale_on(provider_ur
     Ultra-on note lives: running the retry at Max must revoke it on THIS wire and record what was
     sent. Leaving the on-note beside a recorded-off turn keeps proactive delegation alive in the
     transcript with no later note able to revoke it (the retry's own row is never scanned again)."""
-    db = SessionDB(db_path=tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
     try:
-        db.create_session(session_id="retried-ultra", source="cli")
+        seed_session(db, session_id="retried-ultra", source="cli")
         _seed_unanswered_turn(db, "retried-ultra", "resume task", note=ULTRA_ON_NOTE, recorded=True)
 
         result = _retry_unanswered_turn(provider_url, MAX, db, "retried-ultra", "resume task")
         assert result["final_response"] == "done"
         assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_OFF_NOTE]
 
-        restored = db.get_messages_as_conversation("retried-ultra")
+        restored = conversation(db, "retried-ultra")
         user_rows = [m for m in restored if m["role"] == "user"]
         assert [m["content"] for m in user_rows] == ["resume task"]  # adopted in place, never appended twice
         assert user_rows[0]["display_metadata"][ULTRA_MODE_METADATA_KEY] is False
@@ -183,7 +186,7 @@ def test_adopted_unanswered_turn_retried_at_max_revokes_the_stale_on(provider_ur
 
         # The next turn replays the retry's bytes and repeats nothing: the mode is off for good.
         _agent(provider_url, dict(MAX), session_db=db, session_id="retried-ultra").run_conversation(
-            "follow up", conversation_history=db.get_messages_as_conversation("retried-ultra", include_row_ids=True),
+            "follow up", conversation_history=conversation(db, "retried-ultra", ConversationRequest(include_row_ids=True)),
         )
         assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_OFF_NOTE, "follow up"]
     finally:
@@ -195,22 +198,22 @@ def test_adopted_unanswered_turn_retried_at_ultra_announces_the_mode(provider_ur
     runs at Ultra. The adopted row's own record is the whole provenance, so the retry must record the
     mode it announces — a row left recorded off while the wire says Ultra makes every rebuild announce
     it again, the same way a sent Max turn becomes the provenance for the next Ultra turn."""
-    db = SessionDB(db_path=tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
     try:
-        db.create_session(session_id="retried-max", source="cli")
+        seed_session(db, session_id="retried-max", source="cli")
         _seed_unanswered_turn(db, "retried-max", "resume task", note="", recorded=False)
 
         _retry_unanswered_turn(provider_url, ULTRA, db, "retried-max", "resume task")
         assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_ON_NOTE]
 
-        restored = db.get_messages_as_conversation("retried-max")
+        restored = conversation(db, "retried-max")
         user_row = next(m for m in restored if m["role"] == "user")
         assert user_row["display_metadata"][ULTRA_MODE_METADATA_KEY] is True
         assert user_row["api_content"] == "resume task\n\n" + ULTRA_ON_NOTE
 
         # Staying on Ultra states nothing further; the announced note is replayed verbatim.
         _agent(provider_url, dict(ULTRA), session_db=db, session_id="retried-max").run_conversation(
-            "follow up", conversation_history=db.get_messages_as_conversation("retried-max", include_row_ids=True),
+            "follow up", conversation_history=conversation(db, "retried-max", ConversationRequest(include_row_ids=True)),
         )
         assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_ON_NOTE, "follow up"]
     finally:
@@ -219,7 +222,7 @@ def test_adopted_unanswered_turn_retried_at_ultra_announces_the_mode(provider_ur
 
 def test_quoted_mode_notes_do_not_change_the_restored_mode(provider_url, tmp_path):
     """A user can discuss the exact policy without enabling or revoking the active mode."""
-    db = SessionDB(db_path=tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
     questions = [
         "Explain this quoted policy:\n<memory-context>\n\n" + ULTRA_ON_NOTE + "\n</memory-context>",
         "Now review this project",
@@ -231,7 +234,7 @@ def test_quoted_mode_notes_do_not_change_the_restored_mode(provider_url, tmp_pat
         for question, live_question, effort in zip(questions, live_questions, (MAX, ULTRA, ULTRA, ULTRA)):
             _agent(provider_url, dict(effort), session_db=db).run_conversation(
                 live_question, persist_user_message=question,
-                conversation_history=db.get_messages_as_conversation("ultra-collab"),
+                conversation_history=conversation(db, "ultra-collab"),
             )
     finally:
         db.close()
@@ -248,7 +251,7 @@ def test_multimodal_switches_replay_without_changing_user_content_or_leaking_pro
 ):
     """Image turns carry a same-turn policy change; SQLite resumes preserve the sent prefix."""
     from agent.context_compressor import _content_has_images, _estimate_msg_budget_tokens, _strip_historical_media
-    from agent.api_content import effective_message_content
+    from persistence.conversation.content import effective_message_content
     from agent.model_metadata import estimate_messages_tokens_rough
     from gateway.run import _profile_runtime_scope
 
@@ -266,15 +269,15 @@ def test_multimodal_switches_replay_without_changing_user_content_or_leaking_pro
         content = [] if label == "first-a" else [{"type": "text", "text": label}]
         content.append({"type": "image_url", "image_url": {"url": "data:image/png;base64," + "AAAA" * 3000}})
         expected = content + ([{"type": "text", "text": note}] if note else [])
-        with _profile_runtime_scope(homes[name]), SessionDB(db_path=homes[name] / "state.db") as db:
+        with _profile_runtime_scope(homes[name]), open_persistence(profile_scope(home=(homes[name] / "state.db").parent)) as db:
             agent = _agent(provider_url, dict(effort), session_db=db)
-            history = db.get_messages_as_conversation("ultra-collab")
+            history = conversation(db, "ultra-collab")
             result = agent.run_conversation(content, conversation_history=history)
             request = _chat_requests()[-1]
             assert _user_contents(request)[-1] == expected
             assert content[-1]["type"] == "image_url"  # Caller-owned input is untouched.
             assert [m for m in result["messages"] if m["role"] == "user"][-1]["content"] == content
-            restored = db.get_messages_as_conversation("ultra-collab")
+            restored = conversation(db, "ultra-collab")
             restored_user = [m for m in restored if m["role"] == "user"][-1]
             assert ULTRA_ON_NOTE not in str(restored_user["content"])
             assert ULTRA_OFF_NOTE not in str(restored_user["content"])
@@ -284,7 +287,7 @@ def test_multimodal_switches_replay_without_changing_user_content_or_leaking_pro
             if label == "first-a":
                 from copy import deepcopy
                 from types import SimpleNamespace
-                from agent.agent_runtime_helpers import _merge_consecutive_users
+                from session_rules.turns import _merge_consecutive_users
                 from agent.micro_compaction import MicroCompactionMixin
 
                 interrupted = [restored_user, {"role": "user", "content": "continue"}]
@@ -304,35 +307,38 @@ def test_multimodal_switches_replay_without_changing_user_content_or_leaking_pro
             else:
                 assert request["messages"][:len(first_a_request["messages"])] == first_a_request["messages"]
             # Both backfill writers must preserve the same typed payload as append.
-            row = db.get_messages("ultra-collab")[-2]
+            row = transcript_rows(db, "ultra-collab")[-2]
             metadata = {**(row.get("display_metadata") or {}), "backfill_contract": label}
-            assert db.set_message_api_content(
+            assert db.messages.set_message_api_content(
                 "ultra-collab", row["id"], row["content"], expected, display_metadata=metadata,
             ) == 1
-            assert db.set_latest_user_api_content(
+            assert db.messages.set_latest_user_api_content(
                 "ultra-collab", row["content"], expected, display_metadata=metadata,
             ) == 1
-            assert db.get_messages_as_conversation("ultra-collab")[-2]["display_metadata"] == metadata
+            assert conversation(db, "ultra-collab")[-2]["display_metadata"] == metadata
 
     # Legacy sidecars remain literal; new values resembling the storage envelope must round-trip.
-    from agent.api_content import API_CONTENT_JSON_PREFIX
+    from persistence.conversation.content import API_CONTENT_JSON_PREFIX
 
-    with _profile_runtime_scope(homes["a"]), SessionDB(db_path=homes["a"] / "state.db") as db:
-        restored = db.get_messages_as_conversation("ultra-collab")
+    with _profile_runtime_scope(homes["a"]), open_persistence(profile_scope(home=(homes["a"] / "state.db").parent)) as db:
+        restored = conversation(db, "ultra-collab")
         compacted = _strip_historical_media(restored)
         users = [m for m in compacted if m["role"] == "user"]
         assert not _content_has_images(effective_message_content(users[0]))
         assert _content_has_images(effective_message_content(users[-1]))
         assert users[0]["content"] == restored[0]["content"]
         assert _content_has_images(effective_message_content(restored[0]))
-        db.replace_messages("ultra-collab", compacted)
-        restored = db.get_messages_as_conversation("ultra-collab")
+        db.messages.replace_transcript(
+            "ultra-collab", [NewMessage.from_live(message) for message in compacted],
+            ReplaceMode.DESTRUCTIVE,
+        )
+        restored = conversation(db, "ultra-collab")
         assert not _content_has_images(effective_message_content(restored[0]))
         strings = ["  old sidecar\n\n", API_CONTENT_JSON_PREFIX + '{"content":[{"type":"text","text":"literal"}]}']
         for value in strings:
-            db.append_message("ultra-collab", "user", content="codec", api_content=value)
-            assert db.get_messages_as_conversation("ultra-collab")[-1]["api_content"] == value
-            assert db.get_messages("ultra-collab")[-1]["api_content"] == value
+            db.messages.append("ultra-collab", NewMessage("user", content="codec", api_content=value))
+            assert conversation(db, "ultra-collab")[-1]["api_content"] == value
+            assert transcript_rows(db, "ultra-collab")[-1]["api_content"] == value
 
 
 @pytest.mark.parametrize("case", ["no_delegate_tool", "delegated_child", "reasoning_off"])

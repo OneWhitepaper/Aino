@@ -107,6 +107,7 @@ import {
   WorkspaceTabMenu
 } from '../chat/session-tile'
 import { AppContextMenu } from '../context-menu/app-context-menu'
+import { usePresenceRoute } from '../hooks/use-presence-route'
 import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { terminalPaletteToggle } from '../right-sidebar/terminal/reveal-focus'
@@ -850,6 +851,8 @@ export function ContribController() {
   const view = appViewForPath(location.pathname)
   const workspaceMode = useStore($workspaceMode)
   const settingsPage = view === 'settings'
+
+  usePresenceRoute()
 
   // HUD mode is the SAME app with its frame removed: the wiring (gateway,
   // sessions, streams, submit) mounts identically, and only the shell around

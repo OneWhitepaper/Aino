@@ -2,7 +2,7 @@
 from agent.managed_image_provider import managed_image_scope
 from gateway.session_busy_controls import authorize
 from gateway.session_llm_oneshot import DeferredReply
-from hermes_state_runtime import RuntimeStoreError
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
 
 
 async def generate(connection, ref, params):

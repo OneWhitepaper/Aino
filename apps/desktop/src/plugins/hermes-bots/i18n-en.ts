@@ -39,7 +39,7 @@ export const en: BotsMessages = {
     shareKeys: 'Share keys & accounts with the main profile',
     shareKeysOn: target => `Share keys & accounts with the default profile on ${target}`,
     shareKeysHint:
-      'Subscriptions, OAuth logins, and API keys stay shared (not copied), so token refreshes never invalidate each other. Uncheck for an isolated snapshot copy.',
+      'Logins stay shared with the default profile (not copied), so token refreshes never invalidate each other. If the bot starts from another profile that has its own logins (the bot it clones, or, for a fresh bot, the named profile creating it), it gets a copy of those instead. API keys are copied either way. Uncheck for an isolated copy. Subscription logins that can\'t be copied are read from the default profile instead.',
     needsModel:
       'No model provider is ready for it yet, so it skipped its introduction. Pick a provider and model under Advanced.',
     configureModel: 'Configure model',

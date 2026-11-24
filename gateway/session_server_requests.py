@@ -12,10 +12,13 @@ viewer's response frame.
 from __future__ import annotations
 
 import contextlib
+import logging
 import threading
 import uuid
 
 from tools.clarify_batch import settle_batch
+
+logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_S = 120  # main: ``_ask("sudo", ..., timeout=120)``
 _POLL_S = 0.25
@@ -59,12 +62,12 @@ def may_settle(authority, actor, session_id, events) -> bool:
     profiles and ``_open`` is process-wide), *actor* holds ``session:respond`` there, and *actor* is
     attached to that session, the same set of connections the request frame was written to."""
     from gateway.session_contract import SessionRef
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence.core.errors import AuthorityRefusal
     if not owned_by(authority, session_id, events):
         return False
     try:
         authority.authorize(actor, SessionRef(authority.profile_id, session_id), "session:respond")
-    except RuntimeStoreError:
+    except AuthorityRefusal:
         return False
     live = authority.sessions.get(session_id)
     return live is not None and actor in live.subscribers.values()
@@ -87,7 +90,7 @@ def _defer_decline(pending, frame, transport):
     return any(client not in pending.declined for client in clients)
 
 
-def resolve(frame, *, session_ok=lambda session_id, events: True, transport=None) -> bool:
+def resolve(frame, *, session_ok=lambda session_id, events: True, transport=None, answered=None) -> bool:
     """Settle the open request *frame* answers; False when nothing (here) waits for that id.
     ``session_ok(session_id, events)`` lets the caller refuse an answer from a connection not entitled
     to that session: the caller's own authority must own ``events``, the stream the request was sent on
@@ -108,6 +111,11 @@ def resolve(frame, *, session_ok=lambda session_id, events: True, transport=None
     value = result.get("value") if isinstance(result, dict) else ""
     pending.value = value if isinstance(value, str) else ""
     pending.result = result if isinstance(result, dict) else None
+    if answered is not None and pending.replay and "error" not in frame:
+        try:
+            answered(pending.session_id)
+        except Exception:  # health: allow BLE001 -- observing an answer never changes its settlement
+            logger.debug("answered() failed for %s", frame["id"], exc_info=True)
     pending.event.set()
     return True
 

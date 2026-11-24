@@ -12,6 +12,7 @@ import type { ToolPanelCopy } from './tool-panel'
 import type { ArtifactCardCopy, ArtifactPreviewCopy, ArtifactsCopy } from './types/artifacts'
 import type { AccountLoginCopy, AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
+import type { ApprovalCopy } from './types_approval'
 import type { BackupTransferTranslations } from './types_backup_transfer'
 import type { BillingTranslations } from './types_billing'
 import type { BillingSurfaceTranslations } from './types_billing_surface'
@@ -38,6 +39,7 @@ import type { PluginUpdateAllTranslations, PluginUpdateTranslations } from './ty
 import type { PreviewWebCopy } from './types_preview_web'
 import type { SidebarProjectsTranslations } from './types_projects'
 import type { ReplyMetricsTranslations } from './types_reply_metrics'
+import type { SandboxCopy } from './types_sandbox'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
 import type { SummaryTranslations } from './types_summary_surface'
 import type { ThemePickerCopy } from './types_theme_picker'
@@ -77,6 +79,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
   accountPage: AccountPageTranslations
   /** Shared-metrics consent: first-run dialog + Settings › Safety toggles. */
   sharedMetrics: SharedMetricsTranslations
+  /** A profile a plugin runs in a sandbox: its planned start, restart and stop. */
+  sandbox: SandboxCopy
   appTour: AppTourTranslations
   firstRun: FirstRunCopy
   externalOpenFailed: ExternalOpenFailedCopy
@@ -506,6 +510,14 @@ export interface UpstreamTranslations extends NoticeTranslations {
       approvalTitleNamed: (session: string) => string
       approveAction: string
       rejectAction: string
+      accessTitle: string
+      accessTitleNamed: (session: string) => string
+      accessReadBody: (folder: string) => string
+      accessReadWriteBody: (folder: string) => string
+      networkTitle: string
+      networkTitleNamed: (session: string) => string
+      allowAction: string
+      denyAction: string
       inputTitle: string
       inputTitleNamed: (session: string) => string
       inputBody: string
@@ -2338,10 +2350,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
       openLog: string
       actionLog: string
       alreadyInstalled: (name: string) => string
-      pickerTitle: string
-      pickerBrowse: string
-      pickerHide: string
-      pickerHint: string
       loadFailed: string
       previewFailed: string
       scanFailed: string
@@ -2786,6 +2794,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
     remoteOverride: {
       menuItem: string
       badge: (host: string) => string
+      runHere: string
+      sandboxed: string
       title: (profile: string) => string
       description: string
       urlLabel: string
@@ -3214,6 +3224,10 @@ export interface UpstreamTranslations extends NoticeTranslations {
     message: string
     wakingProfile: (profile: string) => string
     placeholderTo: (name: string) => string
+    switchingProfile: (profile: string) => string
+    switchingProfileSlow: string
+    switchProfileFailed: (profile: string) => string
+    willSendTo: (profile: string) => string
     placeholderStarting: string
     placeholderReconnecting: string
     placeholderFollowUp: string
@@ -4448,6 +4462,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
       branchNewChat: string
       react: string
       dismissError: string
+      /** A reply paused for an automatic continuation (store/paused-replies.ts). */
+      responseContinuing: string
       responseStopped: string
       /** Greyed notice on a safety-refused turn kept for display, used when the
        *  backend sent none in display_metadata.content_refused.notice. */
@@ -4616,24 +4632,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
 
       output: string
     }
-    approval: {
-      gatewayDisconnected: string
-      sendFailed: string
-      reconnect: string
-      timedOutSystemLine: string
-      openSafetySettings: string
-      run: string
-      command: string
-      commandDetails: string
-      moreOptions: string
-      allowSession: string
-      alwaysAllowMenu: string
-      jumpToApproval: string
-      reject: string
-      alwaysTitle: string
-      alwaysDescription: (pattern: string) => string
-      alwaysAllow: string
-    }
+    approval: ApprovalCopy
     clarify: ClarifyCopy
     themePicker: ThemePickerCopy
     catalogInstall: CatalogInstallTranslations

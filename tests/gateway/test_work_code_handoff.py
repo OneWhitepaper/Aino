@@ -1,9 +1,20 @@
 """Reviewed Work/Code handoffs create independent, durably related local conversations."""
+
+from persistence.conversation.messages import NewMessage
+from persistence.conversation.lineage import CompressionChild
+from persistence.conversation.sessions import SessionQuery, SessionWindow
+from dataclasses import asdict
+from tests.fixtures.storage_holder import raw_holder
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
 import asyncio
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
 from tests.gateway.test_session_create_tier_cwd import _owner
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 
 
 async def _create(connection, cwd, key, **extra):
@@ -19,32 +30,31 @@ def _context(sid, **extra):
 
 @pytest.mark.asyncio
 async def test_reviewed_handoff_is_atomic_idempotent_and_does_not_run_or_copy_parent(tmp_path, monkeypatch):
-    from hermes_state_local import local_receipt
-    from hermes_state_runtime import list_session_admissions
+
 
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {
         'model': {'default': 'fixture-model', 'api_mode': 'responses'}})
     try:
         source = (await _create(connection, tmp_path, 'work'))['result']['session_id']
-        authority.db.append_message(source, role='user', content='Private source transcript')
-        before = authority.db.get_messages(source)
+        authority.persistence.messages.append(source, NewMessage(role='user', content='Private source transcript'))
+        before = transcript_rows(authority.persistence, source)
         params = dict(execution_mode='code', handoff=_context(source))
         results = await asyncio.gather(*(_create(connection, tmp_path, 'handoff', **params) for _ in range(2)))
         assert all('result' in result for result in results), results
         child = results[0]['result']
         sid = child['session_id']
         assert results[1]['result']['session_id'] == sid
-        assert authority.db.get_session(sid)['parent_session_id'] == source
+        assert session_row(authority.persistence, sid)['parent_session_id'] == source
         assert child['info']['handoff'] == _context(source)
         assert child['info']['execution_mode'] == 'code'
         assert child['messages'] == []
         assert child['info']['linked_sessions'] == [{
             'session_id': source, 'title': '', 'execution_mode': 'work', 'relation': 'source'}]
-        assert authority.db.get_messages(source) == before
-        assert authority.db.get_messages(sid) == []
-        assert list_session_admissions(authority.db, session_id=sid) == []
-        assert local_receipt(authority.db, sid)['policy']['execution_mode'] == 'code'
-        assert sid in {row['id'] for row in authority.db.list_sessions_rich()}
+        assert transcript_rows(authority.persistence, source) == before
+        assert transcript_rows(authority.persistence, sid) == []
+        assert [asdict(row) for row in authority.persistence.admissions.list(session_id=sid)] == []
+        assert asdict(authority.persistence.bindings.receipt(sid))['policy']['execution_mode'] == 'code'
+        assert sid in {row.session.session_id for row in authority.persistence.sessions.list_sessions(SessionQuery(), SessionWindow(limit=200))}
         changed = await _create(connection, tmp_path, 'handoff', **{
             **params, 'handoff': _context(source, summary='Changed requirements')})
         assert changed['error']['data']['reason'] == 'invalid_params'
@@ -125,7 +135,7 @@ async def test_denied_create_retry_does_not_modify_existing_sidebar_state(tmp_pa
             'user_id': 'human', 'capabilities': ['session:create']})
         denied = await _create(restricted, tmp_path, 'child', **params)
         assert denied['error']['data']['reason'] == 'permission_denied'
-        assert not authority.db.get_session(sid)['hidden']
+        assert not session_row(authority.persistence, sid)['hidden']
     finally:
         if restricted is not None:
             await restricted.close()
@@ -148,7 +158,7 @@ async def test_handoff_refuses_foreign_source_same_mode_and_missing_source(tmp_p
         for caller, key, mode, source_id, reason in cases:
             result = await _create(caller, tmp_path, key, execution_mode=mode, handoff=_context(source_id))
             assert result['error']['data']['reason'] == reason, result
-        with authority.db._read_ctx() as conn:
+        with raw_holder(authority.persistence)._read_ctx() as conn:
             assert conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0] == 1
     finally:
         await foreign.close()
@@ -182,8 +192,8 @@ async def test_ordinary_branch_does_not_invent_another_cross_mode_handoff(tmp_pa
 async def test_source_deleted_after_staging_refuses_entire_handoff_commit(tmp_path, monkeypatch):
     from gateway.session_authorities import owner_scope
     from gateway.session_local import stage_local_session
-    from hermes_state_local import commit_local_session
-    from hermes_state_runtime import RuntimeStoreError
+    from gateway.session_local import commit_local_session
+    from persistence import AuthorityRefusal
 
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {
         'model': {'default': 'fixture-model', 'api_mode': 'responses'}})
@@ -193,12 +203,12 @@ async def test_source_deleted_after_staging_refuses_entire_handoff_commit(tmp_pa
             staged = stage_local_session(authority, connection.actor, {
                 'request_id': 'staged', 'source': 'gui', 'cwd': str(tmp_path), 'cwd_explicit': True,
                 'model': 'fixture-model', 'toolsets': [], 'execution_mode': 'code', 'handoff': _context(source)})
-        authority.db.delete_session(source)
-        with pytest.raises(RuntimeStoreError) as refused:
-            commit_local_session(authority.db, epoch=authority.epoch, receipt=staged)
+        authority.persistence.sessions.delete(source, media_root=str(tmp_path / "media"))
+        with pytest.raises(AuthorityRefusal) as refused:
+            commit_local_session(authority.persistence, epoch=authority.epoch, receipt=staged)
         assert refused.value.reason == 'not_found'
-        assert authority.db.get_session(staged['session_id']) is None
-        with authority.db._read_ctx() as conn:
+        assert session_row(authority.persistence, staged['session_id']) is None
+        with raw_holder(authority.persistence)._read_ctx() as conn:
             assert conn.execute('SELECT 1 FROM gateway_routing WHERE session_key=?', (staged['route'],)).fetchone() is None
     finally:
         await connection.close()
@@ -217,7 +227,7 @@ async def test_invalid_review_context_never_creates_a_child(tmp_path, monkeypatc
         source = (await _create(connection, tmp_path, 'work'))['result']['session_id']
         result = await _create(connection, tmp_path, 'bad', execution_mode='code', handoff=_context(source, **bad_context))
         assert result['error']['data']['reason'] == 'invalid_params'
-        with authority.db._read_ctx() as conn:
+        with raw_holder(authority.persistence)._read_ctx() as conn:
             assert conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0] == 1
     finally:
         await connection.close()
@@ -226,16 +236,16 @@ async def test_invalid_review_context_never_creates_a_child(tmp_path, monkeypatc
 
 @pytest.mark.asyncio
 async def test_handoff_title_conflict_rolls_back_the_child_and_valid_title_retries(tmp_path, monkeypatch):
-    from gateway.session_local_recovery import local_identity
+    from persistence.authority.bindings import local_session_id
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {
         'model': {'default': 'fixture-model', 'api_mode': 'responses'}})
     try:
         source = (await _create(connection, tmp_path, 'work', title='Existing title'))['result']['session_id']
         params = dict(execution_mode='code', title='Existing title', handoff=_context(source))
         response = await _create(connection, tmp_path, 'code', **params)
-        sid = local_identity(authority.profile_id, connection.actor.subject, 'code')
+        sid = local_session_id(authority.profile_id, connection.actor.subject, 'code')
         assert response['error']['data']['reason'] == 'admission_conflict'
-        assert authority.db.get_session(sid) is None
+        assert session_row(authority.persistence, sid) is None
         params['title'] = 'Reviewed implementation'
         response = await _create(connection, tmp_path, 'code', **params)
         assert 'result' in response, response
@@ -287,7 +297,7 @@ async def test_legacy_owner_handoff_links_are_bidirectional(tmp_path, monkeypatc
 
 @pytest.mark.asyncio
 async def test_links_and_exact_retry_survive_compression_and_reset(tmp_path, monkeypatch):
-    from hermes_state_local import local_receipt
+
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {
         'model': {'default': 'fixture-model', 'api_mode': 'responses'}})
     try:
@@ -295,16 +305,16 @@ async def test_links_and_exact_retry_survive_compression_and_reset(tmp_path, mon
         params = dict(execution_mode='code', handoff=_context(source))
         child = (await _create(connection, tmp_path, 'code', **params))['result']['session_id']
         for sid in (source, child):
-            authority.db.publish_compression_child(parent_session_id=sid, child_session_id=sid + '-compressed',
-                source='gui', messages=[{'role': 'user', 'content': 'Retained summary'}],
-                model='fixture-model', require_compression_lease=False)
+            authority.persistence.lineage.publish_compression_child(sid,
+                CompressionChild(session_id=sid + '-compressed', source='gui', model='fixture-model'),
+                [NewMessage(role='user', content='Retained summary')], require_compression_lease=False)
             before = await connection.dispatch({'id': 'resume', 'method': 'session.resume', 'params': {'session_id': sid}})
             snapshot = before['result']
             reset = await connection.dispatch({'id': 'reset', 'method': 'session.mutate', 'params': {
                 'session_id': sid, 'request_id': 'reset-' + sid, 'operation': 'reset', 'payload': {},
                 'expected_revision': snapshot['revision'], 'expected_generation': snapshot['execution_generation']}})
             assert 'result' in reset, reset
-            assert local_receipt(authority.db, sid)['entry']['session_id'] != sid
+            assert asdict(authority.persistence.bindings.receipt(sid))['entry']['session_id'] != sid
         retry = await _create(connection, tmp_path, 'code', **params)
         assert retry['result']['session_id'] == child
         assert retry['result']['info']['linked_sessions'][0]['session_id'] == source

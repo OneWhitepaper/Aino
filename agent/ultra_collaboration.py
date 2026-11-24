@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import Any, Iterable, Optional
 
 from agent.reasoning_effort import ULTRA_EFFORT, requested_effort
-from agent.api_content import api_content_value
-from agent.message_content import flatten_message_text
+from persistence.conversation.content import api_content_value
+from session_rules.turns import flatten_message_text
 
 ULTRA_ON_MARKER = "[Ultra mode on: proactive multi-agent delegation]"
 ULTRA_OFF_MARKER = "[Ultra mode off]"

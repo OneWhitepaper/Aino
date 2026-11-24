@@ -1,8 +1,9 @@
 """Profile-bound live-work discovery, including exact native room-member provenance."""
 import asyncio
+from gateway.session_persistence import authority_persistence
 from pathlib import Path
 
-from hermes_state_runtime import RuntimeStoreError
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
 
 
 async def roster(connection, ref, params):
@@ -36,7 +37,7 @@ def _projection(connection):
     profile = served_profile_name(authority.profile_id)
     route_profile = registry.profile_name(authority) if registry is not None else None
     namespaces = {_session_key_namespace(name).split(':', 1)[1] for name in (profile, route_profile)}
-    return live_work_roster(authority.db, namespaces, room_sources=_room_sources(connection))
+    return live_work_roster(authority_persistence(authority), namespaces, room_sources=_room_sources(connection))
 
 
 def _room_sources(connection):
@@ -74,8 +75,8 @@ def _room_sources(connection):
                     continue
                 source = {'kind': 'bot_room', 'room_id': room_id, 'room_name': room['name'],
                           'profile': served_profile_name(authority.profile_id)}
-                aliases = {ref.session_id, target.db.get_compression_tip(ref.session_id)}
+                aliases = {ref.session_id, authority_persistence(target).lineage.tip(ref.session_id)}
                 for sid in aliases - {None}:
-                    if (target.db.get_session(sid) or {}).get('source') == 'bot_room':
+                    if (row := authority_persistence(target).sessions.get(sid)) is not None and row.source == 'bot_room':
                         result[sid] = source
     return result

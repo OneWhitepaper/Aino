@@ -186,6 +186,7 @@ jobs:
             && contains(fromJSON('["desktop-installer@latest", "installer-script+desktop"]'), inputs.install-method)))
       && ((inputs.install-method != 'desktop-installer@latest' && inputs.update-method != 'desktop-installer@latest')
         || inputs.setup-exe-url != '' || github.repository == 'NousResearch/hermes-agent')
+    # The standard runner is free for public repos; extra cores save little time on installs and updates.
     runs-on: windows-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
 

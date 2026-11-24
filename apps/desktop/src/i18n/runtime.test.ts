@@ -292,11 +292,11 @@ describe('desktop i18n runtime translator', () => {
     )
   })
 
-  it('describes the embedded skills-hub action in Simplified Chinese', () => {
+  it('describes the replacement catalog installation action in Simplified Chinese', () => {
     setRuntimeI18nLocale('zh')
 
-    expect(translateNow('skills.hub.pickerHint')).toBe(
-      '点击任意技能卡片上的“添加到此智能体”按钮即可安装，安装后会出现在上方列表中。'
+    expect(translateNow('catalog.installDescription')).toBe(
+      '此技能将在新会话中可用。请仅安装可信来源的内容。'
     )
   })
 

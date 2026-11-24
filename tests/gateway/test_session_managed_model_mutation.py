@@ -1,5 +1,7 @@
 """Managed catalog picks use the canonical model mutation and a fresh binding."""
 
+
+
 import json
 import sqlite3
 from dataclasses import asdict
@@ -9,8 +11,8 @@ import pytest
 
 from gateway.session_mutation_model import prepare_model
 from gateway.session_policy import LocalSessionPolicy, restore_policy
-from hermes_state_mutations import validate_action
-from hermes_state_runtime import RuntimeStoreError
+from persistence.authority.runtime import parse_mutation
+from persistence import AuthorityRefusal
 
 
 def _prepared(source='gui'):
@@ -26,15 +28,15 @@ def _prepared(source='gui'):
 
 
 def test_managed_model_payload_is_closed():
-    validate_action('model', {'model': 'catalog-id', 'model_source': 'aino'})
+    parse_mutation('model', {'model': 'catalog-id', 'model_source': 'aino'})
     for payload in (
         {'model': '', 'model_source': 'aino'},
         {'model': ' catalog-id ', 'model_source': 'aino'},
         {'model': 'catalog-id', 'model_source': 'aino', 'provider': 'other'},
         {'model': 'catalog-id', 'model_source': 'other'},
     ):
-        with pytest.raises(RuntimeStoreError):
-            validate_action('model', payload)
+        with pytest.raises(AuthorityRefusal):
+            parse_mutation('model', payload)
 
 
 @pytest.mark.asyncio
@@ -51,7 +53,7 @@ async def test_managed_pick_freezes_identity_without_old_route_or_credential():
     assert policy.credential_ref is None and policy.config_secret_ref is None
     assert policy.request_json == prepared['snapshot']['receipt']['policy']['request_json']
 
-    with pytest.raises(RuntimeStoreError, match='managed_binding_forbidden'):
+    with pytest.raises(AuthorityRefusal, match='managed_binding_forbidden'):
         await prepare_model(SimpleNamespace(), None, {'model': 'catalog-id', 'model_source': 'aino'},
                             _prepared(source='cli'))
 
@@ -128,7 +130,7 @@ async def test_exact_model_receipt_retry_keeps_a_new_managed_binding(monkeypatch
     monkeypatch.setattr(session_local_mcp, 'announce_tools_changed', lambda *_args: None)
     live = SimpleNamespace(route='route', event_stream=SimpleNamespace(publish=lambda *_a, **_k: None))
     authority = SimpleNamespace(
-        db=SimpleNamespace(get_session=lambda _sid: {'runtime_generation': 2}),
+        persistence=SimpleNamespace(sessions=SimpleNamespace(get=lambda _sid: SimpleNamespace(runtime_generation=2))),
         runner=SimpleNamespace(_set_session_reasoning_override=lambda *_args: None),
         sessions={'s': live}, _schedule=lambda _ref: None)
     ref = SessionRef('owned', 's')
@@ -147,7 +149,7 @@ async def test_exact_model_receipt_retry_keeps_a_new_managed_binding(monkeypatch
     {'provider': 'custom', 'default': 'byok-model'},
 ])
 def test_model_receipt_replaces_stale_managed_row_metadata(monkeypatch, next_model):
-    import hermes_state_mutation_prepared as prepared_module
+    from persistence.sqlite.authority import _runtime_picks as prepared_module
 
     old_metadata = {'provider': 'aino', 'model_source': 'aino', 'model_id': 'old-id',
                     'platform_owner': {'user_id': 'previous'}, 'model': 'old-model',

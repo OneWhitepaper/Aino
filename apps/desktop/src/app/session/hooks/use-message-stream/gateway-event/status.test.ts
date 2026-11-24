@@ -9,6 +9,7 @@ import { reportPlatformCredentialRejection } from '@/api/platform-models'
 import { applyProductBrand } from '@/lib/brand'
 import { $notifications } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
+import { clearAllPrompts, sessionApprovalRequests, setApprovalRequest } from '@/store/prompts'
 
 import { handleStatusEvent } from './status'
 import type { GatewayEventContext } from './types'
@@ -73,6 +74,36 @@ describe('gateway `error` event → error card + toast', () => {
     handleStatusEvent(ctx)
     expect(reportPlatformCredentialRejection).toHaveBeenCalledWith('managed_credential_rejected', 'image-account', 2)
   })
+  it('keeps folder and site cards open when the turn ends with an error, and drops command approvals', () => {
+    // The card's sender waits on a folder or site card, so the end of the turn does not close it.
+    setApprovalRequest({ command: 'rm -rf build', description: 'd', requestId: 'cmd', sessionId: 'sess-1' })
+    setApprovalRequest({
+      command: '',
+      description: 'Allow C:\\docs',
+      kind: 'access',
+      requestId: 'folder',
+      sessionId: 'sess-1',
+      target: { access: 'read', path: 'C:\\docs' }
+    })
+    setApprovalRequest({
+      command: '',
+      description: 'Allow the sandbox to reach pypi.org',
+      kind: 'network',
+      requestId: 'site',
+      sessionId: 'sess-1',
+      target: { host: 'pypi.org' }
+    })
+
+    expect(handleStatusEvent(errorContext('The provider returned an error.').ctx)).toBe(true)
+    expect(
+      sessionApprovalRequests('sess-1')
+        .get()
+        .map(request => request.requestId)
+    ).toEqual(['folder', 'site'])
+
+    clearAllPrompts()
+  })
+
   it('stamps SESSION_NOT_OWNED on a live-owner refusal so the card drops Retry', () => {
     const { ctx, failAssistantMessage } = errorContext(OWNED_REFUSAL)
 

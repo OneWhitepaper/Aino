@@ -14,7 +14,8 @@ from urllib.parse import urlsplit
 
 from hermes_cli.backup_sqlite import _safe_copy_db
 from hermes_constants import PROFILE_ID_RE, named_profile_is_deleted
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
+from hermes_cli.session_export import to_legacy_export_dict
 
 PLAN_RE = re.compile(r"[a-f0-9]{32}\Z")
 
@@ -107,20 +108,18 @@ def snapshot_sessions(home, destination, *, include_groups=False, recover_execut
         groups = _group_history(None, home, destination) if include_groups else []
         return groups, set()
     db = None
+    snapshot_home = private_dir(destination.with_name(destination.stem + "-store"))
+    destination = snapshot_home / "state.db"
     try:
         if not _safe_copy_db(source, destination):
             raise ValueError("could not take a consistent history snapshot")
-        db = SessionDB(db_path=destination)
-        from hermes_state_mutation_retirement import RETIRED_PREFIX
-        with db._read_ctx() as connection:
-            deleted = {row[0][len(RETIRED_PREFIX):] for row in connection.execute(
-                "SELECT key FROM state_meta WHERE key LIKE ?", (RETIRED_PREFIX + "%",))}
-        sessions = db.export_all(include_inactive=True)
+        db = open_persistence(profile_scope(home=snapshot_home), eager=True)
+        retired_prefix = 'gateway.retired_session.v1.'
+        deleted = {entry.key[len(retired_prefix):] for entry in db.state_meta.list_prefix(retired_prefix)}
+        sessions = [to_legacy_export_dict(record) for record in db.maintenance.export_all(include_inactive=True)]
         if import_bindings:
-            from hermes_state_mutation_binding import BINDING_PREFIX
-            with db._read_ctx() as conn:
-                imported = {row[0][len(BINDING_PREFIX):] for row in conn.execute(
-                    'SELECT key FROM state_meta WHERE key LIKE ?', (BINDING_PREFIX + '%',))}
+            binding_prefix = 'gateway.history_control.v1.'
+            imported = {entry.key[len(binding_prefix):] for entry in db.state_meta.list_prefix(binding_prefix)}
             for session in sessions:
                 session['_recovery_imported'] = session['id'] in imported
         if recover_execution:
@@ -134,6 +133,7 @@ def snapshot_sessions(home, destination, *, include_groups=False, recover_execut
             db.close()
         for suffix in ("", "-wal", "-shm"):
             destination.with_name(destination.name + suffix).unlink(missing_ok=True)
+        shutil.rmtree(snapshot_home)
 
 
 def _group_history(db, home, destination):

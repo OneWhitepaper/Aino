@@ -2,7 +2,7 @@
 import asyncio
 from functools import partial
 
-from hermes_state_runtime import RuntimeStoreError
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
 
 
 def handlers(connection):

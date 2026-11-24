@@ -52,7 +52,7 @@ import { isShellTool } from '@/lib/tool-render-class'
 import { toolResultRecord } from '@/lib/tool-result-metadata'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
-import { sessionApprovalRequest } from '@/store/prompts'
+import { sessionCommandApprovalPending } from '@/store/prompts'
 import { $showToolActivity } from '@/store/tool-activity'
 import { $toolRowDismissed, dismissToolRow } from '@/store/tool-dismiss'
 import { $toolProgressFor, formatToolProgress } from '@/store/tool-progress'
@@ -1168,7 +1168,9 @@ const ToolRun: FC<ToolGroupProps> = ({ children, endIndex, startIndex }) => {
   useToolPreviews(tools, messageId)
 
   const sessionId = useStore(useSessionView().$runtimeId)
-  const approval = useStore(useMemo(() => sessionApprovalRequest(sessionId), [sessionId]))
+  // Only a command approval stands in for the turn's terminal rows; a folder
+  // or site card leaves them as they are.
+  const approval = useStore(useMemo(() => sessionCommandApprovalPending(sessionId), [sessionId]))
   const currentTurn = useAuiState(state => isCurrentTurnMessage(state.thread.messages, state.message.id))
   const disclosureId = `tool-run:${key}`
   const persistedOpen = useStore($toolDisclosureOpen(disclosureId))

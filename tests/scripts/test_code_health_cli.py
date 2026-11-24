@@ -32,7 +32,7 @@ _GUARD_SCRIPTS = (
     "scripts/ci/check_lazy_deps_imports.py", "scripts/ci/check_profile_archive_boundary.py",
     "scripts/ci/check_agents_md_size.py", "scripts/ci/check_blob_size.py", "scripts/ci/check_line_endings.py",
     "scripts/ci/check_dockerfile_downloads.py", "scripts/check_tool_discovery.py",
-    "scripts/check_packaged_imports.py",
+    "scripts/check_packaged_imports.py", "scripts/ci/check_backend_imports.py",
 )
 _SUPPORT = ("scripts/ci/profile_scope_patterns.json", "scripts/install_root_lint_baseline.json", "agent/subdirectory_hints.py",
             "tools/__init__.py", "tools/registry.py", "hermes_constants.py", *_GUARD_SCRIPTS)
@@ -175,6 +175,61 @@ def test_accepted_upstream_expires_once_main_contains_it_and_rejects_unmerged_re
     _write(repo, {"pkg/legacy.py": _GROWN})
     with pytest.raises(RuntimeError, match="ancestor"):
         cli.run(repo, base, None, accepted_upstream=upstream)
+
+
+@pytest.mark.parametrize("explicit_base", [True, False])
+def test_accepted_upstream_cli_preserves_a_non_head_candidate_commit(tmp_path, monkeypatch, capsys, explicit_base):
+    repo = _engine_repo(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    upstream = _commit(repo, {"pkg/legacy.py": _LEGACY, "pkg/boundary.py": _SWALLOW})
+    candidate = _commit(repo, {"README.md": "candidate after the reviewed import\n"})
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    _git(repo, "checkout", "--detach", base)
+    monkeypatch.chdir(repo)
+    args = ["--head", candidate, "--accepted-upstream", upstream, "--json"]
+    if explicit_base:
+        args.extend(["--base", base])
+    result = cli.main(args)
+    out, err = capsys.readouterr()
+    assert result == 0, out + err
+    findings = json.loads(out)
+    assert findings and all(upstream in finding["allowed_reason"] for finding in findings)
+    assert _git(repo, "rev-parse", "HEAD") == base
+
+
+def test_accepted_upstream_cli_rejects_an_unrelated_commit_with_the_same_tree_as_head(tmp_path, monkeypatch, capsys):
+    repo = _engine_repo(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    upstream = _commit(repo, {"pkg/legacy.py": _LEGACY})
+    tree = _git(repo, "rev-parse", "HEAD^{tree}")
+    unrelated = _git(repo, "commit-tree", tree, "-p", base, "-m", "same content without upstream ancestry")
+    monkeypatch.chdir(repo)
+    result = cli.main(["--base", base, "--head", unrelated, "--accepted-upstream", upstream, "--json"])
+    out, err = capsys.readouterr()
+    assert result == 2, out + err
+    assert "accepted upstream must be an ancestor" in err
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_accepted_upstream_cli_keeps_unattributed_tree_measurement_but_refuses_tree_ancestry(
+        tmp_path, monkeypatch, capsys, accepted):
+    repo = _engine_repo(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    upstream = _commit(repo, {"pkg/legacy.py": _LEGACY})
+    tree = _git(repo, "rev-parse", "HEAD^{tree}")
+    _git(repo, "checkout", "--detach", base)
+    monkeypatch.chdir(repo)
+    args = ["--base", base, "--head", tree, "--json"]
+    if accepted:
+        args.extend(["--accepted-upstream", upstream])
+    result = cli.main(args)
+    out, err = capsys.readouterr()
+    assert result == (2 if accepted else 1), out + err
+    if accepted:
+        assert "accepted upstream must be an ancestor" in err
+    else:
+        findings = json.loads(out)
+        assert findings and all(not finding["allowed_reason"] for finding in findings)
 
 
 # --- F20: the staged/commit health verdict comes from the judged artifact only -----------------

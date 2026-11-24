@@ -184,6 +184,22 @@ const attachmentTurnAssistantMatchIndex = (
   return storedMessages.indexOf(reply)
 }
 
+const partTextCache = new WeakMap<ChatMessagePart, string>()
+
+/** Whitespace-normalized part text, cached by part identity. */
+const normalizedPartText = (part: ChatMessagePart): string => {
+  const cached = partTextCache.get(part)
+
+  if (cached !== undefined) {
+    return cached
+  }
+
+  const text = 'text' in part && typeof part.text === 'string' ? part.text.replace(/\s+/g, ' ').trim() : ''
+  partTextCache.set(part, text)
+
+  return text
+}
+
 const timelinePartMatch = (stored: ChatMessagePart, local: ChatMessagePart) => {
   if (stored === local) {
     return true
@@ -198,14 +214,32 @@ const timelinePartMatch = (stored: ChatMessagePart, local: ChatMessagePart) => {
   }
 
   if ((stored.type === 'text' || stored.type === 'reasoning') && local.type === stored.type) {
-    return stored.text.replace(/\s+/g, ' ').trim() === local.text.replace(/\s+/g, ' ').trim()
+    // The live path compares the same immutable part every flush. Identical
+    // text is the common case; skip the two regex passes and the allocations.
+    if (stored.text === local.text) {
+      return true
+    }
+
+    return normalizedPartText(stored) === normalizedPartText(local)
   }
 
   return false
 }
 
-/** Keep richer live timing when durable hydration has only one timestamp per row. */
-function reconcileLocalAssistantTimeline(nextMessages: ChatMessage[], currentMessages: ChatMessage[]): ChatMessage[] {
+// Last merge per (stored row, view row). The live path reconciles every flush;
+// a row whose stored object and view counterpart are unchanged (or whose view
+// row is our own previous merge — the merge is idempotent) must come back as
+// the SAME object, or the runtime repository re-normalizes it every ~40 ms.
+// Both levels are weak: a streamed tail's view row is the previous snapshot,
+// so a strong reference to it would chain every snapshot of the reply.
+const timelineMergeByStored = new WeakMap<ChatMessage, WeakMap<ChatMessage, ChatMessage>>()
+
+/** Keep richer live timing when durable hydration has only one timestamp per
+ *  row, returning the incoming object for every row the merge leaves alone. */
+export function reconcileLocalAssistantTimeline(
+  nextMessages: ChatMessage[],
+  currentMessages: ChatMessage[]
+): ChatMessage[] {
   const localAssistants = currentMessages.filter(message => message.role === 'assistant' && !message.hidden)
   const matches = new Map<number, ChatMessage>()
   let localCursor = localAssistants.length - 1
@@ -232,61 +266,85 @@ function reconcileLocalAssistantTimeline(nextMessages: ChatMessage[], currentMes
   return nextMessages.map((message, messageIndex) => {
     const local = matches.get(messageIndex)
 
-    // Streaming keeps settled rows by reference. They already carry the same
-    // local timing, so cloning their parts here would invalidate the runtime's
-    // message cache and re-render old Markdown on every incoming chunk.
-    if (!local || message === local) {
+    // A self-match (the view already holds this exact row) still folds: a
+    // hydrated tool bubble carries completedAt on its parts only, and the
+    // message-level stamp is derived here. The memo below makes repeats free.
+    if (!local) {
       return message
     }
 
-    const unusedLocalParts = new Set(local.parts.map((_, index) => index))
+    const memo = timelineMergeByStored.get(message)?.get(local)
 
-    const parts = message.parts.map(part => {
+    if (memo) {
+      return memo
+    }
+
+    const unusedLocalParts = new Set(local.parts.map((_, index) => index))
+    let parts: ChatMessagePart[] | null = null
+
+    for (let partIndex = 0; partIndex < message.parts.length; partIndex += 1) {
+      const part = message.parts[partIndex]
+
       const localIndex = local.parts.findIndex(
         (candidate, index) => unusedLocalParts.has(index) && timelinePartMatch(part, candidate)
       )
 
       if (localIndex === -1) {
-        return part
+        continue
       }
 
       unusedLocalParts.delete(localIndex)
       const localPart = local.parts[localIndex]
-
-      if (part === localPart) {
-        return part
-      }
-
       const completedAt = latestBoundary(part.completedAt, localPart.completedAt)
       const timestamp = earliestBoundary(part.timestamp, localPart.timestamp)
 
+      // Keep the incoming object when the merge changes nothing: every live
+      // delta republishes the whole transcript through this reconciler, and the
+      // runtime repository keys its normalized-message cache by object
+      // identity. Reallocating settled parts here forces a full
+      // `fromThreadMessageLike` re-normalization of every prior turn per flush.
       if (completedAt === part.completedAt && timestamp === part.timestamp) {
-        return part
+        continue
       }
 
-      return {
-        ...part,
-        completedAt,
-        timestamp
-      } as ChatMessagePart
-    })
+      parts ??= message.parts.slice()
+      parts[partIndex] = { ...part, completedAt, timestamp } as ChatMessagePart
+    }
+
+    const mergedParts = parts ?? message.parts
+
+    const completedAt = latestBoundary(
+      message.completedAt,
+      local.completedAt,
+      ...mergedParts.map(part => part.completedAt)
+    )
+
+    const timestamp = earliestBoundary(message.timestamp, local.timestamp, ...mergedParts.map(part => part.timestamp))
 
     const metadata = {
-      completedAt: latestBoundary(message.completedAt, local.completedAt, ...parts.map(part => part.completedAt)),
+      completedAt,
+      timestamp,
       turnMetrics: message.turnMetrics ?? local.turnMetrics,
-      ...resolvedErrorMetadata(message, local),
       durationS: message.durationS ?? local.durationS,
-      timestamp: earliestBoundary(message.timestamp, local.timestamp, ...parts.map(part => part.timestamp))
+      ...resolvedErrorMetadata(message, local)
     }
-
-    if (
-      parts.every((part, index) => part === message.parts[index]) &&
+    const result =
+      mergedParts === message.parts &&
       Object.entries(metadata).every(([key, value]) => message[key as keyof typeof metadata] === value)
-    ) {
-      return message
+        ? message
+        : { ...message, ...metadata, parts: mergedParts }
+
+    let merges = timelineMergeByStored.get(message)
+
+    if (!merges) {
+      merges = new WeakMap()
+      timelineMergeByStored.set(message, merges)
     }
 
-    return { ...message, ...metadata, parts }
+    merges.set(local, result)
+    merges.set(result, result)
+
+    return result
   })
 }
 
@@ -297,6 +355,12 @@ interface PreservedRun {
 }
 
 function mergeStoredAssistantErrors(nextMessages: ChatMessage[], currentMessages: ChatMessage[]): ChatMessage[] {
+  // Nothing to merge on a healthy live flush or an ordinary refresh: skip the
+  // map allocation and the per-message walk entirely.
+  if (!currentMessages.some(message => message.role === 'assistant' && !message.hidden && Boolean(message.error))) {
+    return nextMessages
+  }
+
   const localById = new Map(currentMessages.map(message => [message.id, message]))
 
   return nextMessages.map(message => {
@@ -481,6 +545,12 @@ function localAssistantErrorIdsToPreserve(
   mergedNextMessages: ChatMessage[],
   currentMessages: ChatMessage[]
 ): Set<string> {
+  // Most publishes carry no local failure at all. Bail before the id sets,
+  // reversed scan and per-error turn matching below.
+  if (!currentMessages.some(message => message.role === 'assistant' && !message.hidden && Boolean(message.error))) {
+    return new Set()
+  }
+
   const existingIds = new Set(mergedNextMessages.map(message => message.id))
   const hydratedIdFor: (message: ChatMessage) => string | undefined = hydratedIdResolver(mergedNextMessages)
 
@@ -630,10 +700,6 @@ export function preserveLocalAssistantErrors(
   nextMessages: ChatMessage[],
   currentMessages: ChatMessage[]
 ): ChatMessage[] {
-  if (nextMessages === currentMessages) {
-    return nextMessages
-  }
-
   const reconciled: ChatMessage[] = reconcileLocalAssistantTimeline(nextMessages, currentMessages)
   const merged: ChatMessage[] = mergeStoredAssistantErrors(reconciled, currentMessages)
   const preserveIds: Set<string> = localAssistantErrorIdsToPreserve(merged, currentMessages)

@@ -255,7 +255,7 @@ export function ModelPill({
     <ModelPillContent
       compact={compact}
       hasModel={Boolean(currentModel.trim())}
-      modelLabel={platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier })}
+      modelLabel={platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier, requireCapabilities: !runtimeId, supportsFast: model.supportsFast, supportsUltrafast: model.supportsUltrafast })}
       noModelLabel={readyForModelSelection ? t.desktop.chooseModel : copy.noModel}
       pinned={pinnedOverride}
       pinnedLabel={copy.modelPinned}

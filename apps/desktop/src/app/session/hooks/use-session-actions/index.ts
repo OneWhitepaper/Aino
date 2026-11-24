@@ -51,6 +51,7 @@ import {
   type AgentProfileRoute,
   ensureGatewayAgent,
   ensureGatewayProfile,
+  invalidateNewChatIntent,
   isLegacyNewChatProfile,
   normalizeProfileKey,
   resolveActiveSourceOwnerRoute,
@@ -122,7 +123,13 @@ import { $archivedSessions } from '@/store/sidebar-archive'
 import { restoreSessionTodosFromSnapshot } from '@/store/todos'
 import { dropTranscriptTail, saveTranscriptTail } from '@/store/transcript-tail-cache'
 import { isWatchWindow } from '@/store/windows'
-import type { SessionCreateResponse, SessionMessagesResponse, SessionResumeResult, UsageStats } from '@/types/hermes'
+import type {
+  SessionCreateResponse,
+  SessionInfo,
+  SessionMessagesResponse,
+  SessionResumeResult,
+  UsageStats
+} from '@/types/hermes'
 
 import { navigateToWorkspacePage, NEW_CHAT_ROUTE, sessionRoute, SETTINGS_ROUTE } from '../../../routes'
 import type { ClientSessionState, SidebarNavItem } from '../../../types'
@@ -269,6 +276,11 @@ export function useSessionActions({
   const startFreshSessionDraft = useCallback(
     (options: boolean | FreshSessionDraftOptions = false) => {
       const draftOptions = typeof options === 'boolean' ? { replaceRoute: options } : options
+
+      if (!draftOptions.preserveProfileSwitch) {
+        invalidateNewChatIntent()
+      }
+
       const preserveRoute = draftOptions.preserveRoute ?? false
       createIntentRef.current = null
       const replaceRoute = draftOptions.replaceRoute ?? false
@@ -2948,7 +2960,7 @@ export function useSessionActions({
   )
 
   const unarchiveSession = useCallback(
-    (storedSessionId: string) => restoreArchivedSession(storedSessionId, copy),
+    (storedSessionId: string, row?: SessionInfo) => restoreArchivedSession(storedSessionId, copy, { row }),
     [copy]
   )
 

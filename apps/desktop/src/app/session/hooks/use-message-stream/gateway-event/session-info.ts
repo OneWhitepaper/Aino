@@ -43,6 +43,7 @@ import {
   sessionInfoStatePatch
 } from '../utils'
 
+import { payTurnEndReport, runningEdge } from './turn-end-report'
 import type { GatewayEventContext } from './types'
 
 /**
@@ -137,7 +138,26 @@ function maybeRebindPaneToRebuiltRuntime(ctx: GatewayEventContext): boolean {
   return true
 }
 
-function applySessionInfoPreferences(payload: GatewayEventContext['payload']): void {
+/** Project the runtime's pending-submission receipts onto the durable
+ *  session's composer queue (keyed by stored id when known). */
+function reconcileSessionInfoPendingSubmissions(ctx: GatewayEventContext): void {
+  const { deps, event, payload, sessionId } = ctx
+
+  if (sessionId) {
+    const storedId =
+      payload?.stored_session_id ?? deps.sessionStateByRuntimeIdRef.current.get(sessionId)?.storedSessionId ?? sessionId
+
+    // A canonical frame's own place in the session's event order fences absence-based retirement.
+    reconcilePendingSubmissions(
+      storedId,
+      (payload as Record<string, unknown>)?.pending_submissions,
+      pendingSnapshotFence(event.replay_epoch, event.seq)
+    )
+  }
+}
+
+/** Foreground runtime preferences; workspace ownership is reconciled separately. */
+function reconcileSessionInfoPreferences(payload: GatewayEventContext['payload']): void {
   if (typeof payload?.terminal_backend === 'string') {
     setTerminalBackend(payload.terminal_backend)
   }
@@ -167,21 +187,16 @@ function applySessionInfoPreferences(payload: GatewayEventContext['payload']): v
   }
 }
 
-/** Project the runtime's pending-submission receipts onto the durable
- *  session's composer queue (keyed by stored id when known). */
-function reconcileSessionInfoPendingSubmissions(ctx: GatewayEventContext): void {
-  const { deps, event, payload, sessionId } = ctx
+function reconcileActiveProfileApproval(ctx: GatewayEventContext): void {
+  const { event, payload, isActiveEvent, fromActiveSource } = ctx
 
-  if (sessionId) {
-    const storedId =
-      payload?.stored_session_id ?? deps.sessionStateByRuntimeIdRef.current.get(sessionId)?.storedSessionId ?? sessionId
-
-    // A canonical frame's own place in the session's event order fences absence-based retirement.
-    reconcilePendingSubmissions(
-      storedId,
-      (payload as Record<string, unknown>)?.pending_submissions,
-      pendingSnapshotFence(event.replay_epoch, event.seq)
-    )
+  // Config is profile-scoped, but session.info also arrives for background
+  // sessions. Only an active-session event from the currently active
+  // gateway may reconcile the foreground cache. Requiring the renderer's
+  // source tag prevents an event queued before a profile swap from being
+  // attributed to the newly active profile.
+  if (isActiveEvent && typeof payload?.approval_mode === 'string' && event.profile && fromActiveSource()) {
+    reconcileApprovalModeForProfile(event.profile, payload.approval_mode, event.connectionId)
   }
 }
 
@@ -219,13 +234,6 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
     const providerChanged = typeof payload?.provider === 'string'
     const runningChanged = typeof payload?.running === 'boolean'
 
-    // Reconnect can miss the structured `compacted` edge. A gateway-authored
-    // running=false is a terminal fact; a running heartbeat is intentionally
-    // not used as a timeout-like guess, so genuine compaction stays visible.
-    if (sessionId && payload?.running === false) {
-      reconcileSessionCompacting(sessionId, 'terminal')
-    }
-
     // The backend stamps model/provider (as strings) on EVERY session.info,
     // so the presence flags above are true on every heartbeat/turn edge —
     // fine for the cheap atom writes below (nanostores skips identical
@@ -240,14 +248,7 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
     const providerValueChanged =
       providerChanged && payload!.provider !== (knownState?.provider ?? $currentProvider.get())
 
-    // Config is profile-scoped, but session.info also arrives for background
-    // sessions. Only an active-session event from the currently active
-    // gateway may reconcile the foreground cache. Requiring the renderer's
-    // source tag prevents an event queued before a profile swap from being
-    // attributed to the newly active profile.
-    if (isActiveEvent && typeof payload?.approval_mode === 'string' && event.profile && fromActiveSource()) {
-      reconcileApprovalModeForProfile(event.profile, payload.approval_mode, event.connectionId)
-    }
+    reconcileActiveProfileApproval(ctx)
 
     if (apply) {
       // Do not call setCurrentModel / setCurrentProvider here. Composer
@@ -295,7 +296,7 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
         setCurrentBranch(payload.branch)
       }
 
-      applySessionInfoPreferences(payload)
+      reconcileSessionInfoPreferences(payload)
     }
 
     if (sessionId && (hasStatePatch || payload?.usage)) {
@@ -336,7 +337,28 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
     // its dot without the user opening it. updateSessionState only
     // mutates the per-runtime cache entry, and syncSessionStateToView
     // guards the view publish to the active session, so this is safe.
-    if (runningChanged && sessionId) {
+    // A completed turn's end-of-turn report, delivered after the next turn's
+    // message.start (ClientSessionState.turnEndReportsOwed): it says nothing about
+    // the turn now live, so it neither ends that turn's compaction phase, nor
+    // clears its prompts, nor settles it.
+    if (runningEdge(ctx, knownState, runningChanged) && sessionId) {
+      // Like every other turn-end edge, drain throttled text before settling:
+      // a delta still waiting on the flush floor would otherwise land after
+      // the settle cleared streamId and seed a fresh pending bubble. Only a
+      // live turn owns that text; with no live turn and no open stream the
+      // queued bytes are orphans of a superseded attempt, which the next
+      // turn boundary drops (#119543).
+      if (!payload!.running && (knownState?.turnLive || knownState?.streamId)) {
+        deps.flushQueuedDeltas(sessionId)
+      }
+
+      // Reconnect can miss the structured `compacted` edge. A gateway-authored
+      // running=false is a terminal fact; a running heartbeat is intentionally
+      // not used as a timeout-like guess, so genuine compaction stays visible.
+      if (!payload!.running) {
+        reconcileSessionCompacting(sessionId, 'terminal')
+      }
+
       // The agent loop's finally block emits running=false even when a
       // reconnect gap or provider crash swallowed message.complete — and
       // message.complete is where the turn-end prompt clear lives. An
@@ -346,7 +368,7 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
       // too (#86577). Bystander sessions keep their prompts: the clear is
       // scoped to this sessionId.
       if (!payload!.running && (knownState?.busy || knownState?.awaitingResponse)) {
-        clearAllPrompts(sessionId)
+        clearAllPrompts(sessionId, 'turn-end')
         // Same wipe class as the turn-end clears (#83319): a reconnect can
         // replay a pre-clarify snapshot with running=false while the server
         // bridge is still parked on the open clarify request — keep the card
@@ -365,8 +387,9 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
 
       const nextState = updateSessionState(
         sessionId,
-        state => {
+        prior => {
           const busy = Boolean(payload!.running)
+          const state = payTurnEndReport(prior, busy)
 
           if (state.busy === busy && (busy || !state.awaitingResponse)) {
             return state

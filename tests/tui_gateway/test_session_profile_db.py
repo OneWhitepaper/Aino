@@ -28,7 +28,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hermes_state import SessionDB
+from persistence_assembly import store_location
+from persistence.conversation.messages import ConversationRequest
+from persistence.sqlite.conversation.sessions import SQLiteSessionRepository
+from persistence.sqlite.conversation.messages import SQLiteMessageRepository
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_seed import seed_messages, seed_session
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
 
 SESSION_ID = "sid-profile"
 SESSION_KEY = "tui-profile-1"
@@ -71,7 +77,7 @@ def server(hermes_home):
 @pytest.fixture()
 def launch_db(server, hermes_home):
     """The launch profile's state.db, wired in as the ``_get_db()`` handle."""
-    db = SessionDB(db_path=hermes_home / "state.db")
+    db = storage_handle(hermes_home)
     server._db = db
     return db
 
@@ -81,17 +87,17 @@ def profile_db(tmp_path):
     """A second, non-launch profile's state.db."""
     profile_home = tmp_path / "profiles" / "work"
     profile_home.mkdir(parents=True)
-    return profile_home, SessionDB(db_path=profile_home / "state.db")
+    return profile_home, storage_handle(profile_home)
 
 
 def _seed(db, turns=3, *, _capture_user_row_ids=None):
-    db.create_session(SESSION_KEY, source="tui")
+    seed_session(db, SESSION_KEY, "tui")
     for i in range(1, turns + 1):
-        uid = db.append_message(SESSION_KEY, "user", f"question {i}")
+        [uid] = seed_messages(db, SESSION_KEY, {"role": "user", "content": f"question {i}"})
         if _capture_user_row_ids is not None:
             _capture_user_row_ids.append(uid)
-        db.append_message(SESSION_KEY, "assistant", f"answer {i}")
-    return db.get_messages_as_conversation(SESSION_KEY)
+        seed_messages(db, SESSION_KEY, {"role": "assistant", "content": f"answer {i}"})
+    return conversation(db, SESSION_KEY)
 
 
 def _register(server, history, *, profile_home=None):
@@ -167,13 +173,13 @@ def test_undo_rewinds_the_profile_transcript(server, launch_db, profile_db):
     assert result["type"] == "prefill"
     assert result["message"] == "question 3"
     # The rewind is durable in the profile's own db, not the launch one.
-    assert _texts(pdb.get_messages_as_conversation(SESSION_KEY)) == [
+    assert _texts(conversation(pdb, SESSION_KEY)) == [
         "question 1",
         "answer 1",
         "question 2",
         "answer 2",
     ]
-    assert launch_db.get_messages_as_conversation(SESSION_KEY) == []
+    assert conversation(launch_db, SESSION_KEY) == []
 
 
 def test_undo_still_uses_the_shared_handle_without_a_profile(server, launch_db):
@@ -189,7 +195,7 @@ def test_undo_still_uses_the_shared_handle_without_a_profile(server, launch_db):
 
     assert not resp.get("error"), f"/undo failed: {resp.get('error')}"
     assert resp["result"]["message"] == "question 3"
-    assert _texts(launch_db.get_messages_as_conversation(SESSION_KEY)) == [
+    assert _texts(conversation(launch_db, SESSION_KEY)) == [
         "question 1",
         "answer 1",
         "question 2",
@@ -246,12 +252,12 @@ def test_truncation_persists_to_the_profile_db(server, launch_db, profile_db, mo
     assert not resp.get("error"), f"prompt.submit failed: {resp.get('error')}"
     # The undone turns are gone from the profile's own db, so session.resume
     # (which opens the profile db correctly) cannot resurrect them.
-    assert _texts(pdb.get_messages_as_conversation(SESSION_KEY)) == [
+    assert _texts(conversation(pdb, SESSION_KEY)) == [
         "question 1",
         "answer 1",
     ]
     # ...and nothing was copied into a foreign profile under this session id.
-    assert launch_db.get_messages_as_conversation(SESSION_KEY) == []
+    assert conversation(launch_db, SESSION_KEY) == []
 
 
 def test_truncation_does_not_copy_rows_into_the_launch_profile(
@@ -267,7 +273,7 @@ def test_truncation_does_not_copy_rows_into_the_launch_profile(
     profile_home, pdb = profile_db
     user_row_ids: list = []
     history = _seed(pdb, _capture_user_row_ids=user_row_ids)
-    launch_db.create_session(SESSION_KEY, source="unknown")
+    seed_session(launch_db, SESSION_KEY, "unknown")
     _register(server, history, profile_home=profile_home)
     _stop_after_truncate(server, monkeypatch)
 
@@ -285,8 +291,8 @@ def test_truncation_does_not_copy_rows_into_the_launch_profile(
     )
 
     assert not resp.get("error"), f"prompt.submit failed: {resp.get('error')}"
-    assert launch_db.get_messages_as_conversation(SESSION_KEY) == []
-    assert _texts(pdb.get_messages_as_conversation(SESSION_KEY)) == [
+    assert conversation(launch_db, SESSION_KEY) == []
+    assert _texts(conversation(pdb, SESSION_KEY)) == [
         "question 1",
         "answer 1",
     ]
@@ -323,7 +329,7 @@ def test_truncation_surfaces_the_profile_dbs_live_row_ids(
     assert not resp.get("error"), f"prompt.submit failed: {resp.get('error')}"
     surviving = [
         row["_row_id"]
-        for row in pdb.get_messages_as_conversation(SESSION_KEY, include_row_ids=True)
+        for row in conversation(pdb, SESSION_KEY, ConversationRequest(include_row_ids=True))
         if row["role"] == "user"
     ]
     assert resp["result"]["survivor_user_row_ids"] == surviving
@@ -351,7 +357,7 @@ def test_truncation_without_a_profile_uses_the_shared_handle(server, launch_db, 
     )
 
     assert not resp.get("error"), f"prompt.submit failed: {resp.get('error')}"
-    assert _texts(launch_db.get_messages_as_conversation(SESSION_KEY)) == [
+    assert _texts(conversation(launch_db, SESSION_KEY)) == [
         "question 1",
         "answer 1",
     ]
@@ -397,18 +403,18 @@ def test_context_reads_the_profile_transcript(server, launch_db, profile_db, mon
 def _seed_context_anchor(db, prompt_tokens, *, tail=False, include_system=False):
     from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, capture_usage_anchor
 
-    db.create_session(SESSION_KEY, source="desktop")
-    db.append_message(SESSION_KEY, "user", f"profile-specific question {prompt_tokens}")
-    priced = db.get_messages_as_conversation(SESSION_KEY)
+    seed_session(db, SESSION_KEY, "desktop")
+    seed_messages(db, SESSION_KEY, {"role": "user", "content": f"profile-specific question {prompt_tokens}"})
+    priced = conversation(db, SESSION_KEY)
     if include_system:
         priced = [{"role": "system", "content": "stable system prompt"}, *priced]
-        db.update_system_prompt(SESSION_KEY, "stable system prompt")
+        db.sessions.update_system_prompt(SESSION_KEY, "stable system prompt")
     anchor = capture_usage_anchor(prompt_tokens, 30, priced)
-    db.patch_session_model_config(SESSION_KEY, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
-    db.append_message(SESSION_KEY, "assistant", "the already-priced reply")
+    db.sessions.patch_model_config(SESSION_KEY, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
+    seed_messages(db, SESSION_KEY, {"role": "assistant", "content": "the already-priced reply"})
     if tail:
-        db.append_message(SESSION_KEY, "user", "new material not yet priced by the provider")
-    return db.get_messages_as_conversation(SESSION_KEY)
+        seed_messages(db, SESSION_KEY, {"role": "user", "content": "new material not yet priced by the provider"})
+    return conversation(db, SESSION_KEY)
 
 
 def test_cold_context_reuses_profile_anchor_a_b_a_without_rereading_history(
@@ -425,18 +431,18 @@ def test_cold_context_reuses_profile_anchor_a_b_a_without_rereading_history(
     server._sessions["cold-a"] = first
     server._sessions["cold-b"] = second
     reads = []
-    original = SessionDB.get_session_model_config_value
+    original = SQLiteSessionRepository.get_model_config_value
 
     def counted(db, session_id, key, default=None):
         if key == USAGE_ANCHOR_MODEL_CONFIG_KEY:
-            reads.append(str(db.db_path))
+            reads.append(str(store_location(db._store.scope)))
         return original(db, session_id, key, default)
 
     def no_second_history_read(*args, **kwargs):
         raise AssertionError("cold context must reuse the existing hydration instead of rereading all messages")
 
-    monkeypatch.setattr(SessionDB, "get_session_model_config_value", counted)
-    monkeypatch.setattr(SessionDB, "get_messages_as_conversation", no_second_history_read)
+    monkeypatch.setattr(SQLiteSessionRepository, "get_model_config_value", counted)
+    monkeypatch.setattr(SQLiteMessageRepository, "read_conversation", no_second_history_read)
     was_multiplex = is_multiplex_active()
     set_multiplex_active(True)
     try:
@@ -458,8 +464,8 @@ def test_cold_context_reuses_profile_anchor_a_b_a_without_rereading_history(
             assert categories["conversation"] == estimate_messages_tokens_rough(
                 first["history"] if sid == "cold-a" else second["history"])
             assert usage["estimated_total"] == sum(categories.values())
-        assert reads.count(str(launch_db.db_path)) == 1
-        assert reads.count(str(pdb.db_path)) == 1
+        assert reads.count(str(store_location(launch_db.scope))) == 1
+        assert reads.count(str(store_location(pdb.scope))) == 1
     finally:
         set_multiplex_active(was_multiplex)
 
@@ -515,14 +521,14 @@ def test_cold_unpriced_history_reports_categories_without_a_second_history_read(
 
     history = _seed(launch_db, turns=1)
     prompt = "persisted system guidance"
-    launch_db.update_system_prompt(SESSION_KEY, prompt)
+    launch_db.sessions.update_system_prompt(SESSION_KEY, prompt)
     session = _register(server, history)
     session["agent"] = None
 
     def no_second_history_read(*args, **kwargs):
         raise AssertionError("category estimates must reuse the hydrated transcript")
 
-    monkeypatch.setattr(SessionDB, "get_messages_as_conversation", no_second_history_read)
+    monkeypatch.setattr(SQLiteMessageRepository, "read_conversation", no_second_history_read)
     response = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})
 
     assert "error" not in response, response

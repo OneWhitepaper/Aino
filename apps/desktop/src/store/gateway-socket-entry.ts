@@ -1,6 +1,10 @@
 import type { HermesConnection } from '@/global'
 import type { HermesGateway } from '@/hermes'
 
+// How long ensureActiveGatewayOpen waits out an in-flight secondary
+// activation before reporting the gateway as unavailable.
+export const ACTIVE_GATEWAY_OPEN_WAIT_MS = 8_000
+
 /** One secondary (pool) socket the gateway registry (store/gateway.ts) keeps. */
 export interface Secondary {
   /** Scope key from registryBackendScopeKey(connectionId, profile). */
@@ -80,4 +84,51 @@ export interface Secondary {
    * an orphaned lease self-heals.
    */
   activationLeaseUntil: number
+}
+
+/** Order a transcript read behind every existing socket that could replay its session. */
+export function pendingGatewaySessionReplay(
+  primaryGateway: HermesGateway | null,
+  secondaries: Iterable<Secondary>,
+  runtimeId: string
+): Promise<boolean> | undefined {
+  const reconnectable = [...secondaries].filter(entry => entry.wantOpen)
+  const clients = new Set([primaryGateway, ...reconnectable.map(entry => entry.gateway)])
+
+  // A closed socket's false means only that IT cannot replay yet. When another
+  // open socket already serves this runtime, that socket orders the read.
+  const servedOpen = [...clients].some(
+    client => client?.connectionState === 'open' && client?.getSeqWatermarks?.()[runtimeId] != null
+  )
+
+  const pending = [...clients].flatMap(client => {
+    if (servedOpen && client?.connectionState !== 'open') {
+      return []
+    }
+
+    // A dev-HMR survivor can predate the barrier method.
+    const barrier = client?.sessionReplayBarrier?.(runtimeId)
+
+    return barrier ? [barrier] : []
+  })
+
+  return pending.length ? Promise.all(pending).then(results => results.every(Boolean)) : undefined
+}
+
+// A deferred liveness re-probe for one entry: cleared when the probe is
+// answered, the socket is redialed (fresh streak), or the entry is disposed.
+export function clearSecondaryLivenessReprobe(entry: Secondary): void {
+  if (entry.livenessReprobeTimer !== null) {
+    clearTimeout(entry.livenessReprobeTimer)
+    entry.livenessReprobeTimer = null
+  }
+}
+
+export function isLegacySecondary(entry: Secondary): boolean {
+  // Every v2 registry route is created with an explicit connection id,
+  // including the registry's `local` source. A missing id is reserved for the
+  // old profile-only pool; the loose null check also retires HMR entries from
+  // builds that predate the field instead of leaving an old legacy socket
+  // behind during a mode apply.
+  return entry.connectionId == null
 }

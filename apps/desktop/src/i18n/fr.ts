@@ -8,6 +8,7 @@ import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { executionModeCopy } from './execution-mode'
+import { frApproval } from './fr_approval'
 import { frBoot } from './fr_boot'
 import { frClarify } from './fr_clarify'
 import { frConnectorAccounts } from './fr_connector_accounts'
@@ -840,6 +841,14 @@ const frBaseOverrides = {
       approvalTitleNamed: session => `Approbation requise — ${session}`,
       approveAction: 'Approuver',
       rejectAction: 'Rejeter',
+      accessTitle: 'Accès au dossier requis',
+      accessTitleNamed: session => `Accès au dossier requis — ${session}`,
+      accessReadBody: folder => `Lecture seule : ${folder}`,
+      accessReadWriteBody: folder => `Lecture et écriture : ${folder}`,
+      networkTitle: 'Accès au site requis',
+      networkTitleNamed: session => `Accès au site requis — ${session}`,
+      allowAction: 'Autoriser',
+      denyAction: 'Refuser',
       inputTitle: 'Saisie requise',
       inputTitleNamed: session => `Saisie requise — ${session}`,
       inputBody: 'Hermes attend votre réponse.',
@@ -2755,11 +2764,6 @@ const frBaseOverrides = {
       openLog: 'Ouvrir le journal',
       actionLog: "Journal d'action",
       alreadyInstalled: name => `« ${name} » est déjà installé`,
-      pickerTitle: 'Hub de skills',
-      pickerBrowse: 'Parcourir tout le hub',
-      pickerHide: 'Masquer le navigateur du hub',
-      pickerHint:
-        'Cliquez sur « + Ajouter à cet agent » pour installer un skill : il apparaîtra ensuite dans la liste ci-dessus.',
       loadFailed: 'Échec du chargement du hub de skills',
       previewFailed: "Échec de l'aperçu du skill",
       scanFailed: 'Échec du scan de sécurité',
@@ -3463,6 +3467,8 @@ const frBaseOverrides = {
     remoteOverride: {
       menuItem: 'Se connecter à un hôte distant…',
       badge: (host: string) => `S'exécute sur ${host}`,
+      runHere: 'Exécuter sur cet ordinateur…',
+      sandboxed: 'En bac à sable',
       title: (profile: string) => `Connecter ${profile} à un hôte distant`,
       description:
         "Les sessions de ce bot s'exécuteront sur le système Aino distant indiqué, plutôt que sur cet ordinateur.",
@@ -3978,6 +3984,10 @@ const frBaseOverrides = {
     message: 'Message',
     wakingProfile: profile => `Réveil de ${profile}…`,
     placeholderTo: name => `Envoyer un message à ${name}, ou saisir / pour utiliser une compétence`,
+    switchingProfile: profile => `Passage à ${profile}…`,
+    switchingProfileSlow: 'Connexion en cours. Les messages envoyés maintenant attendront et iront à cet agent.',
+    switchProfileFailed: profile => `Impossible de passer à ${profile}`,
+    willSendTo: profile => `Sera envoyé à ${profile}`,
     placeholderStarting: 'Démarrage de Hermes…',
     placeholderReconnecting: 'Reconnexion à Hermes…',
     placeholderFollowUp: 'Envoyer un suivi',
@@ -5148,6 +5158,7 @@ const frBaseOverrides = {
       branchNewChat: 'Créer une branche dans une nouvelle conversation',
       react: 'Réagir',
       dismissError: "Ignorer l'erreur",
+      responseContinuing: 'Reprise en cours…',
       responseStopped: 'En pause. La progression actuelle est conservée.',
       ...frErrorLayers,
       errorCodes: {
@@ -5378,25 +5389,7 @@ const frBaseOverrides = {
       sendEdited: 'Envoyer le message modifié',
       attachingFile: 'Ajout en cours…'
     },
-    approval: {
-      gatewayDisconnected: "La Gateway Hermes n'est pas connectée",
-      sendFailed: "Impossible d'envoyer la réponse d'approbation",
-      reconnect: 'Se reconnecter',
-      timedOutSystemLine:
-        "Le délai d'approbation a expiré — la commande n'a pas été exécutée. Demandez à Hermes de réessayer ou augmentez la limite dans Paramètres → Sécurité → Délai d'approbation.",
-      openSafetySettings: 'Ouvrir les paramètres de sécurité',
-      run: 'Exécuter',
-      command: 'Commande',
-      moreOptions: "Plus d'options d'approbation",
-      allowSession: 'Autoriser cette session',
-      alwaysAllowMenu: 'Toujours autoriser…',
-      jumpToApproval: 'Approbation requise',
-      reject: 'Rejeter',
-      alwaysTitle: 'Toujours autoriser cette commande ?',
-      alwaysDescription: pattern =>
-        `Cela ajoute le motif « ${pattern} » à votre liste d'autorisation permanente (~/.hermes/config.yaml). Hermes ne redemandera plus pour ce type de commande — que ce soit dans cette session ou dans une session future.`,
-      alwaysAllow: 'Toujours autoriser'
-    },
+    approval: frApproval,
     clarify: frClarify,
     themePicker: frThemePicker,
     catalogInstall: {

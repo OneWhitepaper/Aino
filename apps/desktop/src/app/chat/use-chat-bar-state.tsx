@@ -98,6 +98,9 @@ export function useChatBarState({
     currentProvider === 'aino'
       ? platformReasoning
       : currentModelCapabilities(modelOptionsQuery.data, currentProvider, currentModel)?.reasoning
+  const caps = currentModelCapabilities(modelOptionsQuery.data, currentProvider, currentModel)
+  const supportsFast = caps ? Boolean(caps.fast) : undefined
+  const supportsUltrafast = caps ? Boolean(caps.ultrafast) : undefined
 
   return useMemo<ChatBarState>(
     () => ({
@@ -112,7 +115,9 @@ export function useChatBarState({
         modelMenuContent,
         quickModels,
         reasoningMenuContent,
-        supportsReasoning
+        supportsFast,
+        supportsReasoning,
+        supportsUltrafast
       },
       tools: {
         enabled: true,
@@ -135,7 +140,9 @@ export function useChatBarState({
       requestModelOptionsForOwner,
       t.ui.actions.addContext,
       reasoningMenuContent,
-      supportsReasoning
+      supportsFast,
+      supportsReasoning,
+      supportsUltrafast
     ]
   )
 }

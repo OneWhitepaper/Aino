@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from hermes_cli.backup_sqlite import _safe_copy_db
-from hermes_state import SessionDB
+from persistence.housekeeping import maintenance as import_limits
 
 _ROOM_TABLES = (("hosted_rooms", "hosted_room_events"),
                 ("hosted_room_replicas", "hosted_room_replica_events"))
@@ -76,11 +76,11 @@ def _messages(connection, events_table, room, source):
 def _chunks(messages):
     # Independent archive parts preserve long rooms without creating an oversized
     # compression lineage the canonical import API could never admit atomically.
-    maximum_bytes = SessionDB._IMPORT_MAX_SESSION_BYTES - 16_384
+    maximum_bytes = import_limits.IMPORT_MAX_SESSION_BYTES - 16_384
     result, chunk, size = [], [], 0
     for message in messages:
         message_size = len(json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) + 1
-        if chunk and (len(chunk) >= SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION or size + message_size > maximum_bytes):
+        if chunk and (len(chunk) >= import_limits.IMPORT_MAX_MESSAGES_PER_SESSION or size + message_size > maximum_bytes):
             result.append(chunk)
             chunk, size = [], 0
         chunk.append(message)
@@ -127,8 +127,14 @@ def _project(connection, source_home):
 
 def project_group_history(db, source_home):
     """Read a caller-owned private state.db snapshot; no room tasks are imported."""
-    with db._read_ctx() as connection:
+    from persistence_assembly import store_location
+    location = store_location(db.scope)
+    connection = sqlite3.connect(f"{location.resolve().as_uri()}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    try:
         return _project(connection, source_home)
+    finally:
+        connection.close()
 
 
 def project_shared_group_history(source_home, destination):

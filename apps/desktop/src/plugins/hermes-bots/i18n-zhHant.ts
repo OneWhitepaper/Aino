@@ -38,7 +38,7 @@ export const zhHant: BotsMessages = {
     shareKeys: '與主要設定檔共用金鑰和帳戶',
     shareKeysOn: target => `與 ${target} 上的 default 設定檔共用金鑰和帳戶`,
     shareKeysHint:
-      '訂閱、OAuth 登入和 API 金鑰保持共用而非複製，權杖更新不會使另一方失效。取消勾選則建立隔離的快照副本。',
+      '登入資訊與 default 設定檔保持共用而非複製，權杖更新不會使另一方失效。如果機器人以另一個擁有自己登入資訊的設定檔為基礎（被複製的機器人；不複製時則為建立它的具名設定檔），則會改為取得這些登入資訊的副本。API 金鑰在兩種情況下都會複製。取消勾選則建立獨立副本。無法複製的訂閱登入會改為使用 default 設定檔中的登入。',
     needsModel: '它還沒有可用的模型提供者，因此略過了自我介紹。請在「進階」中選擇提供者和模型。',
     configureModel: '設定模型',
     createEmpty: '建立空白設定（略過內建技能）',

@@ -51,9 +51,10 @@ import { zh as legacyZh } from './i18n-zh'
 import { zhHant as legacyZhHant } from './i18n-zhHant'
 import { ROSTER_CHROME } from './roster-chrome-locales'
 import { getPluginCtx } from './shared'
+import { TEAMMATE_WAIT_LOCALES } from './teammate-wait-locales'
 
 type BotsMessages = LegacyBotsMessages &
-  Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'> & {
+  Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway' | 'waiting'> & {
     navigation: BotNavigationMessages
     welcome: BotWelcomeMessages
     group: UpstreamBotsMessages['group']
@@ -67,7 +68,8 @@ const en: BotsMessages = {
   group: { ...legacyEn.group, ...GROUP_CHAT_LOCALES['en'] },
   roster: { ...ROSTER_CHROME['en'], ...legacyEn.roster },
   canonical: CANONICAL_GROUP_LOCALES.en,
-  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en,
+  waiting: TEAMMATE_WAIT_LOCALES.en
 }
 
 const ja: BotsMessages = {
@@ -77,7 +79,8 @@ const ja: BotsMessages = {
   group: { ...legacyJa.group, ...GROUP_CHAT_LOCALES['ja'] },
   roster: { ...ROSTER_CHROME['ja'], ...legacyJa.roster },
   canonical: CANONICAL_GROUP_LOCALES.ja,
-  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja,
+  waiting: TEAMMATE_WAIT_LOCALES.ja
 }
 
 const zh: BotsMessages = {
@@ -87,7 +90,8 @@ const zh: BotsMessages = {
   group: { ...legacyZh.group, ...GROUP_CHAT_LOCALES['zh'] },
   roster: { ...ROSTER_CHROME['zh'], ...legacyZh.roster },
   canonical: CANONICAL_GROUP_LOCALES.zh,
-  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh,
+  waiting: TEAMMATE_WAIT_LOCALES.zh
 }
 
 const zhHant: BotsMessages = {
@@ -97,7 +101,8 @@ const zhHant: BotsMessages = {
   group: { ...legacyZhHant.group, ...GROUP_CHAT_LOCALES['zh-hant'] },
   roster: { ...ROSTER_CHROME['zh-hant'], ...legacyZhHant.roster },
   canonical: CANONICAL_GROUP_LOCALES['zh-hant'],
-  crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant']
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant'],
+  waiting: TEAMMATE_WAIT_LOCALES['zh-hant']
 }
 
 /** Registered via `ctx.i18n.register` at plugin load (disposer tracked). */
@@ -112,6 +117,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     welcome: BOT_WELCOME_LOCALES['ar'],
     canonical: CANONICAL_GROUP_LOCALES.ar,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ar,
+    waiting: TEAMMATE_WAIT_LOCALES.ar,
     bot: {
       ...GROUP_SURFACE_AR.bot,
       openModelUnavailableMessage:
@@ -125,6 +131,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     welcome: BOT_WELCOME_LOCALES['ru'],
     canonical: CANONICAL_GROUP_LOCALES.ru,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ru,
+    waiting: TEAMMATE_WAIT_LOCALES.ru,
     bot: {
       ...GROUP_SURFACE_RU.bot,
       openModelUnavailableMessage:
@@ -139,6 +146,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     welcome: BOT_WELCOME_LOCALES['fr'],
     canonical: CANONICAL_GROUP_LOCALES.fr,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.fr,
+    waiting: TEAMMATE_WAIT_LOCALES.fr,
     bot: {
       ...GROUP_SURFACE_FR.bot,
       openModelUnavailableMessage:
@@ -153,6 +161,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     welcome: BOT_WELCOME_LOCALES['de'],
     canonical: CANONICAL_GROUP_LOCALES.de,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.de,
+    waiting: TEAMMATE_WAIT_LOCALES.de,
     bot: {
       ...GROUP_SURFACE_DE.bot,
       openModelUnavailableMessage:
@@ -167,6 +176,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     welcome: BOT_WELCOME_LOCALES['es'],
     canonical: CANONICAL_GROUP_LOCALES.es,
     crossGateway: CROSS_GATEWAY_GROUP_LOCALES.es,
+    waiting: TEAMMATE_WAIT_LOCALES.es,
     bot: {
       ...GROUP_SURFACE_ES.bot,
       openModelUnavailableMessage:

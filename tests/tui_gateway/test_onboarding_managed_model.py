@@ -1,10 +1,13 @@
 """First-run onboarding uses the ordinary managed session lease before its hidden opening."""
 
+from tests.fixtures.storage_read import conversation
+from persistence_assembly import store_location
+
 from pathlib import Path
 from datetime import datetime, timedelta, UTC
 from unittest.mock import patch
 
-from agent.onboarding_flow import Facts
+from session_rules.onboarding_flow import Facts
 from tests.tui_gateway import test_managed_model_agent as managed_model_fixture
 from tests.tui_gateway.test_managed_model_agent import result
 from tui_gateway import server
@@ -15,7 +18,7 @@ managed_gateway = managed_model_fixture.managed_gateway
 
 def test_onboarding_waits_for_the_existing_managed_binding(managed_gateway, monkeypatch):
     rig = managed_gateway
-    monkeypatch.setattr(server, "_hermes_home", str(Path(rig.db.db_path).parent))
+    monkeypatch.setattr(server, "_hermes_home", str(Path(store_location(rig.db.scope)).parent))
     monkeypatch.setattr("agent.onboarding_facts.read_facts", lambda **kw: Facts(os="macos"))
     claims, submitted = [], []
     monkeypatch.setattr("hermes_cli.welcome_trial.claim_desktop_free_tier", lambda **kw: claims.append(kw))
@@ -29,7 +32,7 @@ def test_onboarding_waits_for_the_existing_managed_binding(managed_gateway, monk
     owner = {"user_id": "user-one"}
     # The origin is filled from the fixture's local provider, preserving the real bind validation.
     from hermes_cli.config import read_user_config_raw
-    config = read_user_config_raw(Path(rig.db.db_path).parent / "config.yaml")
+    config = read_user_config_raw(Path(store_location(rig.db.scope)).parent / "config.yaml")
     owner["platform_origin"] = config["custom_providers"][0]["base_url"].removesuffix("/v1")
     selected = {"model_source": "aino", "model_id": "fixture-a", "platform_owner": owner}
     first = result(rig.call("onboarding.start", **selected))
@@ -37,8 +40,8 @@ def test_onboarding_waits_for_the_existing_managed_binding(managed_gateway, monk
     rig.sessions.append(sid)
     assert first["managed_model_pending"] is True
     assert not claims and not submitted and not rig.requests
-    assert rig.db.get_session_model_config_value(stored, "model_source") == "aino"
-    assert rig.db.get_session_model_config_value(stored, "platform_owner") == owner
+    assert rig.db.sessions.get_model_config_value(stored, "model_source") == "aino"
+    assert rig.db.sessions.get_model_config_value(stored, "platform_owner") == owner
     assert result(rig.call("onboarding.start", **selected))["managed_model_pending"] is True
     assert not submitted
 
@@ -83,7 +86,7 @@ def test_bound_onboarding_opening_reaches_only_the_selected_local_model(managed_
     from tui_gateway import server_requests
 
     rig = managed_gateway
-    home = Path(rig.db.db_path).parent
+    home = Path(store_location(rig.db.scope)).parent
     monkeypatch.setattr(server, "_hermes_home", str(home))
     monkeypatch.setattr("agent.onboarding_facts.read_facts", lambda **kw: Facts(os="macos", locale="en"))
     claims, cards = [], []
@@ -125,5 +128,5 @@ def test_bound_onboarding_opening_reaches_only_the_selected_local_model(managed_
                and body["model"] == "fixture-upstream" for path, auth, body in rig.requests)
     assert any(message.get("role") == "user" and "first-run onboarding" in str(message.get("content"))
                for message in rig.requests[0][2]["messages"])
-    rows = rig.db.get_messages_as_conversation(started["stored_session_id"])
+    rows = conversation(rig.db, started["stored_session_id"])
     assert any(row.get("role") == "assistant" and row.get("content") == "Local model finished." for row in rows)

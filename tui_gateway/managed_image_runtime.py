@@ -16,7 +16,7 @@ def conversation_image_scope(*, owner=None, session_id=None, session=None, on_re
             return None
         if owner is not None:
             from gateway.session_platform_model import binding_key, managed_state
-            from hermes_state_runtime import RuntimeStoreError
+            from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
             authority, sid, generation = owner
             live = authority.sessions.get(sid)
             if live is None or authority.executing.get(sid) != generation:

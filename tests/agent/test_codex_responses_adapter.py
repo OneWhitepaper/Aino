@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -755,7 +756,7 @@ def _reasoning_history(item):
     ]
 
 
-def _interleaved_codex_message(*, compaction=False):
+def _interleaved_codex_message(*, compaction=False, legacy_order=True):
     output = [
         SimpleNamespace(type="reasoning", id="rs_a", encrypted_content="sealed-a", summary=[]),
         SimpleNamespace(
@@ -784,11 +785,24 @@ def _interleaved_codex_message(*, compaction=False):
         "codex_message_items": normalized.codex_message_items,
         "tool_calls": [
             {"id": tc.id, "call_id": tc.call_id, "response_item_id": tc.response_item_id,
-             "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+             "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+             "_codex_output_index": tc._codex_output_index}
             for tc in normalized.tool_calls
         ],
     }
+    if legacy_order:
+        call_positions = [call.pop("_codex_output_index") for call in message["tool_calls"]]
+        for item in message["codex_reasoning_items"] + message["codex_message_items"]:
+            item["_output_order"] = {"index": item.pop("_codex_output_index"), "tool_calls": call_positions}
     return message
+
+
+def test_current_responses_output_indices_preserve_interleaving():
+    message = _interleaved_codex_message(legacy_order=False)
+    items = _chat_messages_to_responses_input([message])
+    assert _replay_labels(items) == ["sealed-a", "Checking the first result.", "call_a",
+                                    "sealed-b", "Checking the second result.", "call_b"]
+    assert all(not key.startswith("_") for item in items for key in item)
 
 
 def _replay_labels(items):
@@ -1154,3 +1168,83 @@ def test_role_message_phase_is_kept_only_for_assistant_values_the_api_accepts():
     ])
 
     assert [item.get("phase") for item in wire] == ["final_answer", None, None, None]
+
+
+def test_preflight_accepts_developer_role_and_omitted_instructions():
+    with_developer = _preflight_codex_api_kwargs({
+        "model": "gpt-6.2-sol",
+        "input": [
+            {"role": "developer", "content": "Be exact."},
+            {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "Extra."}]},
+            {"role": "user", "content": "Hi"},
+        ],
+        "store": False,
+    })
+
+    assert "instructions" not in with_developer
+    assert with_developer["input"][0] == {"type": "message", "role": "developer", "content": "Be exact."}
+    assert with_developer["input"][1] == {
+        "type": "message",
+        "role": "developer",
+        "content": [{"type": "input_text", "text": "Extra."}],
+    }
+
+    with pytest.raises(ValueError, match="missing required field\\(s\\): instructions"):
+        _preflight_codex_api_kwargs({
+            "model": "gpt-6.1-sol",
+            "input": [{"role": "user", "content": "Hi"}],
+            "store": False,
+        })
+
+    with pytest.raises(ValueError, match="unsupported item shape"):
+        _preflight_codex_api_kwargs({
+            "model": "gpt-6.2-sol",
+            "instructions": "stub",
+            "input": [{"role": "system", "content": "bad"}],
+            "store": False,
+        })
+
+
+class TestNormalizeCodexDictArguments:
+    """_normalize_codex_response must produce valid JSON strings for tool
+    call arguments, even when the Responses API returns them as dicts."""
+
+    def _make_codex_response(self, item_type, arguments, item_status="completed"):
+        """Build a minimal Responses API response with a single tool call."""
+        item = SimpleNamespace(
+            type=item_type,
+            status=item_status,
+        )
+        if item_type == "function_call":
+            item.name = "web_search"
+            item.arguments = arguments
+            item.call_id = "call_abc123"
+            item.id = "fc_abc123"
+        elif item_type == "custom_tool_call":
+            item.name = "web_search"
+            item.input = arguments
+            item.call_id = "call_abc123"
+            item.id = "fc_abc123"
+        return SimpleNamespace(
+            output=[item],
+            status="completed",
+        )
+
+    def test_function_call_dict_arguments_produce_valid_json(self):
+        """dict arguments from function_call must be serialised with
+        json.dumps, not str(), so downstream json.loads() succeeds."""
+        args_dict = {"query": "weather in NYC", "units": "celsius"}
+        response = self._make_codex_response("function_call", args_dict)
+        msg, _ = _normalize_codex_response(response)
+        tc = msg.tool_calls[0]
+        parsed = json.loads(tc.function.arguments)
+        assert parsed == args_dict
+
+
+    def test_string_arguments_unchanged(self):
+        """String arguments must pass through without modification."""
+        args_str = '{"query": "test"}'
+        response = self._make_codex_response("function_call", args_str)
+        msg, _ = _normalize_codex_response(response)
+        tc = msg.tool_calls[0]
+        assert tc.function.arguments == args_str

@@ -12,6 +12,7 @@ import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
 import { messagingOnboarding } from './messaging-onboarding'
 import { notificationCenterCopy } from './notification-center'
+import { ruApproval } from './ru_approval'
 import { ruBoot } from './ru_boot'
 import { ruCatalog, ruSkillDeepLink } from './ru_catalog'
 import { ruClarify } from './ru_clarify'
@@ -503,6 +504,14 @@ const ruBaseOverrides = {
       approvalTitleNamed: session => `Требуется одобрение — ${session}`,
       approveAction: 'Одобрить',
       rejectAction: 'Отклонить',
+      accessTitle: 'Нужен доступ к папке',
+      accessTitleNamed: session => `Нужен доступ к папке — ${session}`,
+      accessReadBody: folder => `Только чтение: ${folder}`,
+      accessReadWriteBody: folder => `Чтение и запись: ${folder}`,
+      networkTitle: 'Нужен доступ к сайту',
+      networkTitleNamed: session => `Нужен доступ к сайту — ${session}`,
+      allowAction: 'Разрешить',
+      denyAction: 'Запретить',
       inputTitle: 'Требуется ввод',
       inputTitleNamed: session => `Требуется ввод — ${session}`,
       inputBody: 'Hermes ожидает ваш ответ.',
@@ -1730,10 +1739,6 @@ const ruBaseOverrides = {
       actionFailed: 'Действие с навыком не удалось',
       actionLog: 'Журнал действий',
       alreadyInstalled: name => `«${name}» уже установлен`,
-      pickerTitle: 'Хаб навыков',
-      pickerBrowse: 'Открыть весь хаб',
-      pickerHide: 'Скрыть браузер хаба',
-      pickerHint: 'Нажмите «+ Добавить к этому агенту» на любом навыке — он установится и появится в списке выше.',
       loadFailed: 'Не удалось загрузить хаб навыков',
       previewFailed: 'Не удалось получить предпросмотр навыка',
       scanFailed: 'Не удалось выполнить проверку безопасности',
@@ -2317,6 +2322,7 @@ const ruBaseOverrides = {
       'У каждого бота свои роль, настройки, память и беседы. Папки обычных чатов находятся в разделе «Проекты».',
     soulApplyHint: 'Изменения применяются к новым беседам.',
     close: 'Закрыть ботов',
+    remoteOverride: { runHere: 'Запускать на этом компьютере…' },
     nameHint: 'Строчные буквы, цифры, дефисы и подчёркивания. Должно начинаться с буквы или цифры.',
     title: 'Управление ботами',
     count: count => `${count} ${RU_PLURAL(count, 'бот', 'бота', 'ботов')}`,
@@ -2827,6 +2833,10 @@ const ruBaseOverrides = {
     message: 'Сообщение',
     wakingProfile: profile => `Пробуждаем ${profile}…`,
     placeholderTo: name => `Напишите ${name} или введите / для выбора навыка`,
+    switchingProfile: profile => `Переключение на ${profile}…`,
+    switchingProfileSlow: 'Подключение ещё идёт. Сообщения, отправленные сейчас, дождутся его и уйдут этому агенту.',
+    switchProfileFailed: profile => `Не удалось переключиться на ${profile}`,
+    willSendTo: profile => `Будет отправлено в ${profile}`,
     placeholderStarting: 'Запуск Hermes...',
     placeholderReconnecting: 'Переподключение к Hermes…',
     placeholderFollowUp: 'Отправить продолжение',
@@ -3930,21 +3940,7 @@ const ruBaseOverrides = {
         output: 'Выход'
       }
     },
-    approval: {
-      gatewayDisconnected: 'Шлюз Hermes не подключён',
-      sendFailed: 'Не удалось отправить ответ на подтверждение',
-      run: 'Выполнить',
-      command: 'Команда',
-      moreOptions: 'Больше опций подтверждения',
-      allowSession: 'Разрешить в этом сеансе',
-      alwaysAllowMenu: 'Всегда разрешать…',
-      jumpToApproval: 'Нужно подтверждение',
-      reject: 'Отклонить',
-      alwaysTitle: 'Всегда разрешать эту команду?',
-      alwaysDescription: pattern =>
-        `Это добавит паттерн «${pattern}» в ваш постоянный список разрешений (~/.hermes/config.yaml). Hermes больше не будет спрашивать о подобных командах — ни в этом сеансе, ни в будущем.`,
-      alwaysAllow: 'Всегда разрешать'
-    },
+    approval: ruApproval,
     clarify: ruClarify,
     themePicker: ruThemePicker,
     catalogInstall: {

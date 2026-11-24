@@ -1,5 +1,8 @@
 """Managed sessions use the real Agent and SDK against a loopback-only model."""
 
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_read import session_row
+
 import json
 import threading
 from datetime import datetime, timedelta, UTC
@@ -9,7 +12,6 @@ from pathlib import Path
 import pytest
 
 import tui_gateway.server as srv
-from hermes_state import SessionDB
 from tui_gateway.managed_model_runtime import get_registry
 
 
@@ -121,8 +123,9 @@ def managed_gateway(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("HERMES_IGNORE_RULES", "1")
-    db = SessionDB(tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
     monkeypatch.setattr(srv, "_get_db", lambda: db)
+    monkeypatch.setattr(srv, "_db", db)
     # Keep unrelated desktop/MCP integrations out of this protocol contract.
     monkeypatch.setattr(srv, "_load_enabled_toolsets", lambda platform=None: ["file"])
     monkeypatch.setattr(srv, "_start_session_services", lambda *args: None)
@@ -225,7 +228,7 @@ def test_managed_draft_runs_tool_roundtrip_and_renews_without_rebuilding(managed
     refused = f.call("prompt.submit", session_id=sid, text="not sent")
     assert refused["error"]["data"]["reason"] == "awaiting_managed_credentials"
     assert not f.requests
-    assert f.db.get_session(draft["stored_session_id"]) is None
+    assert session_row(f.db, draft["stored_session_id"]) is None
     lease = f.bind(sid)
     f.submit(sid, "Read sample.txt")
     session = srv._sessions[sid]
@@ -247,7 +250,7 @@ def test_managed_draft_runs_tool_roundtrip_and_renews_without_rebuilding(managed
     f.submit(sid, "Continue")
     assert f.requests[-1][1] == "Bearer fixture-secret-two"
     assert system_prompt(f.requests[-1][2]) == prompt
-    row = f.db.get_session(draft["stored_session_id"])
+    row = session_row(f.db, draft["stored_session_id"])
     metadata = json.loads(row["model_config"])
     assert metadata["model_source"] == "aino"
     assert metadata["platform_owner"] == lease["owner"]
@@ -293,12 +296,12 @@ def test_managed_context_anchor_survives_reasoning_change_and_cold_resume(manage
     f.submit(sid, "Read sample.txt")
     session = srv._sessions[sid]
     agent = session["agent"]
-    anchor = f.db.get_session_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY)
+    anchor = f.db.sessions.get_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY)
     assert anchor is not None
     before = (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools))
 
     result(f.call("config.set", session_id=sid, key="reasoning", value="high"))
-    assert f.db.get_session_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY) == anchor
+    assert f.db.sessions.get_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY) == anchor
     assert (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools)) == before
     requests_before_resume = len(f.requests)
     result(f.call("session.close", session_id=sid))
@@ -330,13 +333,13 @@ def test_branch_keeps_platform_identity_without_copying_authority(managed_gatewa
     assert "error" in f.call("prompt.submit", session_id=child, text="not bound")
     f.bind(child)
     f.submit(child, "Continue this branch")
-    row = f.db.get_session(branch["stored_session_id"])
+    row = session_row(f.db, branch["stored_session_id"])
     assert json.loads(row["model_config"])["platform_owner"] == lease["owner"]
     for extra, expected_source in (({}, "aino"), ({"model": "fixture-byok-model", "provider": "custom:fixture-byok"}, None)):
         seeded = result(f.call("session.create", source="desktop", parent_session_id=srv._sessions[sid]["session_key"],
             messages=[{"role": "user", "content": "seed"}, {"role": "assistant", "content": "reply"}], **extra))
         f.sessions.append(seeded["session_id"])
-        row = f.db.get_session(seeded["stored_session_id"])
+        row = session_row(f.db, seeded["stored_session_id"])
         assert json.loads(row["model_config"]).get("model_source") == expected_source
 
 
@@ -353,7 +356,7 @@ def test_explicit_byok_switch_releases_platform_authority_and_persists_new_sourc
     assert not getattr(session["agent"], "_managed_model_metadata", None)
     f.submit(sid, "Continue using my model")
     assert f.requests[-1][1] == "Bearer byok-fixture-key"
-    row = f.db.get_session(session["session_key"])
+    row = session_row(f.db, session["session_key"])
     assert json.loads(row["model_config"]).get("model_source") != "aino"
     unbound = f.create()["session_id"]
     result(f.call("config.set", session_id=unbound, key="model", value=value, confirm_expensive_model=True))
@@ -402,7 +405,7 @@ def test_managed_model_switch_requires_confirmation_then_new_owned_binding(manag
     assert f.requests[-1][2]["model"] == "fixture-other"
     assert f.requests[-1][1] == "Bearer fixture-secret-new-model"
     assert agent.provider == "aino"
-    row = f.db.get_session(srv._sessions[sid]["session_key"])
+    row = session_row(f.db, srv._sessions[sid]["session_key"])
     assert json.loads(row["model_config"])["model_id"] == "fixture-b"
     assert "error" in f.call("session.renew_managed_model", peer=f.controller, **original)
 
@@ -466,8 +469,8 @@ def test_named_profile_build_and_reset_keep_the_platform_runtime(managed_gateway
     f.submit(sid, "Read sample.txt")
     session = srv._sessions[sid]
     assert session["profile_home"] == str(profile)
-    assert f.db.get_session(draft["stored_session_id"]) is None
-    assert session["agent"]._session_db.get_session(draft["stored_session_id"])
+    assert session_row(f.db, draft["stored_session_id"]) is None
+    assert session_row(session["agent"]._session_db, draft["stored_session_id"])
     old = session["agent"]
     info = srv._reset_session_agent(sid, session)
     assert info["provider"] == "aino"

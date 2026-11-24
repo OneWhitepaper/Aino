@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 
-from hermes_state_runtime import RuntimeStoreError
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
+from gateway.session_persistence import authority_persistence
 from tui_gateway.managed_model_runtime import ManagedBindingError, get_registry, persisted_managed_model_metadata
 from tui_gateway.methods_managed_model import (
     _binding, _managed_owner, _managed_positive_int, _managed_purpose, _managed_text,
@@ -152,7 +153,7 @@ def _persist(authority, sid, binding):
     from gateway.session_contract import SessionRef
     target = physical_target(authority, SessionRef(authority.profile_id, sid))
     metadata = persisted_managed_model_metadata(binding)
-    authority.db.patch_session_model_config(target, {**metadata, "provider": "aino", "base_url": None})
+    authority_persistence(authority).sessions.patch_model_config(target, {**metadata, "provider": "aino", "base_url": None})
 
 
 def managed_agent_context(agent, authority, sid):
@@ -298,7 +299,7 @@ def managed_info(authority, sid):
     from gateway.session_ancillary import physical_target
     from gateway.session_contract import SessionRef
     target = physical_target(authority, SessionRef(authority.profile_id, sid))
-    owner = authority.db.get_session_model_config_value(target, "platform_owner")
+    owner = authority_persistence(authority).sessions.get_model_config_value(target, "platform_owner")
     metadata = persisted_managed_model_metadata(binding) if binding else {
         **selected, **({"platform_owner": owner} if owner else {})}
     return {**metadata, "provider": "aino", "model_status": "ready" if binding else "awaiting_managed_credentials"}

@@ -1,6 +1,12 @@
 import type { ProfileScope } from '@/hermes'
-import { requestGatewayForAgent, requestGatewayForProfile, retainGatewayForSessionTurn } from '@/store/gateway'
+import {
+  dialedGatewayModeFor,
+  requestGatewayForAgent,
+  requestGatewayForProfile,
+  retainGatewayForSessionTurn
+} from '@/store/gateway'
 
+import { type BackendRequestOwner, waitForPlannedBackendRecovery } from './backend-transition-request'
 import { resetBackgroundPollingGuardAfterRebind } from './session-gone-latch'
 
 /**
@@ -160,6 +166,24 @@ async function withRoutedTurnLease<T>(
   }
 }
 
+async function requestOwnerWithRecovery<T>(
+  owner: BackendRequestOwner,
+  method: string,
+  params: Record<string, unknown>,
+  request: (retry: boolean) => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  try {
+    return await request(false)
+  } catch (error) {
+    if (!(await waitForPlannedBackendRecovery(error, owner, method, params, signal))) {
+      throw error
+    }
+
+    return request(true)
+  }
+}
+
 async function requestWithRebindGuard<T>(
   method: string,
   params: Record<string, unknown>,
@@ -235,9 +259,20 @@ export function requestForSessionProfile<T>(
       method,
       routedParams,
       () =>
-        timeoutMs === undefined && signal === undefined
-          ? requestGatewayForAgent<T>(connectionId, profile, method, routedParams)
-          : requestGatewayForAgent<T>(connectionId, profile, method, routedParams, timeoutMs, signal),
+        requestOwnerWithRecovery(
+          { connectionId, profile },
+          method,
+          routedParams,
+          retry =>
+            retry
+              ? requestGatewayForAgent<T>(connectionId, profile, method, routedParams, timeoutMs, signal, {
+                  spawnPriority: 'foreground'
+                })
+              : timeoutMs === undefined && signal === undefined
+                ? requestGatewayForAgent<T>(connectionId, profile, method, routedParams)
+                : requestGatewayForAgent<T>(connectionId, profile, method, routedParams, timeoutMs, signal),
+          signal
+        ),
       { ...ownerProfile, connectionId, profile }
     )
   }
@@ -267,7 +302,18 @@ export function requestForSessionProfile<T>(
 
   const profile = normKey(ownerProfile)
 
+  const owner = { connectionId: null, profile, mode: dialedGatewayModeFor(null, profile) }
+
   return withRoutedTurnLease(null, profile, method, params, () =>
-    requestGatewayForProfile<T>(profile, method, params, timeoutMs, signal)
+    requestOwnerWithRecovery(
+      owner,
+      method,
+      params,
+      retry =>
+        retry
+          ? requestGatewayForProfile<T>(profile, method, params, timeoutMs, signal, { spawnPriority: 'foreground' })
+          : requestGatewayForProfile<T>(profile, method, params, timeoutMs, signal),
+      signal
+    )
   )
 }

@@ -441,6 +441,10 @@ function contentRefusedMeta(
   return message.contentRefused ? { contentRefused: message.contentRefused } : {}
 }
 
+// The thread's stopped mark (AssistantMessage's StoppedNotice). A reply the next
+// turn went on with keeps `interrupted` but is not drawn as stopped.
+const stoppedMark = (message: ChatMessage) => (message.interrupted && !message.continued ? { interrupted: true } : {})
+
 function runtimeMessageMetadata(message: ChatMessage) {
   // Reactions and the durable row id ride metadata.custom for every role — the
   // established channel for per-message extras (attachmentRefs below).
@@ -516,7 +520,7 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
       // Carries ChatMessage.interim to AssistantMessage's footer gate.
       custom: {
         ...(message.interim ? { interim: true } : {}),
-        ...(message.interrupted ? { interrupted: true } : {}),
+        ...stoppedMark(message),
         ...timelineMeta,
         ...(message.completedAt !== undefined ? { timelineCompletedAt: message.completedAt } : {}),
         ...(message.durationS !== undefined ? { durationS: message.durationS } : {}),
@@ -617,6 +621,10 @@ export function coalesceToolOnlyAssistants(messages: ChatMessage[], cache: ToolM
               ...prev,
               turnMetrics: message.turnMetrics ?? prev.turnMetrics,
               durationS: message.durationS ?? prev.durationS,
+              // The folded bubble is where the reply ends now, so a stop there is the reply's stop. It is not
+              // lost when the bubble above was never stopped, and not hidden by that bubble's `continued`
+              // (the reply went on after an earlier stop).
+              ...(message.interrupted ? { interrupted: true, continued: message.continued } : {}),
               completedAt: [prev.completedAt, message.completedAt, ...message.parts.map(part => part.completedAt)]
                 .filter((value): value is number => value !== undefined)
                 .reduce<number | undefined>(

@@ -1,4 +1,9 @@
 """A group member can leave its Aino selection and follow its own profile again."""
+
+from tests.fixtures.storage_holder import raw_holder
+from tests.fixtures.storage_read import session_row
+
+from dataclasses import asdict
 import json
 
 import pytest
@@ -14,7 +19,7 @@ def _follow(call, viewer, member='helper', **params):
 
 
 def _pending_inputs(authority, sid):
-    with authority.db._read_ctx() as conn:
+    with raw_holder(authority.persistence)._read_ctx() as conn:
         return [tuple(row) for row in conn.execute(
             'SELECT * FROM session_admissions WHERE target_session_id=? ORDER BY admission_id', (sid,))]
 
@@ -29,8 +34,6 @@ def test_group_can_release_aino_and_follow_current_profile_without_rewriting_pen
         tmp_path, monkeypatch, member, provider, endpoint, providers):
     from gateway.session_platform_model import binding_key, selection_for_policy
     from gateway.session_policy import policy_for_source, restore_policy
-    from hermes_state_local import local_receipt
-    from hermes_state_runtime import admit_session_input
     from tui_gateway.managed_model_runtime import get_registry
 
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
@@ -47,11 +50,9 @@ def test_group_can_release_aino_and_follow_current_profile_without_rewriting_pen
         sid = prepared['session_id']
         key = binding_key(target, sid)
         assert get_registry().get(key) is not None
-        original = local_receipt(target.db, sid)
-        admit_session_input(target.db, epoch=target.epoch, principal_id=original['principal_id'],
-                            session_id=sid, request_id='exact-follow-pending-identity',
-                            payload={'text': '  exact @helper\n``` @all ```  ',
-                                     'frozen_recipients': [member]})
+        original = asdict(target.persistence.bindings.receipt(sid))
+        asdict(target.persistence.admissions.admit(epoch=target.epoch, principal_id=original['principal_id'], session_id=sid, request_id='exact-follow-pending-identity', payload={'text': '  exact @helper\n``` @all ```  ',
+                                     'frozen_recipients': [member]})[0])
         pending = _pending_inputs(target, sid)
         config = {'model': {'default': 'profile-model', 'provider': provider, 'base_url': endpoint},
                   'providers': providers, 'platform_toolsets': {'cli': []}}
@@ -63,7 +64,7 @@ def test_group_can_release_aino_and_follow_current_profile_without_rewriting_pen
         assert result['result']['profile'] == member
         assert result['result']['follow_profile_config'] is True
         assert 'session_ticket' not in result['result']
-        saved = local_receipt(target.db, sid)
+        saved = asdict(target.persistence.bindings.receipt(sid))
         policy = restore_policy(saved['policy'])
         assert policy.source == 'bot_room' and policy.follows_profile
         assert policy.current_model(target) == 'profile-model'
@@ -102,15 +103,15 @@ def test_following_an_uncreated_external_member_does_not_create_a_session(tmp_pa
             'model': {'default': 'external-model', 'provider': 'custom',
                       'base_url': 'http://127.0.0.1:9/v1'},
             'platform_toolsets': {'cli': []}}))
-        with target.db._read_ctx() as conn:
+        with raw_holder(target.persistence)._read_ctx() as conn:
             original_ids = [row[0] for row in conn.execute('SELECT id FROM sessions ORDER BY id')]
         live_ids = set(target.sessions)
         result = _follow(call, viewer, member)
         assert 'result' in result, result
         assert result['result']['profile'] == member
         assert result['result']['follow_profile_config'] is True
-        assert target.db.get_session(result['result']['session_id']) is None
-        with target.db._read_ctx() as conn:
+        assert session_row(target.persistence, result['result']['session_id']) is None
+        with raw_holder(target.persistence)._read_ctx() as conn:
             assert [row[0] for row in conn.execute('SELECT id FROM sessions ORDER BY id')] == original_ids
         assert set(target.sessions) == live_ids
         call(viewer.close())
@@ -124,7 +125,6 @@ def test_following_an_uncreated_external_member_does_not_create_a_session(tmp_pa
 ])
 def test_group_profile_following_rejects_false_or_mixed_selection_fields(tmp_path, monkeypatch, params):
     from gateway.session_platform_model import binding_key
-    from hermes_state_local import local_receipt
     from tui_gateway.managed_model_runtime import get_registry
 
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
@@ -139,11 +139,11 @@ def test_group_profile_following_rejects_false_or_mixed_selection_fields(tmp_pat
         prepared = prepared['result']
         _bind(call, native, prepared)
         sid = prepared['session_id']
-        original = local_receipt(target.db, sid)
+        original = asdict(target.persistence.bindings.receipt(sid))
         binding = get_registry().get(binding_key(target, sid))
         result = _request(call, viewer, 'groups.prepare_model', room_id='room', member_id='helper', **params)
         assert result['error']['data']['reason'] == 'invalid_params', result
-        assert local_receipt(target.db, sid) == original
+        assert asdict(target.persistence.bindings.receipt(sid)) == original
         assert get_registry().get(binding_key(target, sid)) is binding
         call(viewer.close())
         call(native.close())

@@ -1,10 +1,16 @@
 """Aino session modes are durable execution choices, never a mutable UI-only flag."""
+
+from dataclasses import asdict
+from tests.fixtures.storage_read import session_row
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
 from tests.gateway.test_session_create_tier_cwd import _owner
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 
 
 async def _create(connection, cwd, request_id, **extra):
@@ -17,7 +23,7 @@ async def _create(connection, cwd, request_id, **extra):
 @pytest.mark.parametrize('mode', ['work', 'code'])
 async def test_execution_mode_survives_create_list_and_receipt_restore(tmp_path, monkeypatch, mode):
     from gateway.session_policy import restore_policy
-    from hermes_state_local import local_receipt
+
 
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {'model': {'default': 'fixture-model'}})
     try:
@@ -25,7 +31,7 @@ async def test_execution_mode_survives_create_list_and_receipt_restore(tmp_path,
         assert 'error' not in result, result
         created = result['result']
         assert created['info']['execution_mode'] == mode
-        receipt = local_receipt(authority.db, created['session_id'])
+        receipt = asdict(authority.persistence.bindings.receipt(created['session_id']))
         restored = restore_policy(receipt['policy'])
         assert restored.execution_mode == mode
         listed = await connection.dispatch({'id': 'list', 'method': 'session.list', 'params': {}})
@@ -39,7 +45,7 @@ async def test_execution_mode_survives_create_list_and_receipt_restore(tmp_path,
             'expected_generation': 0, 'operation': 'branch', 'payload': {}}})
         assert 'error' not in branched, branched
         child = branched['result']['branched_session_id']
-        assert restore_policy(local_receipt(authority.db, child)['policy']).execution_mode == mode
+        assert restore_policy(asdict(authority.persistence.bindings.receipt(child))['policy']).execution_mode == mode
     finally:
         await connection.close()
         store.close_all_db_handles()
@@ -48,13 +54,13 @@ async def test_execution_mode_survives_create_list_and_receipt_restore(tmp_path,
 @pytest.mark.asyncio
 async def test_old_sessions_default_to_work_and_mode_cannot_change_on_retry(tmp_path, monkeypatch):
     from gateway.session_policy import restore_policy
-    from hermes_state_local import local_receipt
+
 
     store, _runner, authority, connection = _owner(tmp_path / 'home', monkeypatch, {'model': {'default': 'fixture-model'}})
     try:
         created = (await _create(connection, tmp_path, 'same'))['result']
         assert created['info']['execution_mode'] == 'work'
-        policy = local_receipt(authority.db, created['session_id'])['policy']
+        policy = asdict(authority.persistence.bindings.receipt(created['session_id']))['policy']
         policy.pop('execution_mode', None)
         assert restore_policy(policy).execution_mode == 'work'
         changed = await _create(connection, tmp_path, 'same', execution_mode='code')
@@ -72,7 +78,7 @@ async def test_code_mode_survives_a_cold_owner_and_title_lookup(tmp_path, monkey
     try:
         created = (await _create(connection, tmp_path, 'cold-code', execution_mode='code'))['result']
         sid = created['session_id']
-        authority.db.set_session_title(sid, 'Code recovery fixture')
+        authority.persistence.sessions.set_title(sid, 'Code recovery fixture')
     finally:
         await connection.close()
         store.close_all_db_handles()
@@ -112,7 +118,7 @@ async def test_code_rejects_unknown_mode_and_invalid_explicit_workspace(tmp_path
 @pytest.mark.parametrize('profile', ['default', 'secondary'])
 @pytest.mark.parametrize('inherited_cwd', [False, True])
 async def test_projectless_code_has_a_durable_owned_workspace(tmp_path, monkeypatch, profile, inherited_cwd):
-    from hermes_state_local import local_receipt
+
     from gateway.session_policy import restore_policy
 
     home = tmp_path / 'home' if profile == 'default' else tmp_path / 'home' / 'profiles' / profile
@@ -136,8 +142,8 @@ async def test_projectless_code_has_a_durable_owned_workspace(tmp_path, monkeypa
         other = await connection.dispatch({'id': 'other', 'method': 'session.create',
                                            'params': {**params, 'request_id': 'other'}})
         assert other['result']['info']['cwd'] != str(cwd)
-        assert not authority.db.get_session(sid)['cwd']
-        assert restore_policy(local_receipt(authority.db, sid)['policy']).cwd == str(cwd)
+        assert not session_row(authority.persistence, sid)['cwd']
+        assert restore_policy(asdict(authority.persistence.bindings.receipt(sid))['policy']).cwd == str(cwd)
     finally:
         await connection.close()
         store.close_all_db_handles()

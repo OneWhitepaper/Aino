@@ -6,6 +6,7 @@ import type { HermesGateway } from '@/hermes'
 import { translateNow } from '@/i18n'
 import { resolveDesktopGatewayWsUrl } from '@/lib/gateway-ws-url'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
+import { isGatewayTransportError, sentAgainAfterReconnect } from '@/store/backend-transition-request'
 import {
   $gateway,
   activeGateway,
@@ -15,7 +16,7 @@ import {
   gatewayActivationEpoch,
   isActivePrimary
 } from '@/store/gateway'
-import { $gatewayState, setConnection } from '@/store/session'
+import { $connection, $gatewayState, setConnection } from '@/store/session'
 
 export function useGatewayRequest() {
   const gatewayState = useStore($gatewayState)
@@ -169,6 +170,7 @@ export function useGatewayRequest() {
       // when a delayed transport failure (or its reconnect) finishes.
       const connectionId = activeGatewayConnectionId()
       const profile = activeGatewayProfileKey()
+      const mode = $connection.get()?.mode
 
       const isDispatchRouteActive = () =>
         (gatewayRef.current ?? activeGateway()) === gateway &&
@@ -179,6 +181,16 @@ export function useGatewayRequest() {
         return await gateway.request<T>(method, params, timeoutMs, signal)
       } catch (error) {
         if (!isGatewayTransportError(error)) {
+          throw error
+        }
+
+        // A plugin-run profile whose sandbox is restarting (or switching) on
+        // purpose: a request that is safe to send twice waits for its backend
+        // to come back and is sent on the new socket, instead of failing
+        // ("WebSocket heartbeat acknowledgement timed out", "Restore failed").
+        // Any other request gets its error here. An unplanned drop, or a
+        // transition that does not end as planned, takes the path below.
+        if (!(await sentAgainAfterReconnect(error, { connectionId, profile, mode }, method, params, signal))) {
           throw error
         }
 
@@ -215,43 +227,4 @@ export function useGatewayRequest() {
   )
 
   return { connectionRef, gateway, gatewayRef, requestGateway }
-}
-
-const GATEWAY_TRANSPORT_ERROR_CODES = new Set([
-  'ECONNABORTED',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  'ENOTFOUND',
-  'EPIPE',
-  'ETIMEDOUT',
-  'ERR_NETWORK',
-  'ERR_SOCKET_CLOSED'
-])
-
-function errorCode(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null
-  }
-
-  const code = (value as { code?: unknown }).code
-
-  return typeof code === 'string' ? code.toUpperCase() : null
-}
-
-function isGatewayTransportError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-
-  if (/not connected|connection closed|connection reset|ECONNRESET/i.test(message)) {
-    return true
-  }
-
-  const cause = typeof error === 'object' && error !== null ? (error as { cause?: unknown }).cause : undefined
-
-  return [error, cause].some(value => {
-    const code = errorCode(value)
-
-    return code !== null && GATEWAY_TRANSPORT_ERROR_CODES.has(code)
-  })
 }

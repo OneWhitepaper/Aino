@@ -1,5 +1,8 @@
 """Compression children must resume the stable runtime after managed/BYOK switches."""
 
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
+
 import json
 
 import pytest
@@ -64,16 +67,16 @@ def test_compression_resume_routes_to_the_stable_switched_runtime(
     assert agent.base_url.rstrip("/") == stable["base_url"]
     assert not session.get("managed_model_params")
     assert not getattr(agent, "_managed_model_metadata", None)
-    history_count = len(f.db.get_messages(parent))
+    history_count = len(transcript_rows(f.db, parent))
 
     compressed = result(f.call("session.compress", session_id=sid))
     assert compressed["status"] == "compressed"
     tip = session["session_key"]
     assert tip != parent
-    assert f.db.get_compression_lineage(tip) == [parent, tip]
+    assert list(f.db.lineage.lineage(tip)) == [parent, tip]
     assert len(session["history"]) < history_count
     assert any(is_compaction_summary_message(message) for message in session["history"])
-    child = f.db.get_session(tip)
+    child = session_row(f.db, tip)
     child_config = json.loads(child["model_config"])
 
     result(f.call("session.close", session_id=sid))
@@ -98,7 +101,7 @@ def test_compression_resume_routes_to_the_stable_switched_runtime(
         assert agent._session_init_model_config[key] == child_config[key]
     for key in ("model_source", "model_id", "platform_owner", "api_key", "credential_id"):
         assert key not in child_config
-    persisted = json.dumps([f.db.get_session(key) for key in (parent, tip)])
+    persisted = json.dumps([session_row(f.db, key) for key in (parent, tip)])
     assert all(secret not in persisted
                for secret in (lease["api_key"], provider_a["api_key"], provider_b["api_key"]))
     for path in tmp_path.glob("state.db*"):

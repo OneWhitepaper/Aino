@@ -7,5 +7,5 @@ lower or inflate the API available to plugins. Update both values only when the
 corresponding official release has actually been merged into this source tree.
 """
 
-UPSTREAM_VERSION = "0.23.2"
-UPSTREAM_COMMIT = "ae2a81ccc00e9b7c06301523e5bb09608397149c"
+UPSTREAM_VERSION = "0.23.3"
+UPSTREAM_COMMIT = "352b249f67fb6a4a7d7904acaca9dd410db229e0"

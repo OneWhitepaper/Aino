@@ -1,4 +1,8 @@
 """Hosted model preparation respects the room member's saved conversation intent."""
+
+from tests.fixtures.storage_read import session_row
+
+from dataclasses import asdict
 import json
 
 import pytest
@@ -19,7 +23,7 @@ def test_inspection_does_not_create_a_member_session_and_preserves_saved_selecti
         sid = inspected['result']['session_id']
         assert inspected['result'] == {'profile': member, 'session_id': sid, 'selection': None}
         assert set(target.sessions) == before
-        assert target.db.get_session(sid) is None
+        assert session_row(target.persistence, sid) is None
         prepared = _prepare(call, viewer, member)
         assert 'result' in prepared, prepared
         selected = {'model_id': 'selected-deepseek', 'model_source': 'aino', 'provider': 'aino', 'name': 'DeepSeek', 'owner': OWNER}
@@ -49,7 +53,6 @@ def test_saved_aino_choice_cannot_be_rebound_to_a_different_account(tmp_path, mo
 
 def test_saved_configured_provider_choice_uses_existing_model_mutation_without_changing_profile(tmp_path, monkeypatch):
     from gateway.session_policy import policy_for_source
-    from hermes_state_local import local_receipt
 
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
         viewer = _connection(runner.session_authority)
@@ -58,7 +61,7 @@ def test_saved_configured_provider_choice_uses_existing_model_mutation_without_c
         prepared = _prepare(call, viewer)
         assert 'result' in prepared, prepared
         target, sid = runner.session_authorities.for_home(homes['helper']), prepared['result']['session_id']
-        original = local_receipt(target.db, sid)
+        original = asdict(target.persistence.bindings.receipt(sid))
         config = json.dumps({'model': {'provider': 'custom:relay', 'default': 'profile-default'},
                              'providers': {'relay': {'name': 'Relay', 'base_url': 'http://127.0.0.1:9/v1',
                                                       'api_key': 'fixture-private-key', 'models': ['chosen-model']}},
@@ -74,5 +77,5 @@ def test_saved_configured_provider_choice_uses_existing_model_mutation_without_c
         assert policy.current_model(target) == 'chosen-model'
         assert policy.config(target)['model']['provider'] == 'custom:relay'
         assert (homes['helper'] / 'config.yaml').read_text() == config
-        assert local_receipt(target.db, sid)['policy']['request_json'] == original['policy']['request_json']
+        assert asdict(target.persistence.bindings.receipt(sid))['policy']['request_json'] == original['policy']['request_json']
         call(viewer.close())

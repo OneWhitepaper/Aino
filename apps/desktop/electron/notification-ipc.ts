@@ -42,6 +42,7 @@ export function registerNativeNotifications({
   let linux = platform === 'linux' ? createLinuxNotifications() : undefined
   const notifications = createNotificationRegistry({ releaseOnClose: Boolean(linux) })
   let generation = 0
+  const supported = () => Boolean(linux) || Notification.isSupported()
 
   ipcMain.handle('hermes:notify', async (event, payload: HermesNotification) => {
     const ownerGeneration = generation
@@ -55,7 +56,7 @@ export function registerNativeNotifications({
           : getMainWindow()
         : null
 
-    if (!linux && !Notification.isSupported()) {
+    if (!supported()) {
       return false
     }
 
@@ -153,6 +154,9 @@ export function registerNativeNotifications({
 
     return delivery
   })
+  // Read-only, so the renderer can tell ahead of time whether `hermes:notify` could show anything.
+  // Linux asks the session bus for a notification service each time it is asked.
+  ipcMain.handle('hermes:notify:supported', () => (linux ? linux.available() : supported()))
 
   return {
     dispose: () => {

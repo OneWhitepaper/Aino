@@ -43,6 +43,9 @@ def _step(name_prefix: str) -> str:
                 if tag_object := os.environ.get("CATALOG_CI_TAG_OBJECT"):
                     text = re.sub(r"(?m)^REVIEWED_TAG=v[0-9.]+$", f"REVIEWED_TAG={FIXTURE_RELEASE_TAG}", text)
                     text = re.sub(r"(?m)^REVIEWED_TAG_OBJECT=[0-9a-f]{40}$", f"REVIEWED_TAG_OBJECT={tag_object}", text)
+                if release_commit := os.environ.get("CATALOG_CI_RELEASE_COMMIT"):
+                    text = re.sub(r"(?m)^REVIEWED_RELEASE_COMMIT=[0-9a-f]{40}$",
+                                  f"REVIEWED_RELEASE_COMMIT={release_commit}", text)
                 return text
     raise LookupError(name_prefix)
 
@@ -511,6 +514,7 @@ def _reviewed_tag_source(tmp_path, repo, release, monkeypatch):
     _git(tmp_path, "clone", "--bare", str(repo), str(upstream))
     _git(repo, "tag", "-d", FIXTURE_RELEASE_TAG)
     monkeypatch.setenv("CATALOG_CI_TAG_OBJECT", tag_object)
+    monkeypatch.setenv("CATALOG_CI_RELEASE_COMMIT", release)
     return upstream, {
         **os.environ,
         "VALIDATION_REF": release,
@@ -660,3 +664,28 @@ def test_self_updater_allowlist_matches_only_the_reviewed_file(tmp_path, monkeyp
     tool.write_text(tool.read_text() + "//\n", encoding="utf-8")
     with pytest.raises(gate.EntryRejected, match="kit/kit.ts"):
         gate._check_self_updater(str(plugin), "https://x/y", SHA)
+
+
+@pytest.mark.platforms("posix")
+def test_reviewed_snapshot_keeps_its_ancestor_release_version_identity(tmp_path, monkeypatch):
+    repo, release, _, _ = _import_merge(tmp_path)
+    _git(repo, "checkout", "-qb", "snapshot", release)
+    _write(repo, {"code.py": "snapshot_after_release = True\n"})
+    snapshot = _commit(repo, "frozen snapshot after the stable release")
+    _, checkout_env = _reviewed_tag_source(tmp_path, repo, release, monkeypatch)
+    checkout_env["VALIDATION_REF"] = snapshot
+    checkout = _run(_step("Check out reviewed upstream"), tmp_path, repo, checkout_env)
+    assert checkout.returncode == 0, checkout.stdout + checkout.stderr
+    assert _git(repo, "rev-parse", "HEAD") == snapshot
+    assert _git(repo, "rev-parse", f"{FIXTURE_RELEASE_TAG}^{{commit}}") == release
+    assert (repo / "code.py").read_text() == "snapshot_after_release = True\n"
+
+
+@pytest.mark.platforms("posix")
+def test_reviewed_snapshot_rejects_a_release_outside_its_ancestry(tmp_path, monkeypatch):
+    repo, release, base, _ = _import_merge(tmp_path)
+    _, checkout_env = _reviewed_tag_source(tmp_path, repo, release, monkeypatch)
+    checkout_env["VALIDATION_REF"] = base
+    checkout = _run(_step("Check out reviewed upstream"), tmp_path, repo, checkout_env)
+    assert checkout.returncode != 0, checkout.stdout + checkout.stderr
+    assert _git(repo, "tag", "--list", FIXTURE_RELEASE_TAG) == ""

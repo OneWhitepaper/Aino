@@ -5,7 +5,7 @@ import copy
 import json
 
 from hermes_cli.desktop_history_recovery_store import owner_stamp
-from hermes_state import SessionDB
+from persistence.housekeeping import maintenance as import_limits
 
 
 def session_owner(session):
@@ -198,8 +198,8 @@ def bounded_batches(components):
 
 
 def _fits(sessions, size, messages):
-    return (len(sessions) <= SessionDB._IMPORT_MAX_SESSIONS
-            and size <= SessionDB._IMPORT_MAX_TOTAL_BYTES
-            and messages <= SessionDB._IMPORT_MAX_TOTAL_MESSAGES
-            and all(session_size(session) <= SessionDB._IMPORT_MAX_SESSION_BYTES
-                    and len(session.get("messages", [])) <= SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION for session in sessions))
+    return (len(sessions) <= import_limits.IMPORT_MAX_SESSIONS
+            and size <= import_limits.IMPORT_MAX_TOTAL_BYTES
+            and messages <= import_limits.IMPORT_MAX_TOTAL_MESSAGES
+            and all(session_size(session) <= import_limits.IMPORT_MAX_SESSION_BYTES
+                    and len(session.get("messages", [])) <= import_limits.IMPORT_MAX_MESSAGES_PER_SESSION for session in sessions))

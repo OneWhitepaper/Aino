@@ -18,7 +18,7 @@ import threading
 import httpx
 import pytest
 
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, open_persistence_reader, profile_scope
 from tests.gateway.fixtures.local_recovery_probe import Model, child_env, daemon, rpc, websocket
 from tests.gateway.test_native_http_auth import headers, ticket
 from tests.waiting import async_wait_until
@@ -79,9 +79,8 @@ def _assert_source_unchanged(home, before):
 
 
 def _session_config(home, sid):
-    with SessionDB(db_path=home / "state.db", read_only=True) as db:
-        config = db.get_session(sid)["model_config"]
-    return json.loads(config) if isinstance(config, str) else config
+    with open_persistence_reader(home) as store:
+        return store.sessions.get(sid).model_config
 
 
 def _assert_binding(snapshot, sid, mode, model, cwd):
@@ -202,9 +201,9 @@ def test_native_history_sync_continues_original_execution_after_gateway_restart(
         process.send_signal(signal.SIGINT)
         process.wait(timeout=30)
     # Stamp the current account exactly as the desktop does, after the real source turn.
-    with SessionDB(db_path=source / "state.db") as db:
-        db.patch_session_model_config(sid, {"platform_owner": owner})
-        thread_id = db.get_session_model_config_value(sid, "codex_thread_id")
+    with open_persistence(profile_scope(home=source)) as store:
+        store.sessions.patch_model_config(sid, {"platform_owner": owner})
+        thread_id = store.sessions.get_model_config_value(sid, "codex_thread_id")
     artifact = original_cwd / "nested" / "retained.txt"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_text("Work produced before history sync", encoding="utf-8")

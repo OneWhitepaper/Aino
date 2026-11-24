@@ -1,4 +1,11 @@
 """Paused original attachments survive existing media cleanup until their continuation settles."""
+
+from persistence.conversation.messages import NewMessage
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
+
+from dataclasses import asdict
 import os
 from pathlib import Path
 import time
@@ -10,7 +17,6 @@ from gateway.session_ingress_media import release_admission_media, sweep_settled
 from gateway.session_managed_worker import _interrupted_before_bootstrap
 from gateway.session_pause import continuation_descriptor, continuation_history, continuation_turn_scope
 from gateway.session_results import finish_result
-from hermes_state_runtime import claim_session_input
 from tests.agent.test_preflight_compression_cap_e2e import _make_agent, _stop_response
 from tests.gateway.test_api_media_retention import PNG
 from tests.gateway.test_surface_admission import _authority
@@ -31,35 +37,35 @@ async def test_unstarted_pause_keeps_attachment_through_continue_and_age_sweep(t
     try:
         await connection.dispatch({'id': 1, 'method': 'session.resume', 'params': {'session_id': 's'}})
         await _submit(connection, 2, 'Inspect the original picture', attachments=[{'path': str(image), 'mime': 'image/png'}])
-        row = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
+        row = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
         retained = Path(row['payload']['attachments_v1']['media'][0]['path'])
         image.unlink()
         _interrupted_before_bootstrap(authority, row)
-        finish_result(authority.db, epoch=authority.epoch, row=row, response='', outcome='interrupted',
+        finish_result(authority.persistence, epoch=authority.epoch, row=row, response='', outcome='interrupted',
                       result=authority.pending_results[row['admission_id']])
-        release_admission_media(authority.db, row['admission_id'])
+        release_admission_media(authority.persistence, row['admission_id'])
         os.utime(retained, (time.time() - 49 * 3600,) * 2)
-        sweep_settled_media(authority.db, now=time.time() + 2 * 3600)
+        sweep_settled_media(authority.persistence, now=time.time() + 2 * 3600)
         assert retained.read_bytes() == PNG
-        session = authority.db.get_session('s')
+        session = session_row(authority.persistence, 's')
         await _submit(connection, 3, 'Continue.', display_kind='hidden', continuation_of={
             'admission_id': row['admission_id'], 'execution_generation': row['generation'],
             'revision': session['runtime_revision']})
-        continued = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
-        release_admission_media(authority.db, row['admission_id'])
+        continued = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
+        release_admission_media(authority.persistence, row['admission_id'])
         assert retained.exists()
-        with continuation_turn_scope(continuation_descriptor(authority.db, continued)):
+        with continuation_turn_scope(continuation_descriptor(authority.persistence, continued)):
             history = continuation_history([])
         assert any(part.get('type') == 'image_url' for part in history[0]['content'])
         agent = _make_agent(monkeypatch, tmp_path, max_attempts=3)
-        agent._session_db, agent.session_id = authority.db, 's'
+        agent._session_db, agent.session_id = authority.persistence, 's'
         agent.compression_enabled = False
         agent.client.chat.completions.create.return_value = _stop_response()
         result = agent.run_conversation('Continue.', conversation_history=history, persist_user_display_kind='hidden')
         assert result['completed']
-        finish_result(authority.db, epoch=authority.epoch, row=continued, response='done', outcome='completed',
+        finish_result(authority.persistence, epoch=authority.epoch, row=continued, response='done', outcome='completed',
                       result={'result': result, 'usage': {}})
-        sweep_settled_media(authority.db, now=time.time() + 4 * 3600)
+        sweep_settled_media(authority.persistence, now=time.time() + 4 * 3600)
         assert not retained.exists(), 'a completed continuation must release the extra pause hold'
     finally:
         await connection.close()
@@ -77,18 +83,18 @@ async def test_completed_work_or_zero_calls_without_preloop_proof_never_replays_
     try:
         await connection.dispatch({'id': 1, 'method': 'session.resume', 'params': {'session_id': 's'}})
         await _submit(connection, 2, 'Original task')
-        row = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
-        authority.db.append_message('s', 'user', 'Original task')
-        authority.db.append_message('s', 'assistant', 'Visible preserved draft.')
-        finish_result(authority.db, epoch=authority.epoch, row=row, response=result['final_response'],
+        row = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
+        authority.persistence.messages.append('s', NewMessage('user', 'Original task'))
+        authority.persistence.messages.append('s', NewMessage('assistant', 'Visible preserved draft.'))
+        finish_result(authority.persistence, epoch=authority.epoch, row=row, response=result['final_response'],
                       outcome='interrupted', result={'result': result, 'usage': {}})
-        session = authority.db.get_session('s')
+        session = session_row(authority.persistence, 's')
         await _submit(connection, 3, 'Continue.', display_kind='hidden', continuation_of={
             'admission_id': row['admission_id'], 'execution_generation': row['generation'],
             'revision': session['runtime_revision']})
-        continued = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
-        assert continuation_descriptor(authority.db, continued) is None
-        history = authority.db.get_messages_as_conversation('s')
+        continued = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
+        assert continuation_descriptor(authority.persistence, continued) is None
+        history = conversation(authority.persistence, 's')
         with continuation_turn_scope(None):
             assert continuation_history(history) is history
         assert [m['content'] for m in history] == ['Original task', 'Visible preserved draft.']
@@ -117,18 +123,18 @@ async def test_original_reference_refusal_stops_continuation_before_handler(tmp_
     try:
         await connection.dispatch({'id': 1, 'method': 'session.resume', 'params': {'session_id': 's'}})
         await _submit(connection, 2, 'Use @file:original.txt')
-        row = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
+        row = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
         _interrupted_before_bootstrap(authority, row)
-        finish_result(authority.db, epoch=authority.epoch, row=row, response='', outcome='interrupted',
+        finish_result(authority.persistence, epoch=authority.epoch, row=row, response='', outcome='interrupted',
                       result=authority.pending_results[row['admission_id']])
-        session = authority.db.get_session('s')
+        session = session_row(authority.persistence, 's')
         await _submit(connection, 3, 'Continue.', display_kind='hidden', continuation_of={
             'admission_id': row['admission_id'], 'execution_generation': row['generation'],
             'revision': session['runtime_revision']})
-        continued = claim_session_input(authority.db, epoch=authority.epoch, session_id='s')
+        continued = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id='s'))
         reply = await execute_admission(authority, SessionRef(authority.profile_id, 's'), continued)
         assert seen == ['Use @file:original.txt']
         assert reply == 'Original reference refused by existing safety checks.'
-        assert authority.db.get_messages('s') == []
+        assert transcript_rows(authority.persistence, 's') == []
     finally:
         await connection.close()

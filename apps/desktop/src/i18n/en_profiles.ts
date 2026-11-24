@@ -53,6 +53,8 @@ export const enProfiles: Translations['profiles'] = {
     working: (count: number) => (count === 1 ? '1 session running' : `${count} sessions running`)
   },
   remoteOverride: {
+    runHere: 'Run on this computer…',
+    sandboxed: 'Sandboxed',
     menuItem: 'Connect to a remote host…',
     badge: (host: string) => `Runs on ${host}`,
     title: (profile: string) => `Connect ${profile} to a remote host`,

@@ -7,23 +7,28 @@ import sqlite3
 from pathlib import Path
 
 from gateway import hosted_rooms as rooms
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope, store_location
+from persistence.conversation.sessions import SessionQuery, SessionWindow
+from persistence.housekeeping.maintenance import IMPORT_MAX_MESSAGES_PER_SESSION
+from tests.hermes_cli.test_desktop_history_recovery import _export_all
 
 
 def _seed_group(db_path, room_id="room-1", name="创作讨论"):
-    rooms.create_room(db_path, room_id=room_id, name=name,
-                      members=[{"profile": "writer", "handle": "writer", "display_name": "写作机器人"}],
-                      authority_gateway_id="gateway-a", now=10)
-    for event_id, kind, actor, payload in [
-        ("question", "message.user", {"kind": "user", "id": "desktop-user", "display_name": "小张"},
-         {"text": "请给我一个方案"}),
-        ("running", "turn.started", {"kind": "gateway", "id": "gateway-a"},
-         {"task_id": "must-not-resume", "credential": "must-not-copy"}),
-        ("answer", "message.member", {"kind": "member", "id": "writer", "profile": "writer", "display_name": "写作机器人"},
-         {"text": "这是讨论结果"}),
-    ]:
-        rooms.append_event(db_path, room_id=room_id, event_id=event_id, kind=kind, actor=actor,
-                           payload=payload, authority_gateway_id="gateway-a", authority_epoch=1, now=11)
+    placement = "shared" if Path(db_path).name == "shared-state.db" else "profile"
+    with open_persistence(profile_scope(home=Path(db_path).parent)) as store:
+        rooms.create_room(store, placement=placement, room_id=room_id, name=name,
+                          members=[{"profile": "writer", "handle": "writer", "display_name": "写作机器人"}],
+                          authority_gateway_id="gateway-a", now=10)
+        for event_id, kind, actor, payload in [
+            ("question", "message.user", {"kind": "user", "id": "desktop-user", "display_name": "小张"},
+             {"text": "请给我一个方案"}),
+            ("running", "turn.started", {"kind": "gateway", "id": "gateway-a"},
+             {"task_id": "must-not-resume", "credential": "must-not-copy"}),
+            ("answer", "message.member", {"kind": "member", "id": "writer", "profile": "writer", "display_name": "写作机器人"},
+             {"text": "这是讨论结果"}),
+        ]:
+            rooms.append_event(store, placement=placement, room_id=room_id, event_id=event_id, kind=kind, actor=actor,
+                               payload=payload, authority_gateway_id="gateway-a", authority_epoch=1, now=11)
 
 
 def _request(tmp_path):
@@ -39,9 +44,9 @@ def test_projects_only_speaker_messages_as_visible_read_only_history(tmp_path):
 
     home = tmp_path / "legacy"
     home.mkdir()
-    db = SessionDB(db_path=home / "state.db")
-    _seed_group(db.db_path)
-    before = hashlib.sha256(db.db_path.read_bytes()).hexdigest()
+    db = open_persistence(profile_scope(home=home))
+    _seed_group(store_location(db.scope))
+    before = hashlib.sha256(store_location(db.scope).read_bytes()).hexdigest()
     try:
         projected = project_group_history(db, home)
         assert projected == project_group_history(db, home)
@@ -55,12 +60,12 @@ def test_projects_only_speaker_messages_as_visible_read_only_history(tmp_path):
         assert "这是讨论结果" in archive["messages"][1]["content"]
         assert "must-not-copy" not in json.dumps(projected)
         assert "must-not-resume" not in json.dumps(projected)
-        assert hashlib.sha256(db.db_path.read_bytes()).hexdigest() == before
-        target = SessionDB(db_path=tmp_path / "target.db")
+        assert hashlib.sha256(store_location(db.scope).read_bytes()).hexdigest() == before
+        target = open_persistence(profile_scope(home=tmp_path / "target"))
         try:
-            assert target.import_sessions(projected)["ok"]
-            assert [row["id"] for row in target.list_sessions_rich()] == [archive["id"]]
-            assert target.get_session(archive["id"])["source"] == "import"
+            assert target.maintenance.import_sessions(projected).ok
+            assert [row.session.session_id for row in target.sessions.list_sessions(SessionQuery(), SessionWindow(limit=20))] == [archive["id"]]
+            assert target.sessions.get(archive["id"]).source == "import"
         finally:
             target.close()
     finally:
@@ -72,8 +77,8 @@ def test_shared_store_is_snapshotted_with_stable_identity_and_original_data_pres
 
     home = tmp_path / "legacy"
     home.mkdir()
-    db = SessionDB(db_path=home / "state.db")
-    _seed_group(db.db_path)
+    db = open_persistence(profile_scope(home=home))
+    _seed_group(store_location(db.scope))
     _seed_group(home / "shared-state.db")
     before = (home / "shared-state.db").read_bytes()
     destination = tmp_path / "shared-snapshot.db"
@@ -102,10 +107,10 @@ def test_unknown_group_history_requires_confirmation_and_does_not_reappear_after
     assert len(sessions) == 1
     target_home = Path(request["target_home"])
     target_home.mkdir(parents=True, exist_ok=True)
-    target = SessionDB(db_path=target_home / "state.db")
+    target = open_persistence(profile_scope(home=target_home))
     try:
-        assert target.import_sessions(sessions)["ok"]
-        assert target.export_all(include_inactive=True)[0]["messages"][1]["content"].endswith("这是讨论结果")
+        assert target.maintenance.import_sessions(sessions).ok
+        assert _export_all(target, include_inactive=True)[0]["messages"][1]["content"].endswith("这是讨论结果")
     finally:
         target.close()
     again = run(request)
@@ -118,10 +123,10 @@ def test_large_group_history_splits_without_truncating_messages(tmp_path):
 
     home = tmp_path / "legacy"
     home.mkdir()
-    db = SessionDB(db_path=home / "state.db")
-    _seed_group(db.db_path)
-    count = SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION + 1
-    with sqlite3.connect(db.db_path) as connection:
+    db = open_persistence(profile_scope(home=home))
+    _seed_group(store_location(db.scope))
+    count = IMPORT_MAX_MESSAGES_PER_SESSION + 1
+    with sqlite3.connect(store_location(db.scope)) as connection:
         connection.execute("DELETE FROM hosted_room_events")
         connection.executemany("""INSERT INTO hosted_room_events
             (room_id,seq,event_id,kind,actor_json,authority_epoch,payload_json,created_at)
@@ -133,8 +138,8 @@ def test_large_group_history_splits_without_truncating_messages(tmp_path):
         assert len(projected) >= 2
         assert sum(len(row["messages"]) for row in projected) == count
         assert len({message["message_uid"] for row in projected for message in row["messages"]}) == count
-        assert all(len(row["messages"]) <= SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION for row in projected)
-        assert not db._validate_import_payload(projected)[1]
+        assert all(len(row["messages"]) <= IMPORT_MAX_MESSAGES_PER_SESSION for row in projected)
+        assert db.maintenance.import_sessions(projected).ok
     finally:
         db.close()
 
@@ -155,7 +160,7 @@ def test_imported_group_archive_is_visible_in_native_sidebar_and_remains_read_on
     sessions = prepared["groups"][0]["batches"][0]
     target = Path(request["target_home"])
     target.mkdir(parents=True, exist_ok=True)
-    db = SessionDB(db_path=target / "state.db")
+    db = open_persistence(profile_scope(home=target))
     db.close()
     (target / "config.yaml").write_text(json.dumps({
         "gateway": {"multiplex_profiles": False},

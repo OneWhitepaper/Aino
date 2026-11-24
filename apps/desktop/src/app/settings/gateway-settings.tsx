@@ -23,6 +23,7 @@ import { WEBHOOKS_ROUTE } from '../routes'
 
 import { ConnectionsRegistrySection } from './connections-registry'
 import { CONTROL_TEXT } from './constants'
+import { GatewayPluginRecovery } from './gateway-plugin-recovery'
 import { KeychainEncryptionSetting, useKeychainEncryption } from './keychain-encryption-setting'
 import { ManagedUpdatesSection } from './managed-updates-section'
 import { EmptyState, ListRow, Pill, SettingsContent, SettingsSkeleton } from './primitives'
@@ -607,6 +608,8 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
           </p>
         </div>
       )}
+
+      <GatewayPluginRecovery />
 
       {state.envOverride ? (
         <div className="mb-5 flex items-start gap-2 rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">

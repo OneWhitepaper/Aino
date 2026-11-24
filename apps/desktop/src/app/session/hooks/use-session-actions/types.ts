@@ -46,6 +46,7 @@ export interface BranchLoadedSessionOptions {
 }
 
 export interface FreshSessionDraftOptions {
+  preserveProfileSwitch?: boolean
   preserveRoute?: boolean
   replaceRoute?: boolean
   rotateFreshDraftKey?: boolean

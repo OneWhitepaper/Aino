@@ -1,20 +1,27 @@
+import { useStore } from '@nanostores/react'
 import { useEffect, useRef } from 'react'
 
+import { useBackendTransition } from '@/app/gateway/hooks/use-backend-transition'
 import { $workspaceOwnerLabels } from '@/components/pane-shell/workspace-scope'
 import { useI18n } from '@/i18n'
 import { PRODUCT_NAME } from '@/lib/brand'
 import { useStoresSelector } from '@/lib/use-session-slice'
+import { backendTransitionLabel } from '@/store/backend-transition'
 import { $botChatScopes, $botChatSessionIds } from '@/store/bot-chat-scope'
 import { resetBrowseState } from '@/store/composer-input-history'
+import { $activeGatewayProfile } from '@/store/profile'
 import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
 import { $sessionStates, $sessionTiles, storedSessionIdForRuntimeId } from '@/store/session-states'
 
 import { botComposerCopy } from '../bot-composer-copy'
+import { useComposerScope } from '../scope'
 
 interface UseComposerPlaceholderOptions {
   canonicalBotChat?: boolean
   disabled: boolean
   homeLayout?: boolean
+  /** The composer's profile; the active gateway profile when absent. */
+  profile?: null | string
   reconnecting: boolean
   sessionId: null | string | undefined
   storedSessionId?: null | string
@@ -24,11 +31,15 @@ interface UseComposerPlaceholderOptions {
 export function useComposerPlaceholder({
   canonicalBotChat,
   disabled,
+  profile,
   reconnecting,
   sessionId,
   storedSessionId
 }: UseComposerPlaceholderOptions): string {
   const { locale, t } = useI18n()
+  const activeProfile = useStore($activeGatewayProfile)
+  const scope = useComposerScope()
+  const transition = useBackendTransition(profile || scope.profile || activeProfile, scope.connectionId)
 
   const name = useStoresSelector(
     [
@@ -68,11 +79,13 @@ export function useComposerPlaceholder({
   // we're trying to restore. During reconnect, keep the textbox editable so a
   // flaky network doesn't block drafting; only submit/backend actions stay
   // disabled until the gateway is open again.
-  return disabled
-    ? reconnecting
-      ? t.composer.placeholderReconnecting
-      : t.composer.placeholderStarting
-    : canonicalBotChat
-      ? botComposerCopy(locale).placeholder(name)
-      : t.composer.placeholderTo(name)
+  return transition
+    ? backendTransitionLabel(transition, t.sandbox)
+    : disabled
+      ? reconnecting
+        ? t.composer.placeholderReconnecting
+        : t.composer.placeholderStarting
+      : canonicalBotChat
+        ? botComposerCopy(locale).placeholder(name)
+        : t.composer.placeholderTo(name)
 }

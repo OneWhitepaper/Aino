@@ -18,6 +18,7 @@ import { makeTerminalReader, registerTerminalReader } from './buffer'
 import { mirrorSelection } from './clipboard'
 import { trackTerminalCwd } from './cwd-tracking'
 import { terminalLinkHandler, terminalWebLinksAddon } from './links'
+import { PTY_TERMINAL_LINE_OPTIONS } from './pty-output'
 import { createReviveHistory } from './revive-history'
 import { createBootGapFilter } from './revive-snapshot'
 import {
@@ -223,7 +224,7 @@ export function useTerminalSession({
       // reads soft on every platform; VS Code keeps it off and our surface
       // (--ui-bg-chrome) is opaque anyway, so withSurface paints it solid.
       allowTransparency: false,
-      convertEol: true,
+      ...PTY_TERMINAL_LINE_OPTIONS,
       cursorBlink: true,
       fontFamily: latestFontFamilyRef.current,
       fontSize: 11,

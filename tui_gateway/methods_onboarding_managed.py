@@ -15,13 +15,13 @@ def selection(params: dict) -> dict | None:
 
 def store_selection(db, session_id: str, managed: dict | None) -> None:
     if managed is not None:
-        db.patch_session_model_config(session_id, managed)
+        db.sessions.patch_model_config(session_id, managed)
 
 
 def validate_reopen(db, session_id: str, managed: dict | None) -> dict | None:
     from tui_gateway.managed_session import managed_metadata
     fields = ("model_source", "model_id", "platform_owner")
-    stored = managed_metadata({key: db.get_session_model_config_value(session_id, key) for key in fields})
+    stored = managed_metadata({key: db.sessions.get_model_config_value(session_id, key) for key in fields})
     if managed is not None and stored != managed:
         raise ValueError("managed onboarding model or owner changed; start a new run")
     return stored

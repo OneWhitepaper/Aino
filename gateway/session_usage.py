@@ -209,8 +209,14 @@ def begin_reply_metrics(turn, agent, history):
     if not local_viewer_turn(turn) or turn._ctx.mute_notification_reply:
         return None
     session = {"history": history}
+    from agent.agent_init_session import agent_interface
+    store = agent_interface(agent)
     db = getattr(agent, "_session_db", None)
-    if db is not None:
+    if store is not None:
+        stored = store.sessions.get(agent.session_id)
+        if stored is not None:
+            session["created_at"] = stored.started_at
+    elif db is not None:
         stored = db.get_session(agent.session_id)
         if stored:
             session["created_at"] = stored.get("started_at")
@@ -263,8 +269,9 @@ def snapshot_usage(authority, ref, agent) -> dict | None:
         result = usage_stats(agent)
         result["compression_count"] = carried_compression_count(authority.sessions.get(ref.session_id), agent)
         return tui_usage(result)
-    row = authority.db.get_session(ref.session_id)
-    return tui_usage(_stored_stats(row)) if row else None
+    from gateway.session_persistence import authority_persistence
+    row = authority_persistence(authority).sessions.get(ref.session_id)
+    return tui_usage(_stored_stats(row.as_session_row())) if row else None
 
 
 async def account_usage(connection, ref, params):
@@ -303,9 +310,9 @@ async def account_usage(connection, ref, params):
 
 async def stats(connection, ref, params):
     """``session.stats {session_id}``: the same dict ``session.usage`` carries."""
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence.core.errors import AuthorityRefusal
     if set(params) - {"session_id", "profile"}:
-        raise RuntimeStoreError("invalid_params")
+        raise AuthorityRefusal("invalid_params")
     await connection.authority.resolve(connection.actor, ref)
     agent = connection.authority.agent(ref)
     result = usage_stats(agent)

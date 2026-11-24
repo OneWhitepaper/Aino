@@ -167,7 +167,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ruff=={pinned_version(repo)}")
         return 0
     try:
-        head = gitio.resolve_tree(repo, args.head) if args.head else None
+        # Commits are tree-ish too, but their ancestry must not be lost when a
+        # detached candidate shares content with another commit (including HEAD).
+        tip = gitio.commit_or_none(repo, args.head) if args.head else None
+        head = (tip or gitio.resolve_tree(repo, args.head)) if args.head else None
         if args.report:
             return _report(repo, head)
         if args.base:  # CI: the base is the target branch tip, which also holds the switch
@@ -175,7 +178,6 @@ def main(argv: list[str] | None = None) -> int:
                        accepted_upstream=args.accepted_upstream)
         # Locally the base is the merge-base, which lags main; the switch comes from the main tip
         # so a flip on main reaches a branch without a rebase. The head never supplies it.
-        tip = gitio.commit_or_none(repo, args.head) if args.head else None
         base = gitio.default_base(repo, tip or "HEAD")
         switch_rev = gitio.commit_or_none(repo, "origin/main") or base
         return run(repo, base, head, as_json=args.json, switch_rev=switch_rev,

@@ -74,7 +74,7 @@ import {
   previewConsoleInset,
   PreviewConsolePanel
 } from './preview-console'
-import { type ConsoleEntry } from './preview-console-state'
+import { type ConsoleEntry, type PreviewConsoleState } from './preview-console-state'
 import { previewConsoleState } from './preview-console-store'
 import { runPreviewGuestScript, usePreviewDriveChannels, withPreviewDeadline } from './preview-drive-channels'
 import { LocalFilePreview, PreviewEmptyState, PreviewModeSwitcher } from './preview-file'
@@ -227,14 +227,35 @@ const PREVIEW_PRINT_GUARD_SCRIPT =
   `window.print=function(){console.warn("[${PRODUCT_NAME}] Printing is disabled in the in-app preview. ` +
   'Open the page in your browser to print.");};})()'
 
-function PreviewLoadError({
-  consoleHeight = 0,
+interface PreviewBrowserHostProps {
+  consoleState: PreviewConsoleState
+  hidden: boolean
+  hostRef: RefObject<HTMLDivElement | null>
+}
+
+export function PreviewBrowserHost({ consoleState, hidden, hostRef }: PreviewBrowserHostProps) {
+  const open = useStore(consoleState.$open)
+  const height = useStore(consoleState.$height)
+
+  return (
+    <div
+      className={cn('absolute inset-0 flex bg-transparent', hidden && 'pointer-events-none opacity-0')}
+      ref={hostRef}
+      style={previewConsoleInset(open, height)}
+    />
+  )
+}
+
+export function PreviewLoadError({
+  consoleOpen,
+  consoleState,
   error,
   onRestartServer,
   onRetry,
   restarting
 }: {
-  consoleHeight?: number
+  consoleOpen: boolean
+  consoleState: PreviewConsoleState
   error: PreviewLoadErrorState
   onRestartServer?: () => void
   onRetry: () => void
@@ -242,6 +263,11 @@ function PreviewLoadError({
 }) {
   const { t } = useI18n()
   const copy = t.preview.web
+  // Subscribed here, not in PreviewPane: the whole-pane subscription re-rendered
+  // the 1,600-line host (and every mounted preview surface) on every resize
+  // frame while dragging the console splitter. This state is only needed by the
+  // error layout.
+  const consoleHeight = useStore(consoleState.$height)
 
   return (
     <PreviewEmptyState
@@ -268,7 +294,7 @@ function PreviewLoadError({
           )}
         </>
       }
-      consoleHeight={consoleHeight}
+      consoleHeight={consoleOpen ? consoleHeight : 0}
       primaryAction={{ label: copy.tryAgain, onClick: onRetry }}
       secondaryAction={
         onRestartServer
@@ -393,7 +419,6 @@ export function PreviewPane({
   const { browserBarProps, syncPageZoom } = usePreviewPageZoom(webviewRef)
   const noteGuestReady = usePreviewGuestOffscreen(webviewRef, tabId)
   const previewServerRestart = useStore($previewServerRestart)
-  const consoleHeight = useStore(consoleState.$height)
   const consoleOpen = useStore(consoleState.$open)
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const [currentUrl, setCurrentUrl] = useState(target.url)
@@ -473,7 +498,7 @@ export function PreviewPane({
       const handle = event.currentTarget
       const pointerId = event.pointerId
       const startY = event.clientY
-      const startHeight = consoleHeight
+      const startHeight = consoleState.$height.get()
       const previousCursor = document.body.style.cursor
       const previousUserSelect = document.body.style.userSelect
       let active = true
@@ -521,7 +546,7 @@ export function PreviewPane({
       window.addEventListener('blur', cleanup)
       handle.addEventListener('lostpointercapture', cleanup)
     },
-    [consoleHeight, consoleState]
+    [consoleState]
   )
 
   const reloadPreview = useCallback(() => {
@@ -1581,13 +1606,10 @@ export function PreviewPane({
           className="pointer-events-auto relative min-h-0 flex-1 overflow-hidden bg-transparent"
           ref={previewContentRef}
         >
-          <div
-            className={cn(
-              'absolute inset-0 flex bg-transparent',
-              (isRemoteHtml || !isWebPreview || loadError) && 'pointer-events-none opacity-0'
-            )}
-            ref={hostRef}
-            style={previewConsoleInset(consoleOpen, consoleHeight)}
+          <PreviewBrowserHost
+            consoleState={consoleState}
+            hidden={Boolean(isRemoteHtml || !isWebPreview || loadError)}
+            hostRef={hostRef}
           />
           {isRemoteHtml && (
             <PreviewDocumentFrame
@@ -1615,7 +1637,8 @@ export function PreviewPane({
           )}
           {isWebPreview && loadError && (
             <PreviewLoadError
-              consoleHeight={consoleOpen ? consoleHeight : 0}
+              consoleOpen={consoleOpen}
+              consoleState={consoleState}
               error={loadError}
               onRestartServer={target.kind === 'url' && onRestartServer ? () => void restartServer() : undefined}
               onRetry={reloadPreview}

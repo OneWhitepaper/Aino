@@ -19,13 +19,15 @@ test('the pre-MSIX snapshot protects actual ZIP-written rows alongside seeded hi
     const home = path.join(root, account.home)
     const script = `import json,sys
 from pathlib import Path
-from hermes_state import SessionDB
-with SessionDB(db_path=Path(sys.argv[1])) as db:
-    db.create_session('real-zip-session', source='desktop', model='zip-model')
-    first=db.append_message('real-zip-session', role='user', content='actual ZIP prompt')
-    second=db.append_message('real-zip-session', role='assistant', content='actual ZIP reply')
+from persistence.conversation.messages import NewMessage
+from persistence.conversation.sessions import NewSession
+from persistence_assembly import open_persistence, profile_scope
+with open_persistence(profile_scope(home=Path(sys.argv[1]))) as db:
+    db.sessions.create(NewSession('real-zip-session', source='desktop', model='zip-model'))
+    first=db.messages.append('real-zip-session', NewMessage(role='user', content='actual ZIP prompt'))
+    second=db.messages.append('real-zip-session', NewMessage(role='assistant', content='actual ZIP reply'))
 print(json.dumps([first,second]))`
-    const ids = JSON.parse(execFileSync(python, ['-c', script, path.join(home, 'state.db')], {
+    const ids = JSON.parse(execFileSync(python, ['-c', script, home], {
       cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: 15_000, env: { ...process.env, HERMES_HOME: home },
     }))
     fs.writeFileSync(historyPath, JSON.stringify({ purpose: 'aino-released-zip-history', status: 'passed',

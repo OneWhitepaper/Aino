@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Callable, Iterator
 
+from hermes_cli.sqlite_safe_read import connect_tracked, quarantine_cross_process_lock, _secure_state_db_files
+
 
 def open_db(
     path: Path | str,
@@ -37,9 +39,7 @@ def open_db(
     three. Only the transient ``database is locked`` from that pragma is retried (``wal_lock_retries``):
     a first opener initializing a shared DB can make it ignore the busy timeout, notably on Windows.
     """
-    from hermes_state_wal import apply_wal_with_fallback
-    from hermes_cli.sqlite_safe_read import connect_tracked
-    from hermes_state_dbfile import quarantine_cross_process_lock
+    from sqlite_support import apply_wal_with_fallback
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,7 +55,6 @@ def open_db(
         if not acquired:
             raise sqlite3.OperationalError(f"{db_label} startup quarantine lock timed out")
         if path.name == "state.db":
-            from hermes_state import _secure_state_db_files
             _secure_state_db_files(path, create_main=True)
         # Resolved at call time: fd-leak tests patch ``sqlite3.connect`` through the caller's module.
         conn = connect_tracked(path, connect_fn=sqlite3.connect, timeout=busy_timeout_ms / 1000,

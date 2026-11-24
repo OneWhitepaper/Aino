@@ -4,24 +4,22 @@ from __future__ import annotations
 import json
 
 from gateway.session_platform_model import selection_from_policy_data
-from hermes_state_local import POLICY_PREFIX, local_lineage_owner
-from hermes_state_sessions import _parse_model_config
+from persistence.core.errors import AuthorityRefusal
+from persistence.conversation.sessions import parse_model_config as _parse_model_config
 
 
 def project_execution(db, sessions):
     """Read only the private source snapshot. The target importer mints its own ownership."""
-    with db._read_ctx() as conn:
-        for session in sessions:
-            owner = local_lineage_owner(conn, session['id'])
-            row = conn.execute('SELECT value FROM state_meta WHERE key=?', (POLICY_PREFIX + owner,)).fetchone()
-            if row is None:
-                continue
-            receipt = json.loads(row[0])
-            policy = receipt['policy']
-            # Hosted rooms, automation and messaging must remain read-only history.
-            if policy.get('source') not in ('gui', 'cli', 'tui', 'acp', 'tool', 'oneshot'):
-                continue
-            _project_session(session, policy)
+    for session in sessions:
+        owner = db.bindings.lineage_owner(session['id'])
+        marks = db.bindings.binding_marks(owner)
+        if not marks.policy:
+            continue
+        policy = db.bindings.receipt(owner).policy
+        # Hosted rooms, automation and messaging remain history without an executable binding.
+        if policy.get('source') not in ('gui', 'cli', 'tui', 'acp', 'tool', 'oneshot'):
+            continue
+        _project_session(session, policy)
     return sessions
 
 

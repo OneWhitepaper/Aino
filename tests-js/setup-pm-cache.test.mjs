@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { posix } from 'node:path'
 import { load } from 'js-yaml'
 import { expect, it } from 'vitest'
 
@@ -8,6 +9,10 @@ const setup = action('../.github/actions/setup-pm/action.yml')
 // Evaluates the Actions expression subset these gates use, so the tests pin
 // how a gate behaves rather than how it is spelled. Status functions default
 // to a healthy, uncancelled run; `status` overrides them.
+const functions = {
+  // Actions compares case-insensitively.
+  startsWith: (text, prefix) => String(text).toLowerCase().startsWith(String(prefix).toLowerCase()),
+}
 const value = (expression, { status = {}, ...context } = {}) => {
   const lookup = path => path.split('.').reduce(
     (value, key) => (value !== null && typeof value === 'object' ? value[key] : undefined), context) ?? ''
@@ -15,7 +20,7 @@ const value = (expression, { status = {}, ...context } = {}) => {
   const body = String(expression).trim().replace(/^\$\{\{/, '').replace(/\}\}$/, '')
     .replace(/\b(?:inputs|steps|needs|github)(?:\.[\w-]+)+/g, path => JSON.stringify(lookup(path)))
     .replace(/\b(always|success|failure|cancelled)\(\)/g, (_, name) => String(statuses[name]))
-  return Function(`"use strict"; return (${body})`)()
+  return Function(...Object.keys(functions), `"use strict"; return (${body})`)(...Object.values(functions))
 }
 const evaluate = (expression, context) => Boolean(value(expression, context))
 
@@ -84,10 +89,14 @@ it('standalone candidates can restore dependency inputs but cannot save to the r
 })
 
 const SHA = 'a'.repeat(40)
+// A release leg builds only for Stable Release's candidate phase (stable-release.yml passes
+// release-phase: candidate and no upload_release); a direct tag dispatch is refused at validate.
 const dispatches = {
-  tag: { build_commit: '', channel: '', 'release-phase': '', upload_release: true },
+  candidate: { build_commit: '', channel: '', 'release-phase': 'candidate', upload_release: false },
   commit: { build_commit: SHA, channel: '', 'release-phase': '', upload_release: false },
   channel: { build_commit: SHA, channel: 'preview', 'release-phase': '', upload_release: false },
+  // Stable Release claiming an unreviewed commit build in its candidate phase.
+  claim: { build_commit: '', channel: '', 'release-phase': 'candidate', upload_release: false, tag: 'commit.20261026T180000Z-v0.33.0' },
 }
 const admitted = labels => ({
   validate: { result: 'success', outputs: Object.fromEntries(labels.map(label => [label, 'true'])) },
@@ -99,9 +108,12 @@ const payloadEvents = {
   branch: { event_name: 'push', ref: 'refs/heads/feature', sha: SHA },
 }
 
-it('finds a release and a commit leg for every native target, and the payload producer', () => {
+it('finds a release and a commit leg for every native target, a release leg per Linux target, and the payload producer', () => {
   const legs = desktopLegs.map(([, job]) => `${targetOf(job)}:${job['cache-mode']}`).sort()
-  expect(legs).toEqual(nativeDesktopTargets.flatMap(target => [`${target}:read`, `${target}:write`]).sort())
+  const targets = nativeDesktopTargets
+  // Linux builds only on tag builds, so it has no read-only commit leg.
+  expect(legs).toEqual([...targets.flatMap(target => [`${target}:read`, `${target}:write`]),
+    'linux-arm64:write', 'linux-x64:write'].sort())
   expect(cacheUsers(payload)).toHaveLength(1)
 })
 
@@ -115,9 +127,10 @@ it.each([
     // Only the release branch writes the shared cache; commit and channel
     // builds of unreviewed inputs run the read-only leg.
     const needs = admitted(targetOf(job))
-    expect(evaluate(job.if, { inputs: dispatches.tag, needs })).toBe(cacheMode === 'write')
+    expect(evaluate(job.if, { inputs: dispatches.candidate, needs })).toBe(cacheMode === 'write')
     expect(evaluate(job.if, { inputs: dispatches.commit, needs })).toBe(cacheMode === 'read')
     expect(evaluate(job.if, { inputs: dispatches.channel, needs })).toBe(cacheMode === 'read')
+    expect(evaluate(job.if, { inputs: dispatches.claim, needs })).toBe(cacheMode === 'read')
   }
   const cacheSteps = job.steps.filter(step => step.uses === BUILD_CACHE)
   expect(cacheSteps.map(step => step.with.phase)).toEqual(['restore', 'save'])
@@ -140,7 +153,13 @@ it.each([
     expect(build.run).not.toContain('--prepare-only')
   }
   expect(restore.with.producer).toBe(producer)
-  expect(restore.with.source).toBe('${{ github.workspace }}')
+  // The cache action must see the checkout in its own filesystem. On the host
+  // both the relative checkout and github.workspace work; in a job container
+  // the latter names a host path that isn't mounted there (actions/runner#2185).
+  const hostCheckout = '/runner/work/project/project'
+  const checkout = job.container ? '/__w/project/project' : hostCheckout
+  const source = restore.with.source.replace('${{ github.workspace }}', hostCheckout)
+  expect(posix.resolve(checkout, source)).toBe(checkout)
   expect(upload.with).toEqual({
     ...restore.with,
     phase: 'save',
@@ -153,7 +172,7 @@ it.each([
     ...context, steps: { prepare: { outcome } }, status: { failure: outcome !== 'success' },
   })
   const trusted = cacheMode
-    ? { inputs: dispatches.tag }
+    ? { inputs: dispatches.candidate }
     : { inputs: { ref: '' }, github: payloadEvents.trusted }
   expect(saves(trusted)).toBe(true)
   expect(saves(trusted, 'failure')).toBe(false)
@@ -172,20 +191,65 @@ it.each([
 })
 
 it('each selection gate joins exactly one target\'s two trust branches after admission', () => {
-  const legs = Object.fromEntries(desktopLegs.map(([id, job]) => [id, job]))
+  // Trust branches are the admitted build legs that declare a cache mode. They
+  // are found by mode, not by cache action: Termux's legs use no desktop cache.
+  const legs = Object.fromEntries(Object.entries(desktop.jobs)
+    .filter(([, job]) => job['cache-mode'] && String(job.needs) === 'validate'))
   const gates = Object.values(desktop.jobs).filter(job => job.env?.SELECTED_BUILD_SUCCEEDED)
-  expect(gates).toHaveLength(nativeDesktopTargets.length)
+  // A read-only branch reaches the rest of the release only through its gate.
+  const joined = gates.flatMap(gate => gate.needs)
+  for (const id of Object.keys(legs).filter(id => legs[id]['cache-mode'] === 'read')) {
+    expect(joined.filter(other => other === id), id).toHaveLength(1)
+  }
+  const switches = Object.keys(desktop.jobs.validate.outputs)
   for (const gate of gates) {
-    const [admission, ...branches] = gate.needs
+    const [admission, ...rest] = gate.needs
     expect(admission).toBe('validate')
+    const branches = rest.filter(id => id in legs)
+    const stagers = rest.filter(id => !(id in legs))
     expect(branches.map(id => legs[id]?.['cache-mode']).sort()).toEqual(['read', 'write'])
-    const [label] = new Set(branches.flatMap(id => targetOf(legs[id])))
-    expect(new Set(branches.flatMap(id => targetOf(legs[id]))).size).toBe(1)
+    expect(stagers).toHaveLength(1)
+    const [stagerId] = stagers
+    const stager = desktop.jobs[stagerId]
+    const commitLeg = branches.find(id => legs[id]['cache-mode'] === 'read')
+    expect(stager['cache-mode']).toBe('read')
+    expect(stager.needs).toEqual(['validate', commitLeg])
+    // One admission switch opens the gate, and both branches run on it alone.
+    const [label, ...others] = switches.filter(output =>
+      evaluate(gate.if, { inputs: dispatches.candidate, needs: admitted([output]) }))
+    expect(label).toBeDefined()
+    expect(others).toEqual([])
+    for (const id of branches) {
+      const inputs = legs[id]['cache-mode'] === 'write' ? dispatches.candidate : dispatches.commit
+      expect(evaluate(legs[id].if, { inputs, needs: admitted([label]) }), id).toBe(true)
+      expect(evaluate(legs[id].if, { inputs, needs: admitted([]) }), id).toBe(false)
+    }
+    // Commit claims require the fresh controller-only staging job; other modes skip it.
+    const stagerNeeds = { ...admitted([label]), [commitLeg]: { result: 'success' } }
+    expect(evaluate(stager.if, { inputs: dispatches.claim, needs: stagerNeeds }), stagerId).toBe(true)
+    expect(evaluate(stager.if, { inputs: dispatches.candidate, needs: stagerNeeds }), stagerId).toBe(false)
+    expect(evaluate(stager.if, { inputs: dispatches.commit, needs: stagerNeeds }), stagerId).toBe(false)
     // The gate runs always() to judge a skipped branch, so it must still
     // refuse a failed admission itself.
     const needs = admitted([label])
-    expect(evaluate(gate.if, { inputs: dispatches.tag, needs })).toBe(true)
-    expect(evaluate(gate.if, { inputs: dispatches.tag,
+    expect(evaluate(gate.if, { inputs: dispatches.candidate,
       needs: { validate: { ...needs.validate, result: 'failure' } } })).toBe(false)
+  }
+})
+
+it('native builders and trusted claim stagers use standard GitHub hosted runners', () => {
+  const standard = new Set(['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-24.04-arm',
+    'macos-15', 'macos-15-intel', 'windows-latest', 'windows-11-arm'])
+  for (const [id, job] of Object.entries(desktop.jobs)) {
+    if (!job['runs-on']) continue
+    expect(job['runs-on'], id).not.toMatch(/blacksmith|self-hosted|32-(?:arm-)?core/)
+    if (!job['runs-on'].includes('${{')) expect(standard.has(job['runs-on']), id).toBe(true)
+    const declared = job.strategy?.matrix?.target ?? []
+    const targets = typeof declared === 'string'
+      ? Object.values(JSON.parse(declared.match(/fromJSON\('([^']+)'\)/)[1])).flat()
+      : declared
+    for (const target of targets) {
+      expect(standard.has(target.runner), `${id}:${target.label}`).toBe(true)
+    }
   }
 })

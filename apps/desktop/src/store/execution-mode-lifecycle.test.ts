@@ -43,7 +43,7 @@ it('keeps account model/draft intent separate even on the same connection and pr
   expect(getExecutionWorkspace('code')?.draft?.key).toBe('__new__:alice')
 })
 
-it('moves local profile mode pointers on rename and drops only the deleted source', () => {
+it('moves local profile mode pointers on rename and drops only the deleted source', async () => {
   owner('local', 'rename-source')
   $freshDraftKey.set('__new__:local')
   setDraftExecutionMode('code')
@@ -52,7 +52,7 @@ it('moves local profile mode pointers on rename and drops only the deleted sourc
   $freshDraftKey.set('__new__:remote')
   setDraftExecutionMode('code')
   rememberExecutionWorkspace()
-  migrateTilesForProfile('rename-source', 'renamed')
+  await migrateTilesForProfile('rename-source', 'renamed')
   owner('local', 'renamed')
   expect(getExecutionWorkspace('code')?.draft?.key).toBe('__new__:local')
   owner('remote', 'rename-source')

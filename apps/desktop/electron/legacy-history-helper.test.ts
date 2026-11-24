@@ -38,7 +38,7 @@ it('uses the real Python helper to snapshot and prepare only this account’s hi
 import json
 import sys
 from pathlib import Path
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
 
 request = json.load(sys.stdin)
 owner = request['owner']
@@ -46,19 +46,19 @@ source = Path(request['source_home'])
 target = Path(request['target_home'])
 source.mkdir(parents=True, exist_ok=True)
 target.mkdir(parents=True, exist_ok=True)
-db = SessionDB(db_path=source / 'state.db')
-assert db.import_sessions([
+db = open_persistence(profile_scope(home=source))
+assert db.maintenance.import_sessions([
     {'id': 'mine', 'source': 'desktop', 'model_config': {'platform_owner': owner},
      'messages': [{'role': 'user', 'content': 'Archived turn', 'active': 0, 'compacted': 1},
                   {'role': 'assistant', 'content': 'My answer'}]},
     {'id': 'foreign', 'source': 'desktop', 'model_config': {'platform_owner': {**owner, 'user_id': '11'}},
      'messages': [{'role': 'user', 'content': 'Someone else’s conversation'}]},
     {'id': 'unknown', 'source': 'desktop', 'messages': [{'role': 'user', 'content': 'No owner stamp'}]},
-])['ok']
+]).ok
 db.close()
-db = SessionDB(db_path=target / 'state.db')
-assert db.import_sessions([{'id': 'new', 'source': 'desktop',
-    'messages': [{'role': 'user', 'content': 'Keep my new conversation'}]}])['ok']
+db = open_persistence(profile_scope(home=target))
+assert db.maintenance.import_sessions([{'id': 'new', 'source': 'desktop',
+    'messages': [{'role': 'user', 'content': 'Keep my new conversation'}]}]).ok
 db.close()
 `
       ],

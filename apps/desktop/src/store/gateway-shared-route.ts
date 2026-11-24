@@ -1,6 +1,7 @@
 import { type GatewayEvent, registryBackendScopeKey } from '@hermes/shared'
 
-import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
+import type { HermesConnection } from '@/global'
+import { RECONNECT_ATTEMPT_TIMEOUT_MS, SOURCE_SWITCH_DIAL_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 
 import {
   type ManagedModelRoute,
@@ -17,28 +18,33 @@ import {
 // the second dial fails (tunnel/token are per-backend) and the closed socket
 // poisons the active gateway with "not connected" even though the primary is
 // open right next to it.
+//
+// A failed or timed-out lookup REJECTS; it never answers "not shared". On main
+// every local profile rides the primary's one multiplexing gateway, and the
+// lookup is slow exactly when that gateway is still booting — reading the
+// timeout as "not shared" dialed a secondary whose own getConnection joined the
+// same boot for another 20 s, then opened a second socket at the shared process
+// (#120005). Callers surface the rejection as the switch/request failure.
 export async function sharedPrimaryRoute(profile: string): Promise<boolean> {
+  return (await sharedPrimaryConnection(profile)) !== null
+}
+
+/** `profile`'s descriptor when it rides the shared primary backend, else null. */
+export async function sharedPrimaryConnection(profile: string): Promise<HermesConnection | null> {
   const desktop = window.hermesDesktop
 
   if (!desktop) {
-    return false
+    return null
   }
 
-  try {
-    // Unbounded IPC round-trip into main (#93454) — a wedge here must reject
-    // like any other failure, not hang the route decision forever, since
-    // every caller (gatewayForProfile → requestGatewayForProfile/Agent) awaits
-    // this before it can fall back to dialing a secondary.
-    const conn = await withTimeout(
-      desktop.getConnection(profile),
-      RECONNECT_ATTEMPT_TIMEOUT_MS,
-      `Timed out resolving the shared-primary route for profile "${profile}"`
-    )
+  // Unbounded IPC round-trip into main (#93454): bound it so a wedge rejects.
+  const conn = await withTimeout(
+    desktop.getConnection(profile),
+    RECONNECT_ATTEMPT_TIMEOUT_MS,
+    `Timed out resolving the shared-primary route for profile "${profile}"`
+  )
 
-    return Boolean(conn && typeof conn === 'object' && (conn as { sharedPrimary?: boolean }).sharedPrimary === true)
-  } catch {
-    return false
-  }
+  return conn?.sharedPrimary === true ? conn : null
 }
 
 /** True when `connectionId` is the window's already-attached source AND main
@@ -74,38 +80,33 @@ export async function sharedRegistryPrimaryRoute(
     return false
   }
 
-  // Resolved per call, never cached: main answers the route per request
-  // (`resolveProfileBackendRoute` case 6 keeps a pooled backend for
-  // `HERMES_DESKTOP_ISOLATED_BACKEND=1`), and for a pooled profile this is the
-  // same dial `openSecondary` makes next, coalesced by main's claim key.
+  // Resolve per call: only main can distinguish a shared owner from an
+  // isolated pool. A local cold boot needs the same budget as the pool dial.
+  let conn: HermesConnection | null
+
   try {
-    const conn = await withTimeout(
+    conn = await withTimeout(
       desktop.getConnectionFor({ connectionId: id, profile: key }),
-      RECONNECT_ATTEMPT_TIMEOUT_MS,
+      mode === 'local' ? SOURCE_SWITCH_DIAL_TIMEOUT_MS : RECONNECT_ATTEMPT_TIMEOUT_MS,
       `Timed out resolving the backend route for "${key}"`
     )
+  } catch (error) {
+    // Guessing a local owner can mint on the wrong process, while a second
+    // dial can duplicate the host socket. A failed remote probe may ride the
+    // primary, but is not evidence of managed-model support.
+    if (mode === 'local') {
+      throw error
+    }
 
-    const flags =
-      conn && typeof conn === 'object' ? (conn as { sharedPrimary?: boolean; sharedRemote?: boolean }) : null
-
-    return notePrimaryRider(
-      owner,
-      { connectionId: id, profile: key },
-      flags?.sharedRemote === true || flags?.sharedPrimary === true
-    )
-  } catch {
-    // Probe failed on a remote (or not-yet-classified) primary: a secondary at
-    // this already-attached source is the #96493 ghost WebSocket (accept/close,
-    // messages=1), so prefer the primary until a later probe can prove
-    // isolation (`sharedRemote: false`). A LOCAL primary must NOT get that
-    // fallback: when main routes the profile to a pooled child (isolated
-    // backend), the primary would still ACCEPT a `profile`-tagged
-    // session.create (profile_home multiplexing) and mint the session under
-    // its own pid, but the exact-owner route names the pool backend — after a
-    // renderer reload or a pool respawn the resume dials that backend and is
-    // refused SESSION_NOT_OWNED by a pid of the same Desktop (#101416).
-    return notePrimaryRider(owner, { connectionId: id, profile: key }, mode !== 'local', false)
+    return notePrimaryRider(owner, { connectionId: id, profile: key }, true, false)
   }
+
+  // Keep stale-owner rejection outside the probe fallback.
+  return notePrimaryRider(
+    owner,
+    { connectionId: id, profile: key },
+    conn?.sharedRemote === true || conn?.sharedPrimary === true
+  )
 }
 
 // Scopes whose last route resolution rode the primary socket (shared primary /

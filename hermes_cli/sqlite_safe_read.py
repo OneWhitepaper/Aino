@@ -9,6 +9,9 @@ tracks live connections so raw reads happen only when none exist.
 from __future__ import annotations
 
 import contextlib
+import errno
+import stat
+import time
 import logging
 import os
 import secrets
@@ -300,3 +303,162 @@ def offline_file_access(path: Path | str, *, what: str = "read"):
                 "connection's POSIX advisory locks. Close all database "
                 "handles (stop the gateway/dashboard) and retry.")
         yield
+
+
+def _is_operator_store_link(link: Path, link_st: os.stat_result) -> bool:
+    """A ``state.db`` symlink this user owns, to an existing file this user owns.
+
+    A dangling link is refused: SQLite would create the store wherever it points, such as an
+    unmounted volume's mount point (symlinked home directories follow the same rule). A link or
+    target owned by anyone else is refused as planted (#109857).
+    """
+    try:
+        target_st = os.stat(link)
+    except OSError:
+        return False
+    uid = os.geteuid() if hasattr(os, "geteuid") else None
+    return uid is not None and link_st.st_uid == uid and target_st.st_uid == uid
+
+
+def _chmod_pinned_inode(path: Path, mode: int) -> None:
+    """Tighten ``path`` without following a link swapped in after the lstat().
+
+    A bare chmod(2) on the path re-resolves the name, so a replacement symlink
+    racing between validation and chmod could change the mode of an unrelated
+    target (#109857). On Linux the validated inode is pinned with an O_PATH
+    descriptor and reached through ``/proc/self/fd/<fd>``; an O_PATH descriptor
+    holds no POSIX locks, so closing it stays lock-neutral for live SQLite
+    connections. Platforms without O_PATH (macOS/BSD) use the no-follow chmod,
+    which applies to the link itself, never to a swapped-in target.
+    """
+    if hasattr(os, "O_PATH"):
+        # O_PATH|O_NOFOLLOW pins a swapped-in symlink itself instead of failing.
+        fd = os.open(path, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            st_mode = os.fstat(fd).st_mode
+            if stat.S_ISLNK(st_mode):
+                raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), str(path))
+            if not stat.S_ISREG(st_mode):
+                return
+            try:
+                os.chmod(f"/proc/self/fd/{fd}", mode)
+            except FileNotFoundError:
+                # No /proc (minimal chroot/sandbox): leave the mode as is rather
+                # than fall back to a pathname chmod that could follow a swap.
+                logger.debug("state db: /proc unavailable; not tightening %s", path)
+        finally:
+            os.close(fd)
+    else:
+        os.chmod(path, mode, follow_symlinks=False)
+
+
+def _secure_state_db_files(db_path: Path, *, create_main: bool = False) -> None:
+    """Create/tighten a writable state database and its sidecars to 0600.
+
+    SQLite otherwise creates ``state.db``, ``-wal``, and ``-shm`` according to
+    the process umask (commonly 0644 under 0022). Read-only holders
+    never call this helper and remain observational.
+
+    Existing files are tightened without ever (re)opening them: opening the
+    file and closing that descriptor would drop every POSIX ``fcntl`` lock the
+    process holds on its inode — including the locks of an already-open SQLite
+    connection to the same database. A lock-losing close in one process lets a
+    sibling's connection take the shared-memory DMS exclusively at its own
+    close, checkpoint, and unlink the sidecars while long-lived holders
+    (gateway, desktop ``hermes serve``) keep using the deleted inodes.
+    Symlinked state paths fail closed with ``ELOOP`` before the caller's
+    ``sqlite3.connect()`` can follow them (#109857), except a ``state.db``
+    link the operator made to a store of their own (#145075).
+    """
+    if os.name == "nt":
+        return
+
+    main_path = db_path
+    if create_main:
+        # O_EXCL: only a brand-new inode gets a descriptor. Opening an existing
+        # file here and closing it would drop this process's POSIX locks on it.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        try:
+            fd = os.open(main_path, flags, 0o600)
+        except FileExistsError:
+            pass
+        except IsADirectoryError:
+            # Not a database file at all; sqlite3.connect() raises the
+            # canonical error for this, and a directory leaks no row data.
+            return
+        else:
+            os.close(fd)
+
+    for path in (
+        main_path,
+        db_path.with_name(db_path.name + "-wal"),
+        db_path.with_name(db_path.name + "-shm"),
+    ):
+        # fchmod on an ordinary fd of a pre-existing file cannot be used here:
+        # close(fd) would release this process's POSIX locks on that inode,
+        # stripping the locks of any live SQLite connection to the same database.
+        # _chmod_pinned_inode never takes a lock-bearing descriptor.
+        try:
+            st = os.lstat(path)
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(st.st_mode):
+            if path == main_path and _is_operator_store_link(path, st):
+                # A store moved to other storage and linked back (#145075): SQLite follows the link as
+                # before, and the target keeps the mode its owner gave it.
+                continue
+            # Fail closed exactly like the O_NOFOLLOW create above: silently
+            # skipping the link lets the caller's sqlite3.connect() follow it
+            # and operate on whatever it points at (#109857).
+            raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), str(path))
+        if not stat.S_ISREG(st.st_mode):
+            continue
+        try:
+            _chmod_pinned_inode(path, 0o600)
+        except FileNotFoundError:
+            continue  # SQLite retired an idle sidecar after lstat.
+
+
+@contextlib.contextmanager
+def quarantine_cross_process_lock(path: Path, timeout: float = 5.0):
+    """Acquire the cross-process lock for path.quarantine.lock."""
+    import platform
+    lock_path = path.with_name(path.name + ".quarantine.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    acquired = False
+    try:
+        if platform.system() == "Windows":
+            import msvcrt
+            def _lock(mode):  # msvcrt locks a byte range from the current position
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), mode, 1)
+
+            _try_lock = lambda: _lock(msvcrt.LK_NBLCK)
+            _unlock = lambda: _lock(msvcrt.LK_UNLCK)
+        else:
+            import fcntl
+            _try_lock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _unlock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        deadline = time.monotonic() + timeout
+        while not acquired:
+            try:
+                _try_lock()
+                acquired = True
+            except OSError:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(0.020)
+        yield acquired
+    finally:
+        try:
+            if acquired:
+                _unlock()
+        except (OSError, AttributeError):
+            pass
+        finally:
+            handle.close()

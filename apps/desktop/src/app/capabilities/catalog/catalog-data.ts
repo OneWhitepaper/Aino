@@ -310,7 +310,29 @@ export function useCatalog(kind: CatalogKind, profile?: ProfileScope) {
 
 /** Warm a catalog while the browser is idle so switching tabs doesn't pay the fetch + parse. */
 export function prefetchCatalogWhenIdle(kind: CatalogKind, profile?: ProfileScope) {
-  const id = requestIdleCallback(() => void queryClient.prefetchQuery(catalogQuery(kind, profile)), { timeout: 5_000 })
+  const prefetch = () => void queryClient.prefetchQuery(catalogQuery(kind, profile))
 
-  return () => cancelIdleCallback(id)
+  if (typeof window.requestIdleCallback === 'function') {
+    let cancelled = false
+
+    const id = window.requestIdleCallback(() => {
+      if (!cancelled) {
+        prefetch()
+      }
+    }, { timeout: 5_000 })
+
+    return () => {
+      cancelled = true
+
+      if (typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(id)
+      }
+    }
+  }
+
+  const id = window.setTimeout(prefetch, 0)
+
+  return () => {
+    window.clearTimeout(id)
+  }
 }

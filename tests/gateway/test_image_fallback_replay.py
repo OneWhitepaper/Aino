@@ -1,9 +1,11 @@
 """Gateway fallback writes keep text-vision context without inventing native API payloads."""
 from copy import deepcopy
 
+from tests.fixtures.storage_read import transcript_rows
+
 import pytest
 
-from agent.api_content import effective_message_content
+from persistence.conversation.content import effective_message_content
 from gateway.config import GatewayConfig, Platform
 from gateway.platforms.event import MessageEvent, MessageType
 from gateway.run import GatewayRunner
@@ -24,7 +26,7 @@ async def test_gateway_fallback_keeps_image_analysis_for_replay(tmp_path, failed
     runner._refresh_agent_cache_message_count = refresh
     source = SessionSource(platform=Platform.LOCAL, chat_id='image-fallback', user_id='owner')
     entry = store.get_or_create_session(source)
-    db = store._db_for_session_id(entry.session_id)
+    db = store._persistence_for_session_id(entry.session_id)
     image = tmp_path / 'image.png'
     image.write_bytes(b'unchanged image bytes')
     event = MessageEvent(text='change 350 to 400', source=source, message_id='input-1',
@@ -40,7 +42,7 @@ async def test_gateway_fallback_keeps_image_analysis_for_replay(tmp_path, failed
             agent_result={'agent_persisted': False, 'failed': failed, 'error': '429' if failed else None},
             agent_messages=[], prepared=prepared, response='' if failed else 'done',
             agent_failed_early=failed, hidden_reasoning_incomplete=False, is_context_overflow_failure=False)
-        rows = db.get_messages(entry.session_id)
+        rows = transcript_rows(db, entry.session_id)
         assert rows[0]['content'] == clean
         assert rows[0]['api_content'] == model_input
         replay = store.load_transcript(entry.session_id)
@@ -48,7 +50,7 @@ async def test_gateway_fallback_keeps_image_analysis_for_replay(tmp_path, failed
         assert prepared == before
         assert image.read_bytes() == b'unchanged image bytes'
     finally:
-        db.close()
+        store.close_all_db_handles()
 
 
 @pytest.mark.parametrize('image', [True, False], ids=['native-image', 'plain-text'])

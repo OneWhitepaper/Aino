@@ -1,7 +1,10 @@
 """A hosted activity read is fenced to its admission, not its differently numbered room generation."""
-from gateway.hosted_room_driver import TaskIdentity
+
+
+
+from dataclasses import asdict
+from persistence.gateway.hosted_rooms import HostedTaskIdentity as TaskIdentity
 from gateway.session_hosted_rpc import HostedRoomAuthorityRPC
-from hermes_state_runtime import claim_session_input
 
 
 def test_info_returns_only_its_current_admission_activity_and_clears_on_execution_exit(hosted_owner):
@@ -14,7 +17,7 @@ def test_info_returns_only_its_current_admission_activity_and_clears_on_executio
         sid = rpc.create(**coords, title='Group: ' + rpc.room_id)['session_id']
         rpc.submit(**coords, session_id=sid, prompt='work', task=TaskIdentity(rpc.room_id, 'task', 'thread', 'turn'),
                    execution_generation=17, on_terminal=lambda receipt: None)
-        row = claim_session_input(authority.db, epoch=authority.epoch, session_id=sid)
+        row = asdict(authority.persistence.admissions.claim(epoch=authority.epoch, session_id=sid))
         live = authority.sessions[sid]
         authority._stamp_claim(rpc.ref, live, row)
         authority.publish_execution(sid, row['generation'], 'tool.start', {'tool_id': 'call', 'name': tool, 'args': {'private': 'not published'}})

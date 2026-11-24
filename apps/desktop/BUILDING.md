@@ -11,7 +11,7 @@ commands package the current desktop build; they do not stage a fresh runtime.
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
 | Windows x64 / ARM64, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
 | macOS ARM64 / x64 | Signed, notarized `Aino.app` (or the selected Aino variant) in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
-| Linux x64 / ARM64 | Native AppImage candidates; DEB/RPM repackaged from the admitted payload | External replacement; automated Linux release publication remains disabled |
+| Linux x64 / ARM64 | AppImage candidates built on canary tags as unpublished diagnostics; local DEB/RPM repackaging | External replacement; automated Linux release publication remains disabled |
 
 The MSIX manifest targets Windows 10 22H2 (`10.0.19045.0`) and Windows 11.
 The source-script Windows support range is separate from this package floor.
@@ -82,6 +82,15 @@ The macOS custom signer retains the builder's entitlements and file selection.
 It refreshes digests after child signatures and before the outer app signature.
 Unsigned macOS builds refresh them at the end of `afterPack`.
 Do not refresh facts in `afterSign`: that changes resources covered by the signature.
+
+electron-builder copies the payload with builder-util, whose `walk()` drops
+`.gitkeep` and `.DS_Store` files and whose `copyDir()` never creates empty
+directories. The resource copy, the AppImage stage and the MSIX file map all
+use them, and tool digests cover those files. `run-electron-builder.mjs`
+therefore starts the builder with `scripts/patch-electron-builder-copy.mjs`,
+which removes both omissions in memory. Before relocation, framework repair
+and signing change anything, `afterPack` fails the pack unless the packaged
+payload has the prepared payload's entries, types, file sizes and link targets.
 
 ## Local test build
 
@@ -254,8 +263,8 @@ It rejects mixed tag, release-phase, channel-publication, and upgrade inputs.
 Builder jobs check out the admitted SHA. Their artifacts and completion receipts
 go to `releases/commit/FULL_SHA/`, separate from tag archives and update channels.
 The run summary lists Windows sideload packages and their universal bundle, macOS DMG/ZIP
-files, and the Termux package. Linux release legs remain disabled and are listed
-as not built. Only receipt-listed artifacts that exist in storage get download
+files, and the Termux package. Commit builds skip the Linux legs, which are listed
+as skipped. Only receipt-listed artifacts that exist in storage get download
 links. Missing receipts show the failed or incomplete leg.
 
 Each commit build also writes a downloads page to
@@ -519,7 +528,9 @@ For an ordinary package of that desktop build, use the workspace's
 `dist:win`, `dist:mac`, `dist:linux`, or `pack` command. Those commands do not
 replace the complete tagged build described above.
 
-Icons are generated from `assets/nous-girl-*.svg` and `assets/backgrounds/`.
+Desktop icons retain Aino's source art in `assets/aino-icon.png`; shared Hermes
+icons use `assets/nous-girl-*.svg` and `assets/backgrounds/`. Channel variants
+preserve each source's geometry.
 `node scripts/generate-icons.mjs` renders them with the Hermes runtime Python
 (`HERMES_PYTHON`, else `python` on PATH); Pillow and resvg-py are core
 dependencies. Generated PNG/ICO/ICNS files are not source assets.

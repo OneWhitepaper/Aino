@@ -54,7 +54,8 @@ jobs:
       github.repository == 'NousResearch/hermes-agent' &&
       (github.event_name != 'workflow_run' ||
        (github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_repository.full_name == github.repository))
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        startsWith(github.event.workflow_run.display_title, 'Stable release ')))
     strategy:
       fail-fast: false
       matrix:
@@ -153,9 +154,10 @@ jobs:
   merge:
     # Implicit success(): runs only when both publish legs pushed.
     needs: [publish]
-    # GitHub-hosted with docker/setup-buildx-action, as before the runner migration: on
-    # Blacksmith `imagetools create` cannot commit a manifest list to Docker Hub (404 on the
-    # index commit, any buildx version): v0.22.3 rc.1-rc.4 died on it in the versioned manifest.
+    # imagetools needs no BuildKit, but it reads the current builder's buildkitd.toml
+    # registry config. Not useblacksmith/setup-docker-builder: its no-cache-key fallback marks
+    # docker.io `http = true`, Docker Hub 301s the plain-HTTP manifest PUT to HTTPS, Go replays
+    # it as a GET, and the commit 404s (v0.22.3 rc.1-rc.4).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: container-publish
@@ -168,6 +170,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker  # no builder: imagetools then reads no registry config
 
       - name: Log in to Docker Hub
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
