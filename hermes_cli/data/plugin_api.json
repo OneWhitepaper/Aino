@@ -248,7 +248,6 @@
         "hermes_cli.plugin_provider_requests",
         "hermes_constants",
         "hermes_platform",
-        "hermes_state",
         "plugins.plugin_storage",
         "plugins.plugin_utils",
         "pm",

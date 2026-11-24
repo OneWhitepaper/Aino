@@ -87,7 +87,8 @@ def test_a_cold_compress_binds_a_plugin_engine_to_a_session_db_closed_when_it_en
     monkeypatch.setattr("agent.agent_init._select_context_engine", lambda _config: engine)
     monkeypatch.setattr("agent.model_metadata.get_model_context_length", lambda *_a, **_k: 1_000_000)
     monkeypatch.setattr("gateway.session_policy.restore_policy",
-                        lambda _policy: SimpleNamespace(safe_mode=False, config=lambda _authority: {}))
+                        lambda _policy: SimpleNamespace(execution_mode="work", safe_mode=False,
+                                                        config=lambda _authority: {}))
     monkeypatch.setattr("gateway.session_policy.policy_scope", lambda _policy, authority=None: nullcontext())
     runner = SimpleNamespace(_resolve_session_agent_runtime=lambda **_kw: ("test/model", {}))
     authority = SimpleNamespace(runner=runner, persistence=store, profile_id=str(store.scope.profile_dir))

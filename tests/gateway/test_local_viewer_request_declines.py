@@ -79,5 +79,5 @@ async def test_browser_request_waits_for_showing_window_or_unanimous_decline(tmp
             with owner_scope(connection.authority):
                 await connection.close()
         for authority in getattr(runner, "session_authorities", None) or []:
-            authority.db.close()
+            authority.persistence.close()
         process_ownership.release(root)

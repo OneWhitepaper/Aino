@@ -89,4 +89,4 @@ async def test_claimed_image_turn_materializes_and_old_generation_cannot_spend(t
     finally:
         await viewer.close()
         await controller.close()
-        authority.db.close()
+        authority.persistence.close()

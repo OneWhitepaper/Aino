@@ -31,6 +31,7 @@ from persistence.conversation.messages import (
     Watermark,
 )
 from persistence.core.identity import MessageId, SessionId
+from session_rules.turns import _content_text_for_contains
 
 from .._authority import authority_state
 from . import _turn_policy as policy
@@ -75,6 +76,20 @@ class MessageReadsMixin(MessageBase):
 
     def _ids(self, scope: ProfileScope, session_id: SessionId, include_lineage: bool) -> list[str]:
         return resume_lineage(self._backend, scope, str(session_id)) if include_lineage else [str(session_id)]
+
+    def has_prior_user_content(self, session_id, before_row_id, content, *, timestamp=None, flatten_multimodal=False):
+        for _sid, row in self._pairs(self._backend.scope, [str(session_id)]):
+            message = row.message
+            if (row.id >= before_row_id or message.role != "user" or row.visibility is RowVisibility.REWOUND
+                    or message.compressed_summary or message.display_kind not in (None, "", "steer")
+                    or (timestamp is not None and row.epoch != timestamp)):
+                continue
+            if message.content == content or (
+                flatten_multimodal and isinstance(message.content, list)
+                and _content_text_for_contains(message.content).strip() == content
+            ):
+                return True
+        return False
 
     def read_transcript(self, session_id: SessionId, request: TranscriptRead = TranscriptRead()) -> tuple[TranscriptRow, ...]:
         scope = self._backend.scope

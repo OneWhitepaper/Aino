@@ -45,7 +45,7 @@ def _make_prunable(db, session_id):
     end_session(db, session_id, "done")
 
 
-def test_auto_vacuum_is_not_starved_by_a_retired_write_fenced_generation(tmp_path, scope_a):
+def test_auto_vacuum_is_not_starved_by_a_retired_write_fenced_generation(tmp_path, scope_a, owned_holder_processes):
     """One inode replacement must not stop auto-VACUUM for the process lifetime.
 
     The retired generation is never released (a gateway holds its store until shutdown), so a gate that

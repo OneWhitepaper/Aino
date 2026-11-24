@@ -576,21 +576,36 @@ except HTTPException as exc:
 '''
 
 
-def test_browse_budget_interrupt_during_begin_raises_budget_error_without_writing(tmp_path):
-    import hermes_state_reconcile as reconcile
+@pytest.mark.parametrize("statement_prefix", [
+    "BEGIN IMMEDIATE",
+    'PRAGMA table_info("sessions")',
+    'ALTER TABLE "sessions" ADD COLUMN "last_read_at"',
+], ids=["begin", "read-columns", "add-column"])
+def test_browse_budget_interrupt_raises_budget_error_without_writing(tmp_path, monkeypatch, statement_prefix):
+    from persistence.core.errors import DeclarativeDrift
+    from persistence.sqlite.admin import _reconcile as reconcile
 
     path = _lagging_store_with_history(_profile_home(tmp_path), rows=1)
     before = _file_state(path)
+    interrupted = []
+    after_expiry = []
 
-    class InterruptAtBegin(reconcile._Budget):
+    class InterruptAtStatement(reconcile._Budget):
         def arm(self, conn):
-            def interrupt():
-                self.expired = True
-                return 1
-            conn.set_progress_handler(interrupt, 1)
+            def trace(statement):
+                if self.expired:
+                    after_expiry.append(statement)
+                elif statement.startswith(statement_prefix):
+                    interrupted.append(statement)
+                    self.expired = True
+            conn.set_trace_callback(trace)
+            conn.set_progress_handler(lambda: int(self.expired), 1)
 
-    with pytest.raises(reconcile.BrowseBudgetExceeded):
-        reconcile._apply_additive_schema(path, InterruptAtBegin(30))
+    monkeypatch.setattr(reconcile, "_Budget", InterruptAtStatement)
+    with pytest.raises(DeclarativeDrift, match="nothing was changed"):
+        open_store_admin(path, read_only=False).reconcile_drift_for_browse()
+    assert len(interrupted) == 1
+    assert all(statement == "ROLLBACK" for statement in after_expiry), after_expiry
     assert _file_state(path) == before
     assert "last_read_at" not in _session_columns(path)
 
@@ -940,6 +955,7 @@ time.sleep(60)
 
 
 @pytest.mark.platforms("linux")
+@pytest.mark.spawns_gateway_lookalike
 def test_legacy_gateway_holding_the_store_without_a_lock_is_not_written(tmp_path):
     """alt-glitch W1: a v0.22.0 multiplex gateway keeps a named profile's state.db open without writing
     that profile's gateway.lock/gateway.pid. Browse must still treat it as the owner: no DDL, a named
@@ -952,8 +968,11 @@ def test_legacy_gateway_holding_the_store_without_a_lock_is_not_written(tmp_path
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=10)
     before = _file_state(path)
-    legacy = subprocess.Popen(["hermes", "-c", _LEGACY_GATEWAY, str(path), "gateway", "run"],
-                              executable=sys.executable, env=os.environ, stdout=subprocess.PIPE, text=True)
+    gateway_script = tmp_path / "gateway" / "run.py"
+    gateway_script.parent.mkdir()
+    gateway_script.write_text(_LEGACY_GATEWAY, encoding="utf-8")
+    legacy = subprocess.Popen([sys.executable, str(gateway_script), str(path)],
+                              env=os.environ, stdout=subprocess.PIPE, text=True)
     try:
         assert legacy.stdout.readline().strip() == "holding"
         assert not (home / "gateway.lock").exists() or not (home / "gateway.lock").read_text()

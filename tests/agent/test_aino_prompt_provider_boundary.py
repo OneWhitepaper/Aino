@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from persistence.conversation.sessions import NewSession
+from persistence_assembly import open_persistence, profile_scope
 from tests.e2e.core.history._helpers import NO_BACKGROUND_REVIEW, OFFLINE_CONFIG
 from tests.fakes.fake_llm_provider import FakeLLMServer, write_hermes_home
 
@@ -47,14 +49,14 @@ def _system(request: dict) -> str:
 
 
 def _turn(server, home: Path, session_id: str, text: str, history: list[dict]) -> tuple[list[dict], str]:
-    from hermes_state import SessionDB
     from run_agent import AIAgent
 
-    with SessionDB(db_path=home / "state.db") as db:
-        db.ensure_session(session_id, source="desktop")
+    with open_persistence(profile_scope(home=home)) as db:
+        if db.sessions.get(session_id) is None:
+            db.sessions.create(NewSession(session_id=session_id, source="desktop"))
         agent = AIAgent(
             provider="custom", base_url=server.base_url, api_key="sk-fake-e2e", model="fake-model",
-            session_db=db, session_id=session_id, quiet_mode=True, platform="desktop",
+            persistence=db, session_id=session_id, quiet_mode=True, platform="desktop",
         )
         try:
             result = agent.run_conversation(text, conversation_history=history, task_id="brand-boundary")
@@ -87,13 +89,12 @@ def test_new_desktop_session_sends_aino_identity_and_rendering_instructions_to_p
 def test_existing_prefix_stays_frozen_until_real_cli_refresh_targets_its_next_turn(
     desktop_profile, monkeypatch,
 ):
-    from hermes_state import SessionDB
     import hermes_cli.main as main_mod
 
     server, home = desktop_profile
-    with SessionDB(db_path=home / "state.db") as db:
+    with open_persistence(profile_scope(home=home)) as db:
         for session_id in ("legacy-selected", "legacy-sibling"):
-            db.create_session(session_id, source="desktop", system_prompt=LEGACY_PROMPT)
+            db.sessions.create(NewSession(session_id=session_id, source="desktop", system_prompt=LEGACY_PROMPT))
 
     selected_history, selected = _turn(
         server, home, "legacy-selected", "Continue without replacing my instructions.", LEGACY_HISTORY,
@@ -111,9 +112,9 @@ def test_existing_prefix_stays_frozen_until_real_cli_refresh_targets_its_next_tu
     except SystemExit as exc:
         assert exc.code in (0, None)
 
-    with SessionDB(db_path=home / "state.db") as db:
-        assert db.get_session("legacy-selected")["system_prompt"] == LEGACY_PROMPT
-        assert db.get_session("legacy-sibling")["system_prompt"] == LEGACY_PROMPT
+    with open_persistence(profile_scope(home=home)) as db:
+        assert db.sessions.get("legacy-selected").system_prompt == LEGACY_PROMPT
+        assert db.sessions.get("legacy-sibling").system_prompt == LEGACY_PROMPT
 
     selected_history, refreshed = _turn(
         server, home, "legacy-selected", "Adopt the new desktop instructions now.", selected_history,
@@ -123,6 +124,6 @@ def test_existing_prefix_stays_frozen_until_real_cli_refresh_targets_its_next_tu
     assert untouched.encode("utf-8") == LEGACY_PROMPT.encode("utf-8")
     _, restored = _turn(server, home, "legacy-selected", "Continue with the refreshed prefix.", selected_history)
     assert restored.encode("utf-8") == refreshed.encode("utf-8")
-    with SessionDB(db_path=home / "state.db") as db:
-        assert db.get_session("legacy-selected")["system_prompt"] == refreshed
-        assert db.get_session("legacy-sibling")["system_prompt"] == LEGACY_PROMPT
+    with open_persistence(profile_scope(home=home)) as db:
+        assert db.sessions.get("legacy-selected").system_prompt == refreshed
+        assert db.sessions.get("legacy-sibling").system_prompt == LEGACY_PROMPT

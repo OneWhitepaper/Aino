@@ -279,11 +279,11 @@ def test_partial_managed_stream_stops_full_turn_and_persists_unknown(managed_gat
     assert terminal.get("partial", False) is (drop_kind != "invalid_response")
     assert terminal["error_surface"]["code"] == "managed_operation_unknown"
     assert terminal["error_surface"]["retryable"] is False
-    rows = f.db.get_messages(session["session_key"])
+    rows = f.db.messages.read_transcript(session["session_key"])
     if drop_kind != "invalid_response":
         assert partial in terminal["text"]
-        assert partial in rows[-1]["content"]
-    assert rows[-1]["display_metadata"]["error_surface"]["retryable"] is False
+        assert partial in rows[-1].content
+    assert rows[-1].display_metadata["error_surface"]["retryable"] is False
 
 
 @pytest.mark.parametrize("async_mode", [False, True])

@@ -434,3 +434,20 @@ class MessageWritesMixin(MessageBase):
         if not present:
             return
         self._cooldowns(scope)[str(session_id)] = _Cooldown(until=snapshot.until, error=snapshot.error)
+
+    def merge_reply_display_metadata(self, session_id, content, *, after_row_id, metadata, through_row_id=None):
+        scope = self._backend.scope
+        self._backend.backend.require_unreplaced(scope)
+        with self._write_transaction(scope):
+            matches = [
+                row for _sid, row in rows_of(self._backend, scope, [str(session_id)])
+                if row.message.role == "assistant" and row.visibility is RowVisibility.ACTIVE
+                and row.id > after_row_id and (through_row_id is None or row.id <= through_row_id)
+                and row.message.content == content
+            ]
+            if not matches:
+                return False
+            row = max(matches, key=lambda row: row.id)
+            row.message = replace(
+                row.message, display_metadata=copy.deepcopy({**(row.message.display_metadata or {}), **metadata}))
+            return True

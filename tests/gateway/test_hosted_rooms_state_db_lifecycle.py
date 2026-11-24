@@ -1,4 +1,4 @@
-"""Hosted-room startup and SessionDB must share one live database generation."""
+"""Hosted-room startup and session handles must share one live database generation."""
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -11,23 +11,27 @@ import pytest
 from gateway import hosted_rooms
 from gateway.hosted_room_policy_checkpoint import HostedRoomPolicyCheckpoint
 from hermes_constants import get_hermes_home
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
 
 
 def test_policy_index_waits_for_room_schema_on_first_open():
     db_path = get_hermes_home() / "state.db"
-    HostedRoomPolicyCheckpoint(db_path)
+    with open_persistence(profile_scope(), eager=True) as store:
+        checkpoint = HostedRoomPolicyCheckpoint(store, placement="profile")
+        hosted_rooms.list_rooms(store, placement="profile")
+        with sqlite3.connect(db_path) as conn:
+            assert conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
+            ).fetchone() is None
 
-    with hosted_rooms._connect(db_path) as conn:
-        assert conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
-        ).fetchone() is None
-
-    HostedRoomPolicyCheckpoint(db_path)
-    with sqlite3.connect(db_path) as conn:
-        assert conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
-        ).fetchone() is not None
+        # Checkpoints initialize lazily: the first policy read sets up the
+        # room schema before creating its JSON expression index.
+        assert not checkpoint.publication_exists(
+            room_id="missing", task_id="missing", status="settled", execution_generation=1)
+        with sqlite3.connect(db_path) as conn:
+            assert conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
+            ).fetchone() is not None
 
 
 @pytest.mark.parametrize("creator, expected_table", [
@@ -36,64 +40,90 @@ def test_policy_index_waits_for_room_schema_on_first_open():
     ("delivery", "delivery_obligations"),
     ("delegation", "async_delegations"),
 ])
-def test_session_startup_preserves_shared_store_first_open(monkeypatch, creator, expected_table):
-    import hermes_state_wal
+def test_session_startup_preserves_shared_store_first_open(monkeypatch, creator, expected_table, record_property):
     from gateway import delivery_ledger
-    from gateway.hosted_room_policy_checkpoint import HostedRoomPolicyCheckpoint
+    from persistence.sqlite import _holder, _registry
     from tools import async_delegation
 
+    scope = profile_scope()
     db_path = get_hermes_home() / "state.db"
     opened = threading.Event()
     continue_hosted = threading.Event()
-    owner, operation = (
-        (async_delegation, "_initialize_schema") if creator == "delegation"
-        else (hermes_state_wal, "apply_wal_with_fallback")
-    )
-    real_first_write = getattr(owner, operation)
+    session_waiting = threading.Event()
+    acquisition_trace = []
+    real_first_write = _holder.apply_wal_with_fallback
 
     def pause_before_first_write(conn, **kwargs):
-        if threading.current_thread().name.startswith("hosted-first-open"):
+        if threading.current_thread().name.startswith("hosted-first-open") and not opened.is_set():
+            acquisition_trace.append("initializer:zero-byte")
             opened.set()
             assert continue_hosted.wait(5), "hosted startup was not released"
+            acquisition_trace.append("initializer:released")
         return real_first_write(conn, **kwargs)
 
     def start_hosted():
-        if creator == "policy":
-            HostedRoomPolicyCheckpoint(db_path)
-            return
-        openers = {
-            "hosted": lambda: hosted_rooms._connect(db_path),
-            "delivery": delivery_ledger._connect,
-            "delegation": async_delegation._connect,
-        }
-        conn = openers[creator]()
-        conn.close()
+        if creator == "delivery":
+            delivery_ledger.record_obligation(
+                obligation_id="first", session_key="first", platform="test", chat_id="chat",
+                thread_id=None, content="retained reply")
+        elif creator == "delegation":
+            async_delegation._persist_dispatch({"delegation_id": "first", "dispatched_at": 1.0})
+        else:
+            with open_persistence(scope) as store:
+                if creator == "policy":
+                    HostedRoomPolicyCheckpoint(store, placement="profile").publication_exists(
+                        room_id="missing", task_id="missing", status="settled", execution_generation=1)
+                else:
+                    hosted_rooms.list_rooms(store, placement="profile")
 
-    monkeypatch.setattr(owner, operation, pause_before_first_write)
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="hosted-first-open") as pool:
+    def start_session():
+        with open_persistence(scope, eager=True) as store:
+            assert store.sessions.get("missing") is None
+            assert db_path.stat().st_ino == original.st_ino
+            assert not list(db_path.parent.glob("state.db.zeroed-*.bak"))
+
+    def wait_for_shared_store(timeout=None):
+        assert not continue_hosted.is_set()
+        pending = db_path.stat()
+        assert pending.st_size == 0
+        assert pending.st_ino == original.st_ino
+        acquisition_trace.append("session:shared-store-wait")
+        session_waiting.set()
+        return real_opening_wait(timeout)
+
+    monkeypatch.setattr(_holder, "apply_wal_with_fallback", pause_before_first_write)
+    monkeypatch.setattr(delivery_ledger, "_scope", lambda: scope)
+    monkeypatch.setattr(async_delegation, "_scope", lambda: scope)
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hosted-first-open") as pool:
         startup = pool.submit(start_hosted)
         try:
             assert opened.wait(5), "real hosted connection did not open"
             original = db_path.stat()
             assert original.st_size == 0
-            with SessionDB(db_path):
-                assert db_path.stat().st_ino == original.st_ino
-                assert not list(db_path.parent.glob("state.db.zeroed-*.bak"))
+            # Observe the registry's real wait, after the session has found
+            # the in-flight holder, so releasing startup cannot serialize the opens.
+            with _registry._lock:
+                opening = _registry._opening[db_path.resolve()]
+            real_opening_wait = opening.wait
+            monkeypatch.setattr(opening, "wait", wait_for_shared_store)
+            session = pool.submit(start_session)
+            assert session_waiting.wait(5), "session did not wait for the shared first open"
         finally:
             continue_hosted.set()
         startup.result(timeout=5)
+        session.result(timeout=5)
 
-    with SessionDB(db_path) as sessions:
-        tables = {row[0] for row in sessions._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )}
+    record_property("shared_store_acquisition_trace", " -> ".join(acquisition_trace))
+    assert acquisition_trace == ["initializer:zero-byte", "session:shared-store-wait", "initializer:released"]
+    with sqlite3.connect(db_path) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"sessions", expected_table} <= tables
 
 
 @pytest.mark.parametrize("connection_boundary", ["opening_during_rename", "failed_room_read"])
 def test_quarantine_preserves_offline_store_across_connection_boundaries(monkeypatch, connection_boundary):
     from hermes_cli.sqlite_safe_read import connect_tracked
-    from hermes_state_dbfile import quarantine_invalid_state_db
+    from persistence.sqlite._state.dbfile import quarantine_invalid_state_db
 
     db_path = get_hermes_home() / "state.db"
     damaged = bytes(128)
@@ -101,9 +131,11 @@ def test_quarantine_preserves_offline_store_across_connection_boundaries(monkeyp
     original = db_path.stat()
     if connection_boundary == "failed_room_read":
         with pytest.raises(sqlite3.DatabaseError):
-            hosted_rooms.list_rooms(db_path)
-        with SessionDB(db_path) as recovered:
-            assert recovered._conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            hosted_rooms._connect(db_path)
+        with open_persistence(profile_scope(), eager=True) as recovered:
+            assert recovered.sessions.get("missing") is None
+            with sqlite3.connect(db_path) as conn:
+                assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         backups = list(db_path.parent.glob("state.db.zeroed-*.bak"))
         assert len(backups) == 1
         assert backups[0].read_bytes() == damaged

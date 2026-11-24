@@ -81,6 +81,6 @@ def test_unknown_compression_stops_real_turn_before_continuation(
     assert any(row.get('content') == 'continue the task' for row in result['messages'])
     if phase == 'post_tool':
         assert any(row.get('content') == 'already executed tool result' for row in result['messages'])
-    rows = agent._session_db.get_messages(agent.session_id)
-    assert rows[-1]['display_metadata']['error_surface']['code'] == 'managed_operation_unknown'
-    assert rows[-1]['display_metadata']['error_surface']['retryable'] is False
+    rows = agent.persistence.messages.read_transcript(agent.session_id)
+    assert rows[-1].display_metadata['error_surface']['code'] == 'managed_operation_unknown'
+    assert rows[-1].display_metadata['error_surface']['retryable'] is False

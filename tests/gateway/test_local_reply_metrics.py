@@ -11,7 +11,10 @@ from gateway.session_events import SessionEvents
 from gateway.session_results import execution_result
 from gateway.session_settlement_recovery import completion_payload
 from gateway.turn_context import TurnContext
-from hermes_state import SessionDB
+from persistence.conversation.messages import NewMessage
+from persistence_assembly import open_persistence, open_persistence_reader, profile_scope
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_seed import seed_messages, seed_session
 from tests.gateway.test_local_viewer_events_submit import _gateway_runner, _RecordingAgent
 
 
@@ -25,7 +28,7 @@ class _StoredAgent(_RecordingAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._session_db = kwargs['session_db']
+        self._session_db = self.persistence = kwargs['persistence']
         self.api_key = kwargs['api_key']
         self.provider = kwargs['provider']
         self.session_total_tokens = self.session_output_tokens = 0
@@ -46,7 +49,7 @@ class _StoredAgent(_RecordingAgent):
         user = {'role': 'user', 'content': message}
         answer = {'role': 'assistant', 'content': 'same answer'}
         for row in (user, answer):
-            row['_row_id'] = self._session_db.append_message(self.session_id, row['role'], row['content'])
+            row['_row_id'] = self.persistence.messages.append(self.session_id, NewMessage.from_live(row))
         self.answer = answer
         return {'final_response': 'same answer', 'messages': [*history, user, answer],
                 'completed': self.outcome == 'complete', 'interrupted': self.outcome == 'interrupted',
@@ -56,7 +59,7 @@ class _StoredAgent(_RecordingAgent):
 
 def _run(db, authority, *, managed=True, history=None, session_id='sid'):
     runner = _gateway_runner()
-    runner._session_db = SimpleNamespace(_db=db)
+    runner.persistence = db
     key = (ManagedCredential(lambda: 'fixture-secret', 'user', 'billing-session', 'm',
                              'http://127.0.0.1/v1', 'chat_completions', False) if managed else 'byok')
     runner._resolve_session_agent_runtime.return_value = ('m', {'provider': 'custom', 'api_key': key})
@@ -85,19 +88,19 @@ def _run(db, authority, *, managed=True, history=None, session_id='sid'):
 def stored(tmp_path, monkeypatch):
     # This fixture supplies its own non-network credential; native account tests cover lease binding.
     monkeypatch.setattr('gateway.session_platform_model.managed_agent_context', lambda *args: None)
-    with SessionDB(db_path=tmp_path / 'state.db') as db:
-        db.create_session('sid', source='desktop')
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        seed_session(db, 'sid', 'desktop')
         live = SimpleNamespace(tool_progress_mode=None, event_stream=SessionEvents())
-        authority = SimpleNamespace(sessions={'sid': live}, profile_id='p', adopt_agent=lambda *a: None)
+        authority = SimpleNamespace(sessions={'sid': live}, profile_id='p', persistence=db, adopt_agent=lambda *a: None)
         yield db, authority, live
 
 
 @pytest.mark.parametrize('managed', [True, False])
 def test_canonical_reply_projects_and_persists_existing_metrics(stored, managed):
     db, authority, _ = stored
-    db.append_message('sid', 'user', 'old question')
-    db.append_message('sid', 'assistant', 'old answer')
-    prefix = db.get_messages_as_conversation('sid')
+    seed_messages(db, 'sid', {'role': 'user', 'content': 'old question'})
+    seed_messages(db, 'sid', {'role': 'assistant', 'content': 'old answer'})
+    prefix = conversation(db, 'sid')
     complete, agent = _run(db, authority, managed=managed, history=prefix)
     metrics = complete.get('turn_metrics')
     assert metrics is not None, complete
@@ -107,8 +110,8 @@ def test_canonical_reply_projects_and_persists_existing_metrics(stored, managed)
         assert metrics['billing']['calls_complete'] is True
     else:
         assert metrics['non_aino_model_calls'] is True and 'billing' not in metrics
-    with SessionDB(db_path=db.db_path) as reopened:
-        history = reopened.get_messages_as_conversation('sid')
+    with open_persistence_reader(db.scope.profile_dir) as reopened:
+        history = conversation(reopened, 'sid')
     assert history[-1]['display_metadata']['turn_metrics'] == metrics
     assert all('display_metadata' not in row for row in prefix)
     assert 'display_metadata' not in agent.answer  # display writes never mutate the model prefix
@@ -126,7 +129,7 @@ def test_late_receipt_stays_on_original_reply_after_next_turn(stored, monkeypatc
     assert first_bill['calls_complete'] is False
     monkeypatch.setattr(_StoredAgent, 'background', False)
     # Compression moved the physical agent; the logical viewer now runs a later generation.
-    db.create_session('tip', source='desktop', parent_session_id='sid')
+    seed_session(db, 'tip', 'desktop', parent_session_id='sid')
     agent.session_id = 'tip'
     second, _ = _run(db, authority, session_id='tip')
     live.event_stream.execution = {'execution_generation': 2, 'admission_id': 'new-admission'}
@@ -139,9 +142,9 @@ def test_late_receipt_stays_on_original_reply_after_next_turn(stored, monkeypatc
     assert updates[-1]['payload']['reply_billing']['calls_complete'] is True
     assert updates[-1]['payload']['reply_non_aino_model_calls'] is True
     assert 'execution_generation' not in updates[-1] and 'admission_id' not in updates[-1]
-    with SessionDB(db_path=db.db_path) as reopened:
-        original = reopened.get_messages_as_conversation('sid')[-1]['display_metadata']['turn_metrics']
-        later = reopened.get_messages_as_conversation('tip')[-1]['display_metadata']['turn_metrics']
+    with open_persistence_reader(db.scope.profile_dir) as reopened:
+        original = conversation(reopened, 'sid')[-1]['display_metadata']['turn_metrics']
+        later = conversation(reopened, 'tip')[-1]['display_metadata']['turn_metrics']
     assert {call['purpose'] for call in original['billing']['calls']} == {'chat', 'title'}
     assert original['non_aino_model_calls'] is True
     assert later['billing']['turn_id'] == second['turn_metrics']['billing']['turn_id']
@@ -154,7 +157,7 @@ def test_failed_or_interrupted_turn_does_not_stamp_a_successful_reply(stored, mo
     monkeypatch.setattr(_StoredAgent, 'outcome', outcome)
     complete, _ = _run(db, authority)
     assert complete.get('turn_metrics'), complete
-    assert 'display_metadata' not in db.get_messages_as_conversation('sid')[-1]
+    assert 'display_metadata' not in conversation(db, 'sid')[-1]
 
 
 @pytest.mark.parametrize(('reason', 'error', 'layer', 'retryable'), [

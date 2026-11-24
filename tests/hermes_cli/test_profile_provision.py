@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from hermes_cli import profile_provision, profiles
+from hermes_cli.config import read_user_config_raw
 from hermes_cli.profile_provision import ProfileCreateRequest, provision_profile
 
 
@@ -335,9 +336,8 @@ def test_the_cli_does_not_say_no_keys_when_it_copied_them(launch, capsys):
 
 
 
-def test_the_cli_names_the_launch_profile_for_keys_and_the_clone_source_for_logins(launch, monkeypatch, capsys):
-    """``--clone-from src`` copies src's logins, but the keys over src's empty .env and the model come
-    from the launch profile ('work' here), so each line names where its item came from."""
+def test_the_cli_keeps_a_clone_sources_empty_keys_and_model(launch, monkeypatch, capsys):
+    """An explicitly empty clone source must not inherit the RPC host's provider identity."""
     from hermes_cli import profile_cmd
     src = _named_source(launch)
     (src / ".env").write_text("# no keys\n")
@@ -349,9 +349,11 @@ def test_the_cli_names_the_launch_profile_for_keys_and_the_clone_source_for_logi
     monkeypatch.setenv("HERMES_HOME", str(work))
     profile_cmd._profile_create(_cli_args("c", "--no-alias", "--clone-from", "src"))
     out = capsys.readouterr().out
-    assert "Copied API keys from 'work'" in out
-    assert "Model inherited from 'work'" in out
+    assert "Copied API keys from 'work'" not in out
+    assert "Model inherited from 'work'" not in out
     assert "Copied logins from 'src'" in out
+    assert (launch / "profiles" / "c" / ".env").read_text() == "# no keys\n"
+    assert not read_user_config_raw(launch / "profiles" / "c" / "config.yaml").get("model")
 
 
 def test_validating_in_another_home_runs_under_multiplex_semantics(launch, monkeypatch):

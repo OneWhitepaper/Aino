@@ -461,7 +461,9 @@ def execution_modes(holder, session_ids):
             owner = local_lineage_owner(conn, sid)
             row = conn.execute('SELECT value FROM state_meta WHERE key=?', (POLICY_PREFIX + owner,)).fetchone()
             saved = conn.execute('SELECT model_config FROM sessions WHERE id=?', (sid,)).fetchone()
-            mode = json.loads(row[0])['policy'].get('execution_mode') if row else None
+            receipt = _parse_model_config(row[0]) if row else {}
+            policy = receipt.get('policy')
+            mode = policy.get('execution_mode') if isinstance(policy, dict) else None
             if mode not in ('work', 'code') and saved:
                 mode = _parse_model_config(saved[0]).get('execution_mode')
             modes[sid] = mode if mode in ('work', 'code') else 'work'

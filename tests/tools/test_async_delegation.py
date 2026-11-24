@@ -18,6 +18,8 @@ from contextlib import closing
 
 import pytest
 
+from persistence import DelegationId
+from persistence.authority.coordination import PendingCompletion
 from tools import async_delegation as ad
 from tools.process_registry import process_registry
 from tools.process_registry_notifications import format_process_notification
@@ -1087,18 +1089,27 @@ def test_units_of_one_call_share_a_single_capacity_slot():
     gate = threading.Event()
 
     def blocker():
-        gate.wait(timeout=60)
+        gate.wait()
         return {"results": [], "total_duration_seconds": 0}
 
     common = dict(goals=["a", "b"], context=None, toolsets=None, role="leaf", model="m", session_key="",
                   runner=blocker, max_async_children=1)
-    first = ad.dispatch_async_delegation_batch(delegation_id="deleg_call-1", task_indexes=[0], **common)
-    second = ad.dispatch_async_delegation_batch(delegation_id="deleg_call-2", task_indexes=[1],
-                                                slot_key="deleg_call-1", **common)
-    other = ad.dispatch_async_delegation_batch(delegation_id="deleg_other", **common)
-    assert (first["status"], second["status"], other["status"]) == ("dispatched", "dispatched", "rejected")
-    assert ad.active_task_count() == 2
-    gate.set()
+    try:
+        first = ad.dispatch_async_delegation_batch(delegation_id="deleg_call-1", task_indexes=[0], **common)
+        second = ad.dispatch_async_delegation_batch(delegation_id="deleg_call-2", task_indexes=[1],
+                                                    slot_key="deleg_call-1", **common)
+        other = ad.dispatch_async_delegation_batch(delegation_id="deleg_other", **common)
+        assert (first["status"], second["status"], other["status"]) == ("dispatched", "dispatched", "rejected")
+        assert ad.active_task_count() == 2
+    finally:
+        gate.set()
+        # Join through durable finalization: teardown's bounded drain can miss a late publication.
+        if ad._executor is not None:
+            ad._executor.shutdown(wait=True)
+
+    events = [process_registry.completion_queue.get_nowait() for _ in range(2)]
+    assert {evt["delegation_id"] for evt in events} == {"deleg_call-1", "deleg_call-2"}
+    assert all(evt["status"] == "completed" for evt in events)
 
 
 def test_multi_task_call_is_one_completion_unless_independent_completions(monkeypatch):
@@ -1328,8 +1339,12 @@ def _is_offered(delegation_id: str) -> bool:
         return any(key[1] == delegation_id for key in ad._offered)
 
 
-def _pending_row(delegation_id: str, now: float):
-    return [(delegation_id, json.dumps({"type": "async_delegation", "delegation_id": delegation_id}), now, now)]
+def _pending_completion(delegation_id: str, now: float):
+    return [PendingCompletion(
+        delegation_id=DelegationId(delegation_id),
+        event={"type": "async_delegation", "delegation_id": delegation_id},
+        completed_at=now, dispatched_at=now,
+    )]
 
 
 def test_handed_back_offer_leaves_no_stale_registration():
@@ -1356,7 +1371,7 @@ def test_handed_back_offer_leaves_no_stale_registration():
     thread = threading.Thread(target=consumer)
     thread.start()
     try:
-        assert ad._replay_pending(None, _pending_row(delegation_id, now), q, now) == 1
+        assert ad._offer_pending(_pending_completion(delegation_id, now), q) == 1
     finally:
         thread.join(5)
 
@@ -1393,7 +1408,7 @@ def test_copy_never_becomes_visible_before_its_offer_is_registered():
     thread = threading.Thread(target=consumer)
     thread.start()
     try:
-        assert ad._replay_pending(None, _pending_row(delegation_id, now), q, now) == 1
+        assert ad._offer_pending(_pending_completion(delegation_id, now), q) == 1
     finally:
         thread.join(5)
 

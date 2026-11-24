@@ -25,19 +25,19 @@ async def test_manual_gui_pick_supersedes_different_selection_but_matching_bind_
                              toolsets=[], model_source='aino', model_id='original')
         assert 'result' in created, created
         sid = created['result']['session_id']
-        authority.db.patch_session_model_config(sid, {'conversation_model_selection': {
+        authority.persistence.sessions.patch_model_config(sid, {'conversation_model_selection': {
             'scope': {'owner_subject': viewer.actor.subject},
             'selection': {'model_id': desired, 'model_source': 'aino', 'provider': 'aino',
                           'owner': {'platform_origin': 'https://models.example.test', 'user_id': 'one'}}}})
-        before = authority.db.get_session(sid)
+        before = authority.persistence.sessions.get(sid)
         selected = await call(viewer, 'session.mutate', session_id=sid, request_id='newer-explicit-pick',
-                              operation='model', expected_revision=before['runtime_revision'],
-                              expected_generation=before['runtime_generation'],
+                              operation='model', expected_revision=before.runtime_revision,
+                              expected_generation=before.runtime_generation,
                               payload={'model': 'newer-choice', 'model_source': 'aino'})
         assert 'result' in selected, selected
-        assert authority.db.get_session(sid)['model'] == 'newer-choice'
-        saved = authority.db.get_session_model_config_value(sid, 'conversation_model_selection')
+        assert authority.persistence.sessions.get(sid).model == 'newer-choice'
+        saved = authority.persistence.sessions.get(sid).model_config.get('conversation_model_selection')
         assert (saved is not None) is retained
     finally:
         await viewer.close()
-        authority.db.close()
+        authority.persistence.close()

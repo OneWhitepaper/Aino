@@ -9,25 +9,27 @@ from gateway.hosted_room_peer import GatewayRoomCatalog, catalog_mapping
 from tui_gateway.hosted_room_peer_transport import PeerMemberRoute
 from tui_gateway.hosted_room_service import HostedRoomService
 from tests.tui_gateway.test_hosted_room_service import _server, _FakeRPC, _ApprovalPeerClient
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
+from persistence.gateway.hosted_rooms import HostedTaskIdentity
 
 
 def _start_approval_attempt(service, identity, *, member, profile, generation=1):
     """An approval belongs to a durable live attempt, including replacement generations."""
-    db = service.db_path
+    db = service.store
     binding = next(b for b in service.bindings() if b.room_id == identity.room_id)
-    driver.admit_task(db, identity, payload={'target_member_id': member, 'target_profile': profile,
+    driver.admit_task(db, identity, placement=service.placement, payload={'target_member_id': member, 'target_profile': profile,
                       'source_event_seq': 1, 'prompt': 'approval fixture'}, clock=time.time)
-    lease = driver.acquire_lease(db, room_id=identity.room_id, gateway_id=binding.gateway_id,
+    lease = driver.acquire_lease(db, placement=service.placement, room_id=identity.room_id, gateway_id=binding.gateway_id,
         authority_epoch=binding.authority_epoch, process_generation='approval-test',
         ttl_seconds=30, clock=time.time)
     for index in range(generation):
-        attempt = driver.start_task(db, identity, lease, expected_cancel_generation=0, clock=time.time)
+        attempt = driver.start_task(db, identity, lease, placement=service.placement, expected_cancel_generation=0, clock=time.time)
         if index + 1 < generation:
-            driver.requeue_not_admitted_task(db, attempt, clock=time.time)
+            driver.requeue_not_admitted_task(db, attempt, placement=service.placement, clock=time.time)
 
 
 def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
-    db = tmp_path / "state.db"
+    db = storage_handle(tmp_path)
     catalog = GatewayRoomCatalog.from_mapping(
         catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
     )
@@ -42,7 +44,7 @@ def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
         grant="signed.room.grant",
     )
     peer = _ApprovalPeerClient()
-    service = HostedRoomService(_server(), db_path=db)
+    service = HostedRoomService(_server(), store=db, placement="profile")
     service.register_peer_route(
         room_id="room-1",
         member_id="member-peer",
@@ -74,7 +76,7 @@ def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
             }
         ],
     )
-    identity = driver.TaskIdentity("room-1", "task-1", "thread-1", "turn-1")
+    identity = HostedTaskIdentity("room-1", "task-1", "thread-1", "turn-1")
     _start_approval_attempt(service, identity, member='member-peer', profile='reviewer', generation=2)
     transport = service._resolve_member_transport(
         service.bindings()[0],
@@ -147,7 +149,7 @@ def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
 
 
 def test_stale_local_approval_cannot_resolve_replacement_request(tmp_path: Path):
-    service = HostedRoomService(_server(), db_path=tmp_path / "state.db")
+    service = HostedRoomService(_server(), store=storage_handle(tmp_path), placement="profile")
     service.local_profiles = lambda: ('default', 'other')
     rpc = _FakeRPC()
     service.rpc = rpc
@@ -155,7 +157,7 @@ def test_stale_local_approval_cannot_resolve_replacement_request(tmp_path: Path)
     service.create_room(room_id='room-1', name='Room', members=[
         {'member_id': 'local', 'profile': 'default', 'handle': 'local'},
         {'member_id': 'other', 'profile': 'other', 'handle': 'other'}])
-    _start_approval_attempt(service, driver.TaskIdentity('room-1', 'task-local-1', 'thread', 'turn'),
+    _start_approval_attempt(service, HostedTaskIdentity('room-1', 'task-local-1', 'thread', 'turn'),
                             member='local', profile='default')
     action = {
         "kind": "approval",

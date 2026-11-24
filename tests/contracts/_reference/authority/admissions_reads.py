@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from typing import Any, Mapping, Sequence
@@ -10,6 +11,7 @@ from persistence.authority.admissions import AdmissionRecord, AdmissionResult
 from persistence.core.canonical import canonical_json
 from persistence.core.errors import AuthorityRefusal, PermanentStoreError
 from session_rules.api_payloads import compacted_api_payload
+from persistence.authority.vocabulary import UNSTARTED_INTERRUPT_EXIT_REASON
 
 from . import admissions_rows as rows
 from .admissions_results import load_result
@@ -46,6 +48,36 @@ class AdmissionReadsMixin:
 
     def _committed(self) -> dict[str, Any]:
         return self._state().snapshot
+
+    def continuation_descriptor(self, admission_id: str) -> dict | None:
+        authority = self._committed()
+        row = authority["admissions"].get(admission_id)
+        if row is None:
+            return None
+        current = row
+        while (token := current["payload"].get("continuation_v1")) is not None:
+            old = authority["admissions"].get(token["admission_id"])
+            if (old is None or old["target_session_id"] != row["target_session_id"]
+                    or old["principal_id"] != row["principal_id"] or old["status"] != "terminal"
+                    or old["outcome"] != "interrupted" or old["generation"] != token["execution_generation"]
+                    or old["seq"] >= current["seq"]):
+                raise AuthorityRefusal("stale_continuation")
+            saved = authority["meta"].get(rows._result_key(old["admission_id"]))
+            if saved is None:
+                return None
+            result = load_result(json.dumps(saved))["result"]
+            if (result.get("turn_exit_reason") != UNSTARTED_INTERRUPT_EXIT_REASON
+                    or result.get("interrupted") is not True
+                    or any(result.get(key) for key in ("failed", "error", "partial"))):
+                return None
+            current = old
+        if current is row:
+            return None
+        return {
+            "admission_id": current["admission_id"], "submission_id": current["request_id"],
+            "payload": copy.deepcopy({key: current["payload"][key] for key in ("text", "attachments_v1", "display_v1")
+                                      if key in current["payload"]}),
+        }
 
     def find(self, *, principal_id: str, session_id: str, request_id: str) -> AdmissionRecord | None:
         key = (rows._bound_id(principal_id, 1), rows._bound_id(session_id, 2), rows._bound_id(request_id, 3))

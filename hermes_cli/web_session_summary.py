@@ -261,7 +261,7 @@ def summary_for_db(db, session_id, language="zh", *, generate=False, retry=False
             if authority_check is not None:
                 authority_check()
             with scoped_runtime_main(main_runtime or {}):
-                token = set_accounting_context(db, source["session_id"])
+                token = set_accounting_context(db, source["session_id"], persistence=db)
                 try:
                     summary = _generate(source, language, authority_check, main_runtime, should_yield)
                 finally:

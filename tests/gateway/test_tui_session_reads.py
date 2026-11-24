@@ -11,7 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from persistence.conversation.messages import ConversationRequest, NewMessage
 from persistence_assembly import store_location
+from tests.fixtures.storage_read import conversation
 from tests.fixtures.storage_seed import seed_messages
 
 
@@ -375,7 +377,7 @@ async def test_context_breakdown_pending_build_rechecks_a_changed_transcript(own
     from gateway.session_tui_reads import _stored_id
     sid = (await owner.call('session.create', request_id='r', source='cli', cwd=str(owner.workdir)))['session_id']
     stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
-    row_id = owner.authority.db.append_message(stored, 'user', 'original')
+    row_id = owner.authority.persistence.messages.append(stored, NewMessage(role='user', content='original'))
     agent = SimpleNamespace(model='fake-model', provider='custom')
     owner.authority.runner._cached_agent_for = lambda route: agent
     started, release = threading.Event(), threading.Event()
@@ -408,7 +410,7 @@ async def test_context_breakdown_pending_build_rechecks_a_changed_transcript(own
     try:
         assert await asyncio.to_thread(started.wait, 2), 'first context build did not start'
         rewritten = 'replacement with a different context size'
-        assert owner.authority.db.set_user_message_content(stored, row_id, rewritten) == 1
+        assert owner.authority.persistence.messages.set_user_message_content(stored, row_id, rewritten) is True
         second = asyncio.create_task(owner.call('session.context_breakdown', session_id=sid))
         await asyncio.wait_for(joiner_ready.wait(), 2)
     finally:
@@ -429,25 +431,25 @@ async def test_cold_context_breakdown_restores_only_matching_persisted_usage(own
     from gateway.session_tui_reads import _stored_id
     sid = (await owner.call('session.create', request_id='r', source='cli', cwd=str(owner.workdir)))['session_id']
     stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
-    db = owner.authority.db
-    row_id = db.append_message(stored, 'user', 'the provider-priced question')
-    db.update_system_prompt(stored, 'the frozen session prompt')
-    history = db.get_messages_as_conversation(stored, include_ancestors=True)
+    db = owner.authority.persistence
+    row_id = db.messages.append(stored, NewMessage(role='user', content='the provider-priced question'))
+    db.sessions.update_system_prompt(stored, 'the frozen session prompt')
+    history = conversation(db, stored, ConversationRequest(include_lineage=True))
     anchor = capture_usage_anchor(12000, 30, [{'role': 'system', 'content': 'the frozen session prompt'}, *history])
-    db.patch_session_model_config(stored, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
-    db.append_message(stored, 'assistant', 'the already-priced response')
+    db.sessions.patch_model_config(stored, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
+    db.messages.append(stored, NewMessage(role='assistant', content='the already-priced response'))
     tail = [{'role': 'user', 'content': 'new material'}] if with_tail else []
     if tail:
-        db.append_message(stored, 'user', tail[0]['content'])
-        tail = db.get_messages_as_conversation(stored, include_ancestors=True)[2:]
+        db.messages.append(stored, NewMessage(role='user', content=tail[0]['content']))
+        tail = conversation(db, stored, ConversationRequest(include_lineage=True))[2:]
     reads = []
-    read_history = db.get_messages_as_conversation
+    read_history = db.messages.read_conversation
 
     def counted(*args, **kwargs):
         reads.append(True)
         return read_history(*args, **kwargs)
 
-    monkeypatch.setattr(db, 'get_messages_as_conversation', counted)
+    monkeypatch.setattr(db.messages, 'read_conversation', counted)
     first = await owner.call('session.context_breakdown', session_id=sid)
     assert first['context_used'] == 12030 + estimate_messages_tokens_rough(tail)
     assert first['context_source'] == ('provider_usage_plus_estimate' if with_tail else 'provider_usage')
@@ -457,12 +459,14 @@ async def test_cold_context_breakdown_restores_only_matching_persisted_usage(own
     assert await owner.call('session.context_breakdown', session_id=sid) == first
     assert len(reads) == 1
 
-    assert db.set_user_message_content(stored, row_id, 'rewritten and no longer priced ' * 20) == 1
+    assert db.messages.set_user_message_content(stored, row_id, 'rewritten and no longer priced ' * 20) is True
     stale = await owner.call('session.context_breakdown', session_id=sid)
     assert stale['context_used'] == 0
     assert stale['context_source'] == 'unknown'
     categories = {category['id']: category['tokens'] for category in stale['categories']}
-    assert categories['conversation'] == estimate_messages_tokens_rough(read_history(stored, include_ancestors=True))
+    rewritten_history = [message.as_openai_message() for message in read_history(
+        stored, ConversationRequest(include_lineage=True))]
+    assert categories['conversation'] == estimate_messages_tokens_rough(rewritten_history)
     assert stale['estimated_total'] == sum(categories.values())
     assert categories['conversation'] != next(
         category['tokens'] for category in first['categories'] if category['id'] == 'conversation')
@@ -476,11 +480,11 @@ async def test_cold_context_categories_read_history_without_a_provider_anchor(ow
     sid = (await owner.call('session.create', request_id='unpriced', source='gui',
                             cwd=str(owner.workdir)))['session_id']
     stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
-    db = owner.authority.db
-    db.update_system_prompt(stored, 'the persisted prompt is separate from the transcript')
-    db.append_message(stored, 'user', 'history that has not received provider usage yet')
-    db.append_message(stored, 'assistant', 'a restored answer')
-    history = db.get_messages_as_conversation(stored, include_ancestors=True)
+    db = owner.authority.persistence
+    db.sessions.update_system_prompt(stored, 'the persisted prompt is separate from the transcript')
+    db.messages.append(stored, NewMessage(role='user', content='history that has not received provider usage yet'))
+    db.messages.append(stored, NewMessage(role='assistant', content='a restored answer'))
+    history = conversation(db, stored, ConversationRequest(include_lineage=True))
 
     cold = await owner.call('session.context_breakdown', session_id=sid)
 

@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
+
 
 def assignment(tmp_path, monkeypatch, *, finite=True, unattended=False, yolo=False):
     from gateway.session_local import _bypass_policy
@@ -19,7 +21,8 @@ def assignment(tmp_path, monkeypatch, *, finite=True, unattended=False, yolo=Fal
     policy = replace(policy, request_json=json.dumps({**json.loads(policy.request_json), 'yolo': yolo}))
     monkeypatch.setattr('gateway.session_policy.launch_key', lambda *args: None)
     live = SimpleNamespace(source=SimpleNamespace(user_id='u', chat_id='c'), route='managed-contract')
-    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path))
+    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path),
+                                persistence=storage_handle(tmp_path))
     ref = SimpleNamespace(session_id='sid')
     row = {'payload': {'text': 'hello', 'finite': finite, 'unattended': unattended}}
     scope = {'profile_id': str(tmp_path), 'session_id': 'sid', 'execution_id': 'x', 'generation': 1,

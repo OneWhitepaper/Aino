@@ -5,16 +5,20 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from hermes_state import SessionDB
+from persistence.conversation.messages import NewMessage, TranscriptRead, TranscriptView
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import transcript_rows
+from tests.fixtures.storage_holder import raw_holder
 from hermes_cli import web_session_summary as summaries
 
 
 def _conversation(home, sid="task"):
     home.mkdir(parents=True, exist_ok=True)
-    db = SessionDB(db_path=home / "state.db")
-    db.create_session(sid, "gui")
-    first = db.append_message(sid, "user", "Please implement an independent session summary with references. " * 12)
-    reply = db.append_message(sid, "assistant", "Implemented the display history reader and validated its isolation. " * 12)
+    db = open_persistence(profile_scope(home=home))
+    seed_session(db, sid, "gui")
+    first = db.messages.append(sid, NewMessage(role="user", content="Please implement an independent session summary with references. " * 12))
+    reply = db.messages.append(sid, NewMessage(role="assistant", content="Implemented the display history reader and validated its isolation. " * 12))
     return db, first, reply
 
 
@@ -27,9 +31,8 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
     home = tmp_path / ".hermes"
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(home))
-    monkeypatch.setattr("hermes_state.DEFAULT_DB_PATH", home / "state.db")
     db, first, _reply = _conversation(home)
-    tool = db.append_message("task", "tool", "TOOL_START\n" + "large file evidence\n" * 20000 + "TOOL_END")
+    tool = db.messages.append("task", NewMessage(role="tool", content="TOOL_START\n" + "large file evidence\n" * 20000 + "TOOL_END"))
     requests = []
     citation_override = []
 
@@ -60,7 +63,7 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
                                     "api_key": "fixture-key"}],
               "auxiliary": {"session_summary": {"provider": "fixture", "model": "summary-model", "timeout": 5}}}
     (home / "config.yaml").write_text(json.dumps(config))
-    before = db.get_messages("task", include_inactive=True)
+    before = transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL))
     try:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -87,9 +90,9 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
             assert not results[0]["stale"]
             other_language = client.post("/api/sessions/task/summary", json={"language": "ja"}).json()
             assert other_language["summary"] and len(requests) == 2
-            assert db.get_messages("task", include_inactive=True) == before
-            usage = db._read_one("SELECT SUM(input_tokens), SUM(output_tokens), SUM(api_call_count) FROM session_model_usage WHERE session_id = ? AND task = ?", ("task", "session_summary"))
-            assert tuple(usage) == (40, 30, 2)
+            assert transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL)) == before
+            usage = db.usage.auxiliary_usage_by_task("task")["session_summary"]
+            assert (usage.tokens.input_tokens, usage.tokens.output_tokens, usage.api_call_count) == (40, 30, 2)
             alternate = home / "profiles" / "work"
             other_db, other_first, _ = _conversation(alternate)
             (alternate / "config.yaml").write_text(json.dumps(config))
@@ -98,27 +101,27 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
                 scoped = client.post("/api/sessions/task/summary", json={"profile": "work", "language": "en"}).json()
                 assert scoped["summary"]["objective"]["message_ids"] == [other_first]
                 assert len(requests) == 3
-                assert other_db.get_messages("task")[0]["content"] == before[0]["content"]
+                assert transcript_rows(other_db, "task")[0]["content"] == before[0]["content"]
             finally:
                 other_db.close()
             assert client.post("/api/sessions/task/summary", json={"language": "en"}).json() == results[0]
             assert len(requests) == 3
             for turn in range(20):
-                db.append_message("task", "user", f"Task revision {turn}: " + "context " * 300)
-                last = db.append_message("task", "assistant", f"Current findings {turn}: " + "evidence " * 300)
-            before_recent = db.get_messages("task", include_inactive=True)
+                db.messages.append("task", NewMessage(role="user", content=f"Task revision {turn}: " + "context " * 300))
+                last = db.messages.append("task", NewMessage(role="assistant", content=f"Current findings {turn}: " + "evidence " * 300))
+            before_recent = transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL))
             recent = client.post("/api/sessions/task/summary", json={"language": "en"}).json()
             evidence = json.loads(requests[-1]["messages"][-1]["content"])
             assert len(requests) == 4 and len(requests[-1]["messages"][-1]["content"]) <= 24000
             assert recent["summary"]["coverage"] == "recent"
             assert evidence[0]["id"] == first and evidence[-1]["id"] == last
             assert len(evidence) < len(before_recent)
-            assert db.get_messages("task", include_inactive=True) == before_recent
+            assert transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL)) == before_recent
             missing = next(row["id"] for row in before_recent if row["id"] not in {item["id"] for item in evidence})
             citation_override.append(missing)
             invalid = client.post("/api/sessions/task/summary", json={"language": "zh"}).json()
             assert invalid["summary"] is None and invalid["error_code"] == "generation_failed"
-            assert len(requests) == 5 and db.get_messages("task", include_inactive=True) == before_recent
+            assert len(requests) == 5 and transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL)) == before_recent
     finally:
         server.shutdown()
         server.server_close()
@@ -129,12 +132,11 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
 def test_visibility_revision_failure_and_busy_guards_keep_history_intact(tmp_path, monkeypatch):
     home = tmp_path / ".hermes"
     monkeypatch.setenv("HERMES_HOME", str(home))
-    monkeypatch.setattr("hermes_state.DEFAULT_DB_PATH", home / "state.db")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     db, first, reply = _conversation(home)
     (home / "config.yaml").write_text(json.dumps({"auxiliary": {"session_summary": {"provider": "fixture"}}}))
-    hidden = db.append_message("task", "user", "internal scaffolding", display_kind="hidden")
-    db._execute_write(lambda conn: conn.execute("UPDATE messages SET active=0, compacted=1 WHERE id=?", (first,)))
+    hidden = db.messages.append("task", NewMessage(role="user", content="internal scaffolding", display_kind="hidden"))
+    raw_holder(db)._execute_write(lambda conn: conn.execute("UPDATE messages SET active=0, compacted=1 WHERE id=?", (first,)))
     calls = []
 
     def model(rows, language, allowed, **kwargs):
@@ -143,20 +145,20 @@ def test_visibility_revision_failure_and_busy_guards_keep_history_intact(tmp_pat
 
     monkeypatch.setattr(summaries, "_call", model)
     try:
-        original = db.get_messages("task", include_inactive=True)
+        original = transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL))
         result = summaries.session_summary("task", language="en", generate=True)
         assert result["summary"]["objective"]["message_ids"] == [first]
         assert first in {r["id"] for r in calls[0]} and hidden not in {r["id"] for r in calls[0]}
-        assert db.get_messages("task", include_inactive=True) == original
-        db.create_session("greeting", "gui")
-        db.append_message("greeting", "user", "hi")
-        db.append_message("greeting", "assistant", "Hello!")
+        assert transcript_rows(db, "task", TranscriptRead(view=TranscriptView.ALL)) == original
+        seed_session(db, "greeting", "gui")
+        db.messages.append("greeting", NewMessage(role="user", content="hi"))
+        db.messages.append("greeting", NewMessage(role="assistant", content="Hello!"))
         assert not summaries.session_summary("greeting", generate=True)["eligible"] and len(calls) == 1
-        assert db.try_acquire_session_turn_lease("task", "test-summary")
-        db.append_message("task", "user", "Please check the next stage.")
+        assert db.coordination.try_acquire_turn_lease(session_id="task", holder="test-summary")
+        db.messages.append("task", NewMessage(role="user", content="Please check the next stage."))
         busy = summaries.session_summary("task", language="en", generate=True)
         assert busy["busy"] and busy["stale"] and len(calls) == 1
-        db.release_session_turn_lease("task", "test-summary")
+        db.coordination.release_turn_lease(session_id="task", holder="test-summary")
 
         failures = []
         def fail(*args, **kwargs):
@@ -168,7 +170,7 @@ def test_visibility_revision_failure_and_busy_guards_keep_history_intact(tmp_pat
         assert failed["summary"] == result["summary"] and failed["stale"] and failed["error"]
         # A result generated from an old revision cannot overwrite the snapshot.
         def race(rows, *args, **kwargs):
-            db.append_message("task", "assistant", "New evidence arrived during summary generation.")
+            db.messages.append("task", NewMessage(role="assistant", content="New evidence arrived during summary generation."))
             return _point(first)
 
         monkeypatch.setattr(summaries, "_call", race)
@@ -177,7 +179,7 @@ def test_visibility_revision_failure_and_busy_guards_keep_history_intact(tmp_pat
         assert len(failures) == 1
         raced = summaries.session_summary("task", language="en", generate=True, retry=True)
         assert raced["summary"] == result["summary"] and raced["stale"]
-        db._execute_write(lambda conn: conn.execute("UPDATE messages SET active=0, compacted=0 WHERE id=?", (first,)))
+        raw_holder(db)._execute_write(lambda conn: conn.execute("UPDATE messages SET active=0, compacted=0 WHERE id=?", (first,)))
         assert summaries.session_summary("task", language="en")["summary"] is None
         try:
             summaries._validate(_point(hidden), {reply})

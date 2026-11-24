@@ -93,7 +93,8 @@ def test_search_title_lane_runs_off_event_loop(db_path_for_profile, monkeypatch)
             return store.search.search_messages(*args, **kwargs)
 
         return SimpleNamespace(sessions=store.sessions, lineage=store.lineage,
-                               search=SimpleNamespace(search_messages=search_messages), close=store.close)
+                               search=SimpleNamespace(search_messages=search_messages),
+                               bindings=store.bindings, close=store.close)
 
     monkeypatch.setattr(_rt_sessions, "_open_session_db_for_profile", spy_open)
     asyncio.run(_rt_sessions.search_sessions(q="Modpack", limit=20))

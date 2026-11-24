@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from gateway import shutdown_flush
+from persistence.conversation.messages import NewMessage
 
 
 @pytest.mark.parametrize("live_drain", [False, True], ids=["restart", "live"])
@@ -27,7 +28,7 @@ def test_recovery_payload_memory_does_not_scale_with_backlog(
     def replay() -> int:
         if live_drain:
             recovered, remaining = shutdown_flush.drain_transcript_spool(
-                "sess", lambda message: sink.append_message(**message),
+                "sess", lambda message: sink.messages.append("sess", NewMessage.from_live(message)),
             )
             assert remaining == 0
             return recovered

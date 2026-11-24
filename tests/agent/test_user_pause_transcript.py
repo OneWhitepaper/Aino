@@ -10,7 +10,9 @@ from agent.conversation_loop import _close_durable_failed_turn
 from agent.turn_facade_lease import _lease_not_acquired_result
 from agent.turn_failure_copy import FAILED_TURN_NOTICE
 from gateway.run import _normalize_empty_agent_response
-from hermes_state import SessionDB
+from persistence.conversation.messages import NewMessage
+from persistence.conversation.sessions import NewSession
+from persistence_assembly import open_persistence, profile_scope
 from tests.agent.test_turn_finalizer_interrupt_alternation import _StubAgent, _finalize
 from tests.agent.test_turn_api_call_interrupt import _bare_agent
 
@@ -72,9 +74,9 @@ def test_budget_summary_omits_model_wait_diagnostics_only_for_user_interrupts(re
 @pytest.mark.parametrize("failure", [False, True])
 def test_user_pause_closes_the_durable_tail_without_resend_advice(tmp_path, monkeypatch, failure):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    with SessionDB(tmp_path / "state.db") as db:
-        db.create_session("sess-1", source="desktop", model="stub/model")
-        db.append_message("sess-1", "user", "continue the task")
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        db.sessions.create(NewSession(session_id="sess-1", source="desktop", model="stub/model"))
+        db.messages.append("sess-1", NewMessage(role="user", content="continue the task"))
         messages = [{"role": "user", "content": "continue the task"}]
         agent = _StubAgent()
         agent._tool_interrupt_reason = "explicit stop requested"
@@ -84,22 +86,22 @@ def test_user_pause_closes_the_durable_tail_without_resend_advice(tmp_path, monk
 
         def flush(rows):
             row = rows[-1]
-            db.append_message("sess-1", row["role"], row["content"],
-                              display_kind=row.get("display_kind"), api_content=row.get("api_content"))
+            db.messages.append("sess-1", NewMessage.from_live(row))
 
         agent._session_db = db
+        agent.persistence = db
         agent._flush_messages_to_session_db = flush
         _close_durable_failed_turn(agent, result)
         _close_durable_failed_turn(agent, result)
-        rows = db.get_messages("sess-1")
-        assert [row["role"] for row in rows] == ["user", "assistant"]
+        rows = db.messages.read_transcript("sess-1")
+        assert [row.role for row in rows] == ["user", "assistant"]
         if failure:
-            assert rows[-1]["display_kind"] == "failed_turn"
-            assert rows[-1]["content"] == FAILED_TURN_NOTICE
+            assert rows[-1].display_kind == "failed_turn"
+            assert rows[-1].content == FAILED_TURN_NOTICE
         else:
-            assert rows[-1]["display_kind"] == "hidden"
-            assert not rows[-1]["content"]
-            assert rows[-1]["api_content"]
+            assert rows[-1].display_kind == "hidden"
+            assert not rows[-1].content
+            assert rows[-1].api_content
             assert result["user_interrupted"] is True
 
 

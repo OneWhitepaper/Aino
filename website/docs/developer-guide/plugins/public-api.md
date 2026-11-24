@@ -206,7 +206,6 @@ with a name allows that one name only.
 | `hermes_cli.plugin_provider_requests` | whole module | developer-guide / plugins docs |
 | `hermes_constants` | whole module | developer-guide / plugins docs |
 | `hermes_platform` | whole module | developer-guide / plugins docs |
-| `hermes_state` | whole module | developer-guide / plugins docs |
 | `plugins.plugin_storage` | whole module | developer-guide / plugins docs |
 | `plugins.plugin_utils` | whole module | developer-guide / plugins docs |
 | `pm` | whole module | developer-guide / plugins docs |

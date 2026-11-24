@@ -1,11 +1,109 @@
 """Behavioral tests for the state-holder and repair-admission authority."""
 
 import os
+import errno
 from types import SimpleNamespace
 
 import pytest
 
 from persistence.sqlite._state import holders as holders_module
+
+
+@pytest.mark.platforms("macos")
+def test_filtered_holder_scan_does_not_open_unrelated_process_descriptors(tmp_path, monkeypatch):
+    db_path = tmp_path / "state.db"
+    db_path.touch()
+    inspected = []
+
+    class Process:
+        def __init__(self, pid):
+            self.info = {"pid": pid}
+
+        def open_files(self):
+            inspected.append(self.info["pid"])
+            return [SimpleNamespace(path=str(db_path))]
+
+    def processes(attrs):
+        assert attrs == ["pid"]
+        return [Process(4242), Process(4243)]
+
+    monkeypatch.setattr(holders_module.psutil, "process_iter", processes)
+    assert holders_module.foreign_state_db_holders(db_path, process_filter=lambda pid: pid == 4242) == [
+        (4242, str(db_path))]
+    assert inspected == [4242]
+
+
+@pytest.mark.platforms("macos")
+def test_holder_scan_keeps_watched_file_stat_failures(tmp_path, monkeypatch):
+    db_path = tmp_path / "state.db"
+    db_path.touch()
+    projected_os = SimpleNamespace(**vars(os))
+    real_stat = os.stat
+
+    def stat(path, *args, **kwargs):
+        if str(path) == str(db_path):
+            raise PermissionError(errno.EACCES, "denied", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    projected_os.stat = stat
+    monkeypatch.setattr(holders_module, "os", projected_os)
+    monkeypatch.setattr(holders_module.psutil, "process_iter", lambda attrs: [])
+    assert any(pid == -1 and "stat failed" in reason for pid, reason in holders_module.foreign_state_db_holders(db_path))
+    assert holders_module.held_store_refusal(db_path, command="repair") is not None
+
+
+@pytest.mark.platforms("macos")
+@pytest.mark.parametrize("failure", ["gone", "denied"])
+def test_filtered_holder_scan_keeps_later_holders_after_a_process_race(tmp_path, monkeypatch, failure):
+    db_path = tmp_path / "state.db"
+    db_path.touch()
+
+    class Process:
+        def __init__(self, pid):
+            self.info = {"pid": pid}
+
+        def open_files(self):
+            if self.info["pid"] == 4242:
+                error = holders_module.psutil.NoSuchProcess if failure == "gone" else holders_module.psutil.AccessDenied
+                raise error(4242)
+            return [SimpleNamespace(path=str(db_path))]
+
+    monkeypatch.setattr(holders_module.psutil, "process_iter", lambda attrs: [Process(4242), Process(4243)])
+    holders = holders_module.foreign_state_db_holders(db_path, process_filter=lambda pid: True)
+    assert (4243, str(db_path)) in holders
+    assert any(pid == 4242 for pid, _ in holders) is (failure == "denied")
+
+
+@pytest.mark.platforms("macos")
+def test_holder_scan_does_not_resolve_unrelated_open_file_paths(tmp_path, monkeypatch):
+    db_path = tmp_path / "state.db"
+    db_path.touch()
+    unrelated = str(tmp_path / "unrelated")
+    projected_os = SimpleNamespace(**{**vars(os), "path": SimpleNamespace(**vars(os.path))})
+    realpath = os.path.realpath
+
+    def resolve(path, **kwargs):
+        if str(path) == unrelated:
+            raise AssertionError("an unrelated descriptor must not trigger file I/O")
+        return realpath(path, **kwargs)
+
+    projected_os.path.realpath = resolve
+    monkeypatch.setattr(holders_module, "os", projected_os)
+    monkeypatch.setattr(holders_module.psutil, "process_iter", lambda attrs: [SimpleNamespace(
+        info={"pid": 4242, "open_files": [SimpleNamespace(path=unrelated)]})])
+    assert holders_module.foreign_state_db_holders(db_path) == []
+
+
+@pytest.mark.platforms("macos")
+def test_open_file_paths_report_the_kernel_resolved_symlink_target(tmp_path):
+    target = tmp_path / "state.db"
+    target.touch()
+    alias = tmp_path / "alias.db"
+    alias.symlink_to(target)
+    with alias.open("rb"):
+        paths = {opened.path for opened in holders_module.psutil.Process().open_files()}
+    assert str(target.resolve()) in paths
+    assert str(alias) not in paths
 
 
 @pytest.mark.platforms("linux")

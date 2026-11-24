@@ -117,16 +117,15 @@ class TestFinalizeSessionUsesAgentSessionId:
 # ===========================================================================
 
 class TestPendingTitleValueError:
-    """When set_session_title raises ValueError (duplicate/invalid title),
+    """When sessions.set_title refuses a duplicate or invalid title,
     pending_title must be cleared — not left wedged forever."""
 
     def test_valueerror_clears_pending_title(self, monkeypatch):
-        """ValueError from set_session_title should drop pending_title."""
+        """A title conflict should drop pending_title."""
         from persistence.conversation.sessions import TitleConflict
         from tui_gateway import server
 
         mock_db = MagicMock()
-        mock_db.set_session_title.side_effect = ValueError("duplicate title")
 
         class _Agent:
             session_id = "test-session"
@@ -171,11 +170,11 @@ class TestPendingTitleValueError:
                 "params": {"session_id": "sid", "text": "hello"},
             })
             assert "result" in response, response
-            mock_db.set_session_title.assert_called_once_with("test-session", "My Title")
+            persistence.sessions.set_title.assert_called_once_with("test-session", "My Title")
 
-            # pending_title should be cleared on ValueError, not left wedged
+            # A rejected title must clear the pending title for later auto-title.
             assert session.get("pending_title") is None, (
-                "ValueError from set_session_title must clear pending_title "
+                "TitleConflict from sessions.set_title must clear pending_title "
                 "so auto-title can take over"
             )
         finally:

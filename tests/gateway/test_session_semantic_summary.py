@@ -10,6 +10,8 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 
+from persistence.conversation.messages import NewMessage, TranscriptRead, TranscriptView
+
 
 class Peer:
     auth_identity = {'provider': 'local', 'user_id': 'owner'}
@@ -95,8 +97,8 @@ async def summary_owner(tmp_path, monkeypatch, request):
             'context_window': 32000}})
         assert 'result' in bound, bound
     target = physical_target(authority, SessionRef(str(home), sid))
-    citation.append(authority.db.append_message(target, 'user', 'Preserve the cited session summary. ' * 45))
-    authority.db.append_message(target, 'assistant', 'The session model and history remain intact. ' * 45)
+    citation.append(authority.persistence.messages.append(target, NewMessage(role='user', content='Preserve the cited session summary. ' * 45)))
+    authority.persistence.messages.append(target, NewMessage(role='assistant', content='The session model and history remain intact. ' * 45))
     try:
         yield SimpleNamespace(authority=authority, connection=connection, peer=peer, sid=sid, target=target,
                               origin=origin, requests=requests, hooks=hooks, home=home, source=request.param)
@@ -109,7 +111,7 @@ async def summary_owner(tmp_path, monkeypatch, request):
         server.shutdown()
         server.server_close()
         worker.join(5)
-        authority.db.close()
+        authority.persistence.close()
 
 
 async def summary_call(rig, *, language='en', **params):
@@ -121,7 +123,7 @@ async def summary_call(rig, *, language='en', **params):
 @pytest.mark.asyncio
 async def test_canonical_summary_uses_own_route_and_preserves_history(summary_owner):
     rig = summary_owner
-    before = rig.authority.db.get_messages(rig.target, include_inactive=True)
+    before = rig.authority.persistence.messages.read_transcript(rig.target, TranscriptRead(view=TranscriptView.ALL))
     reply = await summary_call(rig)
     assert reply.get('result', {}).get('summary'), reply
     body, headers = rig.requests[0]
@@ -130,7 +132,7 @@ async def test_canonical_summary_uses_own_route_and_preserves_history(summary_ow
     if rig.source == 'aino':
         assert headers['X-Aino-Task'] == 'session_summary'
         assert headers['X-Aino-Model-ID'] == 'catalog-summary'
-    assert rig.authority.db.get_messages(rig.target, include_inactive=True) == before
+    assert rig.authority.persistence.messages.read_transcript(rig.target, TranscriptRead(view=TranscriptView.ALL)) == before
     assert (await summary_call(rig))['result']['stale'] is False
     assert len(rig.requests) == 1
 
