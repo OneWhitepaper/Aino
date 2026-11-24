@@ -73,10 +73,12 @@ import { prepareGatewayReconnect } from '@/store/gateway-targeted-reconnect'
 import { type ScopedServerRequest } from '@/store/gateway-types'
 import { watchLocalRuntimeJobs } from '@/store/local-runtime-jobs'
 import { notify, notifyError, RECOVERY_ACTIONS } from '@/store/notifications'
+import { startPresenceReporter } from '@/store/presence'
 import {
   $activeGatewayProfile,
   currentProfileSelectionRevision,
   ensureGatewayProfile,
+  foregroundShows,
   normalizeProfileKey,
   refreshActiveProfile
 } from '@/store/profile'
@@ -114,8 +116,10 @@ import { isPeerInstanceWindow, windowProfileOverride } from '@/store/windows'
 
 import { stashGatewaySurvivor, survivorIsStale, takeGatewaySurvivor } from './gateway-hmr-survivor'
 import { notifyPrimaryReauth } from './primary-reauth-notice'
+import { isOtherGateway, redialMovedProfile } from './profile-backend-redial'
 import { useConnectionsRegistry } from './use-connections-registry'
 import { useDefaultProfilePreference } from './use-default-profile-preference'
+import { useLauncherTransitions } from './use-launcher-transitions'
 
 // After the reconnect loop has been failing for this long, raise a NON-blocking
 // warning toast. Full-screen BootFailureOverlay used to lock the user out of
@@ -305,6 +309,11 @@ export function useGatewayBoot({
     refreshHermesConfig,
     refreshSessions
   }
+
+  useLauncherTransitions()
+
+  // One presence reporter per window, beside the connection it reports on; it never renders.
+  useEffect(() => startPresenceReporter(), [])
 
   useEffect(() => {
     let cancelled = false
@@ -873,10 +882,63 @@ export function useGatewayBoot({
       }
     }
 
+    const redialPrimaryInPlace = async (profile: string): Promise<boolean> => {
+      // The window's primary profile moved; main already retired its backend.
+      // Redial the primary socket the way a manual reconnect does: the session
+      // lists, the open chat and the shown profile stay. False while booting,
+      // during a switch, or for a registry-scoped primary.
+      if (!bootCompleted || $gatewaySwitching.get() || primaryConnection?.registryScoped) {
+        return false
+      }
+
+      // A reconnect still looking up the OLD route drops it and looks again.
+      primaryRouteRevision += 1
+      primaryReauthError = null
+      reauthNotified = false
+      livenessProbeFailures = 0
+      clearLivenessReprobeTimer()
+      ownCloseReason = 'manual'
+      gateway.close()
+      clearReconnectTimer()
+      resetReconnectBackoff()
+
+      if (reconnecting) {
+        return true
+      }
+
+      const shown = normalizeProfileKey($activeGatewayProfile.get())
+
+      await attemptReconnect({ profile: shown, activationEpoch: gatewayActivationEpoch() })
+
+      // A profile still shown THROUGH the primary socket (the shared host
+      // backend) resolves its own route again now that the primary moved.
+      if (!cancelled && shown !== profile && (await foregroundShows(shown)) && isActivePrimary()) {
+        await ensureGatewayProfile(shown).catch(error => {
+          console.warn(`[gateway] redial of "${shown}" after "${profile}" moved failed`, error)
+        })
+      }
+
+      return true
+    }
+
     // Soft gateway-mode apply: main tore down the primary without reloading.
     // Wipe session lists so skeletons retrigger, then re-dial in place.
-    const softSwitch = async () => {
+    const softSwitch = async (detail?: { profile?: string }) => {
       if (cancelled) {
+        return
+      }
+
+      // Only one profile's backend moved. Any other apply raises its switch
+      // barrier in this same tick.
+      if (
+        detail?.profile &&
+        (await redialMovedProfile(
+          normalizeProfileKey(detail.profile),
+          redialPrimaryInPlace,
+          isOtherGateway(primaryConnection),
+          () => cancelled
+        ))
+      ) {
         return
       }
 
@@ -1313,7 +1375,7 @@ export function useGatewayBoot({
     }
 
     const offPowerResume = desktop.onPowerResume?.(() => void forceReconnectNow())
-    const offConnectionApplied = desktop.onConnectionApplied?.(() => void softSwitch())
+    const offConnectionApplied = desktop.onConnectionApplied?.(detail => void softSwitch(detail))
 
     const offGatewayReconnect = registerGatewayReconnect(async (options?: GatewayReconnectOptions) => {
       if (cancelled || !bootCompleted || $gatewaySwitching.get()) {

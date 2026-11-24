@@ -4,7 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
+from persistence.conversation.messages import NewMessage, ConversationRequest
+from persistence.conversation.sessions import NewSession
+from tests.fixtures.storage_read import conversation, message_reactions
 
 
 def test_reply_metrics_measure_all_calls_and_survive_reopening(tmp_path, monkeypatch):
@@ -13,13 +16,14 @@ def test_reply_metrics_measure_all_calls_and_survive_reopening(tmp_path, monkeyp
     from tui_gateway.turn_metrics import begin_turn_metrics, finish_turn_metrics
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    db = SessionDB(db_path=tmp_path / "state.db")
-    db.create_session("metrics", "desktop")
+    db = open_persistence(profile_scope(home=tmp_path))
+    db.sessions.create(NewSession("metrics", "desktop"))
     agent = AIAgent(api_key="test", base_url="https://api.openai.com/v1", provider="openai",
                     model="gpt-4o", api_mode="chat_completions", session_id="metrics",
                     quiet_mode=True, skip_context_files=True, skip_memory=True,
                     save_trajectories=False, enabled_toolsets=[])
     agent._session_db = db
+    agent.persistence = db
     session = {"session_key": "metrics", "created_at": 100, "history": []}
 
     def record(prompt, output, cached, duration):
@@ -32,9 +36,9 @@ def test_reply_metrics_measure_all_calls_and_survive_reopening(tmp_path, monkeyp
     try:
         record(9000, 1000, 0, 100)  # Previous turn must not affect this reply.
         before = begin_turn_metrics(agent, session, now=200, monotonic=10)
-        db.append_message("metrics", "user", "question")
-        row = db.append_message("metrics", "assistant", "answer")
-        db.set_message_reaction("metrics", row, "ok")
+        db.messages.append("metrics", NewMessage("user", "question"))
+        row = db.messages.append("metrics", NewMessage("assistant", "answer"))
+        db.messages.set_reaction("metrics", row, "ok", author="user")
         session["history"] = [{"role": "user", "content": "question"},
                               {"role": "assistant", "content": "answer"}]
         for _ in range(12):  # More than the rolling speed deque can hold.
@@ -47,10 +51,10 @@ def test_reply_metrics_measure_all_calls_and_survive_reopening(tmp_path, monkeyp
         assert metrics["tokens_per_second"] == pytest.approx(20)
         assert metrics["cache_hit_pct"] == pytest.approx(80)
         assert metrics["context_percent"] == 18
-        with SessionDB(db_path=db.db_path) as reopened:
-            messages = reopened.get_messages_as_conversation("metrics", include_row_ids=True)
+        with open_persistence(db.scope) as reopened:
+            messages = conversation(reopened, "metrics", ConversationRequest(include_row_ids=True))
             assert messages[-1]["display_metadata"]["turn_metrics"] == metrics
-            assert reopened.get_message_reactions("metrics", row)[0]["emoji"] == "ok"
+            assert message_reactions(reopened, "metrics", row)[0].emoji == "ok"
         assert [m["content"] for m in messages] == ["question", "answer"]
         assert session["history"][-1]["display_metadata"]["turn_metrics"] == metrics
         from agent.turn_context import _reset_per_turn_agent_state, build_api_messages
@@ -68,16 +72,16 @@ def test_reply_metrics_measure_all_calls_and_survive_reopening(tmp_path, monkeyp
 def test_missing_usage_never_reuses_previous_reply_or_session_totals(tmp_path):
     from tui_gateway.turn_metrics import begin_turn_metrics, finish_turn_metrics
 
-    with SessionDB(db_path=tmp_path / "state.db") as db:
-        db.create_session("metrics", "desktop")
-        db.append_message("metrics", "assistant", "same answer")
-        agent = SimpleNamespace(_session_db=db, session_id="metrics", session_total_tokens=5000)
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        db.sessions.create(NewSession("metrics", "desktop"))
+        db.messages.append("metrics", NewMessage("assistant", "same answer"))
+        agent = SimpleNamespace(_session_db=db, persistence=db, session_id="metrics", session_total_tokens=5000)
         session = {"session_key": "metrics", "created_at": 100, "history": []}
         before = begin_turn_metrics(agent, session, now=200, monotonic=10)
         result = finish_turn_metrics(agent, session, before, {"avg_tps": 300, "cache_hit_pct": 95},
                                      "same answer", persist=True, monotonic=12)
         assert result == {"duration_s": 2, "session_elapsed_s": 102}
-        assert "display_metadata" not in db.get_messages_as_conversation("metrics")[-1]
+        assert "display_metadata" not in conversation(db, "metrics")[-1]
 
 
 def test_native_codex_usage_does_not_require_standard_loop_timing():
@@ -111,18 +115,18 @@ def test_native_codex_usage_does_not_require_standard_loop_timing():
 def test_transformed_reply_keeps_metrics_on_its_original_persisted_row(tmp_path):
     from tui_gateway.turn_metrics import begin_turn_metrics, finish_turn_metrics
 
-    with SessionDB(db_path=tmp_path / "state.db") as db:
-        db.create_session("metrics", "desktop")
-        agent = SimpleNamespace(_session_db=db, session_id="metrics")
+    with open_persistence(profile_scope(home=tmp_path)) as db:
+        db.sessions.create(NewSession("metrics", "desktop"))
+        agent = SimpleNamespace(_session_db=db, persistence=db, session_id="metrics")
         session = {"session_key": "metrics", "history": []}
         start = begin_turn_metrics(agent, session, monotonic=10)
-        db.append_message("metrics", "user", "question")
-        db.append_message("metrics", "assistant", "original answer")
+        db.messages.append("metrics", NewMessage("user", "question"))
+        db.messages.append("metrics", NewMessage("assistant", "original answer"))
         session["history"] = [{"role": "user", "content": "question"},
                               {"role": "assistant", "content": "original answer"}]
         metrics = finish_turn_metrics(agent, session, start, {}, "original answer\nExtra output-hook note",
                                       persist=True, monotonic=12)
-        row = db.get_messages_as_conversation("metrics")[-1]
+        row = conversation(db, "metrics")[-1]
         assert row["content"] == "original answer"
         assert row["display_metadata"]["turn_metrics"] == metrics
 

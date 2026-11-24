@@ -1,4 +1,6 @@
 """A verified Continue retains local viewer provenance through the real LOCAL claim boundary."""
+
+from tests.fixtures.storage_read import session_row
 from types import SimpleNamespace
 
 import pytest
@@ -6,7 +8,7 @@ import pytest
 from gateway.session_contract import SessionActor, Submission
 from gateway.session_operator import check_local_input, is_viewer_input
 from gateway.session_results import finish_result
-from hermes_state_runtime import RuntimeStoreError
+from persistence import AuthorityRefusal
 
 
 @pytest.mark.asyncio
@@ -21,7 +23,7 @@ async def test_local_continue_is_claimed_as_viewer_input_without_weakening_owner
     monkeypatch.setenv('HERMES_HOME', str(tmp_path))
     monkeypatch.setattr(run, '_load_gateway_config', lambda: {'platform_toolsets': {'cli': []}})
     store = SessionStore(tmp_path / 'sessions', GatewayConfig())
-    runner = SimpleNamespace(session_store=store, _session_db=store._db, adapters={}, _draining=False,
+    runner = SimpleNamespace(session_store=store, _session_db=store.persistence, adapters={}, _draining=False,
                              _cached_agent_for=lambda route: None, _adapter_for_source=lambda source: None)
     authority = await initialize_session_authority(runner, profile_id=str(tmp_path), instance_id='fixture')
     monkeypatch.setattr(authority, '_schedule', lambda ref: None)
@@ -34,9 +36,9 @@ async def test_local_continue_is_claimed_as_viewer_input_without_weakening_owner
         assert sent.status == 'queued'
         live = authority.sessions[ref.session_id]
         row, _ = await authority._claim_next(ref, live)
-        finish_result(authority.db, epoch=authority.epoch, row=row, response='', outcome='interrupted',
+        finish_result(authority.persistence, epoch=authority.epoch, row=row, response='', outcome='interrupted',
             result={'result': {'interrupted': True, 'completed': False, 'final_response': '', 'api_calls': 1}, 'usage': {}})
-        session = authority.db.get_session(ref.session_id)
+        session = session_row(authority.persistence, ref.session_id)
         queued = await authority.submit(owner, Submission('continue', ref, {
             'text': 'Continue from preserved progress.', 'display_kind': 'hidden',
             'continuation_of': {'admission_id': row['admission_id'],
@@ -46,9 +48,9 @@ async def test_local_continue_is_claimed_as_viewer_input_without_weakening_owner
         assert continued['admission_id'] == queued.admission_id
         assert continued['generation'] == row['generation'] + 1
         assert is_viewer_input(continued)
-        with pytest.raises(RuntimeStoreError, match='permission_denied'):
+        with pytest.raises(AuthorityRefusal, match='permission_denied'):
             check_local_input(authority, ref, {**continued, 'principal_id': 'other-account'})
-        with pytest.raises(RuntimeStoreError, match='permission_denied'):
+        with pytest.raises(AuthorityRefusal, match='permission_denied'):
             check_local_input(authority, ref, {**continued, 'payload': {**continued['payload'], 'unknown_v1': {}}})
     finally:
-        store._db.close()
+        store.persistence.close()

@@ -1,5 +1,8 @@
 """Billing metadata travels on the real wire, never in the conversation."""
 
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_read import session_row
+
 from uuid import UUID
 
 import pytest
@@ -39,7 +42,7 @@ def test_managed_tool_rounds_share_turn_but_not_request_ids(managed_gateway, pro
     assert billing["status"] == "pending"  # HTTP completion is not a ledger receipt.
     from tui_gateway import server
     with server._session_db(server._sessions[sid]) as db:
-        messages = db.get_messages_as_conversation(server._sessions[sid]["session_key"])
+        messages = conversation(db, server._sessions[sid]["session_key"])
     persisted = [m["display_metadata"]["turn_metrics"]["billing"] for m in messages
                  if m.get("display_metadata", {}).get("turn_metrics", {}).get("billing")]
     assert persisted[0]["calls"] == billing["calls"]
@@ -75,7 +78,7 @@ def test_custom_reply_persists_its_source_without_relabeling_managed_history(man
     f.bind(sid)
 
     with server._session_db(server._sessions[sid]) as db:
-        messages = db.get_messages_as_conversation(server._sessions[sid]["session_key"])
+        messages = conversation(db, server._sessions[sid]["session_key"])
     metrics = [m["display_metadata"]["turn_metrics"] for m in messages
                if m.get("display_metadata", {}).get("turn_metrics")]
     assert metrics[-2]["billing"]["source"] == "aino"
@@ -134,7 +137,7 @@ def test_managed_reply_keeps_aino_settlement_and_persists_explicit_external_titl
             and event.get("params", {}).get("payload", {}).get("reply_non_aino_model_calls") is True
         ]
         with server._session_db(server._sessions[sid]) as db:
-            messages = db.get_messages_as_conversation(server._sessions[sid]["session_key"])
+            messages = conversation(db, server._sessions[sid]["session_key"])
         metrics = next(
             message["display_metadata"]["turn_metrics"] for message in reversed(messages)
             if message.get("display_metadata", {}).get("turn_metrics"))
@@ -187,7 +190,7 @@ def test_late_title_updates_original_reply_not_next_identical_reply(managed_gate
                 e.get("params", {}).get("payload", {}).get("reply_billing", {}).get("calls_complete")
                 for e in f.chat.events), timeout=10)
         with server._session_db(server._sessions[sid]) as db:
-            messages = db.get_messages_as_conversation(server._sessions[sid]["session_key"])
+            messages = conversation(db, server._sessions[sid]["session_key"])
         bills = [m["display_metadata"]["turn_metrics"]["billing"] for m in messages
                  if m.get("display_metadata", {}).get("turn_metrics", {}).get("billing")]
         assert bills[0]["turn_id"] == first["turn_id"]
@@ -293,8 +296,8 @@ def test_billing_identity_survives_compression_resume_but_not_a_branch(
     tip = srv._sessions[sid]["session_key"]
     assert tip != parent
     with srv._session_db(srv._sessions[sid]) as db:
-        assert db.get_session(parent)["end_reason"] == "compression"
-        assert db.get_compression_lineage(tip) == [parent, tip]
+        assert session_row(db, parent)["end_reason"] == "compression"
+        assert list(db.lineage.lineage(tip)) == [parent, tip]
     with srv._sessions[sid]["history_lock"]:
         compressed_history = list(srv._sessions[sid]["history"])
     assert len(compressed_history) < len(pre_compression_history)

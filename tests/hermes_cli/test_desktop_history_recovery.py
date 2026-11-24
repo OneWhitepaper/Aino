@@ -7,8 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from hermes_state import SessionDB
-from hermes_state_mutation_retirement import RETIRED_PREFIX
+from persistence_assembly import open_persistence, open_persistence_reader, profile_scope
+from hermes_cli.session_export import to_legacy_export_dict
+from persistence.housekeeping.maintenance import IMPORT_MAX_SESSIONS
+from persistence.sqlite.conversation._store.local import POLICY_PREFIX
+
+
+def _export_all(store, **kwargs):
+    return [to_legacy_export_dict(row) for row in store.maintenance.export_all(**kwargs)]
+
+
+def _export_session(store, sid, **kwargs):
+    return to_legacy_export_dict(store.maintenance.export_session(sid, **kwargs))
+from persistence.sqlite.conversation._store.retirement import RETIRED_PREFIX
 
 
 OWNER = {"platform_origin": "https://api.aino.test", "user_id": "10"}
@@ -25,10 +36,10 @@ def _request(tmp_path, owner=OWNER, **changes):
 
 def _seed(home, sessions):
     home.mkdir(parents=True, exist_ok=True)
-    db = SessionDB(db_path=home / "state.db")
+    db = open_persistence(profile_scope(home=home))
     for item in sessions:
         item = {"messages": [{"role": "user", "content": item["id"]}], **item}
-        assert db.import_sessions([item])["ok"]
+        assert db.maintenance.import_sessions([item]).ok
     return db
 
 
@@ -51,7 +62,7 @@ def test_snapshot_filters_accounts_and_preserves_source_and_compacted_turns(tmp_
         _owned("foreign", OTHER), {"id": "unknown", "source": "desktop"},
         _owned("mixed-parent"), _owned("mixed-child", OTHER, parent_session_id="mixed-parent"),
     ])
-    before = source.export_all(include_inactive=True)
+    before = _export_all(source, include_inactive=True)
     digest = hashlib.sha256((Path(request["source_home"]) / "state.db").read_bytes()).hexdigest()
     try:
         inspected = run(request)
@@ -62,7 +73,7 @@ def test_snapshot_filters_accounts_and_preserves_source_and_compacted_turns(tmp_
         assert restored[0]["archived"] and restored[0]["pinned"]
         assert restored[0]["messages"][0]["active"] == 0
         assert restored[0]["messages"][0]["compacted"] == 1
-        assert source.export_all(include_inactive=True) == before
+        assert _export_all(source, include_inactive=True) == before
         assert hashlib.sha256((Path(request["source_home"]) / "state.db").read_bytes()).hexdigest() == digest
         assert not (Path(request["target_home"]) / "state.db").exists()
     finally:
@@ -102,7 +113,7 @@ def test_existing_history_tombstones_titles_and_metadata_are_preserved(tmp_path)
                         _owned("child", parent_session_id="parent")]).close()
     target_home = Path(request["target_home"])
     target = _seed(target_home, [_owned("duplicate", messages=[{"role": "user", "content": "new data"}])])
-    target.set_meta(RETIRED_PREFIX + "deleted", "{}")
+    target.state_meta.set(RETIRED_PREFIX + "deleted", "{}")
     target.close()
     target_bot = target_home / "profiles" / "writer"
     _seed(target_bot, [_owned("new-bot", title="Bot Chat")]).close()
@@ -134,7 +145,7 @@ def test_batches_keep_lineages_together_and_enforce_account_paths(tmp_path):
     prepared = run({**request, "action": "prepare", "plan_id": inspected["planId"]})
     batches = prepared["groups"][0]["batches"]
     assert len(_flatten(prepared)) == len(sessions)
-    assert all(len(batch) <= SessionDB._IMPORT_MAX_SESSIONS for batch in batches)
+    assert all(len(batch) <= IMPORT_MAX_SESSIONS for batch in batches)
     assert any([row["id"] for row in batch if row["id"].startswith("chain-")] == ["chain-root", "chain-leaf"]
                for batch in batches)
     with pytest.raises(ValueError, match="target"):
@@ -224,16 +235,12 @@ def test_recovery_batches_import_via_authenticated_rest_without_losing_new_histo
             return runtime_ids
 
         runtime_ids = asyncio.run(reopen())
-        db = SessionDB(db_path=target / "state.db", read_only=True)
-        try:
-            from hermes_state_local import POLICY_PREFIX
-            assert all(db.get_meta(POLICY_PREFIX + sid) is not None for sid in runtime_ids)
-            assert db.get_session("new-history")["title"] == "Current conversation"
-            assert db.get_session("old-parent")["archived"] and db.get_session("old-parent")["pinned"]
-            assert db.get_session("old-leaf")["parent_session_id"] == "old-parent"
-            assert db.get_session("old-leaf")["hidden"]
-        finally:
-            db.close()
+        with open_persistence_reader(target) as db:
+            assert all(db.state_meta.get(POLICY_PREFIX + sid) is not None for sid in runtime_ids)
+            assert db.sessions.get("new-history").title == "Current conversation"
+            assert db.sessions.get("old-parent").archived and db.sessions.get("old-parent").pinned
+            assert db.sessions.get("old-leaf").parent_session_id == "old-parent"
+            assert db.sessions.get("old-leaf").hidden
 
 
 @pytest.mark.platforms("posix")
@@ -278,7 +285,7 @@ def test_partial_existing_lineage_is_reported_without_detaching_children(tmp_pat
 
     request = _request(tmp_path)
     source = _seed(Path(request["source_home"]), [_owned("parent"), _owned("child", parent_session_id="parent")])
-    parent = source.export_session("parent", include_inactive=True)
+    parent = _export_session(source, "parent", include_inactive=True)
     source.close()
     _seed(Path(request["target_home"]), [parent]).close()
     inspected = run(request)

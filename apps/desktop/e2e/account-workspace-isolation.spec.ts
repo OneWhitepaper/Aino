@@ -1,6 +1,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
+import type { TestInfo } from '@playwright/test'
+
 import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 import { resolveDesktopHermesHome } from '../electron/data-paths.mjs'
@@ -14,6 +16,7 @@ import {
   installLoopbackPythonGuard,
   launchGuardedDesktop
 } from './platform-real-api'
+import { inspectGatewayIdentity, stopFixtureGateway } from './platform-workspace-proof'
 import { collectErrorBanners, type ElectronApplication, expect, installErrorBannerGuard, type Page, test } from './test'
 
 interface NativeAccountWindow {
@@ -199,6 +202,7 @@ async function chromiumStorage(app: ElectronApplication, page: Page, origin: str
       if (value.marker) {
         await storage.cookies.set({ url: value.origin, name: 'account-workspace-marker', value: value.marker })
       }
+
       const cookies = await storage.cookies.get({ url: value.origin, name: 'account-workspace-marker' })
 
       return { path: storage.getStoragePath(), markers: cookies.map((cookie: { value: string }) => cookie.value) }
@@ -207,9 +211,7 @@ async function chromiumStorage(app: ElectronApplication, page: Page, origin: str
   )
 }
 
-test('isolates real account homes, history and Chromium storage across A â†’ B â†’ A on one device', async ({
-  browserName: _browserName
-}, testInfo) => {
+async function verifyAccountWorkspaceIsolation(testInfo: TestInfo, nativeGateway: boolean) {
   test.setTimeout(420_000)
   const sandbox = createSandbox('account-workspace')
   const inference = await startMockServer()
@@ -245,7 +247,7 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
       path.join(sandbox.userDataDir, 'platform-development.json'),
       JSON.stringify({ enabled: true, origin: platform.origin })
     )
-    const inherited = buildAppEnv(sandbox)
+    const inherited = buildAppEnv(sandbox, { HERMES_DESKTOP_ISOLATED_BACKEND: nativeGateway ? '0' : '1' })
     const env: Record<string, string> = { ...fixtureEnvironment(), HOME: sandbox.root, HERMES_HOME: sandbox.hermesHome }
 
     for (const key of [
@@ -277,6 +279,11 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     proofs.push(
       await assertHistory(page, ACCOUNT_FIXTURES[0].session, [ACCOUNT_FIXTURES[1].session, legacy], homes[0]!)
     )
+
+    if (nativeGateway) {
+      expect(inspectGatewayIdentity({ ...sandbox, hermesHome: homes[0]! })).not.toBeNull()
+    }
+
     await page.evaluate(() => localStorage.setItem('account-workspace-probe', 'alpha'))
     const alphaStorage = await chromiumStorage(app, page, platform.origin, 'alpha')
     await page.evaluate(() => (window as unknown as NativeAccountWindow).hermesDesktop.openWindow())
@@ -295,6 +302,11 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     proofs.push(
       await assertHistory(page, ACCOUNT_FIXTURES[1].session, [ACCOUNT_FIXTURES[0].session, legacy], homes[1]!)
     )
+
+    if (nativeGateway) {
+      expect(inspectGatewayIdentity({ ...sandbox, hermesHome: homes[1]! })).not.toBeNull()
+    }
+
     expect(await page.evaluate(() => localStorage.getItem('account-workspace-probe'))).toBeNull()
     const betaStorage = await chromiumStorage(app, page, platform.origin)
     expect(betaStorage.path).not.toBe(alphaStorage.path)
@@ -311,6 +323,11 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     proofs.push(
       await assertHistory(page, ACCOUNT_FIXTURES[0].session, [ACCOUNT_FIXTURES[1].session, legacy], homes[0]!)
     )
+
+    if (nativeGateway) {
+      expect(inspectGatewayIdentity({ ...sandbox, hermesHome: homes[0]! })).not.toBeNull()
+    }
+
     expect(await page.evaluate(() => localStorage.getItem('account-workspace-probe'))).toBe('alpha')
     expect(await chromiumStorage(app, page, platform.origin)).toEqual(alphaStorage)
     expect(platform.logins).toEqual(['17', '23', '17'])
@@ -328,7 +345,7 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     expect(fs.existsSync(tokenFile)).toBe(false)
   } finally {
     await testInfo.attach('account-workspace-history-proof', {
-      body: JSON.stringify(proofs, null, 2),
+      body: JSON.stringify({ nativeGateway, proofs }, null, 2),
       contentType: 'application/json'
     })
 
@@ -340,6 +357,9 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     }
 
     await launched?.app.close().catch(() => undefined)
+    // A canonical gateway outlives its viewers, including every account home
+    // visited by this fixture. Stop those owners before removing the sandbox.
+    stopFixtureGateway(sandbox)
 
     for (const [index, home] of [sandbox.hermesHome, ...homes].entries()) {
       const logs = path.join(home, 'logs')
@@ -353,4 +373,13 @@ test('isolates real account homes, history and Chromium storage across A â†’ B â
     await platform.close()
     sandbox.cleanup()
   }
-})
+}
+
+for (const nativeGateway of [false, true]) {
+  const backend = nativeGateway ? 'managed canonical' : 'legacy isolated'
+  test(`isolates real account homes, history and Chromium storage across A â†’ B â†’ A (${backend})`, async ({
+    browserName: _browserName
+  }, testInfo) => {
+    await verifyAccountWorkspaceIsolation(testInfo, nativeGateway)
+  })
+}

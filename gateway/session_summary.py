@@ -1,9 +1,10 @@
 """Session-authorized semantic summaries on the canonical owner's bounded auxiliary pool."""
 from functools import partial
+from gateway.session_persistence import authority_persistence
 
 from gateway.session_busy_controls import authorize
 from gateway.session_llm_oneshot import DeferredReply, _session_runtime
-from hermes_state_runtime import RuntimeStoreError
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
 
 
 def handlers(connection):
@@ -41,10 +42,10 @@ async def summary(connection, ref, params):
             try:
                 check()
             except SummaryBusy:
-                cached = summary_for_db(authority.db, target, params.get('language', 'zh'))
+                cached = summary_for_db(authority_persistence(authority), target, params.get('language', 'zh'))
                 return {**cached, 'busy': True, 'error_code': 'busy'}
             selected = runtime()
-            return authorized_summary(authority.db, target, params.get('language', 'zh'),
+            return authorized_summary(authority_persistence(authority), target, params.get('language', 'zh'),
                                       runtime=selected, retry=params.get('retry', False),
                                       authority_check=check, should_yield=should_yield)
     return DeferredReply(work)

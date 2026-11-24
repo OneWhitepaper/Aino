@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 import logging
 
+from agent.agent_init_session import agent_interface
 from agent.auxiliary_billing_scope import billing_scope
 from tui_gateway.managed_model_usage import current_usage_metadata
 
@@ -17,11 +18,16 @@ def finish_managed_metrics(agent, session, start, text, metrics, *, persist, on_
     from tui_gateway.turn_metrics import _persist_metrics
     db = getattr(agent, "_session_db", None)
     stored_session = agent.session_id
-    db_path = getattr(db, "db_path", None)
+    store = agent_interface(agent)
+    # Persist deferred receipts through a newly held handle on the same profile.
+    profile_home = store.scope.profile_dir if store is not None else None
+    if profile_home is None and (db_path := getattr(db, "db_path", None)) is not None:
+        profile_home = db_path.parent
     through_row_id = None
     if db is not None and persist:
         try:
-            through_row_id = db.latest_message_row_id(stored_session, role="assistant", require_text=False)
+            latest = store.messages.latest_row_id if store is not None else db.latest_message_row_id
+            through_row_id = latest(stored_session, role="assistant", require_text=False)
         except Exception:
             logger.debug("billing reply boundary unavailable", exc_info=True)
     initial = None
@@ -42,10 +48,10 @@ def finish_managed_metrics(agent, session, start, text, metrics, *, persist, on_
                 stored_text = _persist_metrics(agent, session, start, text, updated)
             return
         try:
-            if db_path and through_row_id and stored_text and start.after_row_id >= 0:
-                from hermes_state import SessionDB
-                with SessionDB(db_path=db_path) as reopened:
-                    reopened.merge_reply_display_metadata(
+            if profile_home and through_row_id and stored_text and start.after_row_id >= 0:
+                from persistence_assembly import open_persistence, profile_scope
+                with open_persistence(profile_scope(home=profile_home)) as reopened:
+                    reopened.messages.merge_reply_display_metadata(
                         stored_session, stored_text, after_row_id=start.after_row_id,
                         through_row_id=through_row_id, metadata={"turn_metrics": updated})
             with session.get("history_lock", nullcontext()):

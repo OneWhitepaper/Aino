@@ -80,7 +80,7 @@ export function useFreshSessionRequest(
     }
 
     lastFreshRef.current = freshSessionRequest
-    startFreshSessionDraft()
+    startFreshSessionDraft({ preserveProfileSwitch: true })
   }, [freshSessionRequest, startFreshSessionDraft])
 }
 

@@ -150,7 +150,7 @@ def _coerce_task_reasoning_configs(
 
 def _conversation_text_turns(history: Any, parent_agent: Any) -> list[list[dict[str, str]]]:
     """Project visible turns only; API-only instructions and execution traces belong to the parent."""
-    from agent.message_content import flatten_message_text
+    from session_rules.turns import flatten_message_text
     from agent.context_compressor import is_compaction_summary_message, user_originated_turn_view
     from agent.session_persistence import _is_ephemeral_scaffolding, durable_user_row_content
 

@@ -291,7 +291,7 @@ def test_merged_restatement_is_not_anchored_twice():
 def test_restatement_survives_repeated_compactions_without_stacking():
     """A task alive across three compactions is restated exactly once per
     output — one copy, one header, always after the summary."""
-    from agent.context_compressor import _INFLIGHT_TASK_REPLAY_HEADER
+    from session_rules.turns import _INFLIGHT_TASK_REPLAY_HEADER
 
     out = [{"role": "user", "content": JOB_SENTINEL}, *_tool_pairs(40)]
     for cycle in (1, 2, 3):
@@ -312,10 +312,8 @@ def test_replay_row_does_not_carry_the_original_timestamp():
     puts the question after its own answer in timestamp-ordered views."""
     import time
 
-    from agent.context_compressor import (
-        _INFLIGHT_TASK_REPLAY_HEADER,
-        COMPRESSED_SUMMARY_METADATA_KEY,
-    )
+    from agent.context_compressor import COMPRESSED_SUMMARY_METADATA_KEY
+    from session_rules.turns import _INFLIGHT_TASK_REPLAY_HEADER
 
     old_ts = 1757577257.0
     carrier = {
@@ -365,11 +363,8 @@ def test_flagged_scaffolding_row_is_never_the_inflight_task():
 
 def test_replay_replaces_surviving_user_row_with_same_message_uid():
     """A protected copy of the in-flight request must not remain active beside its replay."""
-    from agent.context_compressor import (
-        _INFLIGHT_TASK_REPLAY_HEADER,
-        COMPRESSED_SUMMARY_METADATA_KEY,
-        _template_visible_role,
-    )
+    from agent.context_compressor import COMPRESSED_SUMMARY_METADATA_KEY, _template_visible_role
+    from session_rules.turns import _INFLIGHT_TASK_REPLAY_HEADER
     from agent.message_metadata import ABSORBED_MESSAGE_UIDS
 
     uid = "request-uid"

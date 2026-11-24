@@ -1,9 +1,19 @@
 """Desktop HTTP history must show the same engine as the canonical owner."""
 
+from persistence.conversation.lineage import CompressionChild
+from persistence.conversation.messages import NewMessage
+from dataclasses import asdict
+from tests.fixtures.storage_seed import seed_session
+from persistence_assembly import store_location
+from tests.fixtures.storage_read import transcript_rows
+
 import pytest
 from starlette.testclient import TestClient
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
 from tests.gateway.test_session_create_tier_cwd import _owner
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 
 
 @pytest.fixture(autouse=True)
@@ -14,19 +24,17 @@ def uncached_sidebar(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_code_mode_reaches_http_history_and_sidebar(tmp_path, monkeypatch):
-    import hermes_state
     from hermes_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
     home = tmp_path / 'home'
-    monkeypatch.setattr(hermes_state, 'DEFAULT_DB_PATH', home / 'state.db')
     store, _runner, authority, connection = _owner(home, monkeypatch, {'model': {'default': 'fixture-model'}})
-    assert authority.db.db_path == home / 'state.db'
+    assert store_location(authority.persistence.scope) == home / 'state.db'
     monkeypatch.setattr('hermes_cli.profiles._get_default_hermes_home', lambda: home)
     try:
         created = await connection.dispatch({'id': 'code', 'method': 'session.create', 'params': {
             'request_id': 'code', 'source': 'gui', 'execution_mode': 'code', 'model': 'fixture-model', 'toolsets': []}})
         sid = created['result']['session_id']
-        authority.db.append_message(session_id=sid, role='user', content='hello')
+        authority.persistence.messages.append(sid, NewMessage(role='user', content='hello'))
         with TestClient(app) as client:
             client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
             for route, key in [('/api/sessions?profile=default', 'sessions'),
@@ -48,17 +56,15 @@ async def test_code_mode_reaches_http_history_and_sidebar(tmp_path, monkeypatch)
 
 @pytest.mark.asyncio
 async def test_sidebar_keeps_reviewed_handoff_drafts_but_not_empty_launch_stubs(tmp_path, monkeypatch):
-    import hermes_state
     from hermes_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
     from tests.gateway.test_work_code_handoff import _create, _context
 
     home = tmp_path / 'home'
-    monkeypatch.setattr(hermes_state, 'DEFAULT_DB_PATH', home / 'state.db')
     monkeypatch.setattr('hermes_cli.profiles._get_default_hermes_home', lambda: home)
     store, _runner, authority, connection = _owner(home, monkeypatch, {'model': {'default': 'fixture-model'}})
     try:
         source = (await _create(connection, tmp_path, 'source'))['result']['session_id']
-        authority.db.append_message(session_id=source, role='user', content='Reviewed requirements')
+        authority.persistence.messages.append(source, NewMessage(role='user', content='Reviewed requirements'))
         stub = (await _create(connection, tmp_path, 'stub'))['result']['session_id']
         child = (await _create(connection, tmp_path, 'child', execution_mode='code',
                                handoff=_context(source)))['result']['session_id']
@@ -84,7 +90,7 @@ async def test_sidebar_keeps_reviewed_handoff_drafts_but_not_empty_launch_stubs(
                     assert body['total'] == 2
             for route, _key in routes[:2]:
                 assert client.get(route.replace('min_messages=1', 'min_messages=2')).json()['sessions'] == []
-        assert authority.db.get_messages(child) == []
+        assert transcript_rows(authority.persistence, child) == []
     finally:
         await connection.close()
         store.close_all_db_handles()
@@ -92,13 +98,11 @@ async def test_sidebar_keeps_reviewed_handoff_drafts_but_not_empty_launch_stubs(
 
 @pytest.mark.asyncio
 async def test_unloaded_search_hits_keep_code_work_and_legacy_modes(tmp_path, monkeypatch):
-    import hermes_state
     from hermes_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
     home = tmp_path / 'home'
-    monkeypatch.setattr(hermes_state, 'DEFAULT_DB_PATH', home / 'state.db')
     store, _runner, authority, connection = _owner(home, monkeypatch, {'model': {'default': 'fixture-model'}})
-    assert authority.db.db_path == home / 'state.db'
+    assert store_location(authority.persistence.scope) == home / 'state.db'
     monkeypatch.setattr('hermes_cli.profiles._get_default_hermes_home', lambda: home)
     try:
         expected = {}
@@ -108,10 +112,10 @@ async def test_unloaded_search_hits_keep_code_work_and_legacy_modes(tmp_path, mo
                 'model': 'fixture-model', 'toolsets': []}})
             sid = created['result']['session_id']
             expected[sid] = mode
-            authority.db.append_message(session_id=sid, role='user', content='mode-search-fixture')
-            authority.db.set_session_title(sid, f'Lookup fixture {mode}')
-        authority.db.create_session(session_id='legacy-search', source='cli', model='fixture-model')
-        authority.db.append_message(session_id='legacy-search', role='user', content='mode-search-fixture')
+            authority.persistence.messages.append(sid, NewMessage(role='user', content='mode-search-fixture'))
+            authority.persistence.sessions.set_title(sid, f'Lookup fixture {mode}')
+        seed_session(authority.persistence, session_id='legacy-search', source='cli', model='fixture-model')
+        authority.persistence.messages.append('legacy-search', NewMessage(role='user', content='mode-search-fixture'))
         expected['legacy-search'] = 'work'
         with TestClient(app) as client:
             client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
@@ -132,32 +136,28 @@ async def test_unloaded_search_hits_keep_code_work_and_legacy_modes(tmp_path, mo
 @pytest.mark.asyncio
 @pytest.mark.parametrize('rotation', ['compression', 'reset'])
 async def test_search_preserves_code_mode_after_transcript_rotation(tmp_path, monkeypatch, rotation):
-    import hermes_state
     from hermes_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
-    from hermes_state_local import local_receipt
+
     from tests.gateway.test_work_code_handoff import _create
 
     home = tmp_path / 'home'
-    monkeypatch.setattr(hermes_state, 'DEFAULT_DB_PATH', home / 'state.db')
     monkeypatch.setattr('hermes_cli.profiles._get_default_hermes_home', lambda: home)
     store, _runner, authority, connection = _owner(home, monkeypatch, {'model': {'default': 'fixture-model'}})
     try:
         created = (await _create(connection, tmp_path, 'code', execution_mode='code'))['result']
         sid = created['session_id']
         if rotation == 'compression':
-            authority.db.append_message(sid, role='user', content='Before compression')
+            authority.persistence.messages.append(sid, NewMessage(role='user', content='Before compression'))
             target = sid + '-compressed'
-            authority.db.publish_compression_child(parent_session_id=sid, child_session_id=target,
-                source='gui', messages=[{'role': 'user', 'content': 'search-rotation-fixture'}],
-                model='fixture-model', require_compression_lease=False)
+            authority.persistence.lineage.publish_compression_child(sid, CompressionChild(session_id=target, source='gui', model='fixture-model'), [NewMessage.from_live(row) for row in [{'role': 'user', 'content': 'search-rotation-fixture'}]], require_compression_lease=False)
         else:
             reset = await connection.dispatch({'id': 'reset', 'method': 'session.mutate', 'params': {
                 'session_id': sid, 'request_id': 'reset', 'operation': 'reset', 'payload': {},
                 'expected_revision': created['revision'], 'expected_generation': created['execution_generation']}})
             assert 'result' in reset, reset
             target = reset['result']['target_session_id']
-            authority.db.append_message(target, role='user', content='search-rotation-fixture')
-        assert local_receipt(authority.db, sid)['entry']['session_id'] == target
+            authority.persistence.messages.append(target, NewMessage(role='user', content='search-rotation-fixture'))
+        assert asdict(authority.persistence.bindings.receipt(sid))['entry']['session_id'] == target
         with TestClient(app) as client:
             client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
             response = client.get('/api/sessions/search', params={'q': '"search-rotation-fixture"', 'profile': 'default'})

@@ -1,4 +1,9 @@
 """Conversation model discovery reaches the owning native catalog without exposing credentials."""
+
+from tests.fixtures.storage_holder import raw_holder
+from tests.fixtures.storage_read import session_row
+
+from dataclasses import asdict
 import asyncio
 import json
 
@@ -53,12 +58,11 @@ def test_gui_selection_read_is_empty_until_a_native_selection_is_scheduled(tmp_p
 
 
 def test_group_model_select_uses_native_catalog_and_saves_only_conversation_selection(tmp_path, monkeypatch):
-    from hermes_state_local import local_receipt
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
         viewer, sid = _group(runner, call)
         authority = runner.session_authorities.for_home(homes['helper'])
         cli = _connection(authority, scope='profile')
-        original = local_receipt(authority.db, sid)
+        original = asdict(authority.persistence.bindings.receipt(sid))
         configs = {name: (home / 'config.yaml').read_bytes() for name, home in homes.items()}
         task = call(_start(cli, session_id=sid, action='select', query='deepseek flash'))
         request = _pending(call, viewer, task)
@@ -72,7 +76,7 @@ def test_group_model_select_uses_native_catalog_and_saves_only_conversation_sele
         assert chosen.get('result') == {'status': 'scheduled', 'effective': 'next_message', 'selection': ROW}, chosen
         current = _request(call, cli, 'model.session', session_id=sid, action='selection')
         assert current.get('result') == {'selection': ROW}, current
-        assert local_receipt(authority.db, sid) == original, 'the in-flight policy must stay untouched'
+        assert asdict(authority.persistence.bindings.receipt(sid)) == original, 'the in-flight policy must stay untouched'
         assert {name: (home / 'config.yaml').read_bytes() for name, home in homes.items()} == configs
         state = _request(call, viewer, 'groups.state', room_id='room')['result']
         assert not state.get('model_requests')
@@ -113,13 +117,13 @@ def test_native_model_result_rejects_secrets_and_stale_room_authority(tmp_path, 
         if corruption == 'api_key':
             row['api_key'] = 'never-expose-secret'
         elif corruption == 'owner':
-            authority.db._execute_write(lambda conn: conn.execute('UPDATE state_meta SET value=? WHERE key=?',
+            raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute('UPDATE state_meta SET value=? WHERE key=?',
                 ('someone-else', 'gateway.hosted.owner.v1:room')))
         elif corruption == 'epoch':
-            authority.db._execute_write(lambda conn: conn.execute(
+            raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute(
                 'UPDATE hosted_rooms SET authority_epoch=authority_epoch+1 WHERE room_id=?', ('room',)))
         else:
-            authority.db._execute_write(lambda conn: conn.execute('UPDATE hosted_rooms SET members_json=? WHERE room_id=?',
+            raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute('UPDATE hosted_rooms SET members_json=? WHERE room_id=?',
                 (json.dumps(_members('default')), 'room')))
         refused = _request(call, viewer, 'groups.model_respond', room_id='room', request_id=request['request_id'],
                            result={'status': 'selected', 'selection': row})
@@ -132,7 +136,7 @@ def test_native_model_result_rejects_secrets_and_stale_room_authority(tmp_path, 
             assert clean.get('result') == {'accepted': True}, clean
         answer = call(_finish(task))
         assert answer.get('result', {}).get('status') == 'unavailable' or 'error' in answer, answer
-        with target.db._read_ctx() as conn:
+        with raw_holder(target.persistence)._read_ctx() as conn:
             config = json.loads(conn.execute('SELECT model_config FROM sessions WHERE id=?', (sid,)).fetchone()[0] or '{}')
         assert not config.get('conversation_model_selection')
         for connection in (viewer, cli):
@@ -153,7 +157,6 @@ def test_profile_qualified_model_selection_routes_to_the_exact_served_gui_sessio
 
 def test_physical_session_segment_resolves_only_its_exact_canonical_conversation(tmp_path, monkeypatch):
     from gateway.session_contract import SessionRef
-    from hermes_state_local import local_receipt
     with _gateway(tmp_path, monkeypatch, served=()) as (runner, _homes, call):
         authority = runner.session_authority
         viewer = _connection(authority)
@@ -165,7 +168,7 @@ def test_physical_session_segment_resolves_only_its_exact_canonical_conversation
                          request_id='reset', expected_revision=handle.revision,
                          expected_generation=handle.execution_generation)
         assert 'result' in reset, reset
-        segment = local_receipt(authority.db, sid)['entry']['session_id']
+        segment = asdict(authority.persistence.bindings.receipt(sid))['entry']['session_id']
         assert segment != sid
         got = _request(call, viewer, 'model.session', session_id=segment, action='selection')
         assert got.get('result') == {'selection': None}, got
@@ -197,12 +200,11 @@ def _gui_request(call, viewer, task):
 
 
 def test_gui_native_selection_is_scheduled_without_changing_inflight_route(tmp_path, monkeypatch):
-    from hermes_state_local import local_receipt
     with _gateway(tmp_path, monkeypatch, served=()) as (runner, _homes, call):
         authority = runner.session_authority
         viewer, sid = _gui(call, authority, tmp_path)
         cli = _connection(authority, scope='profile')
-        before = local_receipt(authority.db, sid)
+        before = asdict(authority.persistence.bindings.receipt(sid))
         task = call(_start(cli, session_id=sid, action='select', query='deepseek flash'))
         frame = _gui_request(call, viewer, task)
         assert frame['params']['session_id'] == sid
@@ -210,7 +212,7 @@ def test_gui_native_selection_is_scheduled_without_changing_inflight_route(tmp_p
         call(viewer.dispatch({'id': frame['id'], 'result': {'status': 'selected', 'selection': ROW}}))
         answer = call(_finish(task))
         assert answer.get('result') == {'status': 'scheduled', 'effective': 'next_message', 'selection': ROW}, answer
-        assert local_receipt(authority.db, sid) == before
+        assert asdict(authority.persistence.bindings.receipt(sid)) == before
         saved = _request(call, cli, 'model.session', session_id=sid, action='selection')
         assert saved.get('result') == {'selection': ROW}, saved
         for connection in (viewer, cli):
@@ -219,7 +221,6 @@ def test_gui_native_selection_is_scheduled_without_changing_inflight_route(tmp_p
 
 def test_newer_manual_gui_model_commit_wins_over_older_native_answer(tmp_path, monkeypatch):
     from gateway.session_contract import SessionRef
-    from hermes_state_local import local_receipt
     with _gateway(tmp_path, monkeypatch, served=()) as (runner, _homes, call):
         authority = runner.session_authority
         viewer, sid = _gui(call, authority, tmp_path)
@@ -235,7 +236,7 @@ def test_newer_manual_gui_model_commit_wins_over_older_native_answer(tmp_path, m
         call(viewer.dispatch({'id': frame['id'], 'result': {'status': 'selected', 'selection': ROW}}))
         answer = call(_finish(task))
         assert answer.get('error', {}).get('data', {}).get('reason') == 'model_request_expired', answer
-        assert local_receipt(authority.db, sid)['policy']['model'] == 'catalog-manual'
+        assert asdict(authority.persistence.bindings.receipt(sid))['policy']['model'] == 'catalog-manual'
         assert _request(call, cli, 'model.session', session_id=sid, action='selection').get('result') == {'selection': None}
         for connection in (viewer, cli):
             call(connection.close())
@@ -250,14 +251,13 @@ def test_group_response_from_replaced_viewer_cannot_persist_old_selection(tmp_pa
         request = _pending(call, viewer, task)
         replacement = _connection(runner.session_authority)
         assert 'result' in _prepare(call, replacement)
-        from hermes_state_local import local_receipt
-        previous = local_receipt(target.db, sid)['policy']
+        previous = asdict(target.persistence.bindings.receipt(sid))['policy']
         _request(call, viewer, 'groups.model_respond', room_id='room', request_id=request['request_id'],
                             result={'status': 'selected', 'selection': ROW})
         # A retired viewer cannot cause a selection to be committed even if its metadata answer arrives.
         result = call(_finish(task))
         assert result.get('error', {}).get('data', {}).get('reason') == 'model_request_expired', result
-        assert local_receipt(target.db, sid)['policy'] == previous
+        assert asdict(target.persistence.bindings.receipt(sid))['policy'] == previous
         for connection in (viewer, cli, replacement):
             call(connection.close())
 
@@ -315,7 +315,7 @@ def test_native_answer_after_stop_does_not_schedule_a_model_change(tmp_path, mon
         cli = _connection(target, scope='profile')
         task = call(_start(cli, session_id=sid, action='select', query='deepseek'))
         request = _pending(call, viewer, task)
-        generation = target.db.get_session(sid)['runtime_generation']
+        generation = session_row(target.persistence, sid)['runtime_generation']
         target.delivered_stops[sid] = generation
         assert call(_finish(task)).get('result') == {'status': 'unavailable'}
         assert _request(call, viewer, 'groups.model_respond', room_id='room', request_id=request['request_id'],
@@ -328,7 +328,7 @@ def test_native_answer_after_stop_does_not_schedule_a_model_change(tmp_path, mon
 @pytest.mark.parametrize('change', ['owner', 'member', 'epoch'])
 def test_saved_group_selection_refuses_stale_scope_instead_of_using_profile_default(tmp_path, monkeypatch, change):
     from gateway.session_model_requests import selection_for_session
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
         viewer, sid = _group(runner, call)
         target = runner.session_authorities.for_home(homes['helper'])
@@ -341,15 +341,15 @@ def test_saved_group_selection_refuses_stale_scope_instead_of_using_profile_defa
         assert selection_for_session(target, sid) == ROW
         source = runner.session_authority
         if change == 'owner':
-            source.db._execute_write(lambda conn: conn.execute('UPDATE state_meta SET value=? WHERE key=?',
+            raw_holder(source.persistence)._execute_write(lambda conn: conn.execute('UPDATE state_meta SET value=? WHERE key=?',
                 ('new-owner', 'gateway.hosted.owner.v1:room')))
         elif change == 'member':
-            source.db._execute_write(lambda conn: conn.execute('UPDATE hosted_rooms SET members_json=? WHERE room_id=?',
+            raw_holder(source.persistence)._execute_write(lambda conn: conn.execute('UPDATE hosted_rooms SET members_json=? WHERE room_id=?',
                 (json.dumps(_members('default')), 'room')))
         else:
-            source.db._execute_write(lambda conn: conn.execute(
+            raw_holder(source.persistence)._execute_write(lambda conn: conn.execute(
                 'UPDATE hosted_rooms SET authority_epoch=authority_epoch+1 WHERE room_id=?', ('room',)))
-        with pytest.raises(RuntimeStoreError):
+        with pytest.raises(AuthorityRefusal):
             selection_for_session(target, sid)
         for connection in (viewer, cli):
             call(connection.close())
@@ -366,7 +366,7 @@ def test_external_member_discovers_native_models_on_first_turn_without_eager_ses
         inspected = _request(call, viewer, 'groups.prepare_model', room_id='room', member_id='helper', inspect_selection=True)
         assert 'result' in inspected, inspected
         sid = inspected['result']['session_id']
-        assert target.db.get_session(sid) is None, 'a catalog grant must preserve lazy profile creation'
+        assert session_row(target.persistence, sid) is None, 'a catalog grant must preserve lazy profile creation'
         binding = HostedRoomBinding('room', created['result']['room']['authority_gateway_id'], 1)
         rpc = source.hosted_room_service._resolve_member_transport(binding,
             {'payload': {'target_member_id': 'helper', 'target_profile': 'helper'}})

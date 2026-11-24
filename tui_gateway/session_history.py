@@ -169,7 +169,7 @@ def _user_image_display_text(content: Any) -> str | None:
     if len(image_parts) != len(paths) or len(content) not in (1 + len(paths), 2 + len(paths)):
         return None
     if len(content) > 1 + len(paths):
-        from agent.memory_context import sanitize_context
+        from session_rules.turns import sanitize_context
         memory = content[-1]
         if not isinstance(memory, dict) or memory.get("type") != "text" or not isinstance(memory.get("text"), str) or sanitize_context(memory["text"]).strip():
             return None
@@ -276,7 +276,7 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
     so a remote client's history read stays kilobytes instead of re-transmitting every stored attachment."""
     from agent.context_compressor import _content_text_for_contains, is_compaction_summary_message, user_originated_turn_view
     from agent.history_commentary import project_history_commentary
-    from agent.message_metadata import withheld_prompt_text
+    from session_rules.turns import withheld_prompt_text
 
     messages = []
     tool_call_args = {}
@@ -569,9 +569,9 @@ def _cold_history_context_usage(session: dict) -> dict:
 
     try:
         with _session_profile_runtime_scope(session), _session_db(session) as db:
-            anchor = db.get_session_model_config_value(key[0], USAGE_ANCHOR_MODEL_CONFIG_KEY, None) if db else None
-            row = (db.get_session(key[0]) or {}) if db else {}
-            prompt = row.get("_system_prompt_resolved") or row.get("system_prompt")
+            anchor = db.sessions.get_model_config_value(key[0], USAGE_ANCHOR_MODEL_CONFIG_KEY, None) if db else None
+            row = db.sessions.get(key[0]) if db else None
+            prompt = row.system_prompt if row is not None else None
             usage = {**compute_cold_context_categories(snapshot, prompt),
                      **context_usage_from_history(snapshot, anchor, prompt)}
     except Exception:

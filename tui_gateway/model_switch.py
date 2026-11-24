@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import copy
 
+
 from .method_ctx import HandlerRegistry, bind_module
 
 _registry = HandlerRegistry()
@@ -41,15 +42,17 @@ def _append_model_switch_marker(
         db = getattr(agent, "_session_db", None) if agent is not None else None
         if db is None:
             _ensure_session_db_row(session)
-        with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as db:
-            if db is not None:
+        with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as db, \
+                _persistence_for(db) as persistence:
+            if persistence is not None:
                 from agent.context_compressor import _DB_PERSISTED_MARKER
+                from persistence.conversation.messages import NewMessage
                 target = _submit_row_target_key(session)
-                db.deactivate_messages_by_display_kind(target, "model_switch")
+                persistence.messages.deactivate_messages_by_display_kind(target, "model_switch")
                 from agent.message_metadata import stamp_message_uid
-                entry["_row_id"] = db.append_message(
-                    session_id=target, role="user", content=marker, display_kind="model_switch",
-                    display_metadata=metadata, timestamp=timestamp, message_uid=stamp_message_uid(entry))
+                entry["_row_id"] = persistence.messages.append(target, NewMessage(
+                    role="user", content=marker, display_kind="model_switch",
+                    display_metadata=metadata, timestamp=timestamp, message_uid=stamp_message_uid(entry)))
                 entry[_DB_PERSISTED_MARKER] = True
     except Exception:
         logger.warning("failed to persist model switch marker", exc_info=True)
@@ -520,8 +523,9 @@ def _sync_bot_capabilities(sid: str, session: dict) -> None:
     try:
         title = str(getattr(agent, "_session_title_hint", "") or "").strip()
         if not title:
-            db, key = getattr(agent, "_session_db", None), session.get("session_key") or ""
-            title = str((db.get_session_title(key) if (db and key) else None) or "").strip()
+            key = session.get("session_key") or ""
+            with _persistence_for(getattr(agent, "_session_db", None)) as persistence:
+                title = str(persistence.sessions.get_title(key) or "").strip() if persistence is not None and key else ""
         if title != "Bot Chat":
             return
         from tools.bot_mode_probe import capability_fingerprint

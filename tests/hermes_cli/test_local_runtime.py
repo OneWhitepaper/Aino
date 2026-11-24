@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest

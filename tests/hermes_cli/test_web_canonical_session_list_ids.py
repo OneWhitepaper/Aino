@@ -1,21 +1,35 @@
 """UI listings route receipt-owned conversations by owner, not physical transcript tip."""
 
+
+
+from persistence.conversation.lineage import CompressionChild
+from persistence.conversation.sessions import SessionOrder, SessionQuery, SessionWindow
+from persistence_assembly import open_persistence_reader
+from persistence.conversation.messages import NewMessage
+from dataclasses import asdict
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_holder import raw_holder
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
+
 from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
 from starlette.testclient import TestClient
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
 from tests.gateway.test_session_create_tier_cwd import _owner
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 from tests.gateway.test_work_code_handoff import _context, _create
 
 
 @pytest_asyncio.fixture
 async def rotated_home(tmp_path, monkeypatch, profile, rotation):
-    import hermes_state
     from hermes_cli import profiles
-    from hermes_state import SessionDB
-    from hermes_state_local import local_receipt
+
 
     default = tmp_path / 'home'
     homes = {'default': default, 'worker': default / 'profiles' / 'worker'}
@@ -25,21 +39,18 @@ async def rotated_home(tmp_path, monkeypatch, profile, rotation):
     home = homes[profile]
     monkeypatch.setattr(profiles, '_get_default_hermes_home', lambda: default)
     monkeypatch.setattr(profiles, '_get_profiles_root', lambda: default / 'profiles')
-    monkeypatch.setattr(hermes_state, 'DEFAULT_DB_PATH', home / 'state.db')
     monkeypatch.setattr('hermes_cli.web_routers.profiles._SIDEBAR_CACHE_TTL_SECONDS', 0)
     workspace = tmp_path / 'workspace'
     workspace.mkdir()
     store, _runner, authority, connection = _owner(home, monkeypatch, {'model': {'default': 'fixture-model'}})
-    db = authority.db
+    db = authority.persistence
     try:
         if rotation == 'adopted-compression':
             from gateway.session_controls import AuthorityConnection
 
-            db.create_session('historical-root', 'desktop', cwd=str(workspace), model='fixture-model')
-            db.append_message('historical-root', 'user', 'unadopted history')
-            db.publish_compression_child(parent_session_id='historical-root', child_session_id='adopted-owner',
-                source='desktop', messages=[{'role': 'user', 'content': 'legacy continuation'}],
-                model='fixture-model', require_compression_lease=False)
+            seed_session(db, 'historical-root', 'desktop', cwd=str(workspace), model='fixture-model')
+            db.messages.append('historical-root', NewMessage('user', 'unadopted history'))
+            db.lineage.publish_compression_child('historical-root', CompressionChild(session_id='adopted-owner', source='desktop', model='fixture-model'), [NewMessage.from_live(row) for row in [{'role': 'user', 'content': 'legacy continuation'}]], require_compression_lease=False)
             await connection.close()
             connection = AuthorityConnection(authority, object(), {
                 'provider': 'local', 'user_id': 'human', 'profile_id': authority.profile_id,
@@ -53,7 +64,7 @@ async def rotated_home(tmp_path, monkeypatch, profile, rotation):
         else:
             created = (await _create(connection, workspace, 'conversation'))['result']
             owner = root = created['session_id']
-            db.append_message(owner, 'user', 'before rotation')
+            db.messages.append(owner, NewMessage('user', 'before rotation'))
         target = owner
         if rotation == 'reset-compression':
             reset = await connection.dispatch({'id': 'reset', 'method': 'session.mutate', 'params': {
@@ -62,31 +73,27 @@ async def rotated_home(tmp_path, monkeypatch, profile, rotation):
                 'expected_generation': created['execution_generation']}})
             assert 'result' in reset, reset
             target = root = reset['result']['target_session_id']
-            db.append_message(root, 'user', 'after reset')
+            db.messages.append(root, NewMessage('user', 'after reset'))
         tip = owner + '-tip'
-        db.publish_compression_child(parent_session_id=target, child_session_id=tip, source='gui',
-            messages=[{'role': 'user', 'content': 'current transcript'}], model='fixture-model',
-            require_compression_lease=False)
-        receipt = local_receipt(db, owner)
+        db.lineage.publish_compression_child(target, CompressionChild(session_id=tip, source='gui', model='fixture-model'), [NewMessage.from_live(row) for row in [{'role': 'user', 'content': 'current transcript'}]], require_compression_lease=False)
+        receipt = asdict(db.bindings.receipt(owner))
         assert receipt['entry']['session_id'] == tip
-        assert receipt['lineage'] == ([owner, target, tip] if target != owner else [owner, tip])
+        assert receipt['lineage'] == ((owner, target, tip) if target != owner else (owner, tip))
         branched = await _create(connection, workspace, 'branch', execution_mode='code', handoff=_context(owner))
         assert 'result' in branched, branched
         branch = branched['result']['session_id']
-        db.append_message(branch, 'user', 'independent reviewed branch')
+        db.messages.append(branch, NewMessage('user', 'independent reviewed branch'))
         for prefix, source in [('legacy', 'desktop'), ('messaging', 'telegram')]:
-            db.create_session(prefix + '-root', source, cwd=str(workspace))
-            db.append_message(prefix + '-root', 'user', prefix + ' before rotation')
-            db.publish_compression_child(parent_session_id=prefix + '-root', child_session_id=prefix + '-tip',
-                source=source, messages=[{'role': 'user', 'content': prefix + ' current transcript'}],
-                require_compression_lease=False)
-        assert db.set_session_pinned(tip, True)
-        with SessionDB(db_path=homes['worker' if profile == 'default' else 'default'] / 'state.db') as other:
-            other.create_session(tip, 'desktop', cwd=str(workspace))
-            other.append_message(tip, 'user', 'another profile has the same physical id')
+            seed_session(db, prefix + '-root', source, cwd=str(workspace))
+            db.messages.append(prefix + '-root', NewMessage('user', prefix + ' before rotation'))
+            db.lineage.publish_compression_child(prefix + '-root', CompressionChild(session_id=prefix + '-tip', source=source), [NewMessage.from_live(row) for row in [{'role': 'user', 'content': prefix + ' current transcript'}]], require_compression_lease=False)
+        assert db.sessions.set_pinned(tip, True)
+        with open_persistence(profile_scope(home=(homes['worker' if profile == 'default' else 'default'] / 'state.db').parent)) as other:
+            seed_session(other, tip, 'desktop', cwd=str(workspace))
+            other.messages.append(tip, NewMessage('user', 'another profile has the same physical id'))
         yield SimpleNamespace(db=db, home=home, owner=owner, root=root, tip=tip, branch=branch,
                               authority=authority, connection=connection,
-                              lineage=([root, owner, tip] if rotation == 'adopted-compression' else receipt['lineage']),
+                              lineage=([root, owner, tip] if rotation == 'adopted-compression' else list(receipt['lineage'])),
                               profile=profile, owner_in_compression_chain=target == owner)
     finally:
         await connection.close()
@@ -126,13 +133,12 @@ def _read(client, surface, profile, **params):
 @pytest.mark.parametrize('surface', ['sessions', 'profiles', 'sidebar', 'projects'])
 async def test_ui_rows_route_to_the_receipt_owner_without_adopting_other_histories(rotated_home, surface):
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
-    from hermes_state import SessionDB
 
     t = rotated_home
-    raw = t.db.list_sessions_rich(order_by_last_active=True, compact_rows=True)
+    raw = [entry.as_list_row() for entry in t.db.sessions.list_sessions(SessionQuery(order=SessionOrder.LAST_ACTIVE), SessionWindow(limit=200), compact_rows=True)]
     physical = next(row for row in raw if row['id'] == t.tip)
     assert physical['_lineage_root_id'] == t.root
-    before = '\n'.join(t.db._conn.iterdump())
+    before = '\n'.join(raw_holder(t.db)._conn.iterdump())
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         rows = _read(client, surface, t.profile)
@@ -149,9 +155,9 @@ async def test_ui_rows_route_to_the_receipt_owner_without_adopting_other_histori
     assert row['preview'] == physical['preview']
     if surface != 'projects':
         assert row['pinned'] is True
-    assert '\n'.join(t.db._conn.iterdump()) == before, 'listing must not adopt, restore or write state.db'
-    with SessionDB(db_path=t.home / 'state.db', read_only=True) as reader:
-        assert {row['id'] for row in reader.list_sessions_rich()} == {
+    assert '\n'.join(raw_holder(t.db)._conn.iterdump()) == before, 'listing must not adopt, restore or write state.db'
+    with open_persistence_reader(t.home) as reader:
+        assert {entry.session.session_id for entry in reader.sessions.list_sessions(SessionQuery(), SessionWindow(limit=200))} == {
             t.tip, t.branch, 'legacy-tip', 'messaging-tip'}, 'raw storage listing keeps its physical-id contract'
 
 
@@ -162,7 +168,7 @@ async def test_logical_ui_ids_preserve_physical_archive_and_pin_scope(rotated_ho
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
 
     t = rotated_home
-    assert t.db.set_session_archived(t.tip, True)
+    assert t.db.sessions.set_archived(t.tip, True)
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         for surface in ('sessions', 'profiles'):
@@ -172,9 +178,9 @@ async def test_logical_ui_ids_preserve_physical_archive_and_pin_scope(rotated_ho
             assert row['_lineage_root_id'] == t.root
             assert row['_lineage_ids'] == t.lineage
         assert t.owner not in {row['id'] for row in _read(client, 'projects', t.profile)}
-    assert t.db.get_session(t.tip)['archived'] == 1
-    assert t.db.get_session(t.tip)['pinned'] == 1
-    assert t.db.get_session(t.owner)['archived'] == int(t.owner_in_compression_chain)
+    assert session_row(t.db, t.tip)['archived'] == 1
+    assert session_row(t.db, t.tip)['pinned'] == 1
+    assert session_row(t.db, t.owner)['archived'] == int(t.owner_in_compression_chain)
 
 
 @pytest.mark.asyncio
@@ -183,15 +189,14 @@ async def test_logical_ui_ids_preserve_physical_archive_and_pin_scope(rotated_ho
 @pytest.mark.parametrize('read', ['messages', 'oldest', 'detail', 'export', 'timeline', 'around'])
 async def test_listed_owner_reads_current_reset_segment(rotated_home, read):
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
-    from hermes_state_runtime import admit_session_input
 
     t = rotated_home
-    t.db.set_session_title(t.tip, 'Current segment title')
-    t.db.append_message(t.tip, 'assistant', 'current response')
+    t.db.sessions.set_title(t.tip, 'Current segment title')
+    t.db.messages.append(t.tip, NewMessage('assistant', 'current response'))
     # Reads must still work with queued input; the mutation prepare-only snapshot refuses it.
-    admit_session_input(t.db, epoch=t.authority.epoch, principal_id=t.connection.actor.subject,
+    t.db.admissions.admit(epoch=t.authority.epoch, principal_id=t.connection.actor.subject,
                         session_id=t.owner, request_id='queued-input', payload={'text': 'next turn'})
-    before = '\n'.join(t.db._conn.iterdump())
+    before = '\n'.join(raw_holder(t.db)._conn.iterdump())
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         sid = next(row['id'] for row in _read(client, 'sessions', t.profile) if row['id'] == t.owner)
@@ -201,7 +206,7 @@ async def test_listed_owner_reads_current_reset_segment(rotated_home, read):
             query.update(limit=500, offset=0, order='oldest', include_compacted=True)
         if read == 'around':
             suffix = '/messages/around'
-            query['row_id'] = t.db.get_messages(t.tip)[0]['id']
+            query['row_id'] = transcript_rows(t.db, t.tip)[0]['id']
         response = client.get('/api/sessions/' + sid + suffix, params=query)
         assert response.status_code == 200, response.text
         result = response.json()
@@ -217,9 +222,9 @@ async def test_listed_owner_reads_current_reset_segment(rotated_home, read):
         assert 'before rotation' not in content
         if read in ('messages', 'oldest'):
             assert 'after reset' in content
-    assert '\n'.join(t.db._conn.iterdump()) == before, 'stored reads must not adopt or mutate the conversation'
-    assert t.db.resolve_resume_session_id(t.owner) == t.owner, 'raw resume deliberately does not cross reset'
-    assert [message['content'] for message in t.db.get_messages(t.owner)] == ['before rotation']
+    assert '\n'.join(raw_holder(t.db)._conn.iterdump()) == before, 'stored reads must not adopt or mutate the conversation'
+    assert t.db.lineage.resolve_resume_target(t.owner) == t.owner, 'raw resume deliberately does not cross reset'
+    assert [message['content'] for message in transcript_rows(t.db, t.owner)] == ['before rotation']
 
 
 @pytest.mark.asyncio
@@ -232,13 +237,13 @@ async def test_listed_owner_reads_current_reset_segment(rotated_home, read):
 ])
 async def test_listed_owner_metadata_targets_current_segment_and_fences_owner(rotated_home, monkeypatch, field, values):
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
-    from hermes_state_local import local_receipt
+
 
     t = rotated_home
     monkeypatch.setattr(app.state, 'session_authority', t.authority, raising=False)
-    old_owner = t.db.get_session(t.owner)
-    unrelated = {sid: t.db.get_session(sid) for sid in (t.branch, 'legacy-tip', 'messaging-tip')}
-    receipt = local_receipt(t.db, t.owner)
+    old_owner = session_row(t.db, t.owner)
+    unrelated = {sid: session_row(t.db, sid) for sid in (t.branch, 'legacy-tip', 'messaging-tip')}
+    receipt = asdict(t.db.bindings.receipt(t.owner))
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         sid = next(row['id'] for row in _read(client, 'sessions', t.profile) if row['id'] == t.owner)
@@ -251,8 +256,8 @@ async def test_listed_owner_metadata_targets_current_segment_and_fences_owner(ro
                 'expected_revision': snapshot['runtime_revision'],
                 'expected_generation': snapshot['runtime_generation']})
             assert unpinned.status_code == 200, unpinned.text
-            assert t.db.get_session(t.tip)['pinned'] == 0
-            old_owner = t.db.get_session(t.owner)
+            assert session_row(t.db, t.tip)['pinned'] == 0
+            old_owner = session_row(t.db, t.owner)
         for index, value in enumerate(values):
             snapshot = client.get(path + '/mutation-snapshot', params={'profile': t.profile})
             assert snapshot.status_code == 200, snapshot.text
@@ -266,19 +271,19 @@ async def test_listed_owner_metadata_targets_current_segment_and_fences_owner(ro
             result = response.json()
             assert result['session_id'] == sid and result['revision'] == snapshot['runtime_revision'] + 1
             assert result['execution_generation'] == old_owner['runtime_generation']
-            current = t.db.get_session(t.tip)
+            current = session_row(t.db, t.tip)
             column = 'last_read_at' if field == 'unread' else field
             if field == 'unread':
                 assert current[column] == 0 if value else bool(current[column])
             else:
                 assert current[column] == value
-            assert t.db.get_session(t.owner)[column] == old_owner[column], 'old reset history keeps its metadata'
+            assert session_row(t.db, t.owner)[column] == old_owner[column], 'old reset history keeps its metadata'
             if field != 'title':
-                assert t.db.get_session(t.root)[column] == current[column], 'flags cover the current compression chain'
-            after = '\n'.join(t.db._conn.iterdump())
+                assert session_row(t.db, t.root)[column] == current[column], 'flags cover the current compression chain'
+            after = '\n'.join(raw_holder(t.db)._conn.iterdump())
             retry = client.patch(path, json=body)
             assert retry.status_code == 200 and retry.json() == result
-            assert '\n'.join(t.db._conn.iterdump()) == after, 'an exact retry must not mutate or increment twice'
+            assert '\n'.join(raw_holder(t.db)._conn.iterdump()) == after, 'an exact retry must not mutate or increment twice'
             stale = client.patch(path, json={**body, 'request_id': 'stale-' + str(index)})
             assert stale.status_code == 409 and stale.json()['detail'] == 'revision_conflict'
             if field == 'archived':
@@ -286,8 +291,8 @@ async def test_listed_owner_metadata_targets_current_segment_and_fences_owner(ro
                 archived = {row['id'] for row in _read(client, 'sessions', t.profile, archived='only')}
                 assert (sid in archived) == value
                 assert (sid in active) != value
-        assert local_receipt(t.db, sid) == receipt, 'metadata does not re-key policy, routing or creation identity'
-    assert {sid: t.db.get_session(sid) for sid in unrelated} == unrelated
+        assert asdict(t.db.bindings.receipt(sid)) == receipt, 'metadata does not re-key policy, routing or creation identity'
+    assert {sid: session_row(t.db, sid) for sid in unrelated} == unrelated
 
 
 @pytest.mark.asyncio
@@ -299,7 +304,7 @@ async def test_explicit_physical_metadata_keeps_its_original_fence(rotated_home,
 
     t = rotated_home
     monkeypatch.setattr(app.state, 'session_authority', t.authority, raising=False)
-    owner_before = t.db.get_session(t.owner)
+    owner_before = session_row(t.db, t.owner)
     sid = getattr(t, physical)
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
@@ -312,8 +317,8 @@ async def test_explicit_physical_metadata_keeps_its_original_fence(rotated_home,
     assert response.status_code == 200, response.text
     assert response.json()['session_id'] == sid
     assert response.json()['revision'] == snapshot['runtime_revision'] + 1
-    assert t.db.get_session(t.root)['archived'] == t.db.get_session(t.tip)['archived'] == 1
-    assert t.db.get_session(t.owner) == owner_before, 'a physical request does not move the owner fence'
+    assert session_row(t.db, t.root)['archived'] == session_row(t.db, t.tip)['archived'] == 1
+    assert session_row(t.db, t.owner) == owner_before, 'a physical request does not move the owner fence'
 
 
 @pytest.mark.asyncio
@@ -321,7 +326,7 @@ async def test_explicit_physical_metadata_keeps_its_original_fence(rotated_home,
 @pytest.mark.parametrize('rotation', ['reset-compression'])
 async def test_listed_owner_delete_still_retires_the_whole_reset_lineage(rotated_home, monkeypatch):
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
-    from hermes_state_mutation_retirement import retired_in
+    from persistence.sqlite.conversation._store.retirement import retired_in
 
     t = rotated_home
     monkeypatch.setattr(app.state, 'session_authority', t.authority, raising=False)
@@ -336,10 +341,10 @@ async def test_listed_owner_delete_still_retires_the_whole_reset_lineage(rotated
             'expected_generation': snapshot['runtime_generation']})
     assert response.status_code == 200, response.text
     assert set(response.json()['deleted_ids']) == set(t.lineage)
-    assert all(t.db.get_session(sid) is None for sid in t.lineage)
-    with t.db._read_ctx() as conn:
+    assert all(session_row(t.db, sid) is None for sid in t.lineage)
+    with raw_holder(t.db)._read_ctx() as conn:
         assert retired_in(conn, t.owner)
-    assert t.db.get_session(t.branch) is not None
+    assert session_row(t.db, t.branch) is not None
 
 
 @pytest.mark.asyncio
@@ -353,7 +358,7 @@ async def test_exact_physical_metadata_and_export_do_not_follow_legacy_compressi
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         for sid, content in [('legacy-root', 'legacy before rotation'), (t.root, 'after reset')]:
-            t.db.set_session_title(sid, 'Exact ' + sid)
+            t.db.sessions.set_title(sid, 'Exact ' + sid)
             suffix = '' if read == 'detail' else '/export'
             response = client.get('/api/sessions/' + sid + suffix, params={'profile': t.profile})
             assert response.status_code == 200, response.text
@@ -370,10 +375,10 @@ async def test_unreceipted_empty_parent_http_reads_keep_legacy_descendant_fallba
     from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
 
     t = rotated_home
-    t.db.create_session('empty-parent', 'cli')
-    t.db.create_session('empty-child', 'cli', parent_session_id='empty-parent')
-    t.db.create_session('populated-leaf', 'cli', parent_session_id='empty-child')
-    row_id = t.db.append_message('populated-leaf', 'user', 'legacy descendant transcript')
+    seed_session(t.db, 'empty-parent', 'cli')
+    seed_session(t.db, 'empty-child', 'cli', parent_session_id='empty-parent')
+    seed_session(t.db, 'populated-leaf', 'cli', parent_session_id='empty-child')
+    row_id = t.db.messages.append('populated-leaf', NewMessage('user', 'legacy descendant transcript'))
     with TestClient(app) as client:
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
         for suffix in ('/messages', '/timeline', '/messages/around'):

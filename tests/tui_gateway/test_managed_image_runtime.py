@@ -1,5 +1,7 @@
 """Image authority is explicit per turn and never borrowed from another session."""
 
+
+
 from contextvars import copy_context
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -35,7 +37,7 @@ def test_image_scope_refuses_chat_or_expired_lease(purpose, offset):
 
 
 def test_canonical_scope_fences_generation_and_rechecks_live_selection(monkeypatch):
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     from agent.managed_image_provider import current_image_binding
     from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import get_registry
@@ -46,7 +48,7 @@ def test_canonical_scope_fences_generation_and_rechecks_live_selection(monkeypat
     selection = [state]
     def selected(*_args, **_kwargs):
         if selection[0] is None:
-            raise RuntimeStoreError("managed_binding_forbidden")
+            raise AuthorityRefusal("managed_binding_forbidden")
         return selection[0]
     monkeypatch.setattr("gateway.session_platform_model.managed_state", selected)
     monkeypatch.setattr(get_registry(), "get", lambda *_args, **_kwargs: lease)
@@ -129,7 +131,7 @@ def test_image_rejection_uses_its_owner_and_cannot_outlive_scope():
 
 @pytest.mark.parametrize('boundary', ['generation', 'session', 'selection'])
 def test_image_rejection_cannot_notify_after_canonical_owner_changes(monkeypatch, boundary):
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     from agent.managed_image_provider import notify_image_credential_rejection
     from tui_gateway.managed_image_runtime import conversation_image_scope
     from tui_gateway.managed_model_runtime import ManagedModelOwner, get_registry
@@ -142,7 +144,7 @@ def test_image_rejection_cannot_notify_after_canonical_owner_changes(monkeypatch
 
     def selected(*_args, **_kwargs):
         if not available[0]:
-            raise RuntimeStoreError('managed_binding_forbidden')
+            raise AuthorityRefusal('managed_binding_forbidden')
         return {}
 
     monkeypatch.setattr('gateway.session_platform_model.managed_state', selected)

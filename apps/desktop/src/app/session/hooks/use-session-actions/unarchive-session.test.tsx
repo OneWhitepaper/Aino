@@ -9,8 +9,9 @@ import type { MutableRefObject } from 'react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { type SessionInfo, setSessionArchived } from '@/hermes'
-import { $sessions, setSessions } from '@/store/session'
+import { getSession, type SessionInfo, setSessionArchived } from '@/hermes'
+import { $activeGatewayProfile } from '@/store/profile'
+import { $sessions, _resetSessionOwnerHintsForTests, setSessionOwnerHint, setSessions } from '@/store/session'
 import { $archivedSessions } from '@/store/sidebar-archive'
 
 import type { ClientSessionState } from '../../../types'
@@ -45,6 +46,7 @@ function archivedSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
     model: null,
     output_tokens: 0,
     preview: null,
+    profile: 'default',
     source: 'desktop',
     started_at: 1,
     title: 'archived row',
@@ -98,9 +100,12 @@ describe('unarchiveSession', () => {
     setSessions([])
     $archivedSessions.set([])
     vi.mocked(setSessionArchived).mockReset()
+    vi.mocked(getSession).mockReset().mockRejectedValue(new Error('Session not found'))
   })
 
   afterEach(() => {
+    _resetSessionOwnerHintsForTests({ storage: true })
+    $activeGatewayProfile.set('default')
     cleanup()
     setSessions([])
     $archivedSessions.set([])
@@ -114,7 +119,7 @@ describe('unarchiveSession', () => {
 
     await act(() => handle.unarchiveSession('arch-1'))
 
-    expect(vi.mocked(setSessionArchived)).toHaveBeenCalledWith('arch-1', false, undefined)
+    expect(vi.mocked(setSessionArchived)).toHaveBeenCalledWith('arch-1', false, 'default')
     expect($archivedSessions.get().map(session => session.id)).toEqual(['arch-2'])
     expect($sessions.get().map(session => session.id)).toEqual(['arch-1'])
     expect($sessions.get()[0]?.archived).toBe(false)
@@ -143,6 +148,37 @@ describe('unarchiveSession', () => {
     expect(vi.mocked(setSessionArchived)).toHaveBeenCalledWith('arch-1', false, 'sage')
   })
 
+  // An archived search hit is in no cache until the Archived view loads; the
+  // clicked row must still restore it rather than leave the RPC unsent.
+  it('restores a search-only hit from the clicked row when the archive cache is cold', async () => {
+    vi.mocked(setSessionArchived).mockResolvedValue({ ok: true })
+
+    const handle = await mountHarness()
+
+    await act(() =>
+      handle.unarchiveSession('hit-1', archivedSession({ id: 'hit-1', profile: 'sage' } as Partial<SessionInfo>))
+    )
+
+    expect(vi.mocked(setSessionArchived)).toHaveBeenCalledWith('hit-1', false, 'sage')
+    expect($sessions.get().map(session => session.id)).toEqual(['hit-1'])
+    expect($sessions.get()[0]?.archived).toBe(false)
+  })
+
+  // Synthesized search rows carry no profile; the restored row must take the
+  // resolved owner, or a named-profile sidebar filters it out as `default`'s.
+  it('stamps the resolved owner on a restored search row that carried no profile', async () => {
+    $activeGatewayProfile.set('sage')
+    vi.mocked(getSession).mockResolvedValue(archivedSession({ id: 'hit-2', profile: 'sage' } as Partial<SessionInfo>))
+    vi.mocked(setSessionArchived).mockResolvedValue({ ok: true })
+
+    const handle = await mountHarness()
+
+    await act(() => handle.unarchiveSession('hit-2', archivedSession({ id: 'hit-2', profile: undefined })))
+
+    expect(vi.mocked(setSessionArchived)).toHaveBeenCalledWith('hit-2', false, 'sage')
+    expect($sessions.get()[0]?.profile).toBe('sage')
+  })
+
   it('keeps the archived row when the restore RPC fails', async () => {
     $archivedSessions.set([archivedSession()])
     vi.mocked(setSessionArchived).mockRejectedValue(new Error('backend down'))
@@ -153,5 +189,62 @@ describe('unarchiveSession', () => {
 
     expect($archivedSessions.get().map(session => session.id)).toEqual(['arch-1'])
     expect($sessions.get()).toEqual([])
+  })
+
+  it('never sends an ownerless archive write for an unresolved search-only row', async () => {
+    vi.mocked(getSession).mockRejectedValue(new Error('Session not found'))
+    const handle = await mountHarness()
+
+    await act(() =>
+      handle.unarchiveSession('missing-owner', archivedSession({ id: 'missing-owner', profile: undefined }))
+    )
+
+    expect(setSessionArchived).not.toHaveBeenCalled()
+    expect($sessions.get()).toEqual([])
+  })
+
+  it('restores a tagged search hit on its exact owner, not a same-named ambient backend', async () => {
+    vi.mocked(setSessionArchived).mockResolvedValue({ ok: true })
+    const handle = await mountHarness()
+
+    await act(() =>
+      handle.unarchiveSession(
+        'remote-hit',
+        archivedSession({ id: 'remote-hit', connection_id: 'remote-box', profile: 'sage' })
+      )
+    )
+
+    expect(setSessionArchived).toHaveBeenCalledWith('remote-hit', false, {
+      connectionId: 'remote-box',
+      profile: 'sage'
+    })
+    expect($sessions.get()[0]).toMatchObject({
+      id: 'remote-hit',
+      connection_id: 'remote-box',
+      profile: 'sage',
+      archived: false
+    })
+  })
+  it('keeps the desktop alias in a restored row while writing through the captured backend profile', async () => {
+    setSessionOwnerHint('alias-hit', {
+      connectionId: 'remote-box',
+      profile: 'desktop-alias',
+      targetProfile: 'backend-profile'
+    })
+    vi.mocked(setSessionArchived).mockResolvedValue({ ok: true })
+    const handle = await mountHarness()
+
+    await act(() => handle.unarchiveSession('alias-hit', archivedSession({ id: 'alias-hit', profile: undefined })))
+
+    expect(setSessionArchived).toHaveBeenCalledWith('alias-hit', false, {
+      connectionId: 'remote-box',
+      profile: 'backend-profile'
+    })
+    expect($sessions.get()[0]).toMatchObject({
+      id: 'alias-hit',
+      connection_id: 'remote-box',
+      profile: 'desktop-alias',
+      archived: false
+    })
   })
 })

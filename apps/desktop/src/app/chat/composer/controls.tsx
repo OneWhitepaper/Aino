@@ -1,4 +1,5 @@
 import { useStore } from '@nanostores/react'
+import type { ReadableAtom } from 'nanostores'
 import type { CSSProperties } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ import { ACTIVE_ICON_BTN, GHOST_ICON_BTN, PRIMARY_ICON_BTN } from './control-cla
 import type { TaskContinuationControl } from './hooks/use-task-continuation'
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import { ModelPill } from './model-pill'
+import { sendButtonDisabled } from './paused-reply'
 import { ReasoningPill } from './reasoning-pill'
 import { StartVoiceButton } from './start-voice-button'
 import type { ChatBarState, VoiceStatus } from './types'
@@ -38,7 +40,7 @@ const keepEditorFocus = (event: { preventDefault: () => void }) => {
 
 interface ConversationProps {
   active: boolean
-  level: number
+  levelStore: ReadableAtom<number>
   muted: boolean
   status: ConversationStatus
   onEnd: () => void
@@ -69,6 +71,8 @@ interface ComposerControlsProps {
   hideModelPill?: boolean
   hideReasoningPill?: boolean
   minimal?: boolean
+  /** Send stays usable while `disabled`: a send now is held in the queue (a reply paused for its continuation). */
+  sendWhileDisabled?: boolean
   state: ChatBarState
   voiceStatus: VoiceStatus
   onDictate: () => void
@@ -94,6 +98,7 @@ export function ComposerControls({
   hideModelPill = false,
   hideReasoningPill = false,
   minimal = false,
+  sendWhileDisabled,
   state,
   voiceStatus,
   onDictate,
@@ -212,7 +217,7 @@ export function ComposerControls({
           <Button
             aria-label={showStop ? c.pauseTask : sendLabel}
             className={PRIMARY_ICON_BTN}
-            disabled={disabled || !canSubmit}
+            disabled={sendButtonDisabled(disabled, canSubmit, sendWhileDisabled)}
             onClick={() => recordAction(showStop ? 'composer.cancel' : 'composer.send', 'click')}
             onMouseDown={keepEditorFocus}
             type="submit"
@@ -470,7 +475,7 @@ function HudWindowButtons() {
 
 function ConversationPill({
   disabled,
-  level,
+  levelStore,
   muted,
   onEnd,
   onStopTurn,
@@ -541,7 +546,7 @@ function ConversationPill({
         }}
         type="button"
       >
-        <ConversationIndicator level={level} listening={listening} speaking={speaking} />
+        <ConversationIndicator levelStore={levelStore} listening={listening} speaking={speaking} />
         <span>{c.endShort}</span>
       </Button>
       <span className="sr-only" role="status">
@@ -552,14 +557,18 @@ function ConversationPill({
 }
 
 function ConversationIndicator({
-  level,
+  levelStore,
   listening,
   speaking
 }: {
-  level: number
+  levelStore: ReadableAtom<number>
   listening: boolean
   speaking: boolean
 }) {
+  // Only the indicator subscribes to the audio meter. The level used to be
+  // React state in ChatBar, so every meter report re-rendered the composer.
+  const level = useStore(levelStore)
+
   if (speaking) {
     return <Loader2 className={cn('animate-spin', iconSize.xs)} />
   }

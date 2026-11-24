@@ -4,10 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DocsLink } from '@/components/onboarding/flow'
 import { useI18n } from '@/i18n'
 import { $activeConnectionId } from '@/store/connections'
-import { setDesktopMetricsGate } from '@/store/desktop-metrics'
+import { captureDesktopMetricsGate } from '@/store/desktop-metrics'
 import { requestGatewayForAgent } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
-import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { $settingsScopeProfile } from '@/store/settings-scope'
 import {
   readSharedMetricsConsent,
@@ -27,10 +26,11 @@ import { ToggleRow } from './primitives'
  * rolled back on failure.
  */
 export function SharedMetricsSettings() {
+  const profile = useStore($settingsScopeProfile)
+  const connectionId = useStore($activeConnectionId)
+
   const { t } = useI18n()
   const copy = t.sharedMetrics
-  const scopeProfile = useStore($settingsScopeProfile)
-  const connectionId = useStore($activeConnectionId)
   const [consent, setConsent] = useState<SharedMetricsConsent | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -40,12 +40,12 @@ export function SharedMetricsSettings() {
     () =>
       sharedMetricsProfileRequester(
         <T,>(method: string, params: Record<string, unknown> = {}) =>
-          requestGatewayForAgent<T>(connectionId, scopeProfile, method, params, undefined, undefined, {
+          requestGatewayForAgent<T>(connectionId, profile, method, params, undefined, undefined, {
             spawnPriority: 'foreground'
           }),
-        scopeProfile
+        profile
       ),
-    [connectionId, scopeProfile]
+    [connectionId, profile]
   )
 
   // eslint-disable-next-line no-restricted-syntax -- invalidates request generations; owner values are read from atoms directly
@@ -74,27 +74,35 @@ export function SharedMetricsSettings() {
     const isCurrent = () =>
       revision.current === version &&
       $activeConnectionId.get() === connectionId &&
-      $settingsScopeProfile.get() === scopeProfile
+      $settingsScopeProfile.get() === profile
 
     setBusy(true)
     setConsent({ ...flags, send: flags.enabled && flags.send, decided: true, recipient: 'aino' })
 
     try {
+      const applyGate = await captureDesktopMetricsGate(`${connectionId ?? ''}|${profile}`)
       const saved = await saveSharedMetricsConsent(request, flags)
 
       if (!isCurrent()) {
+        // A withdrawal still revokes its captured cohort, but an old owner's
+        // delayed opt-in must never start collection in the current context.
+        if (!saved.enabled) {
+          await applyGate('off')
+        }
+
         return
       }
 
+      const applied = await applyGate(saved.enabled ? 'on' : 'off')
       setConsent(saved)
 
-      // This page applies to the focused profile (unscoped, or scoped to it by name): Desktop
-      // telemetry follows its switch at once.
-      const focused =
-        scopeProfile === null || normalizeProfileKey(scopeProfile) === normalizeProfileKey($activeGatewayProfile.get())
+      if (!applied) {
+        const applyCurrent = await captureDesktopMetricsGate(`${connectionId ?? ''}|${profile}`)
+        const current = await readSharedMetricsConsent(request)
 
-      if (saved && focused) {
-        setDesktopMetricsGate(saved.enabled ? 'on' : 'off')
+        if (isCurrent() && current?.decided && (await applyCurrent(current.enabled ? 'on' : 'off', current.decided))) {
+          setConsent(current)
+        }
       }
     } catch (err) {
       if (isCurrent()) {

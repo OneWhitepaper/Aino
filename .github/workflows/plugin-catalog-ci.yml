@@ -76,26 +76,26 @@ jobs:
             exit 1
           fi
 
-          # A v0.23.2 upstream import is the one reviewed exception to the
+          # The frozen upstream snapshot import is the one reviewed exception to the
           # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
           # its second parent is the proposed PR head and its first parent is
-          # the target branch.  The release must be present in the PR head but
+          # the target branch.  The snapshot must be present in the PR head but
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
-          UPSTREAM=ae2a81ccc00e9b7c06301523e5bb09608397149c
-          CATALOG_TREE=69c547eddebf432b73fb58a4c3351c7c038e3869
+          UPSTREAM=352b249f67fb6a4a7d7904acaca9dd410db229e0
+          CATALOG_TREE=d41911abb8ea97eb927c6b0824eb3c61f7ad476b
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # Pin the final reviewed v0.23.2 catalog, including retained Aino entries.
-            # Every changed entry still passes the exact release scanner and
+            # Pin the final reviewed snapshot catalog, including retained Aino entries.
+            # Every changed entry still passes the exact snapshot scanner and
             # pinned-source validation below; unrelated catalog edits are rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
-              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.23.2"
+              echo "::error::upstream import changed plugin-catalog/ beyond the reviewed snapshot"
               exit 1
             fi
-            # The import must use the release's reviewed enforcement inputs.
+            # The import must use the snapshot's reviewed enforcement inputs.
             # These files are consumed by this job before any plugin code runs;
             # keeping them byte-for-byte pinned prevents an import PR from
             # weakening the scanner or PM setup while it is being admitted.
@@ -195,11 +195,15 @@ jobs:
           # upstream runtime version. Fetch the reviewed official tag locally
           # and verify both its immutable tag object and peeled release commit
           # before setup or plugin code can consume its version identity.
-          REVIEWED_TAG=v0.23.2
-          REVIEWED_TAG_OBJECT=28f57ed8e3dba4eceb67dfd3e3abda1a7604452d
+          # The snapshot is after stable: validation_ref pins executable code,
+          # while the verified ancestor tag supplies its upstream version identity.
+          REVIEWED_TAG=v0.23.3
+          REVIEWED_TAG_OBJECT=2861fe3744f8134b782659438961a4f69ab5d495
+          REVIEWED_RELEASE_COMMIT=caafe5389ae585ef77387a962aee05b1bcf17029
           git fetch --no-tags https://github.com/NousResearch/hermes-agent.git "refs/tags/$REVIEWED_TAG"
           if [ "$(git rev-parse FETCH_HEAD)" != "$REVIEWED_TAG_OBJECT" ] \
-              || [ "$(git rev-parse 'FETCH_HEAD^{commit}')" != "$VALIDATION_REF" ]; then
+              || [ "$(git rev-parse 'FETCH_HEAD^{commit}')" != "$REVIEWED_RELEASE_COMMIT" ] \
+              || ! git merge-base --is-ancestor "$REVIEWED_RELEASE_COMMIT" "$VALIDATION_REF"; then
             echo "::error::official release tag does not match the reviewed upstream import"
             exit 1
           fi
@@ -207,7 +211,7 @@ jobs:
           # Validate the exact admitted catalog data, including reviewed pins
           # whose plugin trees are unchanged but whose old commits disappeared
           # from the remote's advertised history. Only catalog data is restored;
-          # the runtime, scanners and PM setup stay at the reviewed release.
+          # the runtime, scanners and PM setup stay at the reviewed snapshot.
           git rm -r --quiet -- plugin-catalog
           git read-tree -u --prefix=plugin-catalog/ "$VALIDATION_CATALOG_TREE"
           if [ "$(git write-tree --prefix=plugin-catalog/)" != "$VALIDATION_CATALOG_TREE" ] \

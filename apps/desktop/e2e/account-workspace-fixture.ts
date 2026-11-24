@@ -22,7 +22,13 @@ export async function startAccountWorkspacePlatform() {
 
     function reply(data: unknown, status = 200) {
       response.writeHead(status, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ code: status === 200 ? 0 : 'INVALID_CREDENTIALS', message: status === 200 ? 'ok' : 'invalid credentials', data }))
+      response.end(
+        JSON.stringify({
+          code: status === 200 ? 0 : 'INVALID_CREDENTIALS',
+          message: status === 200 ? 'ok' : 'invalid credentials',
+          data
+        })
+      )
     }
 
     if (route === 'POST /api/v1/auth/login') {
@@ -32,24 +38,34 @@ export async function startAccountWorkspacePlatform() {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { email?: string; password?: string }
         const account = ACCOUNT_FIXTURES.find(candidate => candidate.email === body.email)
 
-        if (!account || body.password !== 'inert-fixture-password') { reply(null, 401);
+        if (!account || body.password !== 'inert-fixture-password') {
+          reply(null, 401)
 
- return }
+          return
+        }
 
         logins.push(account.id)
-        reply({ access_token: `fixture-access-${account.id}`, refresh_token: `fixture-refresh-${account.id}`,
-          expires_in: 3600, token_type: 'Bearer' })
+        reply({
+          access_token: `fixture-access-${account.id}`,
+          refresh_token: `fixture-refresh-${account.id}`,
+          expires_in: 3600,
+          token_type: 'Bearer'
+        })
       })
 
       return
     }
 
     if (route === 'GET /api/v1/user/profile') {
-      const account = ACCOUNT_FIXTURES.find(candidate => request.headers.authorization === `Bearer fixture-access-${candidate.id}`)
+      const account = ACCOUNT_FIXTURES.find(
+        candidate => request.headers.authorization === `Bearer fixture-access-${candidate.id}`
+      )
 
-      if (!account) { reply(null, 401);
+      if (!account) {
+        reply(null, 401)
 
- return }
+        return
+      }
 
       reply({ id: Number(account.id), username: account.displayName, email: account.email, phone_bound: true })
 
@@ -66,7 +82,9 @@ export async function startAccountWorkspacePlatform() {
     })
     const address = server.address()
 
-    if (!address || typeof address === 'string') { throw new Error('Account workspace fixture failed to bind') }
+    if (!address || typeof address === 'string') {
+      throw new Error('Account workspace fixture failed to bind')
+    }
 
     return {
       origin: `http://127.0.0.1:${address.port}`,
@@ -86,18 +104,37 @@ export async function startAccountWorkspacePlatform() {
 export function seedWorkspaceSession(python: string, sandbox: Sandbox, home: string, session: string): void {
   const repo = path.resolve(import.meta.dirname, '../../..')
   fs.mkdirSync(home, { recursive: true })
-  execFileSync(python, ['-c', `
+  execFileSync(
+    python,
+    [
+      '-c',
+      `
 import sys
-from hermes_state import SessionDB
-with SessionDB() as db:
-    db.create_session(sys.argv[1], source="desktop", model="mock-model")
-    db.set_session_title(sys.argv[1], "Private " + sys.argv[1])
-    db.append_message(sys.argv[1], role="user", content="Notebook " + sys.argv[1])
-    db.append_message(sys.argv[1], role="assistant", content="Saved " + sys.argv[1])
-`, session], {
-    cwd: repo,
-    env: { PATH: process.env.PATH, LANG: 'en_US.UTF-8', HOME: sandbox.root, USERPROFILE: sandbox.root,
-      HERMES_HOME: home, PYTHONPATH: repo, HERMES_TEST_ISOLATION: '1' },
-    encoding: 'utf8', timeout: 60_000
-  })
+from persistence_assembly import open_persistence, profile_scope
+from persistence.conversation.sessions import NewSession
+from persistence.conversation.messages import NewMessage
+with open_persistence(profile_scope()) as db:
+    db.sessions.create(NewSession(sys.argv[1], source="desktop", model="mock-model"))
+    db.sessions.set_title(sys.argv[1], "Private " + sys.argv[1])
+    db.messages.append(sys.argv[1], NewMessage(role="user", content="Notebook " + sys.argv[1]))
+    db.messages.append(sys.argv[1], NewMessage(role="assistant", content="Saved " + sys.argv[1]))
+`,
+      session
+    ],
+    {
+      cwd: repo,
+      env: {
+        PATH: process.env.PATH,
+        LANG: 'en_US.UTF-8',
+        HOME: sandbox.root,
+        USERPROFILE: sandbox.root,
+        HERMES_HOME: home,
+        HERMES_RUNTIME_DIR: process.env.HERMES_RUNTIME_DIR,
+        PYTHONPATH: repo,
+        HERMES_TEST_ISOLATION: '1'
+      },
+      encoding: 'utf8',
+      timeout: 60_000
+    }
+  )
 }

@@ -41,16 +41,22 @@ def _row(text="I will inspect the files."):
 
 
 def _seed_commentary_history(home):
-    from hermes_state import SessionDB
+    from persistence.conversation.messages import NewMessage
+    from persistence.conversation.sessions import NewSession
+    from persistence_assembly import open_persistence, profile_scope
 
-    db = SessionDB(home / "state.db")
-    try:
-        db.create_session("sid", source="desktop")
-        prompt_id = db.append_message("sid", "user", "Inspect the files.", timestamp=0)
-        db.append_message("sid", **_row())
+    with open_persistence(profile_scope(home=home)) as store:
+        store.sessions.create(NewSession(session_id="sid", source="desktop"))
+        prompt_id = store.messages.append("sid", NewMessage(role="user", content="Inspect the files.", timestamp=0))
+        store.messages.append("sid", NewMessage(**_row()))
         return prompt_id
-    finally:
-        db.close()
+
+
+def _history_store(home, fn):
+    from persistence_assembly import open_persistence_reader
+
+    with open_persistence_reader(home) as store:
+        return fn(store)
 
 
 def test_rest_history_separates_public_commentary_without_changing_source():
@@ -144,7 +150,6 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
 ):
     from hermes_cli import config as config_mod
     from hermes_cli.web_routers import sessions
-    from hermes_state import SessionDB
 
     homes = {name: tmp_path / name for name in ("visible", "hidden")}
     prompts = {profile: _seed_commentary_history(home) for profile, home in homes.items()}
@@ -163,8 +168,7 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
     )
 
     monkeypatch.setattr(
-        sessions, "_open_session_db_for_profile",
-        lambda profile, read_only: SessionDB(homes[profile] / "state.db", read_only=read_only),
+        sessions, "_with_db", lambda profile, fn, read_only: _history_store(homes[profile], fn)
     )
 
     async def exercise():
@@ -193,12 +197,10 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
 def test_unscoped_rest_history_uses_custom_home_of_its_database(monkeypatch, tmp_path):
     from hermes_cli import config as config_mod
     from hermes_cli.web_routers import sessions
-    import hermes_state
 
     custom, default = tmp_path / "custom", tmp_path / "default"
     prompt_id = _seed_commentary_history(custom)
     monkeypatch.setenv("HERMES_HOME", str(custom))
-    monkeypatch.setattr(hermes_state, "DEFAULT_DB_PATH", custom / "state.db")
     monkeypatch.setattr(
         sessions, "_cron_profile_home", lambda profile: ("default", default)
     )
@@ -210,6 +212,9 @@ def test_unscoped_rest_history_uses_custom_home_of_its_database(monkeypatch, tmp
                 "show_commentary": str(get_hermes_home_override()) != str(custom)
             }
         },
+    )
+    monkeypatch.setattr(
+        sessions, "_with_db", lambda profile, fn, read_only: _history_store(custom, fn)
     )
 
     async def exercise():

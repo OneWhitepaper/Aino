@@ -12,7 +12,16 @@ const python = process.env.HERMES_PYTHON || process.env.HERMES_DESKTOP_PYTHON
 
 interface Fixture {
   files: string[]
-  accounts: { userId: string; displayName: string; origin: string; model: string; baseUrl: string; home: string; profile: string; sessionIds: string[] }[]
+  accounts: {
+    userId: string
+    displayName: string
+    origin: string
+    model: string
+    baseUrl: string
+    home: string
+    profile: string
+    sessionIds: string[]
+  }[]
 }
 
 let scratch: string
@@ -30,7 +39,9 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(scratch, { recursive: true, force: true }))
 
 function run(command: string, args: string[] = []) {
-  return spawnSync(process.execPath, [helper, command, '--root', root, '--python', python!, ...args], { encoding: 'utf8' })
+  return spawnSync(process.execPath, [helper, command, '--root', root, '--python', python!, ...args], {
+    encoding: 'utf8'
+  })
 }
 
 function seed(args: string[] = []): Fixture {
@@ -53,20 +64,36 @@ test('seeds isolated account histories, Bot identity, model settings and UTF-8 u
     expect(fs.readFileSync(path.join(bot, 'profile.yaml'), 'utf8')).toContain('hermes-bots')
     expect(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8')).toContain('model:')
     expect(fs.readFileSync(path.join(home, '.env'), 'utf8')).toContain('inert-fixture-')
-    expect(JSON.parse(fs.readFileSync(path.join(home, 'ui-preferences.json'), 'utf8')).values).toHaveProperty('hermes-desktop-theme-v2')
+    expect(JSON.parse(fs.readFileSync(path.join(home, 'ui-preferences.json'), 'utf8')).values).toHaveProperty(
+      'hermes-desktop-theme-v2'
+    )
     expect(fs.readFileSync(path.join(home, '资料', '升级保留.txt'), 'utf8')).toContain(account.displayName)
 
     for (const directory of [home, bot]) {
-      const rows = JSON.parse(execFileSync(python!, ['-c', `
+      const rows = JSON.parse(
+        execFileSync(
+          python!,
+          [
+            '-c',
+            `
 import json, sqlite3, sys
 with sqlite3.connect(sys.argv[1]) as db:
     print(json.dumps({
         "sessions": db.execute("SELECT id, user_id, title, model FROM sessions").fetchall(),
         "messages": db.execute("SELECT role, content FROM messages ORDER BY id").fetchall()
     }, ensure_ascii=False))
-`, path.join(directory, 'state.db')], { encoding: 'utf8' }))
+`,
+            path.join(directory, 'state.db')
+          ],
+          { encoding: 'utf8' }
+        )
+      )
 
-      expect(rows.sessions.some((row: string[]) => account.sessionIds.includes(row[0]) && row[1] === `platform:${account.userId}`)).toBe(true)
+      expect(
+        rows.sessions.some(
+          (row: string[]) => account.sessionIds.includes(row[0]) && row[1] === `platform:${account.userId}`
+        )
+      ).toBe(true)
       expect(rows.messages.map((row: string[]) => row[0])).toEqual(['user', 'assistant'])
       expect(rows.messages.flat().join(' ')).toContain(account.displayName)
     }
@@ -98,7 +125,13 @@ test('snapshots static fixture bytes and seeded historical rows without capturin
 
   const verified = run('verify', ['--snapshot', snapshot, '--report', report])
   expect(verified.status, verified.stderr).toBe(0)
-  expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toMatchObject({ ok: true, checked: fixture.files.length, missing: [], changed: [], unsafe: [] })
+  expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toMatchObject({
+    ok: true,
+    checked: fixture.files.length,
+    missing: [],
+    changed: [],
+    unsafe: []
+  })
   expect(fs.readFileSync(report, 'utf8')).not.toContain('inert-fixture-')
 })
 
@@ -106,32 +139,53 @@ test('keeps seeded history valid after more messages, new sessions and a SQLite 
   const fixture = seed()
   const account = fixture.accounts[0]
   const database = path.join(root, account.home, 'state.db')
-  execFileSync(python!, ['-c', `
+  execFileSync(
+    python!,
+    [
+      '-c',
+      `
 import sqlite3, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[2])
-from hermes_state import SessionDB
-with SessionDB(db_path=Path(sys.argv[1])) as db:
-    db.append_message(sys.argv[3], role="user", content="A new question after the update")
-    db.create_session("new-session-after-update", source="desktop", model="new-model")
-    db.append_message("new-session-after-update", role="user", content="New conversation")
+from persistence_assembly import open_persistence, profile_scope
+from persistence.conversation.sessions import NewSession
+from persistence.conversation.messages import NewMessage
+with open_persistence(profile_scope(home=Path(sys.argv[1]).parent)) as db:
+    db.messages.append(sys.argv[3], NewMessage(role="user", content="A new question after the update"))
+    db.sessions.create(NewSession("new-session-after-update", source="desktop", model="new-model"))
+    db.messages.append("new-session-after-update", NewMessage(role="user", content="New conversation"))
 with sqlite3.connect(sys.argv[1]) as db:
     db.execute("UPDATE sessions SET model_config=? WHERE id=?", ('{"base_url":"https://fixture.invalid/v1","provider":"custom"}', sys.argv[3]))
     db.commit()
     db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     db.execute("VACUUM")
-`, database, path.resolve(import.meta.dirname, '../../..'), account.sessionIds[0]], {
-    encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,
-      HOME: scratch, USERPROFILE: scratch, HERMES_HOME: path.join(scratch, 'isolated-home'),
-      HERMES_RUNTIME_DIR: path.join(scratch, 'isolated-runtime'), PYTHONUTF8: '1' }
-  })
+`,
+      database,
+      path.resolve(import.meta.dirname, '../../..'),
+      account.sessionIds[0]
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        HOME: scratch,
+        USERPROFILE: scratch,
+        HERMES_HOME: path.join(scratch, 'isolated-home'),
+        HERMES_RUNTIME_DIR: path.join(scratch, 'isolated-runtime'),
+        PYTHONUTF8: '1'
+      }
+    }
+  )
 
   const verified = run('verify', ['--snapshot', snapshot, '--report', report])
   expect(verified.status, verified.stderr).toBe(0)
   expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toMatchObject({ ok: true, changed: [], missing: [] })
   const captured = run('snapshot', ['--snapshot', snapshot])
   expect(captured.status, captured.stderr).toBe(0)
-  const history = JSON.parse(fs.readFileSync(snapshot, 'utf8')).files.find((file: { path: string }) => file.path === `${account.home}/state.db`)
+  const history = JSON.parse(fs.readFileSync(snapshot, 'utf8')).files.find(
+    (file: { path: string }) => file.path === `${account.home}/state.db`
+  )
   expect(history.sessions.map((session: { id: string }) => session.id)).toEqual([account.sessionIds[0]])
   expect(history.messages.map((message: { role: string }) => message.role)).toEqual(['user', 'assistant'])
 })
@@ -143,12 +197,20 @@ test.each([
   'DELETE FROM sessions',
   'UPDATE sessions SET model="wrong-model"',
   'UPDATE sessions SET user_id="wrong-account"',
-  'UPDATE sessions SET profile_name="wrong-profile"',
+  'UPDATE sessions SET profile_name="wrong-profile"'
 ])('rejects lost or rewritten seeded history: %s', statement => {
   const fixture = seed()
   const database = `${fixture.accounts[0].home}/state.db`
-  execFileSync(python!, ['-c', 'import sqlite3, sys\nwith sqlite3.connect(sys.argv[1]) as db: db.execute(sys.argv[2])',
-    path.join(root, database), statement], { encoding: 'utf8' })
+  execFileSync(
+    python!,
+    [
+      '-c',
+      'import sqlite3, sys\nwith sqlite3.connect(sys.argv[1]) as db: db.execute(sys.argv[2])',
+      path.join(root, database),
+      statement
+    ],
+    { encoding: 'utf8' }
+  )
 
   const verified = run('verify', ['--snapshot', snapshot, '--report', report])
   expect(verified.status).toBe(1)
@@ -156,14 +218,25 @@ test.each([
 })
 
 test('seeds an explicit authenticated account and live mock endpoint without sharing workspaces', async () => {
-  const fixture = seed(['--origin', 'https://api.agentera.com.cn', '--primary-user-id', '91', '--secondary-user-id', '92', '--mock-url', 'http://127.0.0.1:19001'])
+  const fixture = seed([
+    '--origin',
+    'https://api.agentera.com.cn',
+    '--primary-user-id',
+    '91',
+    '--secondary-user-id',
+    '92',
+    '--mock-url',
+    'http://127.0.0.1:19001'
+  ])
   expect(fixture.accounts.map(account => account.userId)).toEqual(['91', '92'])
   const fixtureModule = await import(pathToFileURL(helper).href)
   expect(fixtureModule.fixtureAccountForHome).toBeTypeOf('function')
 
   for (const account of fixture.accounts) {
     expect(account.origin).toBe('https://api.agentera.com.cn')
-    const scope = createHash('sha256').update(JSON.stringify(['https://api.agentera.com.cn', account.userId])).digest('hex')
+    const scope = createHash('sha256')
+      .update(JSON.stringify(['https://api.agentera.com.cn', account.userId]))
+      .digest('hex')
 
     expect(account.home).toBe(`account-workspaces/${scope}/home`)
     expect(account.model).toBeTruthy()
@@ -171,13 +244,22 @@ test('seeds an explicit authenticated account and live mock endpoint without sha
     const home = path.join(root, account.home)
 
     expect(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8')).toContain('base_url: http://127.0.0.1:19001/v1')
-    expect(JSON.parse(fs.readFileSync(path.join(home, '..', 'desktop', 'active-profile.json'), 'utf8'))).toEqual({ profile: 'default' })
+    expect(JSON.parse(fs.readFileSync(path.join(home, '..', 'desktop', 'active-profile.json'), 'utf8'))).toEqual({
+      profile: 'default'
+    })
     expect(fixtureModule.fixtureAccountForHome({ root, home })).toMatchObject({
-      home, relativeHome: account.home, userId: account.userId, model: account.model, baseUrl: account.baseUrl, sessionIds: account.sessionIds
+      home,
+      relativeHome: account.home,
+      userId: account.userId,
+      model: account.model,
+      baseUrl: account.baseUrl,
+      sessionIds: account.sessionIds
     })
   }
 
-  expect(fixtureModule.fixtureAccountForHome({ root, home: path.join(root, 'account-workspaces', 'signed-out', 'home') })).toBeNull()
+  expect(
+    fixtureModule.fixtureAccountForHome({ root, home: path.join(root, 'account-workspaces', 'signed-out', 'home') })
+  ).toBeNull()
   expect(fixtureModule.fixtureAccountForHome({ root, home: scratch })).toBeNull()
 })
 
@@ -191,7 +273,12 @@ test('fails verification and records files deleted or corrupted by an installer'
 
   const verified = run('verify', ['--snapshot', snapshot, '--report', report])
   expect(verified.status).toBe(1)
-  expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toMatchObject({ ok: false, missing: [missing], changed: [changed], unsafe: [] })
+  expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toMatchObject({
+    ok: false,
+    missing: [missing],
+    changed: [changed],
+    unsafe: []
+  })
 })
 
 test('rejects a profile junction that redirects fixture reads outside the disposable root', () => {
@@ -207,7 +294,9 @@ test('rejects a profile junction that redirects fixture reads outside the dispos
   const result = JSON.parse(fs.readFileSync(report, 'utf8'))
   expect(result.ok).toBe(false)
   expect(result.unsafe.length).toBeGreaterThan(0)
-  expect(result.unsafe.every((file: string) => file.startsWith(`${account.home}/profiles/${account.profile}/`))).toBe(true)
+  expect(result.unsafe.every((file: string) => file.startsWith(`${account.home}/profiles/${account.profile}/`))).toBe(
+    true
+  )
   const captured = run('snapshot', ['--snapshot', path.join(scratch, 'escaped.json')])
   expect(captured.status).toBe(1)
   expect(captured.stderr).toMatch(/symlink|junction/i)

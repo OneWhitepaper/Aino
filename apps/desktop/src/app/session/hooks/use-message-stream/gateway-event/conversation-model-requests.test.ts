@@ -1,9 +1,11 @@
 import { expect, it, vi } from 'vitest'
 
+import type { ServerRequestContext } from './server-request-context'
+
 const answer = vi.hoisted(() => vi.fn())
 vi.mock('@/api/platform-conversation-models', () => ({ answerPlatformConversationModelRequest: answer }))
 
-import { handleServerRequest, type ServerRequestContext } from './server-requests'
+import { handleServerRequest } from './server-requests'
 
 it('answers metadata for the originating background session on its captured source instead of the foreground model', async () => {
   const result = { status: 'selected', selection: { model_source: 'aino', model_id: 'deepseek' } }

@@ -13,7 +13,7 @@ import {
   tombstoneSessions,
   untombstoneSessions
 } from '@/store/session-removal'
-import type { SessionOwnerScope } from '@/store/session-request-router'
+import { profileScopeForSessionOwner, type SessionOwnerScope } from '@/store/session-request-router'
 import { closeSessionTile, dropSessionState } from '@/store/session-states'
 import { forgetSessionUnread } from '@/store/session-unread'
 import { $archivedSessions } from '@/store/sidebar-archive'
@@ -57,6 +57,31 @@ function rowOwner(row: SessionInfo | undefined): SessionOwnerScope {
     : row?.profile?.trim() || undefined
 }
 
+/** Restore sidebar identity separately from the backend profile used by the write. */
+function restoreArchivedListing(
+  storedSessionId: string,
+  archived: SessionInfo | undefined,
+  owner: NonNullable<ProfileScope>,
+  presentationOwner: ProfileScope
+): void {
+  $archivedSessions.set($archivedSessions.get().filter(session => !sessionMatchesStoredId(session, storedSessionId)))
+
+  if (!archived) {
+    return
+  }
+
+  untombstoneSessions([storedSessionId, archived.id, archived._lineage_root_id])
+  restoreListedSession({
+    ...archived,
+    archived: false,
+    profile:
+      archived.profile ||
+      (typeof presentationOwner === 'string' ? presentationOwner : presentationOwner?.profile) ||
+      undefined,
+    ...(typeof owner === 'object' && owner.connectionId ? { connection_id: owner.connectionId } : {})
+  })
+}
+
 /** One restore path for Archived chats and the short Undo offer. */
 export async function restoreArchivedSession(
   storedSessionId: string,
@@ -73,9 +98,23 @@ export async function restoreArchivedSession(
   const archived =
     options.row ?? $archivedSessions.get().find(session => sessionMatchesStoredId(session, storedSessionId))
 
-  const owner = options.owner ?? rowOwner(archived)
-
   try {
+    const resolvedOwner = options.owner
+      ? undefined
+      : (rowOwner(archived) ?? (await resolveSessionOwner(storedSessionId)))
+    const owner = options.owner ?? profileScopeForSessionOwner(resolvedOwner)
+    // The REST scope can name a different backend profile. Sidebar metadata
+    // keeps the Desktop alias that owns this conversation.
+    const presentationOwner = resolvedOwner ?? options.owner
+
+    if (!lifetime.current()) {
+      return
+    }
+
+    if (!owner) {
+      throw new Error(copy.sessionOwnershipUnavailable)
+    }
+
     const result = await setSessionArchived(storedSessionId, false, owner)
 
     if (!result.ok) {
@@ -86,12 +125,7 @@ export async function restoreArchivedSession(
       return
     }
 
-    $archivedSessions.set($archivedSessions.get().filter(session => !sessionMatchesStoredId(session, storedSessionId)))
-
-    if (archived) {
-      untombstoneSessions([storedSessionId, archived.id, archived._lineage_root_id])
-      restoreListedSession({ ...archived, archived: false })
-    }
+    restoreArchivedListing(storedSessionId, archived, owner, presentationOwner)
 
     if (options.restorePinId) {
       const pinResult = await setSessionPinnedRemote(options.restorePinId, true, owner)

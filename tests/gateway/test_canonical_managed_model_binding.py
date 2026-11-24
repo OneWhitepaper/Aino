@@ -1,5 +1,7 @@
 """Canonical Desktop sessions delegate ephemeral Aino credentials to the controller."""
 
+
+
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -137,4 +139,4 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
     finally:
         await viewer.close()
         await controller.close()
-        authority.db.close()
+        authority.persistence.close()

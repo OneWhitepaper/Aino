@@ -68,8 +68,11 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  // Radix restores focus on the next timer turn. Let that real cleanup run
+  // before Vitest replaces this jsdom realm and its CustomEvent constructor.
+  await new Promise(resolve => setTimeout(resolve, 0))
   _resetSessionOwnerHintsForTests()
   $sessionStates.set({})
   $onboardingSession.set(null)

@@ -1,4 +1,10 @@
 """Real disk-backed runtime readers for the Desktop's independent account homes."""
+
+from persistence.conversation.messages import NewMessage
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
 import asyncio
 import json
 from pathlib import Path
@@ -9,7 +15,6 @@ from types import SimpleNamespace
 def seed(marker):
     from cron.jobs import create_job
     from hermes_constants import get_hermes_home
-    from hermes_state import SessionDB
     from tools.memory_tool import MemoryStore
 
     home = get_hermes_home()
@@ -29,12 +34,12 @@ def seed(marker):
     memory.load_from_disk()
     assert memory.add("memory", f"Preferred notebook is {marker}.")["success"]
     create_job(prompt=f"Remember {marker}", schedule="0 0 1 1 *", name=marker, paused=True)
-    db = SessionDB()
+    db = open_persistence(profile_scope())
     try:
-        db.create_session(marker, source="webui", model=marker)
-        db.append_message(marker, role="user", content=f"Notebook {marker}")
-        db.append_message(marker, role="assistant", content=f"Saved {marker}")
-        db.set_session_title(marker, marker)
+        seed_session(db, marker, source="webui", model=marker)
+        db.messages.append(marker, NewMessage(role="user", content=f"Notebook {marker}"))
+        db.messages.append(marker, NewMessage(role="assistant", content=f"Saved {marker}"))
+        db.sessions.set_title(marker, marker)
     finally:
         db.close()
 
@@ -44,11 +49,10 @@ def inspect(marker, foreign):
     from hermes_cli.config import load_config
     from hermes_cli.profiles import list_profiles
     from hermes_constants import get_default_hermes_root, get_hermes_home
-    from hermes_state import SessionDB
     from tools.memory_tool import load_on_disk_store
     from tools.skills_tool import find_all_skills
 
-    db = SessionDB()
+    db = open_persistence(profile_scope())
     try:
         return {"home": str(get_hermes_home()), "root": str(get_default_hermes_root()),
                 "profiles": {p.name: str(p.path) for p in list_profiles(lazy_skill_count=True)},
@@ -59,8 +63,8 @@ def inspect(marker, foreign):
                 "sessions": [s["id"] for s in db.list_sessions_rich()],
                 "own_search": [r["session_id"] for r in db.search_messages(marker)],
                 "foreign_search": db.search_messages(foreign),
-                "foreign_session": db.get_session(foreign),
-                "foreign_messages": db.get_messages(foreign)}
+                "foreign_session": session_row(db, foreign),
+                "foreign_messages": transcript_rows(db, foreign)}
     finally:
         db.close()
 
@@ -72,11 +76,11 @@ async def gateway_read(marker, foreign):
     from gateway.session_contract import SessionRef
     from gateway.session_controls import AuthorityConnection
     from hermes_constants import get_hermes_home
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
 
     home = get_hermes_home()
     store = SessionStore(home / "sessions", GatewayConfig())
-    runner = SimpleNamespace(session_store=store, _session_db=store._db, adapters={}, _draining=False,
+    runner = SimpleNamespace(session_store=store, _session_db=store.persistence, adapters={}, _draining=False,
                              _adapter_for_source=lambda source: None, _cached_agent_for=lambda route: None)
     authority = await initialize_session_authority(runner, profile_id=str(home), instance_id="account-test")
     identity = {"provider": "local", "user_id": "uid:same-os-user", "profile_id": str(home),
@@ -87,13 +91,13 @@ async def gateway_read(marker, foreign):
         for method in ("resume", "events_since", "info"):
             try:
                 await getattr(connection, method)(SessionRef(str(home), foreign), {"session_id": foreign})
-            except RuntimeStoreError as error:
+            except AuthorityRefusal as error:
                 refusals[method] = error.reason
         opened = await connection.resume(SessionRef(str(home), marker), {"session_id": marker})
         return {"refusals": refusals, "messages": [m["content"] for m in opened["messages"]]}
     finally:
         await connection.close()
-        store._db.close()
+        store.persistence.close()
 
 
 if __name__ == "__main__":

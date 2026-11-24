@@ -1,10 +1,19 @@
 """An explicit same-model pick refreshes a named provider's frozen transport, not its history."""
 
+from persistence.conversation.messages import NewMessage
+from tests.fixtures.storage_read import session_row
+from tests.fixtures.storage_read import transcript_rows
+
+from dataclasses import asdict
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
 
 import pytest
+from tests.gateway.fixtures.storage_handles import close_storage_handles
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 
 from tests.gateway.test_session_follow_profile_config import _owner
 
@@ -63,7 +72,6 @@ def profile(tmp_path, monkeypatch):
 async def test_same_model_reselection_refreshes_transport_with_history_and_fences_intact(profile):
     from gateway.run_turn_prepare import GatewayTurnPrepareMixin
     from gateway.session_policy import policy_for_source
-    from hermes_state_local import local_receipt
 
     home, config = profile
     store, runner, authority, owner = _owner(home)
@@ -77,12 +85,12 @@ async def test_same_model_reselection_refreshes_transport_with_history_and_fence
         assert "result" in created, created
         sid = created["result"]["session_id"]
         live = authority.sessions[sid]
-        db = authority.db
-        db.append_message(sid, "user", "Keep this conversation")
-        db.append_message(sid, "assistant", "Its existing answer stays here")
-        history = db.get_messages(sid)
-        before = db.get_session(sid)
-        original_request = local_receipt(db, sid)["policy"]["request_json"]
+        db = authority.persistence
+        db.messages.append(sid, NewMessage("user", "Keep this conversation"))
+        db.messages.append(sid, NewMessage("assistant", "Its existing answer stays here"))
+        history = transcript_rows(db, sid)
+        before = session_row(db, sid)
+        original_request = asdict(db.bindings.receipt(sid))["policy"]["request_json"]
 
         def runtime():
             model, route = runner._resolve_session_agent_runtime(source=live.source, fallback=False)
@@ -106,7 +114,7 @@ async def test_same_model_reselection_refreshes_transport_with_history_and_fence
             }})
             assert refused["error"]["data"]["reason"] == reason, refused
             assert runtime()["api_mode"] == "chat_completions"
-            assert db.get_messages(sid) == history
+            assert transcript_rows(db, sid) == history
 
         refreshed = await owner.dispatch({"id": "refresh", "method": "session.mutate", "params": params})
         assert "result" in refreshed, refreshed
@@ -116,18 +124,18 @@ async def test_same_model_reselection_refreshes_transport_with_history_and_fence
         assert not policy.follows_profile
         assert policy.config()["model"]["api_mode"] == "codex_responses"
         assert policy.config()["providers"][PROVIDER]["api_mode"] == "codex_responses"
-        assert local_receipt(db, sid)["policy"]["request_json"] == original_request
-        after = db.get_session(sid)
+        assert asdict(db.bindings.receipt(sid))["policy"]["request_json"] == original_request
+        after = session_row(db, sid)
         assert after["runtime_revision"] > before["runtime_revision"]
         assert after["runtime_generation"] == before["runtime_generation"] + 1
         assert after["system_prompt"] == before["system_prompt"]
-        assert db.get_messages(sid) == history
+        assert transcript_rows(db, sid) == history
 
         retry = await owner.dispatch({"id": "retry", "method": "session.mutate", "params": params})
         assert retry["result"] == refreshed["result"]
-        assert db.get_session(sid)["runtime_revision"] == after["runtime_revision"]
-        assert db.get_session(sid)["runtime_generation"] == after["runtime_generation"]
-        assert db.get_messages(sid) == history
+        assert session_row(db, sid)["runtime_revision"] == after["runtime_revision"]
+        assert session_row(db, sid)["runtime_generation"] == after["runtime_generation"]
+        assert transcript_rows(db, sid) == history
     finally:
         await owner.close()
         store.close_all_db_handles()

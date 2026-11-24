@@ -28,35 +28,32 @@ RELEASE_EPOCH = 1_787_965_323
 WINDOWS_VERSION = '2026.5761.123.0'
 
 
-def test_windows_publication_uses_packager_identity_and_checks_assembly_version(tmp_path, monkeypatch):
+def test_windows_publication_uses_packager_identity_and_checks_assembly_version(tmp_path, r2_server):
     from scripts.releases.channel_releases import product_identity
 
-    workflow = hermes_yaml.safe_load((ROOT / '.github/workflows/desktop-bundled-release.yml').read_text(encoding='utf-8'))
-    step = next(step for step in workflow['jobs']['publish-win32-updater']['steps']
-                if step.get('name') == 'Publish identical tested bytes without rebuilding')
-    script = step['run'].split("python - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
-    identity = product_identity('v1.2.3')
-    staged = tmp_path / 'staged'
-    staged.mkdir()
-    (staged / 'expected-identity.json').write_text(json.dumps({
-        'identity': identity['msixAppIdWithOrg'], 'artifactName': identity['artifactNamePascal'],
-        'publisher': 'CN=Test', 'version': WINDOWS_VERSION,
-    }), encoding='utf-8')
-    bundle = staged / f"{identity['artifactNamePascal']}-{WINDOWS_VERSION}-win.msixbundle"
-    bundle.write_bytes(b'receipt-bound artifact fixture')
-    calls = []
-    monkeypatch.setattr(artifacts, 'main', calls.append)
-    monkeypatch.setenv('HERMES_PAYLOAD_TAG', 'v1.2.3')
-    monkeypatch.chdir(tmp_path)
-    exec(compile(script, 'windows-publication-workflow', 'exec'), {})
-    assert calls == [['publish-appinstaller', '--root', 'staged', '--bundle', f'staged/{bundle.name}',
-                     '--tag', 'v1.2.3', '--variant', 'bundled', '--identity', identity['msixAppIdWithOrg'],
-                     '--publisher', 'CN=Test', '--version', WINDOWS_VERSION]]
-    calls.clear()
-    bundle.rename(bundle.with_name(bundle.name.replace(WINDOWS_VERSION, '2026.5761.124.0')))
-    with pytest.raises(ValueError, match='Assembly version differs'):
-        exec(compile(script, 'windows-publication-workflow', 'exec'), {})
-    assert calls == []
+    tag = "canary.20260818T101010Z-v1.2.3"
+    identity = product_identity(tag)
+    version = "26.818.10.1010"
+    bundle = tmp_path / f"{identity['artifactNamePascal']}-{version}-win.msixbundle"
+    with zipfile.ZipFile(bundle, "w") as archive:
+        archive.writestr("AppxMetadata/AppxBundleManifest.xml",
+                         f'<Bundle><Identity Name="{identity["msixAppIdWithOrg"]}" '
+                         f'Publisher="CN=Test" Version="{version}"/></Bundle>')
+    original = bundle.read_bytes()
+    base = f"http://127.0.0.1:{r2_server.server_port}/hermes-releases"
+    args = ["publish-appinstaller", "--root", str(tmp_path), "--bundle", str(bundle),
+            "--tag", tag, "--variant", "bundled", "--identity", identity["msixAppIdWithOrg"],
+            "--publisher", "CN=Test", "--version", version, "--public-base", base]
+    artifacts.main(args)
+    assert r2_server.store[f"releases/win32/canary/{bundle.name}"][0] == original
+    descriptor = ET.fromstring(r2_server.store["releases/win32/canary/canary.appinstaller"][0])
+    assert descriptor.find("{*}MainBundle").get("Name") == identity["msixAppIdWithOrg"]
+    assert descriptor.get("Version") == descriptor.find("{*}MainBundle").get("Version") == version
+    r2_server.requests.clear()
+    args[args.index("--version") + 1] = "26.818.10.1011"
+    with pytest.raises(ValueError, match="Version does not match"):
+        artifacts.main(args)
+    assert not any(method == "PUT" for method, _, _ in r2_server.requests)
 
 
 def test_windows_metadata_is_read_from_package_and_stale_stamp_is_rejected(tmp_path):
@@ -95,15 +92,109 @@ def test_windows_metadata_is_read_from_package_and_stale_stamp_is_rejected(tmp_p
         stamp_matches({}, tag, commit)
 
 
+def test_windows_executable_version_is_read_from_msix_not_clobbered_unpacked_dir(tmp_path):
+    """Canary win32 jobs build --variant bundled then --variant store into the same release dir;
+    the Store build overwrites win-unpacked/ with the Store quad, so record() must probe the
+    executable extracted from the bundled MSIX itself."""
+    tag, commit = 'canary.20261120T173138Z-v0.23.3', 'a' * 40
+    root = tmp_path / 'release'
+    root.mkdir()
+    package = root / 'HermesBundled-0.23.3+canary.20261120T173138Z-win-x64.msix'
+    manifest = (
+        '<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">'
+        '<Identity Name="NousResearch.HermesBundledCanary" Publisher="CN=Test" '
+        'Version="26.1120.17.3138" ProcessorArchitecture="x64"/>'
+        '<Applications><Application Id="HermesBundledCanary" '
+        'Executable="app\\Hermes Agent Canary.exe"/></Applications></Package>'
+    )
+    stamp = {
+        'tag': tag, 'commit': commit, 'baseVersion': '0.23.3+canary.20261120T173138Z',
+        'receiverProtocol': 1,
+    }
+    with zipfile.ZipFile(package, 'w') as archive:
+        archive.writestr('AppxManifest.xml', manifest)
+        archive.writestr('app/resources/install-stamp.json', json.dumps(stamp))
+        archive.writestr('app/Hermes Agent Canary.exe', b'bundled-canary-exe-bytes')
+
+    # Simulate the subsequent --variant store build overwriting win-unpacked/.
+    unpacked = root / 'win-unpacked'
+    unpacked.mkdir()
+    (unpacked / 'Hermes Agent Canary.exe').write_bytes(b'store-overwrite-exe-bytes')
+
+    probed_paths = []
+
+    def probe(executable: Path) -> str:
+        probed_paths.append(executable)
+        assert not executable.is_relative_to(root), f'must not read mutable {executable}'
+        assert executable.name == 'Hermes Agent Canary.exe'
+        data = executable.read_bytes()
+        return '26.1120.17.3138' if data == b'bundled-canary-exe-bytes' else '2026.7769.1898.0'
+
+    out = root / 'metadata-windows-x64.json'
+    record('windows', 'x64', root, tag, commit, out, executable_version_probe=probe)
+    metadata = json.loads(out.read_text(encoding='utf-8-sig'))
+    assert metadata['version'] == '26.1120.17.3138'
+    assert metadata['executableVersion'] == '26.1120.17.3138'
+    assert len(probed_paths) == 1
+    assert not probed_paths[0].exists()  # temporary extracted executable is cleaned up
+
+    # Missing declared executable in the MSIX must fail closed rather than reading win-unpacked/.
+    with zipfile.ZipFile(package, 'w') as archive:
+        archive.writestr('AppxManifest.xml', manifest)
+        archive.writestr('app/resources/install-stamp.json', json.dumps(stamp))
+    with pytest.raises(ValueError, match='Expected exactly one'):
+        record('windows', 'x64', root, tag, commit, out, executable_version_probe=probe)
+
+
+def test_windows_executable_is_found_under_its_percent_encoded_msix_part_name(tmp_path):
+    """MakeAppx stores part names percent-encoded: the published rc.3-v0.22.0 x64 MSIX
+    declares Executable="app\\Hermes Agent.exe" and holds it as app/Hermes%20Agent.exe."""
+    tag, commit = 'v0.23.3', 'a' * 40
+    root = tmp_path / 'release'
+    root.mkdir()
+    package = root / 'HermesBundled-0.23.3-win-x64.msix'
+    manifest = (
+        '<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">'
+        '<Identity Name="NousResearch.HermesBundled" Publisher="CN=Test" '
+        'Version="2026.7769.1898.0" ProcessorArchitecture="x64"/>'
+        '<Applications><Application Id="HermesBundled" '
+        'Executable="app\\Hermes Agent.exe"/></Applications></Package>'
+    )
+    with zipfile.ZipFile(package, 'w') as archive:
+        archive.writestr('AppxManifest.xml', manifest)
+        archive.writestr('app/resources/install-stamp.json', json.dumps({
+            'tag': tag, 'commit': commit, 'baseVersion': tag[1:],
+        }))
+        archive.writestr('app/Hermes%20Agent.exe', b'stable-exe-bytes')
+    probed = []
+
+    def probe(executable: Path) -> str:
+        probed.append(executable.read_bytes())
+        return '2026.7769.1898.0'
+
+    out = root / 'metadata-windows-x64.json'
+    record('windows', 'x64', root, tag, commit, out, executable_version_probe=probe)
+    assert json.loads(out.read_text(encoding='utf-8-sig'))['executableVersion'] == '2026.7769.1898.0'
+    assert probed == [b'stable-exe-bytes']
+
+
 @pytest.fixture
-def staged_candidate(tmp_path, r2_server, https_origin):
+def staged_candidate(tmp_path, r2_server, https_origin, request):
     from scripts.bundles.release_artifacts import assemble
     from scripts.releases import handoff
 
-    tag, commit, base = 'v1.2.3', 'a' * 40, https_origin.base
-    attempt = 'rc.2-v1.2.3'
+    from scripts.releases import stable
+    from scripts.termux.deb_version import deb_version_for_tag
+
+    tag, commit, base = getattr(request, 'param', 'v1.2.3'), 'a' * 40, https_origin.base
+    canary = tag.startswith('canary.')
+    attempt = tag if canary else 'rc.2-v1.2.3'
+    version = stable.payload_version(tag)
+    epoch = stable.canary_epoch(tag) if canary else RELEASE_EPOCH
+    windows_version = stable.canary_windows_version(tag) if canary else WINDOWS_VERSION
+    channel = 'canary' if canary else 'stable'
     https_origin.store = r2_server.store
-    legs, mac_bytes = _inputs('1.2.3')
+    legs, mac_bytes = _inputs(version)
     built = tmp_path / 'built'
     built.mkdir()
     for platform, arches in [('windows', ('x64', 'arm64')), ('macos', ('x64', 'arm64')), ('termux', ('aarch64',))]:
@@ -114,30 +205,31 @@ def staged_candidate(tmp_path, r2_server, https_origin):
                 'identity': 'Product',
             }
             if platform == 'windows':
-                row.update(version=WINDOWS_VERSION, executableVersion=WINDOWS_VERSION,
+                row.update(version=windows_version, executableVersion=windows_version,
                            publisher='CN=Test', applicationId='App')
                 package = f'HermesBundled-1.2.3-win-{arch}.msix'
                 handoff_name = f'win32-{arch}'
             elif platform == 'macos':
                 package = next(Path(key).name for key in mac_bytes if key.endswith(f'-mac-{arch}.zip'))
-                row.update(version='1.2.3', teamId='ABCDEFGHIJ', filename=package)
+                row.update(version=version, teamId='ABCDEFGHIJ', filename=package)
                 handoff_name = f'darwin-{arch}'
             else:
                 package = 'deb/product.deb'
-                row.update(version='1.2.3-1', filename=package)
+                row.update(version=deb_version_for_tag(tag), filename=package)
                 handoff_name = 'termux'
             file = built / package
             file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_bytes(mac_bytes.get(f'releases/tag/{tag}/{package}', b'package transport fixture'))
+            file.write_bytes(next((body for key, body in mac_bytes.items() if Path(key).name == package),
+                                  b'package transport fixture'))
             metadata = built / f'metadata-{platform}-{arch}.json'
             metadata.write_text(json.dumps(row), encoding='utf-8')
             includes = [package, metadata.name]
             if platform == 'macos':
-                feed = f'{arch}-stable-mac.yml'
+                feed = f'{arch}-{channel}-mac.yml'
                 (built / feed).write_text(legs[feed], encoding='utf-8')
                 includes.append(feed)
             if platform == 'termux':
-                for name in ('pool/package.deb', 'dists/hermes-stable/InRelease', 'dists/hermes-stable/Release'):
+                for name in ('pool/package.deb', f'dists/hermes-{channel}/InRelease', f'dists/hermes-{channel}/Release'):
                     path = built / 'apt' / name
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(f'index transport fixture: {name}'.encode())
@@ -145,7 +237,7 @@ def staged_candidate(tmp_path, r2_server, https_origin):
             handoff.stage(attempt, commit, handoff_name, built, includes)
     bundle = built / 'Product-win.msixbundle'
     with zipfile.ZipFile(bundle, 'w') as archive:
-        archive.writestr('AppxMetadata/AppxBundleManifest.xml', f'<Bundle><Identity Name="Product" Publisher="CN=Test" Version="{WINDOWS_VERSION}"/><Packages><Package Type="application" Architecture="arm64"/><Package Type="application" Architecture="x64"/></Packages></Bundle>')
+        archive.writestr('AppxMetadata/AppxBundleManifest.xml', f'<Bundle><Identity Name="Product" Publisher="CN=Test" Version="{windows_version}"/><Packages><Package Type="application" Architecture="arm64"/><Package Type="application" Architecture="x64"/></Packages></Bundle>')
     (built / 'Store-Product-win.msixbundle').write_bytes(b'Store bundle transport fixture')
     handoff.stage(attempt, commit, 'windows-universal', built, ['*.msixbundle'])
     fetched = tmp_path / 'fetched'
@@ -153,7 +245,7 @@ def staged_candidate(tmp_path, r2_server, https_origin):
     handoff.fetch(attempt, commit, names, fetched, ['metadata-*.json', '*.msixbundle'])
     r2_server.requests.clear()
     manifest = assemble(fetched, tag, commit, base, tmp_path / 'release-candidates.json',
-                        smoke_results=SMOKE_RESULTS, release_epoch=RELEASE_EPOCH, archive=attempt,
+                        smoke_results=SMOKE_RESULTS, release_epoch=epoch, archive=attempt,
                         lanes=lane_set.NAMES)
     assert manifest['archive'] == attempt and manifest['tag'] == tag
     assert {row['platform'] + '/' + row['arch'] for row in manifest['packages']} == {
@@ -163,7 +255,8 @@ def staged_candidate(tmp_path, r2_server, https_origin):
     puts = [path for method, path, _ in r2_server.requests if method == 'PUT']
     assert puts == [f'/hermes-releases/releases/tag/{attempt}/release-candidates.json']
     assert all(key.startswith(f'releases/tag/{attempt}/') for key in r2_server.store)
-    assert not any(key.startswith(f'releases/tag/{tag}/') for key in r2_server.store)
+    if not canary:
+        assert not any(key.startswith(f'releases/tag/{tag}/') for key in r2_server.store)
     return manifest, fetched, base
 
 

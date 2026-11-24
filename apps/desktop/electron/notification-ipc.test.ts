@@ -8,7 +8,8 @@ import type { HermesNotification } from './notification-types'
 const host = vi.hoisted(() => ({
   handle: vi.fn(),
   fromWebContents: vi.fn(),
-  shown: [] as Array<EventEmitter & { close: () => void }>
+  shown: [] as Array<EventEmitter & { close: () => void }>,
+  supported: true
 }))
 
 vi.mock('electron', () => ({
@@ -16,7 +17,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: host.handle },
   Notification: class extends EventEmitter {
     static isSupported() {
-      return true
+      return host.supported
     }
 
     show() {
@@ -44,6 +45,7 @@ beforeEach(() => {
   host.handle.mockReset()
   host.fromWebContents.mockReset()
   host.shown.length = 0
+  host.supported = true
 })
 
 it('returns native clicks and approval actions to the emitting window, not the primary', async () => {
@@ -210,4 +212,20 @@ it.each(['darwin', 'win32'] as const)('retires %s notifications before another a
   expect(current.webContents.send).toHaveBeenCalledWith('hermes:focus-session', 'same-local-id')
   expect(focusWindow).toHaveBeenCalledWith(current)
   nativeNotifications.dispose()
+})
+
+it.each([
+  ['darwin', true, true],
+  ['darwin', false, false],
+  ['win32', false, false]
+  // Linux asks the session bus instead; notification-linux.test.ts covers it.
+] as const)('on %s with Notification.isSupported() %s, main says it can notify: %s', async (platform, supported, expected) => {
+  host.supported = supported
+  registerNativeNotifications({ getMainWindow: () => null, focusWindow: vi.fn(), platform })
+
+  const answer = host.handle.mock.calls.find(([channel]) => channel === 'hermes:notify:supported')?.[1] as
+    | (() => boolean)
+    | undefined
+
+  expect(answer?.()).toBe(expected)
 })

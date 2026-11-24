@@ -1,4 +1,8 @@
 """Hosted members keep one recoverable policy and follow their owning profile."""
+
+from tests.fixtures.storage_holder import raw_holder
+
+from dataclasses import asdict
 import json
 
 import pytest
@@ -12,15 +16,14 @@ def _rpc(hosted_owner):
 
 
 def _receipt(authority, sid):
-    from hermes_state_local import local_receipt
-    return local_receipt(authority.db, sid)
+    return asdict(authority.persistence.bindings.receipt(sid))
 
 
 def _seed_empty_receipt(rpc, *, tamper=None):
     """The old create committed this policy before its immediate restore failed."""
     from gateway.config import Platform
     from gateway.session_local_recovery import local_adapter_map
-    from hermes_state_local import POLICY_PREFIX
+    from persistence.sqlite.conversation._store.local import POLICY_PREFIX
     sid = rpc.create(profile='default', title='Group: room', source='bot_room')['session_id']
     receipt = _receipt(rpc.authority, sid)
     receipt['policy']['model'] = ''
@@ -36,7 +39,7 @@ def _seed_empty_receipt(rpc, *, tamper=None):
     def write(conn):
         conn.execute('UPDATE state_meta SET value=? WHERE key=?', (encoded, POLICY_PREFIX + sid))
         conn.execute("UPDATE sessions SET model='' WHERE id=?", (sid,))
-    rpc.authority.db._execute_write(write)
+    raw_holder(rpc.authority.persistence)._execute_write(write)
     live = rpc.authority.sessions.pop(sid)
     local_adapter_map(rpc.authority)[Platform.LOCAL].policies.pop(live.source.chat_id)
     return sid, receipt
@@ -63,25 +66,24 @@ def test_new_room_without_a_runtime_model_commits_a_recoverable_following_policy
 
 @pytest.mark.parametrize('status', ['queued', 'started', 'unknown'])
 def test_old_empty_room_policy_recovers_same_id_without_rewriting_pending_input(hosted_owner, status):
-    from gateway.hosted_room_driver import TaskIdentity
-    from hermes_state_runtime import list_session_admissions
+    from persistence.gateway.hosted_rooms import HostedTaskIdentity as TaskIdentity
     from gateway.session_policy import restore_policy
     rpc = _rpc(hosted_owner)
     sid = rpc.create(profile='default', title='Group: room', source='bot_room')['session_id']
     task = TaskIdentity('room', 'task', 'thread', 'turn')
     rpc.submit(profile='default', session_id=sid, source='bot_room', prompt='exact @member prompt',
                task=task, execution_generation=1, on_terminal=lambda result: None)
-    rpc.authority.db._execute_write(lambda conn: conn.execute(
+    raw_holder(rpc.authority.persistence)._execute_write(lambda conn: conn.execute(
         'UPDATE session_admissions SET status=?,owner_epoch=?,generation=1 WHERE target_session_id=?',
         (status, rpc.authority.epoch, sid)))
-    before_admissions = list_session_admissions(rpc.authority.db, session_id=sid, pending_only=False)
+    before_admissions = [asdict(record) for record in rpc.authority.persistence.admissions.list(session_id=sid, pending_only=False)]
     sid, before = _seed_empty_receipt(rpc)
     resumed = rpc.resume(profile='default', session_id=sid, source='bot_room')
     after = _receipt(rpc.authority, sid)
     assert resumed['session_id'] == sid
     assert before['request_id'] == after['request_id'] == rpc.creation_id
     assert before['policy']['request_json'] == after['policy']['request_json']
-    assert list_session_admissions(rpc.authority.db, session_id=sid, pending_only=False) == before_admissions
+    assert [asdict(record) for record in rpc.authority.persistence.admissions.list(session_id=sid, pending_only=False)] == before_admissions
     policy = restore_policy(after['policy'])
     assert policy.model is None and policy.follows_profile
     assert rpc.create(profile='default', title='Group: room', source='bot_room')['session_id'] == sid
@@ -95,9 +97,9 @@ def test_old_empty_room_policy_recovers_same_id_without_rewriting_pending_input(
     lambda receipt: receipt['entry'].update(session_key='another-route'),
 ])
 def test_empty_policy_repair_refuses_any_other_creation_or_owner(hosted_owner, tamper):
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     rpc = _rpc(hosted_owner)
     sid, before = _seed_empty_receipt(rpc, tamper=tamper)
-    with pytest.raises(RuntimeStoreError):
+    with pytest.raises(AuthorityRefusal):
         rpc.resume(profile='default', session_id=sid, source='bot_room')
     assert _receipt(rpc.authority, sid) == before

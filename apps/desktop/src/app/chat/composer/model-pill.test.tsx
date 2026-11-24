@@ -15,8 +15,10 @@ import {
   $currentModel,
   $modelDefaultUnavailable,
   $modelPickerOpen,
+  setCurrentFastMode,
   setCurrentModel,
-  setCurrentModelSource
+  setCurrentModelSource,
+  setCurrentServiceTier
 } from '@/store/session'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
 
@@ -37,8 +39,10 @@ afterEach(() => {
   $activeSessionId.set(null)
   $modelDefaultUnavailable.set(false)
   $modelPickerOpen.set(false)
+  setCurrentFastMode(false)
   setCurrentModel('')
   setCurrentModelSource('')
+  setCurrentServiceTier('')
 })
 
 it('offers the picker instead of an endless model loader after default resolution has no model', () => {
@@ -393,5 +397,70 @@ describe('ModelPill label providers', () => {
 
     expect(screen.getByText('first wins')).toBeTruthy()
     expect(second).not.toHaveBeenCalled()
+  })
+})
+
+describe('ModelPill speed-tier gating', () => {
+  it('omits Ultrafast when a live session reports fast=false for an unsupported model', () => {
+    $activeSessionId.set('live-gemini')
+    setCurrentFastMode(false)
+    setCurrentServiceTier('ultrafast')
+
+    render(<ModelPill disabled={false} model={modelState({ model: 'gemini-4-neon', provider: 'gemini' })} />)
+
+    expect(screen.getByText('Gemini 4 Neon')).toBeTruthy()
+    expect(screen.queryByText(/Ultrafast/)).toBeNull()
+  })
+
+  it('omits Ultrafast on a draft when model capabilities report no ultrafast support', () => {
+    $activeSessionId.set(null)
+    setCurrentFastMode(true)
+    setCurrentServiceTier('ultrafast')
+
+    render(
+      <ModelPill
+        disabled={false}
+        model={modelState({
+          model: 'gemini-4-neon',
+          provider: 'gemini',
+          supportsFast: false,
+          supportsUltrafast: false
+        })}
+      />
+    )
+
+    expect(screen.getByText('Gemini 4 Neon')).toBeTruthy()
+    expect(screen.queryByText(/Ultrafast/)).toBeNull()
+  })
+
+  it('omits Ultrafast on a draft before model capabilities load', () => {
+    $activeSessionId.set(null)
+    setCurrentFastMode(true)
+    setCurrentServiceTier('ultrafast')
+
+    render(<ModelPill disabled={false} model={modelState({ model: 'gemini-4-neon', provider: 'gemini' })} />)
+
+    expect(screen.getByText('Gemini 4 Neon')).toBeTruthy()
+    expect(screen.queryByText(/Ultrafast/)).toBeNull()
+  })
+
+  it('shows Ultrafast when both fastMode and ultrafast support are true', () => {
+    $activeSessionId.set('live-codex')
+    setCurrentFastMode(true)
+    setCurrentServiceTier('ultrafast')
+
+    render(
+      <ModelPill
+        disabled={false}
+        model={modelState({
+          model: 'openai/gpt-6.1-sol',
+          provider: 'openai-codex',
+          supportsFast: true,
+          supportsUltrafast: true
+        })}
+      />
+    )
+
+    expect(screen.getByText('GPT-6.1-sol · Ultrafast')).toBeTruthy()
   })
 })

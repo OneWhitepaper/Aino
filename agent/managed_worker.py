@@ -56,6 +56,8 @@ def result_frame(result):
     """Worker side: the receipt fields of ``run_conversation``'s result, scalars only, text bounded."""
     frame = {k: (v[:4096] if isinstance(v, str) and k != 'final_response' else v) for k, v in result.items()
              if k in RESULT_FIELDS and k not in STRUCTURED_FIELDS and (v is None or type(v) in (bool, int, float, str))}
+    if frame.get('final_response') is None and (frame.get('interrupted') or frame.get('failed')):
+        frame['final_response'] = ''
     for key, fields in STRUCTURED_FIELDS.items():
         if isinstance(block := result.get(key), dict):
             frame[key] = {k: v[:4096] if isinstance(v, str) else v for k, v in block.items()
@@ -492,8 +494,6 @@ def execute(frame, channel):
             from agent.title_generator import wait_for_title_upgrades
             wait_for_title_upgrades()
             store.flush_token_counts()
-            if result.get('final_response') is None and (result.get('interrupted') or result.get('failed')):
-                result['final_response'] = ''
             channel.send('result', result=result_frame(result))
             if not controls.finish.wait(30):
                 raise ValueError('managed_finish_timeout')

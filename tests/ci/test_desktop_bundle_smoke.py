@@ -1,10 +1,10 @@
-"""Replay artifact handoffs and publication against a fake R2."""
+"""Replay artifact handoffs and smoke fetches against a fake R2."""
+import copy
 import hashlib
 import json
 import shutil
-import subprocess
-import xml.etree.ElementTree as ET
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import hermes_yaml
@@ -12,11 +12,13 @@ import pytest
 
 from tests.ci.desktop_release_roles import (
     CANARY_TAG as TAG, NATIVE_TARGETS, SHA, native_builds, needs_of, phase_result, selection_gates,
-    smoke_callers, stage_step, termux_builder, universal_assembler, updater_publishers,
+    smoke_callers, stage_step, termux_builder, universal_assembler,
 )
 from tests.ci.test_commit_build_staging import ROOT, shell_step
-from tests.ci.test_desktop_release_tag_admission import _child_env, _workflow
-from tests.scripts.test_release_r2 import r2_server
+from tests.ci.test_desktop_release_tag_admission import _workflow
+from tests.scripts.test_release_r2 import r2_server as r2_server  # noqa: PLC0414 -- explicit pytest fixture export prevents F811 on its parameter
+from tests.scripts.test_release_artifacts import staged_candidate as staged_candidate  # noqa: PLC0414 -- explicit pytest fixture export prevents F811 on its parameter
+from tests.scripts.test_stable_release import https_origin as https_origin  # noqa: PLC0414 -- explicit pytest fixture export prevents F811 on its parameter
 
 
 def smoke_workflow():
@@ -29,20 +31,6 @@ def smoke_fetch_script():
                for step in job.get('steps', []) if step.get('id') == 'artifact'}
     (script,) = scripts
     return script
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def transport_env(tmp_path, server, *, commit=False):
@@ -193,101 +181,73 @@ def test_stable_phase_result_requires_smoke_but_preserves_other_phases(tmp_path,
     assert jobs[store].get('continue-on-error') is True
 
 
+@pytest.mark.parametrize("staged_candidate", [TAG], indirect=True)
+def test_canary_publisher_consumes_staged_bytes_and_writes_pointer_last(
+        tmp_path, r2_server, staged_candidate, monkeypatch):
+    """The accepted-candidate controller replaced the standalone Windows publisher."""
+    from scripts.bundles import release_artifacts
+    from scripts.releases import channel_releases
 
-def test_canary_publisher_consumes_staged_bytes_and_writes_pointer_last(tmp_path, r2_server):
-    tag = 'v0.28.1+canary.20260818T101010Z'
-    env = {**transport_env(tmp_path, r2_server), 'HERMES_DESKTOP_VARIANT': 'bundled',
-           'HERMES_PAYLOAD_TAG': tag, 'RELEASE_TAG': tag,
-           'AZURE_SIGN_PUBLISHER': 'CN=Aino Fixture'}
-    # Use the real assembly identity derivation with a stable base available.
-    for file in ['scripts/msix-shared.mjs', 'scripts/release-content-types.json',
-                 'apps/desktop/product-identity.cjs', 'apps/desktop/brand.json', 'apps/desktop/package.json']:
-        target = tmp_path / file
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / file, target)
+    manifest, _, base = staged_candidate
+    manifest_key = f"releases/tag/{manifest['archive']}/release-candidates.json"
+    accepted_bytes = r2_server.store[manifest_key][0]
+    monkeypatch.setenv("CANDIDATE_MANIFEST_SHA256", hashlib.sha256(accepted_bytes).hexdigest())
+    args = ["--tag", TAG, "--archive", TAG, "--commit", manifest["commit"], "--public-base", base]
+    windows = next(row for row in manifest["packages"] if row["platform"] == "windows")
+    key = windows["artifact"]["url"].removeprefix(base + "/")
+    tested_bytes = r2_server.store[key][0]
+    filename = key.rsplit("/", 1)[1]
+    promoted = tmp_path / "promoted"
+    # The same promoter used by publish_release consumes only the admitted candidate.
+    release_artifacts.main(["publish", *args, "--root", str(tmp_path / "verified")])
+    r2_server.requests.clear()
+    channel_releases.promote_stable_feeds(manifest, promoted, base)
+    assert (promoted / filename).read_bytes() == tested_bytes
+    assert r2_server.store[f"releases/win32/canary/{filename}"][0] == tested_bytes
+    writes = [path for method, path, _ in r2_server.requests if method == "PUT"]
+    windows_writes = [path for path in writes if "/win32/" in path]
+    assert windows_writes[-1].endswith("/canary.appinstaller")
+    descriptor = ET.fromstring(r2_server.store["releases/win32/canary/canary.appinstaller"][0])
+    assert descriptor.get("Version") == descriptor.find("{*}MainBundle").get("Version") == windows["version"]
+    assert not any("/stable/" in path for path in writes)
 
-    def git(*args, date='2026-08-18T08:10:10Z'):
-        subprocess.run(['git', *args], cwd=tmp_path, check=True, capture_output=True,
-                       env=_child_env(GIT_AUTHOR_NAME='Fixture', GIT_AUTHOR_EMAIL='fixture@example.invalid',
-                                      GIT_COMMITTER_NAME='Fixture', GIT_COMMITTER_EMAIL='fixture@example.invalid',
-                                      GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date,
-                                      GIT_CONFIG_GLOBAL=str(tmp_path / 'no-git-config'), GIT_CONFIG_NOSYSTEM='1'))
+    # A renamed or ambiguous envelope cannot replace the accepted manifest, even if its
+    # native version/identity would otherwise look plausible. The pinned digest refuses it.
+    for wrong in ["AinoBundled-0.29.0.0-win.msixbundle", "AinoBundled-0.28.1.65536-win.msixbundle",
+                  "AinoBundled-0.28.1-canary.20260818101010-win.msixbundle", filename]:
+        substituted = copy.deepcopy(manifest)
+        row = next(item for item in substituted["files"] if item["path"] == filename)
+        if wrong == filename:
+            substituted["files"].append(dict(row))
+        else:
+            row["path"] = wrong
+        r2_server.store[manifest_key] = (json.dumps(substituted).encode(), '"substituted"')
+        r2_server.requests.clear()
+        with pytest.raises(ValueError, match="digest mismatch"):
+            release_artifacts.main(["promote", *args, "--root", str(tmp_path / "refused")])
+        assert not any(method == "PUT" for method, _, _ in r2_server.requests)
+    r2_server.store[manifest_key] = (accepted_bytes, '"accepted"')
 
-    def assembly_identity():
-        result = subprocess.run(['node', '--input-type=module', '-e',
-                                 'import {appIdentity} from "./scripts/msix-shared.mjs";'
-                                 'console.log(JSON.stringify(appIdentity(process.cwd()+"/apps/desktop")));'],
-                                cwd=tmp_path, env=_child_env(**env), check=True, capture_output=True, text=True)
-        return json.loads(result.stdout)
-
-    git('init', '-q')
-    git('-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'stable base')
-    git('tag', 'v0.28.0')
-    assembled = assembly_identity()
-    version = assembled['version']
-    release = tmp_path / 'apps/desktop/release'
-    release.mkdir(parents=True)
-    filename = f"{assembled['name']}-{version}-win.msixbundle"
-    bundle = release / filename
-    with zipfile.ZipFile(bundle, 'w') as archive:
-        archive.writestr('AppxMetadata/AppxBundleManifest.xml',
-                         f'<Bundle><Identity Name="{assembled["identity"]["msixAppIdWithOrg"]}" '
-                         f'Publisher="{env["AZURE_SIGN_PUBLISHER"]}" '
-                         f'Version="{version}"/></Bundle>')
-    tested_bytes = bundle.read_bytes()
-    jobs = _workflow()['jobs']
-    publisher = updater_publishers(jobs)['win32']
-    staged = shell_step(tmp_path, r2_server, '', '', env, script=stage_step(jobs[universal_assembler(jobs)])['run'])
-    assert staged.returncode == 0, staged.stdout + staged.stderr
-    assert all(key.startswith(f'releases/tag/{tag}/') for key in r2_server.store)
-    # A newer stable becomes visible after assembly but cannot alter the
-    # timestamp-derived canary identity.
-    git('-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'new stable', date='2026-08-18T11:10:10Z')
-    git('tag', 'v0.28.1')
-    assert assembly_identity()['version'] == version
-    for name in ('Retrieve the tested universal bundle', 'Publish identical tested bytes without rebuilding'):
-        result = shell_step(tmp_path, r2_server, publisher, name, env)
-        assert result.returncode == 0, result.stdout + result.stderr
-    assert (tmp_path / 'staged' / filename).read_bytes() == tested_bytes
-    assert r2_server.store[f'releases/win32/canary/{filename}'][0] == tested_bytes
-    writes = [path for method, path, _ in r2_server.requests if method == 'PUT']
-    assert writes[-1].endswith('/canary.appinstaller')
-    descriptor = ET.fromstring(r2_server.store['releases/win32/canary/canary.appinstaller'][0])
-    main_bundle = descriptor.find('{*}MainBundle')
-    assert main_bundle is not None
-    assert descriptor.get('Version') == main_bundle.get('Version') == version
-
-    # The publication job must refuse an ambiguous envelope, even when a
-    # caller accidentally broadens the receipt selector in future.
-    (tmp_path / f'staged/{assembled["name"]}-0.29.0.0-win.msixbundle').write_bytes(tested_bytes)
-    before = len(writes)
-    refused = shell_step(tmp_path, r2_server, publisher,
-                         'Publish identical tested bytes without rebuilding', env)
-    assert refused.returncode != 0
-    assert len([row for row in r2_server.requests if row[0] == 'PUT']) == before
-    (tmp_path / f'staged/{assembled["name"]}-0.29.0.0-win.msixbundle').unlink()
-
-    # Filename, tag base, and baked identity must still agree. Reading the
-    # accepted assembly version is not permission to trust arbitrary metadata.
-    staged_bundle = tmp_path / 'staged' / filename
-    for field, wrong in [('Version', '0.28.1.0'), ('Name', 'NousResearch.Other'), ('Publisher', 'CN=Other')]:
-        with zipfile.ZipFile(bundle) as archive:
-            manifest = ET.fromstring(archive.read('AppxMetadata/AppxBundleManifest.xml'))
-        native = manifest.find('Identity')
-        assert native is not None
-        native.set(field, wrong)
-        with zipfile.ZipFile(staged_bundle, 'w') as archive:
-            archive.writestr('AppxMetadata/AppxBundleManifest.xml', ET.tostring(manifest))
-        refused = shell_step(tmp_path, r2_server, publisher,
-                             'Publish identical tested bytes without rebuilding', env)
-        assert refused.returncode != 0, field
-        assert len([row for row in r2_server.requests if row[0] == 'PUT']) == before
-    staged_bundle.write_bytes(tested_bytes)
-    for wrong in ['AinoBundled-0.29.0.0-win.msixbundle', 'AinoBundled-0.28.1.65536-win.msixbundle',
-                  'AinoBundled-0.28.1-canary.20260818101010-win.msixbundle']:
-        renamed = staged_bundle.rename(staged_bundle.with_name(wrong))
-        refused = shell_step(tmp_path, r2_server, publisher,
-                             'Publish identical tested bytes without rebuilding', env)
-        assert refused.returncode != 0, wrong
-        assert len([row for row in r2_server.requests if row[0] == 'PUT']) == before
-        renamed.rename(staged_bundle)
+    # Receipt integrity and native identity are independent checks: even a matching new
+    # digest cannot hide a different identity/version from candidate publication.
+    for field, wrong in [("Version", "0.28.1.0"), ("Name", "NousResearch.Other"), ("Publisher", "CN=Other")]:
+        bad_bundle = tmp_path / "forged.msixbundle"
+        with zipfile.ZipFile(promoted / filename) as archive:
+            native = ET.fromstring(archive.read("AppxMetadata/AppxBundleManifest.xml"))
+        native.find("Identity").set(field, wrong)
+        with zipfile.ZipFile(bad_bundle, "w") as archive:
+            archive.writestr("AppxMetadata/AppxBundleManifest.xml", ET.tostring(native))
+        body = bad_bundle.read_bytes()
+        substituted = copy.deepcopy(manifest)
+        for item in substituted["files"]:
+            if item["path"] == filename:
+                item.update(sha256=hashlib.sha256(body).hexdigest(), size=len(body))
+        for row in substituted["packages"]:
+            if row["platform"] == "windows":
+                row["artifact"]["sha256"] = hashlib.sha256(body).hexdigest()
+        r2_server.store[key] = (body, '"forged"')
+        r2_server.requests.clear()
+        with pytest.raises(ValueError, match="Universal bundle identity"):
+            release_artifacts.publish(substituted, tmp_path / f"refused-{field}", base)
+        assert not any(method == "PUT" for method, _, _ in r2_server.requests)
+    r2_server.store[key] = (tested_bytes, '"accepted"')

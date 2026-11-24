@@ -5,6 +5,7 @@ import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { configPagesFor } from './config-pages'
 import { enAppTour } from './en_app_tour'
+import { enApproval } from './en_approval'
 import { enBackupTransfer } from './en_backup_transfer'
 import { enBilling } from './en_billing'
 import { enBoot } from './en_boot'
@@ -34,6 +35,7 @@ import { enPluginUpdateAll } from './en_plugin_update_all'
 import { enPreviewWeb } from './en_preview_web'
 import { enProfiles } from './en_profiles'
 import { enProjects } from './en_projects'
+import { enSandbox } from './en_sandbox'
 import { enSharedMetrics } from './en_shared_metrics'
 import { sidebarMode } from './en_sidebar_mode'
 import { enSummary } from './en_summary_surface'
@@ -61,6 +63,7 @@ export const en: Translations = {
   accountPage: accountPage['en'],
   externalOpenFailed: enExternalOpenFailed,
   sharedMetrics: enSharedMetrics,
+  sandbox: enSandbox,
   appTour: enAppTour,
   firstRun: enFirstRun,
   // English editorial copy stays in the shipped JSONL; other locales override it.
@@ -513,6 +516,14 @@ export const en: Translations = {
       approvalTitleNamed: session => `Approval needed — ${session}`,
       approveAction: 'Approve',
       rejectAction: 'Reject',
+      accessTitle: 'Folder access needed',
+      accessTitleNamed: session => `Folder access needed — ${session}`,
+      accessReadBody: folder => `Read only: ${folder}`,
+      accessReadWriteBody: folder => `Read and write: ${folder}`,
+      networkTitle: 'Website access needed',
+      networkTitleNamed: session => `Website access needed — ${session}`,
+      allowAction: 'Allow',
+      denyAction: 'Deny',
       inputTitle: 'Input needed',
       inputTitleNamed: session => `Input needed — ${session}`,
       inputBody: 'Hermes is waiting for your response.',
@@ -2717,10 +2728,6 @@ export const en: Translations = {
       openLog: 'Open log',
       actionLog: 'Action log',
       alreadyInstalled: (name: string) => `"${name}" is already installed`,
-      pickerTitle: 'Skills Hub',
-      pickerBrowse: 'Browse the full hub',
-      pickerHide: 'Hide the hub browser',
-      pickerHint: 'Hit "+ Add to this Agent" on any skill — it installs and appears in the list above.',
       loadFailed: 'Skill hub failed to load',
       previewFailed: 'Skill preview failed',
       scanFailed: 'Security scan failed',
@@ -3637,6 +3644,10 @@ export const en: Translations = {
     message: 'Message',
     wakingProfile: profile => `Waking up ${profile}…`,
     placeholderTo: name => `Message ${name}, or type / to use a skill`,
+    switchingProfile: profile => `Switching to ${profile}…`,
+    switchingProfileSlow: 'Still connecting. Messages you send now will wait and go to this agent.',
+    switchProfileFailed: profile => `Couldn’t switch to ${profile}`,
+    willSendTo: profile => `Will send to ${profile}`,
     placeholderStarting: 'Starting Hermes...',
     placeholderReconnecting: 'Reconnecting to Hermes…',
     placeholderFollowUp: 'Send follow-up',
@@ -5035,6 +5046,7 @@ export const en: Translations = {
       branchNewChat: 'Branch in new chat',
       react: 'React',
       dismissError: 'Dismiss error',
+      responseContinuing: 'Continuing…',
       responseStopped: 'Paused. Current progress is preserved.',
       contentRefusedNotice: "This message was refused by the model's safety filter — try a different query.",
       ...enErrorLayers,
@@ -5174,27 +5186,7 @@ export const en: Translations = {
 
       output: 'Output'
     },
-    approval: {
-      gatewayDisconnected:
-        'Hermes is offline right now. The command is still waiting for your answer (until the approval timeout). Reconnect, then send it again.',
-      sendFailed: 'Could not send your answer',
-      reconnect: 'Reconnect',
-      timedOutSystemLine:
-        'Approval timed out — the command was not run. Ask Hermes to try again, or raise the limit in Settings → Safety → Approval timeout.',
-      openSafetySettings: 'Open Safety settings',
-      run: 'Run',
-      command: 'Command',
-      commandDetails: 'Command details',
-      moreOptions: 'More approval options',
-      allowSession: 'Allow this session',
-      alwaysAllowMenu: 'Always allow…',
-      jumpToApproval: 'Approval needed',
-      reject: 'Reject',
-      alwaysTitle: 'Always allow this command?',
-      alwaysDescription: pattern =>
-        `This adds the “${pattern}” pattern to your permanent allowlist (~/.hermes/config.yaml). Hermes won’t ask again for commands like this — in this session or any future one.`,
-      alwaysAllow: 'Always allow'
-    },
+    approval: enApproval,
     clarify: enClarify,
     themePicker: enThemePicker,
     catalogInstall: enCatalogInstall,

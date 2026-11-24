@@ -1,5 +1,6 @@
 """Per-reply diagnostics, persisted only as display metadata."""
 
+from agent.agent_init_session import agent_interface
 from contextlib import nullcontext
 from dataclasses import dataclass
 import logging
@@ -39,7 +40,9 @@ def begin_turn_metrics(agent, session, *, now=None, monotonic=None):
     boundary = 0
     if db is not None:
         try:
-            boundary = db.latest_message_row_id(agent.session_id, role="assistant", require_text=False) or 0
+            store = agent_interface(agent)
+            latest = store.messages.latest_row_id if store is not None else db.latest_message_row_id
+            boundary = latest(agent.session_id, role="assistant", require_text=False) or 0
         except Exception:
             logger.debug("reply metrics row boundary unavailable", exc_info=True)
             boundary = -1  # A failed read must not authorize an unbounded write.
@@ -102,7 +105,9 @@ def _persist_metrics(agent, session, start, text, metrics):
     db = getattr(agent, "_session_db", None)
     if db is not None and start.after_row_id >= 0:
         try:
-            if not db.merge_reply_display_metadata(
+            store = agent_interface(agent)
+            merge = store.messages.merge_reply_display_metadata if store is not None else db.merge_reply_display_metadata
+            if not merge(
                     agent.session_id, text, after_row_id=start.after_row_id, metadata=metadata):
                 return
         except Exception:

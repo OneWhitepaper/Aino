@@ -10,6 +10,7 @@ import { defineLocale, type TranslationOverrides } from './define-locale'
 import { executionModeCopy } from './execution-mode'
 import { homeGuidance } from './home-guidance'
 import { introJa } from './intro-ja'
+import { jaApproval } from './ja_approval'
 import { jaBoot } from './ja_boot'
 import { jaCatalog, jaSkillDeepLink } from './ja_catalog'
 import { jaClarify } from './ja_clarify'
@@ -459,6 +460,14 @@ const jaBaseOverrides = {
       approvalTitleNamed: session => `承認が必要です — ${session}`,
       approveAction: '承認',
       rejectAction: '拒否',
+      accessTitle: 'フォルダーアクセスが必要です',
+      accessTitleNamed: session => `フォルダーアクセスが必要です — ${session}`,
+      accessReadBody: folder => `読み取り専用: ${folder}`,
+      accessReadWriteBody: folder => `読み取り/書き込み: ${folder}`,
+      networkTitle: 'サイトへのアクセスが必要です',
+      networkTitleNamed: session => `サイトへのアクセスが必要です — ${session}`,
+      allowAction: '許可',
+      denyAction: '拒否',
       inputTitle: '入力が必要です',
       inputTitleNamed: session => `入力が必要です — ${session}`,
       inputBody: 'Hermes が応答を待っています。',
@@ -1547,10 +1556,7 @@ const jaBaseOverrides = {
       searching: '検索中…',
       noResults: '一致するスキルがハブにありません。',
       installed: 'インストール済み',
-      installStarted: name => `「${name}」をインストール中…`,
-      pickerBrowse: 'ハブ全体を見る',
-      pickerHide: 'ハブのブラウザーを隠す',
-      pickerHint: 'スキルの「+ Add to this Agent」を押すと、インストールされて上の一覧に表示されます。'
+      installStarted: name => `「${name}」をインストール中…`
     },
     tabSkills: 'スキル',
     tabToolsets: 'ツールセット',
@@ -2127,6 +2133,8 @@ const jaBaseOverrides = {
     remoteOverride: {
       menuItem: 'リモートホストに接続…',
       badge: (host: string) => `${host} で実行中`,
+      runHere: 'このコンピューターで実行…',
+      sandboxed: 'サンドボックス化',
       title: (profile: string) => `${profile} をリモートホストに接続`,
       description: 'このBotのセッションは、このパソコンではなく指定したリモートの Aino で実行されます。',
       urlLabel: 'リモートアドレス',
@@ -2601,6 +2609,10 @@ const jaBaseOverrides = {
     message: 'メッセージ',
     wakingProfile: profile => `${profile} を起動中…`,
     placeholderTo: name => `${name} にメッセージ、または / でスキルを使用`,
+    switchingProfile: profile => `${profile} に切り替え中…`,
+    switchingProfileSlow: 'まだ接続中です。今送信したメッセージは接続を待ってからこのエージェントに届きます。',
+    switchProfileFailed: profile => `${profile} に切り替えられませんでした`,
+    willSendTo: profile => `${profile} に送信します`,
     placeholderStarting: 'Hermes を起動中...',
     placeholderReconnecting: 'Hermes に再接続中…',
     placeholderFollowUp: 'フォローアップを送信',
@@ -3859,21 +3871,7 @@ const jaBaseOverrides = {
 
       output: '出力'
     },
-    approval: {
-      gatewayDisconnected: 'Hermes ゲートウェイが接続されていません',
-      sendFailed: '承認応答を送信できませんでした',
-      run: '実行',
-      command: 'コマンド',
-      moreOptions: 'その他の承認オプション',
-      allowSession: 'このセッションで許可',
-      alwaysAllowMenu: '常に許可…',
-      jumpToApproval: '承認が必要',
-      reject: '拒否',
-      alwaysTitle: 'このコマンドを常に許可しますか？',
-      alwaysDescription: pattern =>
-        `これにより "${pattern}" パターンが永続的な許可リスト (~/.hermes/config.yaml) に追加されます。Hermes はこのセッションや将来のセッションで、このようなコマンドについて再度尋ねません。`,
-      alwaysAllow: '常に許可'
-    },
+    approval: jaApproval,
     clarify: jaClarify,
     themePicker: jaThemePicker,
     tool: {

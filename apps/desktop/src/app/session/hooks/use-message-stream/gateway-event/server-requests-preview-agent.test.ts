@@ -5,7 +5,8 @@ import { createClientSessionState } from '@/lib/chat-runtime'
 import { $previewTabs, setPreviewScope } from '@/store/preview'
 import { dropSessionState, publishSessionState } from '@/store/session-states'
 
-import { handleServerRequest, type ServerRequestContext } from './server-requests'
+import type { ServerRequestContext } from './server-request-context'
+import { handleServerRequest } from './server-requests'
 
 const run = vi.hoisted(() => vi.fn())
 const hasLiveSurface = vi.hoisted(() => vi.fn(() => true))

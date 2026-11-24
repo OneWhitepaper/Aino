@@ -778,7 +778,10 @@ def test_live_local_backend_noclobber_startup_keeps_caller_input(configured_pass
     # Capability probing is covered separately; every sudo here must be the stand-in.
     env._sudo_askpass_ok = True
     try:
-        result = env.execute(f'read -r p; echo "got:$p"; {fake} true', stdin_data="rest\n")
+        assert env.execute(f"export PATH={fake.parent}:$PATH")["returncode"] == 0
+        # The export must survive into the next command under noclobber, or the host's sudo runs.
+        assert env.execute("command -v sudo")["output"].strip() == str(fake)
+        result = env.execute('read -r p; echo "got:$p"; sudo true', stdin_data="rest\n")
     finally:
         env.cleanup()
     assert result["returncode"] == 0, result

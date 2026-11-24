@@ -4,6 +4,8 @@ The real canonical FIFO and model-credential resolver run against a temporary pr
 the model's waiting/tool loop is held at a seam so disconnects land between its HTTP calls.
 """
 
+
+
 import asyncio
 from contextlib import asynccontextmanager
 from contextvars import copy_context
@@ -60,7 +62,7 @@ async def _running_desktop(tmp_path, monkeypatch):
         peers.append(peer)
         return peer
 
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
 
     started = asyncio.Event()
     commands = asyncio.Queue()
@@ -85,7 +87,7 @@ async def _running_desktop(tmp_path, monkeypatch):
                 return 'completed answer'
             try:
                 request.set_result(agent.api_key())
-            except RuntimeStoreError as exc:
+            except AuthorityRefusal as exc:
                 request.set_exception(exc)
 
     async def probe():
@@ -123,12 +125,12 @@ async def _running_desktop(tmp_path, monkeypatch):
             await peer.close()
         if sid is not None:
             get_registry().clear_session(binding_key(authority, sid))
-        authority.db.close()
+        authority.persistence.close()
 
 
 @pytest.mark.asyncio
 async def test_viewer_reconnect_preserves_only_its_claimed_turn(tmp_path, monkeypatch):
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
 
     async with _running_desktop(tmp_path, monkeypatch) as rig:
         credential = rig.agent.api_key
@@ -163,12 +165,12 @@ async def test_viewer_reconnect_preserves_only_its_claimed_turn(tmp_path, monkey
         await replacement.close()
         assert not rig.agent.interrupted
         assert await rig.probe() == 'replacement-key'
-        with pytest.raises(RuntimeStoreError, match='awaiting_managed_credentials'):
+        with pytest.raises(AuthorityRefusal, match='awaiting_managed_credentials'):
             old_context.run(credential)
         rig.finish()
         await async_wait_until(lambda: rig.authority.sessions[rig.sid].task.done(),
                                timeout=10, what='the detached second turn completed and settled')
-        with pytest.raises(RuntimeStoreError, match='awaiting_managed_credentials'):
+        with pytest.raises(AuthorityRefusal, match='awaiting_managed_credentials'):
             old_context.run(credential)
         cold = rig.connection()
         resumed = await call(cold, 'session.resume', session_id=rig.sid)
@@ -180,7 +182,7 @@ async def test_viewer_reconnect_preserves_only_its_claimed_turn(tmp_path, monkey
 
 @pytest.mark.asyncio
 async def test_explicit_revoke_still_stops_an_admitted_turn(tmp_path, monkeypatch):
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
 
     async with _running_desktop(tmp_path, monkeypatch) as rig:
         assert await rig.probe() == 'first-key'
@@ -188,5 +190,5 @@ async def test_explicit_revoke_still_stops_an_admitted_turn(tmp_path, monkeypatc
                              binding_revision=rig.revision)
         assert cleared.get('result') == {'cleared': True}, cleared
         assert rig.agent.interrupted, 'an explicit revocation must reach the running agent'
-        with pytest.raises(RuntimeStoreError, match='awaiting_managed_credentials'):
+        with pytest.raises(AuthorityRefusal, match='awaiting_managed_credentials'):
             await rig.probe()

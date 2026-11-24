@@ -295,7 +295,15 @@ export function textAfterSelection(editor: HTMLElement): string {
   probe.selectNodeContents(editor)
   probe.setStart(hit.range.endContainer, hit.range.endOffset)
 
-  return serializeTriggerRange(probe)
+  const scratch = document.createElement('div')
+  scratch.append(probe.cloneContents())
+  for (const chip of scratch.querySelectorAll('[data-ref-text]')) {
+    chip.replaceWith(document.createTextNode('\uFFFC'))
+  }
+  for (const br of scratch.querySelectorAll('br')) {
+    br.replaceWith(document.createTextNode('\n'))
+  }
+  return scratch.textContent ?? ''
 }
 
 /** Serialized text from the editor's start up to (`container`, `offset`).
@@ -305,28 +313,71 @@ export function textAfterSelection(editor: HTMLElement): string {
  *  makes a chip edge read as a token boundary, which is what both trigger
  *  detection and directive recognition need. */
 export function serializeTextBefore(editor: HTMLElement, container: Node, offset: number): string {
+  // Read the prefix in place. Cloning the range and rewriting chips/BRs in the
+  // clone was ~O(prefix) allocation plus a live-DOM write per keystroke; on a
+  // long accumulated draft it dominated the completion-trigger path. The
+  // traversal below produces the same string for every caret Chromium places:
+  // a chip contributes one U+FFFC regardless of where the caret sits inside it,
+  // a <br> contributes one newline, and text contributes its UTF-16 prefix. A
+  // (chip|br element, offset 0) boundary, which no caret path produces, now
+  // yields the prefix before that element instead of including it.
   const probe = document.createRange()
 
   probe.selectNodeContents(editor)
   probe.setEnd(container, offset)
 
-  return serializeTriggerRange(probe)
-}
+  let text = ''
 
-function serializeTriggerRange(probe: Range): string {
-  const scratch = document.createElement('div')
+  const walk = (node: Node) => {
+    // The caret at this node's start includes none of it (a chip/BR element
+    // container would otherwise be emitted by the branches below).
+    if (node === container && offset === 0) {
+      return
+    }
 
-  scratch.append(probe.cloneContents())
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node === container ? (node as Text).data.slice(0, offset) : ((node as Text).data ?? '')
 
-  for (const chip of scratch.querySelectorAll('[data-ref-text]')) {
-    chip.replaceWith('\uFFFC')
+      return
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return
+    }
+
+    const element = node as Element
+
+    if (element.hasAttribute('data-ref-text')) {
+      text += '\uFFFC'
+
+      return
+    }
+
+    if (element.tagName === 'BR') {
+      text += '\n'
+
+      return
+    }
+
+    const children = element.childNodes
+    const limit = element === container ? offset : children.length
+
+    for (let index = 0; index < limit; index += 1) {
+      const child = children[index]
+
+      // A sibling that starts at/after the range end contributes nothing. The
+      // range boundary is already set, so this is a pure comparison — no clone.
+      if (element !== container && probe.comparePoint(child, 0) > 0) {
+        break
+      }
+
+      walk(child)
+    }
   }
 
-  for (const br of scratch.querySelectorAll('br')) {
-    br.replaceWith('\n')
-  }
+  walk(editor)
 
-  return scratch.textContent ?? ''
+  return text
 }
 
 /** True when the insertion point starts a token — the editor's start, or after

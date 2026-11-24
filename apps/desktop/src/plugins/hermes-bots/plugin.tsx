@@ -68,8 +68,8 @@ import {
   sweepGroupChatMembersForRemovedConnection,
   updateGroupChat
 } from './group-chat'
+import { hydrateDurableGroupChatRoom } from './group-chat-record'
 import { openGroupChat } from './group-chat-view'
-import { stickyGroupEngine } from './group-engine'
 import { groupWorkspaceOwnerKey } from './group-membership'
 import {
   clearGroupComposerDrafts,
@@ -97,6 +97,7 @@ import { startScreenAutoRaise } from './screen-autoraise'
 import { ProfileGroupScreenPortal } from './screen-portal'
 import { startHideSweepScheduler } from './session-sweep'
 import { $pendingBotOpen, bumpBotOpenGeneration, getBotOpenGeneration, ID, pluginText, setPluginCtx } from './shared'
+import { TeammateWaits } from './teammate-waits'
 import type { GroupChat, RosterRow } from './types'
 import { loadBotSections } from './user-sections'
 
@@ -163,6 +164,29 @@ interface ComposerDraftPayload {
   text: string
 }
 
+function registerBotServices(ctx: PluginContext) {
+  setPluginCtx(ctx)
+  registerBotWorkspaceAvatar(ctx)
+  // The user's own roster sections. Read once at register; every mutation
+  // writes through.
+  loadBotSections()
+  const disposeLocales = ctx.i18n.register(BOTS_LOCALES)
+  setGroupChatSyncDisposed(false)
+  // The cross-connection relay rides every gateway socket this Desktop
+  // holds: roster sync + envelope drain/deliver/reply loops.
+  startBotRelay()
+  // Opt-in per bot: raise a bot's Screen tab on its first live screen tool call.
+  const stopScreenAutoRaise = startScreenAutoRaise()
+
+  // Disable and hot reload release the relay, screen listener and editor context.
+  if (typeof ctx.onDispose === 'function') {
+    ctx.onDispose(disposeLocales)
+    ctx.onDispose(stopBotRelay)
+    ctx.onDispose(stopScreenAutoRaise)
+    ctx.onDispose(clearEditorOnAccountChange())
+  }
+}
+
 export default {
   id: ID,
   name: 'Bot',
@@ -186,26 +210,7 @@ export default {
     }
   },
   register(ctx: PluginContext) {
-    setPluginCtx(ctx)
-    registerBotWorkspaceAvatar(ctx)
-    // The user's own roster sections. Read once at register; every mutation
-    // writes through.
-    loadBotSections()
-    const disposeLocales = ctx.i18n.register(BOTS_LOCALES)
-    setGroupChatSyncDisposed(false)
-    // The cross-connection relay rides every gateway socket this Desktop
-    // holds: roster sync + envelope drain/deliver/reply loops.
-    startBotRelay()
-    // Opt-in per bot: raise a bot's Screen tab on its first live screen tool call.
-    const stopScreenAutoRaise = startScreenAutoRaise()
-
-    // Disable and hot reload release the relay, screen listener and editor context.
-    if (typeof ctx.onDispose === 'function') {
-      ctx.onDispose(disposeLocales)
-      ctx.onDispose(stopBotRelay)
-      ctx.onDispose(stopScreenAutoRaise)
-      ctx.onDispose(clearEditorOnAccountChange())
-    }
+    registerBotServices(ctx)
 
     // @-mention autocomplete: typing "@rese…" in ANY composer offers the
     // roster's handles (issue #88060). Reads the roster straight from the
@@ -354,27 +359,10 @@ export default {
             for (const [name, room] of Object.entries(value)) {
               if (room && Array.isArray(room.log)) {
                 rooms[name] = {
+                  ...hydrateDurableGroupChatRoom(room),
                   // Pre-thread entries get synthetic thread ids on hydrate so
                   // every UI/engine path can assume entry.thread exists.
                   log: assignLegacyThreads(room.log),
-                  watermarks: room.watermarks && typeof room.watermarks === 'object' ? room.watermarks : {},
-                  sessions: room.sessions && typeof room.sessions === 'object' ? room.sessions : {},
-                  sessionOwners: room.sessionOwners && typeof room.sessionOwners === 'object' ? room.sessionOwners : {},
-                  stranded: room.stranded && typeof room.stranded === 'object' ? room.stranded : {},
-                  // #93129: rehydrate sticky stop holds with the same shape
-                  // guard as the other maps — a held bot stays held across
-                  // window restarts until explicitly released.
-                  holds: room.holds && typeof room.holds === 'object' ? room.holds : {},
-                  externalCursors:
-                    room.externalCursors && typeof room.externalCursors === 'object' ? room.externalCursors : {},
-                  members: Array.isArray(room.members) ? room.members : [],
-                  roomId: typeof room.roomId === 'string' && room.roomId ? room.roomId : null,
-                  ...stickyGroupEngine(room),
-                  image: typeof room.image === 'string' && room.image ? room.image : null,
-                  rosterOrder: Number.isFinite(room.rosterOrder) ? room.rosterOrder : undefined,
-                  pinned: Boolean(room.pinned),
-                  sectionId: room.sectionId ?? null,
-                  syncRevision: Math.max(0, Number(room.syncRevision || 0)),
                   epoch: 0,
                   running: false
                 }
@@ -509,6 +497,9 @@ export default {
     // Sessions sidebar: each gateway/profile group gets the profile's Screen portal
     // above its sessions, so the bot's computer is reachable from either mode.
     ctx.register(BOT_MANAGER_CONTRIBUTION)
+    // Above a Bot Chat's composer: that bot's unsettled teammate deliveries (renders nothing
+    // in any other chat, or when none are pending).
+    ctx.register({ id: 'teammate-waits', area: COMPOSER_AREAS.top, render: () => <TeammateWaits /> })
     ctx.register({
       id: 'screen-portal',
       area: SIDEBAR_PROFILE_GROUP_HEADER_AREA,

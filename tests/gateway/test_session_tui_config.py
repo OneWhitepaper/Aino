@@ -1,6 +1,8 @@
 """The TUI's profile preferences (/statusbar /mouse /density /details /focus /battery /theme
 /indicator) are written by the shared owner into the OWNING profile's config.yaml, like main's
 per-TUI sidecar ``config.set`` — never refused, never inference."""
+
+
 import asyncio
 import json
 from types import SimpleNamespace
@@ -30,13 +32,13 @@ def test_approval_mode_changes_persist_for_the_owning_profile(tmp_path):
 def test_approval_mode_write_refusal_keeps_the_command_failure_detail(tmp_path):
     from gateway.session_tui_config import _set_approval_mode
     from hermes_cli.approval_mode import ApprovalModeResult
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
 
     connection = SimpleNamespace(authority=SimpleNamespace(profile_id=str(tmp_path)))
     failure = ApprovalModeResult(False, 'off', False, 'Failed to save approval mode: config is read-only')
 
     with patch('hermes_cli.approval_mode.run_approval_mode_command', return_value=failure):
-        with pytest.raises(RuntimeStoreError, match='storage_unavailable') as raised:
+        with pytest.raises(AuthorityRefusal, match='storage_unavailable') as raised:
             _set_approval_mode(connection, 'manual')
 
     assert raised.value.detail == failure.message

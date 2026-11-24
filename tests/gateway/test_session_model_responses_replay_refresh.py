@@ -1,9 +1,19 @@
 """A canonical same-model pick refreshes a frozen relay's message-ID replay policy."""
 
+from persistence.conversation.messages import NewMessage
+from tests.fixtures.storage_read import session_row
+from persistence_assembly import store_location
+from tests.fixtures.storage_read import transcript_rows
+
+from dataclasses import asdict
+
 from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
+from tests.gateway.fixtures.storage_handles import close_storage_handles
+
+pytestmark = pytest.mark.usefixtures("authority_cwd_in_tmp")
 
 from tests.gateway.test_session_follow_profile_config import _owner
 from tests.gateway import test_session_model_transport_refresh
@@ -16,7 +26,6 @@ profile = test_session_model_transport_refresh.profile
 @pytest.mark.asyncio
 @pytest.mark.parametrize("initial", [None, True], ids=["default", "explicit-true"])
 async def test_same_model_pick_refreshes_only_frozen_replay_policy(profile, initial, monkeypatch):
-    import hermes_state
     from agent.codex_responses_adapter import classify_responses_route
     from agent.transports.codex import ResponsesApiTransport
     from gateway.run_turn_prepare import GatewayTurnPrepareMixin
@@ -24,18 +33,16 @@ async def test_same_model_pick_refreshes_only_frozen_replay_policy(profile, init
     from gateway.session_policy import policy_for_source, route_launch_key
     from gateway.session_worker_construct import route_runtime
     from hermes_cli.config import atomic_config_write, get_compatible_custom_providers
-    from hermes_state_local import local_receipt
 
     home, config = profile
     # The hermetic fixture pins this separately once hermes_state is already imported.
-    monkeypatch.setattr(hermes_state, "DEFAULT_DB_PATH", home / "state.db")
     config["model"]["api_mode"] = "codex_responses"
     config["providers"][PROVIDER]["api_mode"] = "codex_responses"
     if initial is not None:
         config["providers"][PROVIDER]["responses_replay_item_ids"] = initial
     atomic_config_write(home / "config.yaml", config)
     store, runner, authority, owner = _owner(home)
-    assert Path(authority.db.db_path).resolve().parent == home.resolve()
+    assert Path(store_location(authority.persistence.scope)).resolve().parent == home.resolve()
     runner._peek_session_state = lambda key: None
     runner._resolve_session_agent_runtime = GatewayTurnPrepareMixin._resolve_session_agent_runtime.__get__(runner)
     try:
@@ -45,12 +52,12 @@ async def test_same_model_pick_refreshes_only_frozen_replay_policy(profile, init
         }})
         assert "result" in created, created
         sid = created["result"]["session_id"]
-        live, db = authority.sessions[sid], authority.db
-        db.update_system_prompt(sid, "Keep the original cached system prefix.")
-        db.append_message(sid, "user", "Keep my conversation")
-        db.append_message(sid, "assistant", "Its original answer")
-        history, before = db.get_messages(sid), db.get_session(sid)
-        original_request = local_receipt(db, sid)["policy"]["request_json"]
+        live, db = authority.sessions[sid], authority.persistence
+        db.sessions.update_system_prompt(sid, "Keep the original cached system prefix.")
+        db.messages.append(sid, NewMessage("user", "Keep my conversation"))
+        db.messages.append(sid, NewMessage("assistant", "Its original answer"))
+        history, before = transcript_rows(db, sid), session_row(db, sid)
+        original_request = asdict(db.bindings.receipt(sid))["policy"]["request_json"]
 
         def replay_state():
             model, route = runner._resolve_session_agent_runtime(source=live.source, fallback=False)
@@ -95,7 +102,7 @@ async def test_same_model_pick_refreshes_only_frozen_replay_policy(profile, init
             }})
             assert refused["error"]["data"]["reason"] == reason, refused
             assert replay_state()[1].replay_item_ids is True
-            assert db.get_messages(sid) == history
+            assert transcript_rows(db, sid) == history
 
         refreshed = await owner.dispatch({"id": "refresh", "method": "session.mutate", "params": params})
         assert "result" in refreshed, refreshed
@@ -107,18 +114,18 @@ async def test_same_model_pick_refreshes_only_frozen_replay_policy(profile, init
         policy = policy_for_source(runner, live.source)
         assert not policy.follows_profile
         assert policy.config()["providers"][PROVIDER]["responses_replay_item_ids"] is False
-        assert local_receipt(db, sid)["policy"]["request_json"] == original_request
-        after = db.get_session(sid)
+        assert asdict(db.bindings.receipt(sid))["policy"]["request_json"] == original_request
+        after = session_row(db, sid)
         assert after["runtime_revision"] > before["runtime_revision"]
         assert after["runtime_generation"] == before["runtime_generation"] + 1
         assert after["system_prompt"] == before["system_prompt"]
-        assert db.get_messages(sid) == history
+        assert transcript_rows(db, sid) == history
 
         retry = await owner.dispatch({"id": "retry", "method": "session.mutate", "params": params})
         assert retry["result"] == refreshed["result"]
-        assert db.get_session(sid)["runtime_revision"] == after["runtime_revision"]
-        assert db.get_session(sid)["runtime_generation"] == after["runtime_generation"]
-        assert db.get_messages(sid) == history
+        assert session_row(db, sid)["runtime_revision"] == after["runtime_revision"]
+        assert session_row(db, sid)["runtime_generation"] == after["runtime_generation"]
+        assert transcript_rows(db, sid) == history
     finally:
         await owner.close()
         store.close_all_db_handles()

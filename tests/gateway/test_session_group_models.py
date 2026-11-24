@@ -1,4 +1,8 @@
 """A group member has its own managed credential, under the current room owner's grant."""
+
+from tests.fixtures.storage_holder import raw_holder
+
+from dataclasses import asdict
 import json
 from types import SimpleNamespace
 
@@ -54,7 +58,6 @@ def test_group_prepares_exact_hosted_session_and_binds_across_renderer_and_nativ
     from gateway.session_platform_model import binding_key, managed_state
     from gateway.session_policy import policy_for_source
     from gateway.run_turn_prepare import _resolve_policy_agent_runtime
-    from hermes_state_local import local_receipt
     from tui_gateway.hosted_room_driver import HostedRoomBinding
     from tui_gateway.managed_model_runtime import get_registry
 
@@ -74,7 +77,7 @@ def test_group_prepares_exact_hosted_session_and_binds_across_renderer_and_nativ
             HostedRoomBinding('room', create['result']['room']['authority_gateway_id'], 1),
             {'payload': {'target_member_id': member, 'target_profile': member}})
         assert rpc.create(profile=member, source='bot_room', title='Group: room')['session_id'] == sid
-        before = local_receipt(target.db, sid)
+        before = asdict(target.persistence.bindings.receipt(sid))
         assert before['policy']['source'] == 'bot_room'
         route, revision = _bind(call, native, prepared)
         binding = get_registry().get(binding_key(target, sid), managed_state(target, sid))
@@ -101,7 +104,7 @@ def test_group_prepares_exact_hosted_session_and_binds_across_renderer_and_nativ
         assert 'result' in again, again
         assert get_registry().get(binding_key(target, sid)) is binding
         assert get_registry().get(binding_key(target, bot_sid)) is bot_binding
-        assert local_receipt(target.db, sid) == before
+        assert asdict(target.persistence.bindings.receipt(sid)) == before
         monkeypatch.setattr(target, '_handle', original_handle)
 
         if member != source_profile:
@@ -113,15 +116,15 @@ def test_group_prepares_exact_hosted_session_and_binds_across_renderer_and_nativ
         assert get_registry().get(binding_key(target, sid)) is binding
 
         # A current owner/member/epoch check fences both future native actions and runtime reads.
-        authority.db._execute_write(lambda conn: conn.execute(
+        raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute(
             'UPDATE state_meta SET value=? WHERE key=?', ('replacement-owner', 'gateway.hosted.owner.v1:room')))
         denied = _request(call, native, 'session.managed_model_status', **route, owner=OWNER,
                           model_id='catalog-one', binding_revision=revision, credential_version=1)
         assert 'error' in denied, denied
-        from hermes_state_runtime import RuntimeStoreError
-        with pytest.raises(RuntimeStoreError, match='managed_binding_forbidden'):
+        from persistence import AuthorityRefusal
+        with pytest.raises(AuthorityRefusal, match='managed_binding_forbidden'):
             managed_state(target, sid)
-        with pytest.raises(RuntimeStoreError, match='managed_binding_forbidden'):
+        with pytest.raises(AuthorityRefusal, match='managed_binding_forbidden'):
             runtime['api_key']()
         assert get_registry().get(binding_key(target, sid)) is None
         assert get_registry().get(binding_key(target, bot_sid)) is bot_binding
@@ -146,14 +149,14 @@ def test_group_prepare_and_native_claim_refuse_foreign_or_stale_grants(tmp_path,
         if refusal in replacements:
             members = _members('default', 'helper')
             members[1].update(replacements[refusal])
-            authority.db._execute_write(lambda conn: conn.execute(
+            raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute(
                 'UPDATE hosted_rooms SET members_json=? WHERE room_id=?', (json.dumps(members), 'room')))
         prepared = _prepare(call, caller)
         if refusal in {'account', 'epoch'}:
             assert 'result' in prepared, prepared
             selected = prepared['result']
             if refusal == 'epoch':
-                authority.db._execute_write(lambda conn: conn.execute(
+                raw_holder(authority.persistence)._execute_write(lambda conn: conn.execute(
                     'UPDATE hosted_rooms SET authority_epoch=authority_epoch+1 WHERE room_id=?', ('room',)))
             denied = _request(call, _connection(authority), 'session.claim_managed_model',
                               profile=selected['profile'], session_id=selected['session_id'],
@@ -171,8 +174,6 @@ def test_group_prepare_and_native_claim_refuse_foreign_or_stale_grants(tmp_path,
 @pytest.mark.parametrize('change', ['model', 'account'])
 def test_group_model_preparation_keeps_pending_input_bytes_and_refuses_active_selection_changes(tmp_path, monkeypatch, status, change):
     from gateway.session_platform_model import binding_key
-    from hermes_state_local import local_receipt
-    from hermes_state_runtime import admit_session_input
     from tui_gateway.managed_model_runtime import get_registry
 
     with _gateway(tmp_path, monkeypatch, served=('helper',)) as (runner, homes, call):
@@ -183,16 +184,14 @@ def test_group_model_preparation_keeps_pending_input_bytes_and_refuses_active_se
         prepared = _prepare(call, viewer)['result']
         _bind(call, native, prepared)
         sid = prepared['session_id']
-        policy = local_receipt(target.db, sid)
-        admit_session_input(target.db, epoch=target.epoch, principal_id=policy['principal_id'],
-                            session_id=sid, request_id='exact-pending-identity',
-                            payload={'text': '  exact @helper\n``` @all ```  ', 'frozen_recipients': ['helper']})
-        target.db._execute_write(lambda conn: conn.execute(
+        policy = asdict(target.persistence.bindings.receipt(sid))
+        asdict(target.persistence.admissions.admit(epoch=target.epoch, principal_id=policy['principal_id'], session_id=sid, request_id='exact-pending-identity', payload={'text': '  exact @helper\n``` @all ```  ', 'frozen_recipients': ['helper']})[0])
+        raw_holder(target.persistence)._execute_write(lambda conn: conn.execute(
             'UPDATE session_admissions SET status=?,owner_epoch=?,generation=1 WHERE target_session_id=?',
             (status, target.epoch, sid)))
 
         def raw_inputs():
-            with target.db._read_ctx() as conn:
+            with raw_holder(target.persistence)._read_ctx() as conn:
                 return [tuple(row) for row in conn.execute('SELECT * FROM session_admissions WHERE target_session_id=?', (sid,))]
         pending = raw_inputs()
         active = get_registry().get(binding_key(target, sid))
@@ -205,9 +204,9 @@ def test_group_model_preparation_keeps_pending_input_bytes_and_refuses_active_se
         else:
             expected = 'session_busy' if status == 'started' else 'unknown_execution'
             assert changed['error']['data']['reason'] == expected, changed
-            assert local_receipt(target.db, sid) == policy
+            assert asdict(target.persistence.bindings.receipt(sid)) == policy
             assert get_registry().get(binding_key(target, sid)) is active
         assert raw_inputs() == pending
-        assert local_receipt(target.db, sid)['policy']['request_json'] == policy['policy']['request_json']
+        assert asdict(target.persistence.bindings.receipt(sid))['policy']['request_json'] == policy['policy']['request_json']
         call(viewer.close())
         call(native.close())

@@ -13,7 +13,8 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 
 from agent.message_metadata import append_message
-from agent.message_sanitization import coalesce_tool_call_id, normalize_provider_tool_call_ids
+from agent.message_sanitization import normalize_provider_tool_call_ids
+from session_rules.turns import coalesce_tool_call_id
 from agent.turn_preflight import compress_after_tool_results
 from agent.turn_tool_validation import validate_tool_calls
 
@@ -46,6 +47,18 @@ class ToolRoundVerdict:
     result: Optional[dict[str, Any]] = None
 
 
+def _log_tool_calls(agent: Any, tool_calls: Any) -> None:
+    """Emit the tool-round count and optional bounded argument previews."""
+    if not agent.quiet_mode:
+        agent._vprint(f"{agent.log_prefix}🔧 Processing {len(tool_calls)} tool call(s)...")
+
+    if agent.verbose_logging:
+        for tc in tool_calls:
+            raw_args = tc.function.arguments
+            args_preview = raw_args[:200] if isinstance(raw_args, str) else repr(raw_args)[:200]
+            logging.debug("Tool call: %s with args: %s...", tc.function.name, args_preview)
+
+
 def run_tool_round(
     agent: Any, *, assistant_message: Any, finish_reason: Any, messages: Any,
     conversation_history: Any, api_call_count: Any, effective_task_id: Any, user_message: Any,
@@ -68,14 +81,7 @@ def run_tool_round(
             current_turn_user_idx=current_turn_user_idx, result=result,
         )
 
-    if not agent.quiet_mode:
-        agent._vprint(f"{agent.log_prefix}🔧 Processing {len(assistant_message.tool_calls)} tool call(s)...")
-
-    if agent.verbose_logging:
-        for tc in assistant_message.tool_calls:
-            raw_args = tc.function.arguments
-            args_preview = raw_args[:200] if isinstance(raw_args, str) else repr(raw_args)[:200]
-            logging.debug("Tool call: %s with args: %s...", tc.function.name, args_preview)
+    _log_tool_calls(agent, assistant_message.tool_calls)
 
     _tvv = validate_tool_calls(
         agent, assistant_message, finish_reason, messages=messages,
@@ -89,14 +95,16 @@ def run_tool_round(
 
     # Normalize only this unpersisted turn. Each local bridge entry must pass
     # through the same scope, approvals, state and scheduling as a singleton.
-    from agent.tool_call_batches import expand_local_tool_batches
-    assistant_message.tool_calls = expand_local_tool_batches(
-        assistant_message.tool_calls, provider_data=getattr(assistant_message, "provider_data", None))
+    from agent.tool_call_batches import expand_local_tool_batches, prune_native_tool_blocks
+    provider_data = getattr(assistant_message, "provider_data", None)
+    assistant_message.tool_calls = expand_local_tool_batches(assistant_message.tool_calls, provider_data=provider_data)
 
-    # Post-call guardrails.
-    assistant_message.tool_calls = agent._deduplicate_tool_calls(
-        agent._cap_delegate_task_calls(assistant_message.tool_calls)
-    )
+    # Post-call guardrails. A dropped call gets no result, so it must leave the native
+    # replay sidecars too (before id normalization, while their ids still match).
+    emitted = assistant_message.tool_calls
+    assistant_message.tool_calls = agent._deduplicate_tool_calls(agent._cap_delegate_task_calls(emitted))
+    if provider_data and len(assistant_message.tool_calls) < len(emitted):
+        prune_native_tool_blocks(provider_data, emitted, assistant_message.tool_calls)
     # Filtering can turn a mixed batch into an all-provider one; re-check the final batch
     # before it is staged (idempotent for already-normalized ids).
     normalize_provider_tool_call_ids(assistant_message.tool_calls)
@@ -133,7 +141,7 @@ def run_tool_round(
         _tool_turn_persisted = agent._flush_messages_to_session_db(messages, conversation_history)
     except Exception as exc:
         _tool_turn_persisted = False
-        from hermes_state import classify_persistence_error
+        from storage_errors import classify_persistence_error
         agent._last_persistence_error_cause = classify_persistence_error(exc)
         logger.warning(
             "Incremental tool-call persistence failed before execution "

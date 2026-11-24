@@ -12,7 +12,7 @@ def usage_session_id(session):
     with server._session_db(session) as db:
         if db is None:
             raise ManagedBindingError("managed_auth_unavailable")
-        lineage = db.get_compression_lineage(session_key)
+        lineage = db.lineage.lineage(session_key)
     return str(uuid5(NAMESPACE_OID, lineage[0] if lineage else session_key))
 
 

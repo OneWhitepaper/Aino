@@ -77,7 +77,9 @@ const SEED_HISTORY = `
 import json, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[3])
-from hermes_state import SessionDB
+from persistence.conversation.messages import NewMessage
+from persistence.conversation.sessions import NewSession
+from persistence_assembly import open_persistence, profile_scope
 
 root = Path(sys.argv[1])
 databases = []
@@ -85,17 +87,17 @@ for account in json.loads(sys.argv[2]):
     home = root / account["home"]
     for index, directory in enumerate([home, home / "profiles" / account["profile"]]):
         session = account["sessionIds"][index]
-        with SessionDB(db_path=directory / "state.db") as db:
-            db.create_session(session, source="desktop", model=account["model"],
+        with open_persistence(profile_scope(home=directory)) as db:
+            db.sessions.create(NewSession(session, source="desktop", model=account["model"],
                               model_config={"provider": "custom", "base_url": account["baseUrl"]},
                               user_id="platform:" + account["userId"],
-                              profile_name="default" if index == 0 else account["profile"])
-            db.set_session_title(session, "历史对话" if index == 0 else "Bot Chat")
+                              profile_name="default" if index == 0 else account["profile"]))
+            db.sessions.set_title(session, "历史对话" if index == 0 else "Bot Chat")
             if index:
-                db.set_session_hidden(session, True)
+                db.sessions.set_hidden(session, True)
             messages = [
-                db.append_message(session, role="user", content=account["displayName"] + "：请保留我的历史记录。"),
-                db.append_message(session, role="assistant", content=account["displayName"] + "：历史回答和模型设置应在升级后保留。")
+                db.messages.append(session, NewMessage(role="user", content=account["displayName"] + "：请保留我的历史记录。")),
+                db.messages.append(session, NewMessage(role="assistant", content=account["displayName"] + "：历史回答和模型设置应在升级后保留。"))
             ]
         databases.append({"path": (directory / "state.db").relative_to(root).as_posix(),
                           "sessionIds": [session], "messageIds": messages})

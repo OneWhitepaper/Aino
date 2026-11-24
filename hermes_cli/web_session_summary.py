@@ -43,8 +43,10 @@ def _source(db, session_id):
     sid = _resolve_session_id(db, session_id)
     if not sid:
         raise HTTPException(404, "Session not found")
-    sid = db.resolve_resume_session_id(sid)
-    messages = _project_for_display(db.get_messages(sid, include_compacted=True))
+    sid = db.lineage.resolve_resume_target(sid)
+    from persistence.conversation.messages import TranscriptRead, TranscriptView
+    messages = _project_for_display([row.as_wire_row() for row in db.messages.read_transcript(
+        sid, TranscriptRead(view=TranscriptView.DISPLAY))])
     rows = []
     for message in messages:
         if message.get("display_kind") == "hidden" or message.get("role") not in {"user", "assistant", "tool"}:
@@ -54,18 +56,14 @@ def _source(db, session_id):
             rows.append({"id": message["id"], "role": message["role"], "content": content})
     # Include visibility/compaction changes, even if their display text is identical.
     fingerprint = {"version": _VERSION, "session_id": sid,
-                   "started_at": db.get_session(sid).get("started_at"), "rows": rows,
+                   "started_at": db.sessions.get(sid).started_at, "rows": rows,
                    "visibility": [(m["id"], m.get("active"), m.get("compacted"), m.get("display_kind")) for m in messages]}
     revision = hashlib.sha256(json.dumps(fingerprint, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     human = [r for r in rows if r["role"] == "user"]
     replies = [r for r in rows if r["role"] == "assistant"]
     chars = sum(len(r["content"]) for r in human + replies)
     eligible = bool(human and replies and (chars >= 1200 or (len(human) >= 2 and chars >= 400)))
-    conversation = db._session_turn_lease_key(sid)
-    busy = bool(db._read_one("SELECT 1 FROM session_turn_leases WHERE conversation_id = ? AND expires_at > ?",
-                            (conversation, time.time())))
-    busy = busy or bool(db._read_one("SELECT 1 FROM compression_locks WHERE session_id = ? AND expires_at > ?",
-                                    (sid, time.time())))
+    busy = db.coordination.has_active_leases(session_id=sid)
     return {"session_id": sid, "rows": rows, "revision": revision, "eligible": eligible, "busy": busy}
 
 
@@ -238,7 +236,7 @@ def summary_for_db(db, session_id, language="zh", *, generate=False, retry=False
         raise HTTPException(400, "Unsupported summary language")
     source = _source(db, session_id)
     key = hashlib.sha256((source["session_id"] + ":" + language).encode()).hexdigest()
-    path = Path(db.db_path).parent / "cache" / "session-summaries" / (key + ".json")
+    path = db.scope.profile_dir / "cache" / "session-summaries" / (key + ".json")
     lock_key = hashlib.sha256(str(path.resolve()).encode()).digest()[0] % len(_LOCKS)
     if not generate:
         return _payload(source, read_json_or_empty(path))

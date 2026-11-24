@@ -9,21 +9,25 @@ sanitize/merge pass already coalesces consecutive user messages.
 
 from __future__ import annotations
 
+from persistence.conversation.messages import ConversationRequest
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_read import conversation
+from tests.fixtures.storage_seed import seed_session
+
 from types import SimpleNamespace
 from tui_gateway import server
 from tui_gateway.server import _append_model_switch_marker
 
 
 def test_model_switch_display_metadata_survives_persistence(tmp_path) -> None:
-    from hermes_state import SessionDB
 
-    db = SessionDB(tmp_path / "state.db")
-    db.create_session("model-display", source="desktop", model="before")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
+    seed_session(db, "model-display", source="desktop", model="before")
     session = {"session_key": "model-display", "history": [], "agent": SimpleNamespace(_session_db=db)}
     try:
         _append_model_switch_marker(
             session, model="after", provider="aino", previous_model="before", previous_provider="openai")
-        durable = db.get_messages_as_conversation("model-display")
+        durable = conversation(db, "model-display")
         warm_message = session["history"][0]
         stored_message = durable[0]
         assert stored_message["display_metadata"] == warm_message["display_metadata"] == {
@@ -36,10 +40,9 @@ def test_model_switch_display_metadata_survives_persistence(tmp_path) -> None:
 
 
 def test_committed_switch_event_matches_durable_marker(tmp_path, monkeypatch) -> None:
-    from hermes_state import SessionDB
 
-    db = SessionDB(tmp_path / "state.db")
-    db.create_session("model-event", source="desktop", model="before")
+    db = open_persistence(profile_scope(home=(tmp_path / "state.db").parent))
+    seed_session(db, "model-event", source="desktop", model="before")
     agent = SimpleNamespace(
         _session_db=db, model="after", provider="aino", _managed_model_metadata=None,
         switch_model=lambda **_kwargs: None)
@@ -54,7 +57,7 @@ def test_committed_switch_event_matches_durable_marker(tmp_path, monkeypatch) ->
                              api_mode="", runtime_capabilities=None, managed_metadata=None)
     try:
         server._commit_agent_switch("ui", session, agent, result, "before", None)
-        stored = db.get_messages_as_conversation("model-event", include_row_ids=True)[0]
+        stored = conversation(db, "model-event", ConversationRequest(include_row_ids=True))[0]
         payload = emitted[-1][2]
         entry = payload["history_entry"]
         assert payload["kind"] == "model_switch"

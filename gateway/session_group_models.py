@@ -10,7 +10,8 @@ from functools import partial
 from pathlib import Path
 
 from gateway.owner_identity import same_owner
-from hermes_state_runtime import RuntimeStoreError
+from gateway.session_persistence import authority_persistence
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
 from tui_gateway.managed_model_runtime import ManagedBindingError, get_registry, transport_principal
 
 
@@ -54,7 +55,7 @@ def _member(source, service, room_id, member_id, *, host_scoped):
                 and not getattr(b.authority, 'retired', False)), None)
     if bot is None or (bot.authority is not source and not host_scoped):
         raise RuntimeStoreError('permission_denied')
-    if Path(bot.authority.db.db_path).resolve().parent != bot.home.resolve():
+    if authority_persistence(bot.authority).scope.profile_dir.resolve() != bot.home.resolve():
         raise RuntimeStoreError('profile_mismatch')
     return bot.authority, profile, service._owner(room_id), room_authority
 
@@ -135,35 +136,21 @@ def _select(grant, sid, model_id, *, changed_owner):
     from gateway.session_mutation_model import managed_policy
     from gateway.session_platform_model import selection_for_policy
     from gateway.session_policy import restore_policy
-    from hermes_state_local import POLICY_PREFIX
-    from hermes_state_mutation_prepared import local_snapshot, model_in_transaction
-    from hermes_state_runtime import _epoch
-    import json
     authority = grant.target
-
-    def write(conn):
-        _epoch(conn, authority.epoch)
-        # Source ownership is rechecked before AND after this off-loop write, before
-        # publishing any credential grant. Never take another home's lock while holding
-        # this writer: reciprocal room preparations must not invert their DB locks.
-        raw = conn.execute('SELECT value FROM state_meta WHERE key=?', (POLICY_PREFIX + sid,)).fetchone()
-        if raw is None:
-            raise RuntimeStoreError('not_found')
-        old = restore_policy(json.loads(raw[0])['policy'])
-        if old.source != 'bot_room':
-            raise RuntimeStoreError('managed_binding_forbidden')
-        selected = selection_for_policy(old)
-        if model_id is None and selected is None and old.follows_profile:
-            return False
-        if model_id is not None and selected == {'model_source': 'aino', 'model_id': model_id} and not changed_owner:
-            return False
-        snapshot = local_snapshot(authority.db, conn, sid)
-        policy = (_following_policy(authority, old, sid) if model_id is None
-                  else managed_policy(authority, old, sid, model_id))
-        prepared = {'snapshot': snapshot, 'policy': asdict(policy)}
-        model_in_transaction(authority.db, conn, sid, {}, prepared)
-        return True
-    return authority.db._execute_write(write)
+    store = authority_persistence(authority)
+    old_data = store.bindings.receipt(sid).policy
+    old = restore_policy(old_data)
+    if old.source != 'bot_room':
+        raise RuntimeStoreError('managed_binding_forbidden')
+    selected = selection_for_policy(old)
+    if model_id is None and selected is None and old.follows_profile:
+        return False
+    if model_id is not None and selected == {'model_source': 'aino', 'model_id': model_id} and not changed_owner:
+        return False
+    policy = (_following_policy(authority, old, sid) if model_id is None
+              else managed_policy(authority, old, sid, model_id))
+    store.runtime.apply_room_model_policy(authority.epoch, sid, old_data, asdict(policy))
+    return True
 
 
 def _following_policy(authority, old, sid):
@@ -214,7 +201,7 @@ async def _prepare(connection, grant, model_id):
             changed_owner = previous is not None and previous.model_owner != grant.model_owner
             if previous is None and grant.model_owner is not None:
                 from gateway.session_ancillary import physical_target
-                saved = authority.db.get_session_model_config_value(physical_target(authority, rpc.ref), 'platform_owner')
+                saved = authority_persistence(authority).sessions.get_model_config_value(physical_target(authority, rpc.ref), 'platform_owner')
                 changed_owner = bool(saved and saved != asdict(grant.model_owner))
 
             def publish(changed):
@@ -260,7 +247,7 @@ async def _apply_provider_selection(grant, rpc, selected):
     import uuid
     from gateway.session_mutations import write_mutation
     from gateway.session_policy import policy_for_source
-    from hermes_state_mutation_guards import MUTATION_GUARD_REFUSALS
+    from persistence.core.errors import MUTATION_GUARD_REFUSALS
     authority, sid = grant.target, rpc.ref.session_id
     live = authority.sessions[sid]
     policy = policy_for_source(authority.runner, live.source)

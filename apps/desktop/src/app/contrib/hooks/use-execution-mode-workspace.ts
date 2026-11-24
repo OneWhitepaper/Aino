@@ -22,7 +22,7 @@ import {
   $foregroundRuntimeMode,
   executionWorkspaceOwner
 } from '@/store/execution-mode/foreground'
-import { pinNewChatRoute } from '@/store/profile'
+import { $newChatProfile, pinNewChatRoute } from '@/store/profile'
 import { $projectScope, advanceProjectNavigation, ALL_PROJECTS } from '@/store/project-scope'
 import {
   $connection,
@@ -53,18 +53,18 @@ import { focusOpenSession } from '@/store/session-states'
 
 type StartFresh = (options?: boolean | FreshSessionDraftOptions) => void
 
-function restoreModeDraft(request: ExecutionModeRequest, startFresh: StartFresh): void {
+function restoreModeDraft(request: ExecutionModeRequest, startFresh: StartFresh, preserveProfileSwitch = false): void {
   const saved = getExecutionWorkspace(request.mode, request.scope)
   const owner = request.owner ?? executionWorkspaceOwner(request.scope)
 
-  if (owner) {
+  if (owner && !preserveProfileSwitch) {
     pinNewChatRoute(owner)
   }
 
   const draft = saved?.draft
   advanceProjectNavigation()
   $projectScope.set(saved?.projectScope ?? ALL_PROJECTS)
-  startFresh({ rotateFreshDraftKey: !draft, workspaceTarget: draft?.workspaceTarget ?? null })
+  startFresh({ preserveProfileSwitch, rotateFreshDraftKey: !draft, workspaceTarget: draft?.workspaceTarget ?? null })
   noteActiveTreeGroup(null)
 
   if (draft) {
@@ -167,7 +167,11 @@ export function useExecutionModeWorkspace(startFresh: StartFresh, resumeLastSess
         }
       } else if (saved || switching || changedOwner) {
         restoringSession.current = null
-        restoreModeDraft(target, startFresh)
+        // Following a pinned profile into its Work/Code workspace is part of
+        // that same intent, not a second user choice. Re-pinning/restating it
+        // used to revoke the /profile completion while its socket was opening.
+        // Explicit mode/account changes still supersede the pending command.
+        restoreModeDraft(target, startFresh, !switching && !accountChanged && $newChatProfile.get() !== null)
       } else {
         rememberExecutionWorkspace()
       }

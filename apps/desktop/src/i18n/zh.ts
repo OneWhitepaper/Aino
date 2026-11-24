@@ -12,6 +12,7 @@ import { notificationCenterCopy } from './notification-center'
 import { zhAccountErrors } from './platform-account-errors'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
+import { zhApproval } from './zh_approval'
 import { zhBackupTransfer } from './zh_backup_transfer'
 import { zhBilling } from './zh_billing_surface'
 import { zhCatalog, zhSkillDeepLink } from './zh_catalog'
@@ -655,6 +656,14 @@ export const zhOverrides = {
       approvalTitleNamed: session => `需要批准 — ${session}`,
       approveAction: '批准',
       rejectAction: '拒绝',
+      accessTitle: '需要文件夹访问权限',
+      accessTitleNamed: session => `需要文件夹访问权限 — ${session}`,
+      accessReadBody: folder => `只读：${folder}`,
+      accessReadWriteBody: folder => `读写：${folder}`,
+      networkTitle: '需要网站访问权限',
+      networkTitleNamed: session => `需要网站访问权限 — ${session}`,
+      allowAction: '允许',
+      denyAction: '拒绝',
       inputTitle: '需要输入',
       inputTitleNamed: session => `需要输入 — ${session}`,
       inputBody: 'Hermes 正在等待你的回应。',
@@ -2758,10 +2767,6 @@ export const zhOverrides = {
       actionFailed: '技能操作失败',
       actionLog: '操作日志',
       alreadyInstalled: name => `“${name}”已安装`,
-      pickerTitle: '技能中心',
-      pickerBrowse: '浏览完整技能中心',
-      pickerHide: '隐藏技能中心浏览器',
-      pickerHint: '点击任意技能卡片上的“添加到此智能体”按钮即可安装，安装后会出现在上方列表中。',
       loadFailed: '技能中心加载失败',
       previewFailed: '技能预览失败',
       scanFailed: '安全扫描失败',
@@ -3228,6 +3233,8 @@ export const zhOverrides = {
     remoteOverride: {
       menuItem: '连接到远程主机…',
       badge: (host: string) => `运行于 ${host}`,
+      runHere: '在此电脑上运行…',
+      sandboxed: '已沙盒化',
       title: (profile: string) => `将 ${profile} 连接到远程主机`,
       description: '此机器人中的会话将在你指定的远程 Aino 上运行，而不是这台电脑。',
       urlLabel: '远程地址',
@@ -3914,6 +3921,10 @@ export const zhOverrides = {
     message: '消息',
     wakingProfile: profile => `正在唤醒 ${profile}…`,
     placeholderTo: name => `发消息给 ${name}，或输入 / 使用技能`,
+    switchingProfile: profile => `正在切换到 ${profile}…`,
+    switchingProfileSlow: '仍在连接。现在发送的消息会等待连接完成后发给此智能体。',
+    switchProfileFailed: profile => `无法切换到 ${profile}`,
+    willSendTo: profile => `将发送给 ${profile}`,
     placeholderStarting: '正在启动 Hermes…',
     placeholderReconnecting: '正在重新连接 Hermes…',
     placeholderFollowUp: '发送后续消息',
@@ -5612,22 +5623,7 @@ export const zhOverrides = {
 
       output: '输出'
     },
-    approval: {
-      gatewayDisconnected: 'Hermes 网关未连接',
-      sendFailed: '无法发送审批响应',
-      run: '运行',
-      command: '命令',
-      moreOptions: '更多审批选项',
-      allowSession: '允许本会话',
-      alwaysAllowMenu: '始终允许…',
-      jumpToApproval: '需要审批',
-      reject: '拒绝',
-      alwaysTitle: '始终允许此命令？',
-      alwaysDescription: pattern =>
-        `这会将“${pattern}”模式加入永久允许列表 (~/.hermes/config.yaml)。Hermes 对类似命令将不再询问，包括当前会话和未来会话。`,
-      alwaysAllow: '始终允许',
-      timedOutSystemLine: '审批已超时，命令未执行。请让智能体重试，或在“设置 > 安全 > 审批超时”中延长等待时间。'
-    },
+    approval: zhApproval,
     clarify: zhClarify,
     themePicker: zhThemePicker,
     catalogInstall: {

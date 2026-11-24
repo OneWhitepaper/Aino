@@ -457,6 +457,8 @@ export const arCommandCenter = {
     remoteOverride: {
       menuItem: 'الاتصال بمضيف بعيد…',
       badge: (host: string) => `يعمل على ${host}`,
+      runHere: 'التشغيل على هذا الحاسوب…',
+      sandboxed: 'معزول',
       title: (profile: string) => `ربط ${profile} بمضيف بعيد`,
       description: 'ستعمل جلسات هذا الروبوت على خادم Aino البعيد الذي تحدده، بدلاً من هذا الجهاز.',
       urlLabel: 'العنوان البعيد',

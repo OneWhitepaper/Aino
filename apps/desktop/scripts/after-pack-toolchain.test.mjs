@@ -47,7 +47,11 @@ test.runIf(process.platform === 'linux')('afterPack uses the provisioned Python 
       payload], { cwd: path.resolve(import.meta.dirname, '../../..'), encoding: 'utf8' })
     symlinkSync('/builder/tools/python/bin/python3', path.join(venv, 'python'))
     symlinkSync('python', path.join(venv, 'python3'))
-    await afterPack({ electronPlatformName: process.platform, appOutDir: directory })
+    await afterPack({
+      electronPlatformName: process.platform,
+      appOutDir: directory,
+      packager: { config: {}, projectDir: directory }
+    })
     expect(JSON.parse(readFileSync(observed, 'utf8'))).toBe(expected)
     expect(readlinkSync(path.join(venv, 'python'))).toBe('../../tools/python/bin/python3')
     expect(readFileSync(path.join(venv, 'python3'), 'utf8')).toBe('payload interpreter link target')

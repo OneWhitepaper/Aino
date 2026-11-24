@@ -30,7 +30,9 @@ from pathlib import Path
 
 import pytest
 
+from gateway.control_socket import identify_gateway
 from tests.live_process_fixtures import sleeper_script_path
+from tests.waiting import wait_until
 
 pytestmark = pytest.mark.platforms("windows")  # live Windows named-pipe E2E
 
@@ -109,6 +111,7 @@ def live_server(tmp_path: Path):
             if not line.startswith("SERVER_STARTED"):
                 pytest.fail(f"pipe server child failed to start: {line!r} {_diagnostics(proc, diagnostics)}")
             server_pid = int(line.split()[1])
+            wait_until(lambda: identify_gateway(home, timeout=10.0), timeout=60, what="pipe server first identify")
             yield proc, home, server_pid, diagnostics
         finally:
             _kill_tree(proc)

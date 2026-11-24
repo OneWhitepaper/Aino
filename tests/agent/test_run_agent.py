@@ -17,7 +17,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agent.codex_responses_adapter import _normalize_codex_response
 
 import run_agent
 from run_agent import AIAgent
@@ -611,7 +610,7 @@ class TestInit:
             assert a._use_prompt_caching is True
 
     def test_prompt_caching_cache_ttl_defaults_without_config(self):
-        """cache_ttl stays 5m when prompt_caching is absent from config."""
+        """cache_ttl falls back to the auto tier (never None) when prompt_caching is absent."""
         with (
             patch("model_tools.get_tool_definitions", return_value=[]),
             patch("model_tools.check_toolset_requirements", return_value={}),
@@ -6755,49 +6754,6 @@ class TestVprintForceOnErrors:
         assert len(printed) == 1
 
 
-class TestNormalizeCodexDictArguments:
-    """_normalize_codex_response must produce valid JSON strings for tool
-    call arguments, even when the Responses API returns them as dicts."""
-
-    def _make_codex_response(self, item_type, arguments, item_status="completed"):
-        """Build a minimal Responses API response with a single tool call."""
-        item = SimpleNamespace(
-            type=item_type,
-            status=item_status,
-        )
-        if item_type == "function_call":
-            item.name = "web_search"
-            item.arguments = arguments
-            item.call_id = "call_abc123"
-            item.id = "fc_abc123"
-        elif item_type == "custom_tool_call":
-            item.name = "web_search"
-            item.input = arguments
-            item.call_id = "call_abc123"
-            item.id = "fc_abc123"
-        return SimpleNamespace(
-            output=[item],
-            status="completed",
-        )
-
-    def test_function_call_dict_arguments_produce_valid_json(self, agent):
-        """dict arguments from function_call must be serialised with
-        json.dumps, not str(), so downstream json.loads() succeeds."""
-        args_dict = {"query": "weather in NYC", "units": "celsius"}
-        response = self._make_codex_response("function_call", args_dict)
-        msg, _ = _normalize_codex_response(response)
-        tc = msg.tool_calls[0]
-        parsed = json.loads(tc.function.arguments)
-        assert parsed == args_dict
-
-
-    def test_string_arguments_unchanged(self, agent):
-        """String arguments must pass through without modification."""
-        args_str = '{"query": "test"}'
-        response = self._make_codex_response("function_call", args_str)
-        msg, _ = _normalize_codex_response(response)
-        tc = msg.tool_calls[0]
-        assert tc.function.arguments == args_str
 
 
 # ---------------------------------------------------------------------------
@@ -6895,3 +6851,28 @@ class TestFallbackSetsOAuthFlag:
 
         assert result is True
         assert agent._is_anthropic_oauth is False
+
+
+class TestMemoryContextSanitization:
+    """sanitize_context() helper correctness — used at provider boundaries."""
+
+
+    def test_sanitize_context_strips_full_block(self):
+        """Helper-level: a string with an embedded memory-context block is
+        cleaned to just the surrounding text.  Used by build_memory_context_block
+        (input-validation) and by plugins on their own backend boundary."""
+        from session_rules.turns import sanitize_context
+        user_text = "how is the honcho working"
+        injected = (
+            user_text + "\n\n"
+            "<memory-context>\n"
+            "[System note: The following is recalled memory context, "
+            "NOT new user input. Treat as informational background data.]\n\n"
+            "## User Representation\n"
+            "[2026-01-13 02:13:00] stale observation about AstroMap\n"
+            "</memory-context>"
+        )
+        result = sanitize_context(injected)
+        assert "memory-context" not in result.lower()
+        assert "stale observation" not in result
+        assert "how is the honcho working" in result

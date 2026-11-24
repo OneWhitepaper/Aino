@@ -42,6 +42,16 @@ function persistedRowIds(message: SessionMessage): number[] {
   return rowId === undefined ? [] : [rowId]
 }
 
+function tagSourceRow(parts: ChatMessagePart[], rowId: number | undefined): void {
+  if (rowId !== undefined) {
+    for (const part of parts) {
+      if (part.type === 'text') {
+        part.sourceRowId = rowId
+      }
+    }
+  }
+}
+
 // Native ingress persists the image-routing hints followed by one placeholder
 // per flattened image part. Recognize that suffix only, not quoted caption prose.
 function persistedImageRefs(text: string) {
@@ -338,6 +348,12 @@ function timelineDisplayText(metadata: SessionMessage['display_metadata']): stri
   return typeof text === 'string' && text.trim() ? text : undefined
 }
 
+function promptSubmission(message: SessionMessage): Pick<ChatMessage, 'submissionId'> {
+  const id = message.role === 'user' ? parseDisplayMetadata(message.display_metadata)?.submission_id : undefined
+
+  return typeof id === 'string' && id ? { submissionId: id } : {}
+}
+
 function modelSwitchMetadata(metadata: SessionMessage['display_metadata']): ModelSwitchDisplayMetadata {
   const parsed = parseDisplayMetadata(metadata)
   const result: ModelSwitchDisplayMetadata = {}
@@ -511,6 +527,37 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     return timestamps.length ? Math.min(...timestamps) : undefined
   }
 
+  // A stopped mark says the reply ended there. When the same reply goes on with no visible
+  // row between (a host plugin paused the turn to apply a grant and continued it with a hidden
+  // prompt), it was not stopped for the reader: the mark comes off. A visible user or system
+  // row (the user writing next, the "resumed interrupted turn" notice) keeps it.
+  let stoppedBubble: ChatMessage | null = null
+
+  /** `bubble` takes output that continues the reply, so a stopped bubble before it did not end there. */
+  const wentOn = (bubble: ChatMessage) => {
+    if (stoppedBubble) {
+      delete stoppedBubble.interrupted
+    }
+
+    stoppedBubble = bubble.interrupted ? bubble : null
+  }
+
+  /** A row drawn on its own: assistant output goes on with the reply, anything else stands between. */
+  const drawnRow = (bubble: ChatMessage) => {
+    if (bubble.role === 'assistant') {
+      wentOn(bubble)
+    } else {
+      stoppedBubble = null
+    }
+  }
+
+  /** A row that draws nothing stands between only when the reader would have seen it. */
+  const emptyRow = (message: SessionMessage) => {
+    if (message.display_kind !== 'hidden') {
+      stoppedBubble = null
+    }
+  }
+
   const appendPartsToActiveAssistant = (parts: ChatMessagePart[], timestamp?: number): boolean => {
     if (activeAssistantIndex === null) {
       return false
@@ -525,6 +572,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     }
 
     active.sourceRowIds = [...(active.sourceRowIds ?? []), ...pendingRowIds]
+    wentOn(active)
     active.parts = [...active.parts, ...parts]
     active.durableComplete = false
     active.timestamp = earliestTimestamp(active.timestamp, timestamp, ...parts.map(part => part.timestamp))
@@ -549,6 +597,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         timestamp: pendingToolTimestamp
       })
       activeAssistantIndex = result.length - 1
+      wentOn(result[activeAssistantIndex])
     }
 
     clearPendingTools()
@@ -567,6 +616,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
     if (bubble?.role === 'assistant') {
       bubble.interrupted = true
+      stoppedBubble = bubble
     }
   }
 
@@ -686,13 +736,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       )
     }
 
-    if (rowId !== undefined) {
-      for (const part of parts) {
-        if (part.type === 'text') {
-          part.sourceRowId = rowId
-        }
-      }
-    }
+    tagSourceRow(parts, rowId)
 
     if (!parts.length && !extractedAttachmentRefs?.length) {
       if (message.role === 'assistant') {
@@ -700,6 +744,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       } else {
         flushPendingTools(index)
         activeAssistantIndex = null
+        emptyRow(message)
       }
 
       return
@@ -746,6 +791,8 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       const activeHasToolCall = Boolean(activeAssistant?.parts.some(part => part.type === 'tool-call'))
 
       if (activeAssistant && (currentHasToolCall || activeHasToolCall)) {
+        wentOn(activeAssistant)
+
         if (turnMetrics) {
           activeAssistant.turnMetrics = turnMetrics
           activeAssistant.durationS = turnMetrics.duration_s
@@ -764,6 +811,10 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
         if (messageInterrupted(message.display_metadata)) {
           activeAssistant.interrupted = true
+        }
+
+        if (activeAssistant.interrupted) {
+          stoppedBubble = activeAssistant
         }
 
         activeAssistant.timestamp = earliestTimestamp(
@@ -813,6 +864,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       ...(rowIds.length ? { sourceRowIds: rowIds } : {}),
       ...(turnMetrics ? { turnMetrics, durationS: turnMetrics.duration_s } : {}),
       ...(message.display_kind === 'process_complete' ? { asyncResultKind: 'process' as const } : {}),
+      ...promptSubmission(message),
       ...(pendingAbsorbedRows > 0 ? { serverRowSpan: pendingAbsorbedRows + 1 } : {}),
       ...(reactions.length ? { reactions } : {}),
       ...(message.role === 'assistant' && messageInterrupted(message.display_metadata) ? { interrupted: true } : {}),
@@ -821,6 +873,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     })
 
     activeAssistantIndex = message.role === 'assistant' ? result.length - 1 : null
+    drawnRow(result[result.length - 1])
   })
   flushPendingTools(messages.length)
 

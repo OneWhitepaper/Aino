@@ -474,6 +474,12 @@ animation invents streamed reply text or rewrites historical facts.
   Original names, authors, installation identifiers, editor/archive actions and
   profile/connection routing stay authoritative. Connectors and toolsets keep
   their existing management flows and shared presentation primitives.
+- **Orphaned sandbox routes recover in Gateway connection settings.** A saved local
+  profile whose launcher plugin is disabled, missing or failed has an exact-profile
+  “Run on this computer…” action in the existing flat settings rows. Discovery
+  reads native saved routing, not the unavailable backend or an unmounted rail.
+  The existing native confirmation remains authoritative; cancellation, changed
+  ownership and run-elsewhere refusals never silently fall back to local execution.
 - **Workspace settings keep the existing configuration owner.** Three horizontal
   categories — Projects and discovery, Terminal environment, Files and execution —
   reuse the existing configuration draft, scoped autosave, schema and project
@@ -1746,6 +1752,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   diff receive actual flex height and scroll independently above the fixed ship
   controls. The changed line must be visibly inside its viewport, not merely
   present in the DOM.
+  The composer's local `ComposerStateInput` retains the hidden, non-tabbable
+  plain-textarea binding; the visible contentEditable owns interaction, without
+  an invisible autosizing input's layout work.
+- `ComposerHeartField` in `src/app/chat/index.tsx` owns pet-visibility
+  subscriptions: reaction hearts rise from the composer only when neither the
+  in-window nor popped-out pet is present.
 - **Inline widgets** — a tool result that renders as a panel the user reads or
   acts on (clarify, code and graphic artifact cards) wears `WIDGET_SHELL_CLASS`
   (`src/components/chat/widget-shell.ts`): shared radius, the
@@ -1827,6 +1839,27 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
 - Terminals/editors, user artifacts, external sites and cross-origin Skills Hub
   contents are content boundaries. Unify all Aino-owned chrome, controls and
   loading/error states around them; preserve external content and semantic output.
+- A profile switch never covers the conversation. `ChatSwitchIndicator`
+  escalates by elapsed time: nothing under 2s, a quiet corner pill tinted with
+  the target profile's colour until 10s, then an inline strip above the thread
+  saying sends will wait. A rejected rail switch ends in that strip's terminal
+  failure with Retry; the rail square shows busy/failed, and the composer names
+  where a send will go while the switch is pending. Paint-first sync (#89843)
+  is the same component's quiet pill.
+  `ProfileSquareContent` in `sidebar/profile-switcher.tsx` owns the square's
+  spinner and badges; failure takes precedence over its inactive-session dot.
+  The enclosing button retains the accessible state and drag/selection gestures.
+  Retrying the same failed profile restarts the quiet grace period; an earlier
+  attempt's stalled indicator must not carry into the new attempt.
+  Send assurances follow the captured draft route or existing session owner,
+  not an older activation still holding the switch queue. A new draft, source,
+  or selected conversation invalidates the old Retry, including saved callbacks;
+  retrying a still-current intent preserves its draft and captured source.
+  Automatic Work/Code draft restoration follows an already pinned profile without
+  revoking its pending slash completion. A newer explicit draft, mode or account
+  choice still supersedes it, including a repeated choice of the same owner.
+  Slash profile selections claim their intent before metadata lookup; stale
+  lookups, activations, and launch-restore rollbacks cannot replace a newer draft.
 - Guide startup has a dedicated landing screen with the shared long-operation
   Loader and a localized startup label. It remains active until the guide's
   saved conversation is loaded. No greeting, composer, Skip setup, or statusbar

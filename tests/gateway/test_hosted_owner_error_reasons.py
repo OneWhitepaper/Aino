@@ -1,4 +1,6 @@
 """Private hosted errors retain bounded domain reasons without parsing arbitrary messages."""
+
+
 import asyncio
 
 import pytest
@@ -34,13 +36,13 @@ def owner_error_server(hosted_owner, tmp_path):
 ])
 def test_hosted_owner_preserves_exact_runtime_domain_reason(owner_error_server, reason):
     from gateway.session_hosted_transport import owner_request
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     home, server = owner_error_server
 
     def refuse(params, peer):
-        raise RuntimeStoreError(reason, detail='private diagnostic stays at the owner')
+        raise AuthorityRefusal(reason, detail='private diagnostic stays at the owner')
     server.private_handlers['hosted-error'] = refuse
-    with pytest.raises(RuntimeStoreError) as caught:
+    with pytest.raises(AuthorityRefusal) as caught:
         owner_request(home, 'hosted-error', {})
     assert caught.value.reason == reason
     assert caught.value.detail is None
@@ -48,14 +50,14 @@ def test_hosted_owner_preserves_exact_runtime_domain_reason(owner_error_server, 
 
 def test_hosted_owner_preserves_exact_registry_error(owner_error_server):
     from gateway.session_hosted_transport import owner_request
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     from tui_gateway.managed_model_runtime import ManagedBindingError
     home, server = owner_error_server
 
     def refuse(params, peer):
         raise ManagedBindingError('managed_binding_forbidden')
     server.private_handlers['hosted-error'] = refuse
-    with pytest.raises(RuntimeStoreError) as caught:
+    with pytest.raises(AuthorityRefusal) as caught:
         owner_request(home, 'hosted-error', {})
     assert caught.value.reason == 'managed_binding_forbidden'
 
@@ -66,13 +68,13 @@ def test_hosted_owner_preserves_exact_registry_error(owner_error_server):
 ])
 def test_hosted_owner_unknown_error_cannot_impersonate_a_known_suffix(owner_error_server, message):
     from gateway.session_hosted_transport import owner_request
-    from hermes_state_runtime import RuntimeStoreError
+    from persistence import AuthorityRefusal
     home, server = owner_error_server
 
     def refuse(params, peer):
-        raise RuntimeStoreError(message)
+        raise AuthorityRefusal(message)
     server.private_handlers['hosted-error'] = refuse
-    with pytest.raises(RuntimeStoreError) as caught:
+    with pytest.raises(AuthorityRefusal) as caught:
         owner_request(home, 'hosted-error', {})
     assert caught.value.reason == 'runtime_draining'
     assert str(caught.value) == 'runtime_draining'

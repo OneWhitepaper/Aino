@@ -1,5 +1,9 @@
 """A real Agent/SDK tool roundtrip finishes after its Desktop viewer disconnects."""
 
+from tests.fixtures.storage_read import transcript_rows
+
+from dataclasses import asdict
+
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -92,7 +96,6 @@ async def test_tool_reply_persists_after_the_viewer_closes_during_inference(tmp_
     from gateway.session_contract import SessionRef
     from gateway.session_controls import AuthorityConnection
     from gateway.session_platform_model import binding_key
-    from hermes_state_runtime import list_session_admissions
     from run_agent import AIAgent
     from tui_gateway.managed_model_runtime import get_registry
 
@@ -132,9 +135,9 @@ async def test_tool_reply_persists_after_the_viewer_closes_during_inference(tmp_
         tool_model.release.set()
         await async_wait_until(lambda: authority.sessions[sid].task.done(), timeout=30,
                                what='the disconnected tool turn to persist its final answer')
-        [admission] = list_session_admissions(authority.db, session_id=sid, pending_only=False)
+        [admission] = [asdict(record) for record in authority.persistence.admissions.list(session_id=sid, pending_only=False)]
         assert (admission['status'], admission['outcome']) == ('terminal', 'completed'), admission
-        history = authority.db.get_messages(physical_target(authority, ref))
+        history = transcript_rows(authority.persistence, physical_target(authority, ref))
         assert any(row['role'] == 'tool' and FILE_CONTENT in str(row['content']) for row in history), history
         assert any(row['role'] == 'assistant' and row['content'] == FINAL for row in history), history
         assert not any((row.get('display_metadata') or {}).get('interrupted') for row in history), history
@@ -153,4 +156,4 @@ async def test_tool_reply_persists_after_the_viewer_closes_during_inference(tmp_
             get_registry().clear_session(binding_key(authority, sid))
         if agent is not None:
             await asyncio.to_thread(agent.release_clients)
-        authority.db.close()
+        authority.persistence.close()

@@ -14,8 +14,9 @@ import time
 import uuid
 
 from gateway.owner_identity import same_owner
-from hermes_state_runtime import RuntimeStoreError
-from hermes_state_common import CONVERSATION_MODEL_SELECTION_KEY as _SELECTION_KEY
+from persistence.core.errors import AuthorityRefusal as RuntimeStoreError
+from persistence.authority.vocabulary import CONVERSATION_MODEL_SELECTION_KEY as _SELECTION_KEY
+from gateway.session_persistence import authority_persistence
 _TIMEOUT = 30
 _MAX_MODELS = 2048
 _MAX_LAZY_VIEWERS = 256
@@ -195,9 +196,8 @@ def _saved_selection(authority, sid):
     from gateway.session_ancillary import physical_target
     from gateway.session_contract import SessionRef
     target = physical_target(authority, SessionRef(authority.profile_id, sid))
-    with authority.db._read_ctx() as conn:
-        found = conn.execute('SELECT model_config FROM sessions WHERE id=?', (target,)).fetchone()
-    raw = json.loads(found[0] or '{}').get(_SELECTION_KEY) if found else None
+    row = authority_persistence(authority).sessions.get(target)
+    raw = row.model_config.get(_SELECTION_KEY) if row is not None else None
     if raw is None:
         return None
     if not isinstance(raw, dict) or set(raw) != {'scope', 'selection'}:
@@ -213,35 +213,12 @@ def selection_for_session(authority, sid):
 
 
 def _selection_fence(authority, sid):
-    from hermes_state_mutation_prepared import DEFERRED_PICK_PREFIX
-    with authority.db._read_ctx() as conn:
-        row = conn.execute('SELECT runtime_revision, runtime_generation FROM sessions WHERE id=?', (sid,)).fetchone()
-        deferred = conn.execute('SELECT value FROM state_meta WHERE key=?', (DEFERRED_PICK_PREFIX + sid,)).fetchone()
-    if row is None:
-        raise RuntimeStoreError('not_found')
-    return row[0], row[1], deferred[0] if deferred else None
+    return authority_persistence(authority).runtime.selection_fence(sid)
 
 
 def _save_selection(authority, sid, selection, scope, fence):
-    from hermes_state_runtime import _epoch
-    value = {'scope': scope, 'selection': selection}
-
-    def write(conn):
-        _epoch(conn, authority.epoch)
-        from hermes_state_mutation_prepared import DEFERRED_PICK_PREFIX
-        row = conn.execute('SELECT runtime_revision, runtime_generation FROM sessions WHERE id=?', (sid,)).fetchone()
-        deferred = conn.execute('SELECT value FROM state_meta WHERE key=?', (DEFERRED_PICK_PREFIX + sid,)).fetchone()
-        current = (row[0], row[1], deferred[0] if deferred else None) if row else None
-        if current != fence:
-            raise RuntimeStoreError('model_request_expired')
-        target = authority.db._compression_tip_on(conn, sid)
-        found = conn.execute('SELECT model_config FROM sessions WHERE id=?', (target,)).fetchone()
-        if found is None:
-            raise RuntimeStoreError('not_found')
-        config = json.loads(found[0] or '{}')
-        config[_SELECTION_KEY] = value
-        conn.execute('UPDATE sessions SET model_config=? WHERE id=?', (json.dumps(config), target))
-    authority.db._execute_write(write)
+    authority_persistence(authority).runtime.save_conversation_selection(
+        authority.epoch, sid, {'scope': scope, 'selection': selection}, fence)
 
 
 def _still_current(connection, ref, live, generation, group=None):
@@ -346,9 +323,7 @@ async def model_session(connection, ref, params):
         raise RuntimeStoreError('invalid_params')
     if ref.session_id not in connection.authority.sessions:
         from dataclasses import replace
-        from hermes_state_local import local_lineage_owner
-        with connection.authority.db._read_ctx() as conn:
-            owner = local_lineage_owner(conn, ref.session_id)
+        owner = authority_persistence(connection.authority).bindings.lineage_owner(ref.session_id)
         if owner != ref.session_id:
             ref = replace(ref, session_id=owner)
     live, group = _authorize(connection, ref)

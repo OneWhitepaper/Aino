@@ -4,15 +4,18 @@ import pytest
 from scripts.releases import lanes as lane_set
 
 
-def test_the_default_builds_everything_but_macos_intel_and_termux():
-    assert lane_set.DEFAULT == set(lane_set.NAMES) - {"macos-intel", "termux"}
+def test_the_default_builds_everything_but_termux_and_diagnostic_linux():
+    assert lane_set.DEFAULT == set(lane_set.NAMES) - {"macos-intel", "termux", "linux"}
     assert lane_set.select() == lane_set.DEFAULT
+    assert "linux" in lane_set.CANARY
+    assert not lane_set.has_bundles(["linux"])
+    assert lane_set.DIAGNOSTIC_CALLS.isdisjoint(lane_set.CANDIDATE_CALLS)
 
 
 @pytest.mark.parametrize("kwargs,expected", [
     # The request that motivated lanes: only the Windows bundles and the image, no tests.
     ({"only": ["windows", "docker"]}, {"windows", "docker"}),
-    ({"with_": ["macos-intel", "termux"]}, set(lane_set.NAMES)),
+    ({"with_": ["macos-intel", "termux", "linux"]}, set(lane_set.NAMES)),
     ({"without": ["macos-arm64", "upgrade"]}, set(lane_set.DEFAULT) - {"macos-arm64", "upgrade"}),
     ({"only": ["windows"], "with_": ["smoke"], "without": ["windows"]}, {"smoke"}),
     ({"only": []}, set()),
@@ -117,3 +120,12 @@ def test_the_desktop_channel_moves_only_for_the_full_desktop_set():
     # A release that moves no channel is finished once public.
     assert lane_set.moves_channels(["docker"]) and lane_set.moves_channels(["windows", "macos-arm64"])
     assert not lane_set.moves_channels(["windows"]) and not lane_set.moves_channels([])
+
+
+def test_intel_macos_is_opt_in_for_each_native_claim_policy():
+    for policy in lane_set.POLICIES:
+        assert "macos-intel" not in lane_set.select(policy=policy)
+        chosen = lane_set.select(policy=policy, with_=["macos-intel"])
+        assert lane_set.jobs_to_run(chosen, policy)["candidates-darwin-x64"]
+        assert "macos/x64" in lane_set.targets(chosen)
+        assert "darwin-x64" in lane_set.handoffs(chosen, ["darwin-x64"])
