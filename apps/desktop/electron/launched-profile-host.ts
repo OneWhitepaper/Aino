@@ -60,7 +60,7 @@ export interface PinnedConnection<Backend> {
 }
 
 export function createLaunchedProfileHost<Backend>(deps: LaunchedProfileHostDeps<Backend>) {
-  const home = () => typeof deps.hermesHome === 'function' ? deps.hermesHome() : deps.hermesHome
+  const home = () => (typeof deps.hermesHome === 'function' ? deps.hermesHome() : deps.hermesHome)
   const isLaunched = (profile: null | string | undefined) => profileIsLaunched(deps.readConfig(), profile)
   const isMarked = (profile: string) => Boolean(readRunElsewhereMarker(home(), profile))
 

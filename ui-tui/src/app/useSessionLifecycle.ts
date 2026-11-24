@@ -439,8 +439,7 @@ export function useSessionLifecycle(opts: UseSessionLifecycleOptions) {
       try {
         const setup = await rpc<SetupStatusResponse>('setup.status', {})
 
-        const ready =
-          setup?.provider_configured !== false || (gw.isCanonical && (await launchRouteServes(rpc)))
+        const ready = setup?.provider_configured !== false || (gw.isCanonical && (await launchRouteServes(rpc)))
 
         if (flight !== attachmentFlight.current) {
           return null

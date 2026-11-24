@@ -38,13 +38,15 @@ export interface MemberOutcome {
 
 /** A running member, in absolute times (epoch seconds) so it does not change as the clock ticks: the
  *  chip that shows it reads the clock (`busyAt`), the room's derivations never do. */
-export interface BusyMember { kind: 'working'; startedAt?: number; lastSignAt?: number; tool?: string }
+export interface BusyMember {
+  kind: 'working'
+  startedAt?: number
+  lastSignAt?: number
+  tool?: string
+}
 
 export type MemberStatus =
-  | { kind: 'idle' }
-  | { kind: 'queued' }
-  | BusyMember
-  | ({ kind: MemberOutcomeKind } & Omit<MemberOutcome, 'kind'>)
+  { kind: 'idle' } | { kind: 'queued' } | BusyMember | ({ kind: MemberOutcomeKind } & Omit<MemberOutcome, 'kind'>)
 
 /** A running member with no frame for this long reads as stalled. */
 export const STALL_AFTER_S = 120
@@ -146,8 +148,12 @@ export function memberStatus(
   const running = rows.find(row => row.status !== 'queued')
 
   if (running) {
-    return { kind: 'working', startedAt: running.started_at, lastSignAt: running.progress_at ?? running.started_at,
-      tool: running.tool || undefined }
+    return {
+      kind: 'working',
+      startedAt: running.started_at,
+      lastSignAt: running.progress_at ?? running.started_at,
+      tool: running.tool || undefined
+    }
   }
 
   if (rows.length) {
@@ -162,11 +168,19 @@ export function memberStatus(
 export const isBusyStatus = (status: MemberStatus): status is BusyMember => status.kind === 'working'
 
 /** A busy member as its chip shows it at `nowS`: stalled after `STALL_AFTER_S` with no sign of life. */
-export function busyAt(status: BusyMember, nowS: number): { kind: 'stalled' | 'working'; elapsedS?: number; quietS?: number; tool?: string } {
+export function busyAt(
+  status: BusyMember,
+  nowS: number
+): { kind: 'stalled' | 'working'; elapsedS?: number; quietS?: number; tool?: string } {
   const elapsedS = typeof status.startedAt === 'number' ? Math.max(0, nowS - status.startedAt) : undefined
   const quietS = typeof status.lastSignAt === 'number' ? Math.max(0, nowS - status.lastSignAt) : undefined
 
-  return { kind: quietS !== undefined && quietS >= STALL_AFTER_S ? 'stalled' : 'working', elapsedS, quietS, tool: status.tool }
+  return {
+    kind: quietS !== undefined && quietS >= STALL_AFTER_S ? 'stalled' : 'working',
+    elapsedS,
+    quietS,
+    tool: status.tool
+  }
 }
 
 /** `45s`, `1m20s`, `1h05m`. */

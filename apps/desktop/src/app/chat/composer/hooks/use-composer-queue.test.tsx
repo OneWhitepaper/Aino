@@ -382,7 +382,7 @@ describe('useComposerQueue park integration', () => {
 
   // The composer's key is the chat's lineage root; a compressed chat's pause is marked under the id its
   // runtime shows (the compression tip).
-  it('holds a compressed chat\'s queue while its reply is paused under its tip id', async () => {
+  it("holds a compressed chat's queue while its reply is paused under its tip id", async () => {
     $sessions.set([{ _lineage_root_id: SESSION_KEY, id: 'compression-tip' } as SessionInfo])
     enqueueQueuedPrompt(SESSION_KEY, { attachments: [], text: 'after the continuation' })
     markReplyPaused('compression-tip')

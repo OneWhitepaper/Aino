@@ -15,13 +15,25 @@ const GATEWAY_ENSURE_CLIENT_GRACE_MS = 15_000
 
 /** Run one bounded `hermes ... gateway <verb>` client (`ensure` by default; `restart` for a stale owner). */
 export function runGatewayEnsure(
-  backend, cwd: string, home: string, parentEnv: NodeJS.ProcessEnv = process.env,
-  { timeoutMs = GATEWAY_ENSURE_PROTOCOL_DEADLINE_MS + GATEWAY_ENSURE_CLIENT_GRACE_MS, label = 'hermes gateway ensure', execPath = process.execPath }: { timeoutMs?: number; label?: string; execPath?: string } = {}
+  backend,
+  cwd: string,
+  home: string,
+  parentEnv: NodeJS.ProcessEnv = process.env,
+  {
+    timeoutMs = GATEWAY_ENSURE_PROTOCOL_DEADLINE_MS + GATEWAY_ENSURE_CLIENT_GRACE_MS,
+    label = 'hermes gateway ensure',
+    execPath = process.execPath
+  }: { timeoutMs?: number; label?: string; execPath?: string } = {}
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     // The gateway this starts outlives a dev session and Desktop reaches it without an Origin
     // (main-process HTTP, Origin-stripped socket dials): it never trusts the dev renderer.
-    const { HERMES_DESKTOP_DEV_SERVER: _devServer, ...env } = mountFreeEnv({ ...parentEnv, ...backend.env, HERMES_HOME: home }, backend.command, execPath)
+    const { HERMES_DESKTOP_DEV_SERVER: _devServer, ...env } = mountFreeEnv(
+      { ...parentEnv, ...backend.env, HERMES_HOME: home },
+      backend.command,
+      execPath
+    )
+
     // shell: true hands cmd.exe one command line it cuts at the first unquoted space,
     // so an install under `C:\Users\John Doe\...` must arrive quoted (#74064).
     const child = spawn(

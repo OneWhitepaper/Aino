@@ -295,9 +295,7 @@ describe('desktop i18n runtime translator', () => {
   it('describes the replacement catalog installation action in Simplified Chinese', () => {
     setRuntimeI18nLocale('zh')
 
-    expect(translateNow('catalog.installDescription')).toBe(
-      '此技能将在新会话中可用。请仅安装可信来源的内容。'
-    )
+    expect(translateNow('catalog.installDescription')).toBe('此技能将在新会话中可用。请仅安装可信来源的内容。')
   })
 
   it('falls back to English when the active locale cannot resolve a key', () => {

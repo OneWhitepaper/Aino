@@ -291,6 +291,7 @@ export async function fetchPrimaryProfileSessions(
   options: { prefixForMerge?: boolean; aggregate?: ProfileSessionAggregateFetchOptions } = {}
 ): Promise<ProfileSessionsResponse> {
   const aggregate = options.aggregate
+
   const fetchJson =
     aggregate && resolveProfileSessionAggregateRoute(aggregate) === 'global-remote'
       ? aggregate.fetchJsonForGlobalRemote

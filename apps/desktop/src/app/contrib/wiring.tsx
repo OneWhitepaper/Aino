@@ -1200,10 +1200,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         {!isAuxiliaryWindow() && <OnboardingEnd />}
         {!isAuxiliaryWindow() && <FreeTierSignInDialog onSelectModel={selectModel} />}
         {!isAuxiliaryWindow() && (
-          <SharedMetricsConsentDialog
-            enabled={gatewayState === 'open'}
-            profile={activeGatewayProfile}
-          />
+          <SharedMetricsConsentDialog enabled={gatewayState === 'open'} profile={activeGatewayProfile} />
         )}
         {!isAuxiliaryWindow() && (
           <DesktopOnboardingOverlay

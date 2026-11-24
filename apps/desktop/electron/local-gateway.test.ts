@@ -54,7 +54,10 @@ test('the ensure client never hands a dev renderer origin to the long-lived loca
 test('a gateway started from the AppImage payload copy gets no paths into the app mount', async () => {
   const mount = '/tmp/.mount_HermesAb12'
   const keys = ['PATH', 'LD_LIBRARY_PATH', 'XDG_DATA_DIRS', 'GSETTINGS_SCHEMA_DIR', 'APPDIR', 'APPIMAGE']
-  const printEnv = ['-e', `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map(k => [k, process.env[k] ?? null]))))`]
+  const printEnv = [
+    '-e',
+    `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map(k => [k, process.env[k] ?? null]))))`
+  ]
 
   const result = await runGatewayEnsure(
     { command: process.execPath, args: printEnv, env: { PATH: `${mount}:${mount}/usr/sbin:/usr/bin` }, shell: false },

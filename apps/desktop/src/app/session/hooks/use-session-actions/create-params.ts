@@ -17,11 +17,7 @@ import {
   normalizeProfileKey,
   resolveNewChatOwnerRoute
 } from '@/store/profile'
-import {
-  $currentCwdExplicit,
-  getComposerSelectionGeneration,
-  getComposerSelectionScope
-} from '@/store/session'
+import { $currentCwdExplicit, getComposerSelectionGeneration, getComposerSelectionScope } from '@/store/session'
 
 import { captureCreateSelection, type SessionCreateSelection } from './create-selection'
 
@@ -78,7 +74,9 @@ interface SessionCreateIntent {
 }
 
 function captureExecutionWorkspaceParams(
-  cwd: string, includeComposerSelection: boolean | 'defaults', intent?: SessionCreateIntent
+  cwd: string,
+  includeComposerSelection: boolean | 'defaults',
+  intent?: SessionCreateIntent
 ) {
   const executionMode = intent?.executionMode ?? (includeComposerSelection ? getDraftExecutionMode() : 'work')
   const cwdExplicit = intent?.cwdExplicit ?? $currentCwdExplicit.get()
@@ -134,8 +132,11 @@ export async function desktopSessionCreateParams(
     ? { connectionId: capturedRoute.connectionId, profile }
     : platformDefaultScope(profile).route
 
-  if (!intent?.retainModelSelection && includeComposerSelection &&
-    (includeComposerSelection === 'defaults' || selectionSource !== 'manual')) {
+  if (
+    !intent?.retainModelSelection &&
+    includeComposerSelection &&
+    (includeComposerSelection === 'defaults' || selectionSource !== 'manual')
+  ) {
     // A persisted default or a live session's footer is not billing authority.
     // Resolve the captured owner directly, even before background effects run.
     const resolved = await resolveModelDefault(scope, managedRoute)
@@ -197,14 +198,14 @@ export async function desktopSessionCreateParams(
       scope,
       platformModel: verifiedPlatformModel(codeSelection.model, platformOwner, platformOrigin),
       isCurrent: () =>
-        (includeComposerSelection !== true || (
-          generation === getComposerSelectionGeneration() &&
-          selectionScope === getComposerSelectionScope() &&
-          JSON.stringify(picked) === JSON.stringify(getComposerModelSelection()) &&
-          draftOwner === JSON.stringify(resolveNewChatOwnerRoute())
-        )) &&
+        (includeComposerSelection !== true ||
+          (generation === getComposerSelectionGeneration() &&
+            selectionScope === getComposerSelectionScope() &&
+            JSON.stringify(picked) === JSON.stringify(getComposerModelSelection()) &&
+            draftOwner === JSON.stringify(resolveNewChatOwnerRoute()))) &&
         account === catalog.account.get() &&
-        ownerScope === platformDefaultScope(scope).key && intent?.isCurrent?.() !== false
+        ownerScope === platformDefaultScope(scope).key &&
+        intent?.isCurrent?.() !== false
     })
   }
 

@@ -26,6 +26,7 @@ export function useComposerConnection(gatewayDisabled: boolean, profile: null | 
   const gatewayState = useStore($gatewayState)
   const activeProfile = useStore($activeGatewayProfile)
   const scope = useComposerScope()
+
   const backendTransition =
     useBackendTransition(profile || scope.profile || activeProfile, scope.connectionId)?.kind ?? null
 

@@ -298,6 +298,7 @@ export function ChatBar({
   const emoji = useEmojiCompletions()
 
   const { t } = useI18n()
+
   const { backendTransition, disabled, inputDisabled, reconnecting } = useComposerConnection(
     gatewayDisabled || bindingProject || platformAccess.kind !== 'allowed',
     profile

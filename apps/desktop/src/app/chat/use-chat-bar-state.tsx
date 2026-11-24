@@ -98,6 +98,7 @@ export function useChatBarState({
     currentProvider === 'aino'
       ? platformReasoning
       : currentModelCapabilities(modelOptionsQuery.data, currentProvider, currentModel)?.reasoning
+
   const caps = currentModelCapabilities(modelOptionsQuery.data, currentProvider, currentModel)
   const supportsFast = caps ? Boolean(caps.fast) : undefined
   const supportsUltrafast = caps ? Boolean(caps.ultrafast) : undefined

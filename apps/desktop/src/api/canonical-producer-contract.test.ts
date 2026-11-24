@@ -155,12 +155,7 @@ const SITES: Array<[string, string, Record<string, unknown>, string[] | RegExp]>
     { session_id: 's', text: 'again', confirm_truncate: true, truncate_before_row_id: 9, confirm_deep_truncate: true },
     ['session.mutate', 'prompt.submit']
   ],
-  [
-    'use-prompt-actions /handoff',
-    'handoff.request',
-    { session_id: 's', platform: 'telegram' },
-    ['handoff.request']
-  ],
+  ['use-prompt-actions /handoff', 'handoff.request', { session_id: 's', platform: 'telegram' }, ['handoff.request']],
   ['use-prompt-actions handoff poll', 'handoff.state', { session_id: 's' }, ['handoff.state']],
   ['use-prompt-actions handoff fail', 'handoff.fail', { session_id: 's', error: 'boom' }, ['handoff.fail']],
   [

@@ -43,6 +43,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
 import { CanonicalGroupWorkspace, roomLogPageAfter } from './canonical-group-workspace'
 
 const binding = { connectionId: 'local', profile: 'team', roomId: 'feed', roomName: 'Room' }
+
 const message = (seq: number, text = `m${seq}`) => ({
   seq,
   kind: 'message.user',
@@ -75,6 +76,7 @@ function serveRoom(room: { log: ReturnType<typeof message>[]; changeEvents?: boo
 
 const stateReads = () => request.mock.calls.filter(call => call[1] === 'groups.state').length
 const logReads = () => request.mock.calls.filter(call => call[1] === 'groups.log').map(call => call[2].since_seq)
+
 const emit = (type: string, event: Record<string, unknown> = {}) =>
   act(() => {
     for (const listener of listeners.get(type) ?? []) {
@@ -245,6 +247,7 @@ it('reads once for one broadcast that reaches it on every open socket, and again
       connectionId: 'local',
       payload: { room_ids: ['feed'], ...(id ? { broadcast_id: id } : {}) }
     })
+
   let before = stateReads()
   hold()
   room.log.push(message(2))
@@ -299,9 +302,11 @@ it('runs one room read at a time for every caller: Refresh joins a push read in 
   const retry = await screen.findByRole('button', { name: 'Refresh' }) // the read-error banner's button
 
   let release!: () => void
+
   const held = new Promise<void>(resolve => {
     release = resolve
   })
+
   let inFlight = 0
   let maxInFlight = 0
   failLog = false
@@ -309,6 +314,7 @@ it('runs one room read at a time for every caller: Refresh joins a push read in 
     if (args[1] !== 'groups.state') {
       return serve(...args)
     }
+
     inFlight++
     maxInFlight = Math.max(maxInFlight, inFlight)
 
@@ -582,10 +588,12 @@ it("asks again for a socket lease that failed when its route reconnects, and a r
   serveRoom(room)
   const sdk = await import('@hermes/plugin-sdk')
   const released = vi.fn()
+
   const retain = vi
     .fn<() => Promise<() => void>>()
     .mockRejectedValueOnce(new Error('route unreachable'))
     .mockResolvedValue(released)
+
   Object.assign(sdk.host, { retainProfile: retain })
   const serve = request.getMockImplementation()!
   // An unleased secondary socket reconnects for each request: every read's own dial announces gateway.ready.
