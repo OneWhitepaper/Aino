@@ -422,16 +422,18 @@ def _windows_restart_manager_holders(db_path: Path) -> list[tuple[int, str]]:
         end(session)
 
 
-def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
+def foreign_state_db_holders(db_path: Path, *, process_filter: Callable[[int], bool] | None = None) -> list[tuple[int, str]]:
     """Return foreign holders of the DB or one of its WAL sidecars.
 
     A scan failure is represented as an unknown holder. Structural maintenance
     must not assume quiescence when an old, unlinked SQLite generation may
-    still be open by another process.
+    still be open by another process. A caller looking only for a known process kind can
+    filter before expensive descriptor enumeration; structural maintenance leaves this unset.
     """
     if _IS_WINDOWS:
         try:
-            return _windows_restart_manager_holders(db_path)
+            holders = _windows_restart_manager_holders(db_path)
+            return holders if process_filter is None else [row for row in holders if process_filter(row[0])]
         except Exception as exc:
             logger.warning(
                 "Could not prove state.db has no Windows holders; deferring structural maintenance: %s",
@@ -467,6 +469,8 @@ def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
                     continue
                 pid = int(pid_str)
                 if pid == own_pid:
+                    continue
+                if process_filter is not None and not process_filter(pid):
                     continue
                 fd_dir = f"/proc/{pid}/fd"
                 try:
@@ -542,23 +546,42 @@ def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
             holders.append((-1, f"open-file scan failed: {exc}"))
         return holders
 
+    holders.extend(_psutil_state_db_holders(watched, process_filter))
+    return holders
+
+
+def _psutil_state_db_holders(watched: set[str], process_filter: Callable[[int], bool] | None) -> list[tuple[int, str]]:
     if psutil is None:
         return [(-1, "open-file scan unavailable")]
+    holders = []
     try:
-        for process in psutil.process_iter(["pid", "open_files"]):
+        attrs = ["pid"] if process_filter is not None else ["pid", "open_files"]
+        for process in psutil.process_iter(attrs):
             info = process.info
             pid = int(info["pid"])
             if pid == os.getpid():
                 continue
-            for opened in info.get("open_files") or ():
+            if process_filter is not None and not process_filter(pid):
+                continue
+            try:
+                opened_files = process.open_files() if process_filter is not None else info.get("open_files")
+            except psutil.NoSuchProcess:
+                continue
+            except (psutil.Error, OSError) as exc:
+                holders.append((pid, f"uninspectable descriptors: {exc}"))
+                continue
+            for opened in opened_files or ():
                 path = getattr(opened, "path", "")
-                if path and canonical_sqlite_path(os.path.realpath(path)) in watched:
+                # libproc/psutil returns kernel-resolved paths. Resolving every unrelated
+                # descriptor again performs unnecessary I/O outside the watched store.
+                if path and canonical_sqlite_path(path) in watched:
                     holders.append((pid, path))
     except Exception as exc:
         logger.warning(
             "Could not prove state.db has no foreign holders; "
             "deferring structural maintenance: %s",
             exc,
+            exc_info=True,
         )
         holders.append((-1, f"open-file scan failed: {exc}"))
     return holders

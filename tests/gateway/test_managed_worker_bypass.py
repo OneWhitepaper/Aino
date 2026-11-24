@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
+
 
 def _policy(tmp_path, **extra):
     from gateway.session_local import _bypass_policy
@@ -27,7 +29,8 @@ def test_bypass_policy_routes_to_managed_worker_and_bootstrap_carries_flags(tmp_
     opted = build_policy({'cwd': str(tmp_path), 'model': 'm', 'provider': 'custom', 'base_url': 'http://127.0.0.1:9/v1'},
                          {'gateway': {'managed_workers': True}})
     live = SimpleNamespace(source=SimpleNamespace(user_id='u', chat_id='c'), route='route')
-    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path))
+    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path),
+                                persistence=storage_handle(tmp_path))
     ref = SimpleNamespace(session_id='sid')
     for policy, expected in ((safe, safe), (config_only, config_only), (ordinary, None), (opted, opted)):
         monkeypatch.setattr('gateway.session_policy.policy_for_source', lambda runner, source, p=policy: p)

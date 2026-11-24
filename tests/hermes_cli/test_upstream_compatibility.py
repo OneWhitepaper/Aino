@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from hermes_cli import plugins_manifest, version_info
+from hermes_cli.upstream_compatibility import UPSTREAM_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -25,14 +26,14 @@ def _git(root, *args):
 
 
 def _assert_plugin_boundary():
-    assert plugins_manifest.running_hermes_version() == "0.23.2"
+    assert plugins_manifest.running_hermes_version() == UPSTREAM_VERSION
     # Existing plugins such as OMH read the public runtime API directly.
-    assert version_info.get_version_info().base_version == "0.23.2"
-    for requirement in (">=0.21.1", ">=0.23.2", "<=0.23.2", ">=0.21.1,<=0.23.2"):
+    assert version_info.get_version_info().base_version == UPSTREAM_VERSION
+    for requirement in (">=0.21.1", f">={UPSTREAM_VERSION}", f"<={UPSTREAM_VERSION}", f">=0.21.1,<={UPSTREAM_VERSION}"):
         assert plugins_manifest.requires_hermes_error({"requires_hermes": requirement}) is None
-    for requirement in (">0.23.2", ">=0.24.0", "<0.23.2"):
+    for requirement in (f">{UPSTREAM_VERSION}", f"<{UPSTREAM_VERSION}"):
         reason = plugins_manifest.requires_hermes_error({"requires_hermes": requirement})
-        assert reason == f"requires hermes {requirement}, running 0.23.2"
+        assert reason == f"requires hermes {requirement}, running {UPSTREAM_VERSION}"
 
 
 @pytest.mark.parametrize("legacy_tag", [False, True])
@@ -86,18 +87,18 @@ def test_packaged_tree_without_git_uses_compatibility_without_rewriting_stamp(tm
 
 
 @pytest.mark.parametrize("requirement, allowed", [("hermes-agent>=0.21.1", True),
-                                                  ("hermes-agent<=0.23.2", True),
-                                                  ("hermes-agent>0.23.2", False)])
+                                                  (f"hermes-agent<={UPSTREAM_VERSION}", True),
+                                                  (f"hermes-agent>{UPSTREAM_VERSION}", False)])
 def test_pm_core_requirements_share_the_plugin_compatibility_boundary(requirement, allowed):
     from pm.workspace import core_requirement_error
     declaration = SimpleNamespace(external=False, requirements=[requirement], pyproject=None)
     reason = core_requirement_error(declaration)
     assert (reason is None) is allowed
     if not allowed:
-        assert "running 0.23.2" in reason
+        assert f"running {UPSTREAM_VERSION}" in reason
 
 
-@pytest.mark.parametrize("required, accepted", [(">=0.21.1", True), (">=0.23.2", True), (">0.23.2", False)])
+@pytest.mark.parametrize("required, accepted", [(">=0.21.1", True), (f">={UPSTREAM_VERSION}", True), (f">{UPSTREAM_VERSION}", False)])
 def test_profile_distribution_admission_uses_the_same_core_version(tmp_path, monkeypatch, required, accepted):
     from hermes_cli.profile_distribution import DistributionError, DistributionManifest, plan_install, write_manifest
     stamp = tmp_path / "install-stamp.json"
@@ -109,17 +110,16 @@ def test_profile_distribution_admission_uses_the_same_core_version(tmp_path, mon
     if accepted:
         assert plan_install(str(package), tmp_path / "staging").manifest.hermes_requires == required
     else:
-        with pytest.raises(DistributionError, match="but you have 0.23.2"):
+        with pytest.raises(DistributionError, match=f"but you have {UPSTREAM_VERSION}"):
             plan_install(str(package), tmp_path / "staging")
 
 
 def test_declared_upstream_baseline_is_an_ancestor_in_complete_source_history():
-    from hermes_cli.upstream_compatibility import UPSTREAM_COMMIT, UPSTREAM_VERSION
+    from hermes_cli.upstream_compatibility import UPSTREAM_COMMIT
     root = Path(__file__).resolve().parents[2]
     if not (root / ".git").exists():
         pytest.skip("packaged source has no history; compatibility is carried by the Python module")
     if _git(root, "rev-parse", "--is-shallow-repository") == "true":
         pytest.skip("shallow checkout omits ancestry; the full-history lane verifies the baseline")
-    assert UPSTREAM_VERSION == "0.23.2"
     _git(root, "merge-base", "--is-ancestor", UPSTREAM_COMMIT, "HEAD")
     assert _git(root, "show", f"{UPSTREAM_COMMIT}:hermes_cli/version_info.py")

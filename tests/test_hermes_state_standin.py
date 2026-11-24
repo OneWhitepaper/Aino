@@ -282,6 +282,25 @@ def test_validate_flags_a_name_the_stand_in_does_not_carry(tmp_path):
     assert private_import_findings(plugin) == ["__init__.py:2 hermes_state.SessionMessagesMixin"]
 
 
+def test_validate_rejects_the_whole_stand_in_as_a_public_plugin_import(tmp_path):
+    from hermes_cli.plugin_validate import validate_plugin_dir
+
+    plugin = tmp_path / "legacy"
+    plugin.mkdir()
+    (plugin / "plugin.yaml").write_text(
+        "name: legacy\nversion: 1.0.0\ndescription: Stand-in import admission\n", encoding="utf-8")
+    (plugin / "__init__.py").write_text(
+        "import hermes_state\n"
+        "from hermes_state import SessionDB\n"
+        "from hermes_state import SessionMessagesMixin\n"
+        "def register(ctx):\n    pass\n", encoding="utf-8")
+    report = validate_plugin_dir(plugin)
+    [warning] = [item for item in report.warnings if item.startswith("private core imports")]
+    assert "__init__.py:1 hermes_state" in warning
+    assert "__init__.py:3 hermes_state.SessionMessagesMixin" in warning
+    assert "hermes_state.SessionDB" not in warning
+
+
 def test_the_registry_stand_in_lends_a_session_db_that_reads_gateway_sessions(monkeypatch, store):
     import hermes_state_registry
 

@@ -35,7 +35,7 @@ async def test_gui_image_binding_uses_live_profile_config_without_overwriting_ch
                              model='chat-original', provider='custom', base_url='http://127.0.0.1:1/v1', api_key='loopback-only')
         assert 'result' in created, created
         sid = created['result']['session_id']
-        before = authority.db.get_session(sid)['model_config']
+        before = authority.persistence.sessions.get(sid).model_config
         params = {'session_id': sid, 'purpose': 'image', 'owner': owner, 'model_id': 'image-catalog'}
         for method in ('session.managed_model_ticket', 'session.claim_managed_model',
                        'session.bind_managed_model', 'session.renew_managed_model', 'session.clear_managed_model'):
@@ -55,7 +55,7 @@ async def test_gui_image_binding_uses_live_profile_config_without_overwriting_ch
         image = get_registry().get(binding_key(authority, sid), purpose='image')
         assert image.api_key == 'isolated-image-secret'
         assert get_registry().get(binding_key(authority, sid)) is None
-        assert authority.db.get_session(sid)['model_config'] == before
+        assert authority.persistence.sessions.get(sid).model_config == before
         assert not hasattr(authority.sessions[sid], 'managed_model_state')
         foreign = {**params, 'profile': 'foreign'}
         assert 'error' in await call(viewer, 'session.managed_model_ticket', **foreign)
@@ -93,7 +93,7 @@ async def test_gui_image_binding_uses_live_profile_config_without_overwriting_ch
     finally:
         await viewer.close()
         await controller.close()
-        authority.db.close()
+        authority.persistence.close()
 
 
 @pytest.mark.asyncio
@@ -150,4 +150,4 @@ async def test_canonical_delete_retires_both_managed_credential_purposes(tmp_pat
     finally:
         await viewer.close()
         await controller.close()
-        authority.db.close()
+        authority.persistence.close()

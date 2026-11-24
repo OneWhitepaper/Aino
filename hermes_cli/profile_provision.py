@@ -12,7 +12,8 @@ shares the source's logins (a clone's, else the launch profile's) when the sourc
 too (it is the root or has no ``auth.json``), so a named source's own ``auth.json`` is copied instead.
 Opt-outs: ``share_auth=False`` (auth copied once, single-use OAuth grants dropped) and
 ``mirror_credentials=False`` (no keys, logins or model copied; the root's logins stay readable through
-the same fallback). Clones keep their own ``.env`` (a comment-only one takes the launch profile's keys).
+the same fallback). Clones keep their selected source's model, keys and voice settings,
+including an intentionally empty source; they never fill gaps from the RPC host.
 """
 from __future__ import annotations
 
@@ -25,6 +26,9 @@ import weakref
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional
+
+from hermes_constants import get_hermes_home
+from tui_gateway.launch_profile_policy import profile_config_scope
 
 logger = logging.getLogger(__name__)
 
@@ -260,21 +264,24 @@ def provision_profile(request: ProfileCreateRequest) -> ProvisionResult:
         # A clone's logins come from its source; a fresh profile's from the launch profile. A source that
         # can't be read now copies no logins, never the launch profile's (another account's): sharing the
         # root's store leaves the profile reading the root's, as any profile without its own auth.json does.
-        auth_home = step("logins source", lambda: _logins_home(
-            None if request.fresh else profiles._resolve_clone_source(request.clone_from)))
-        share_auth = request.share_auth or auth_home is None
-        if auth_home is None:
-            from hermes_constants import get_default_hermes_root
-            auth_home = get_default_hermes_root()
-        kept_root = step("launch credentials", lambda: mirror_launch_credentials(
-            path, result.mirrored, share_auth=share_auth, clone_channels=request.clone_channels,
-            auth_home=auth_home), default=())
-        if kept_root and not _is_root(auth_home):
-            # A named source's own subscription logins can't be copied (single-use refresh
-            # tokens); the copy reads the default profile's for those providers instead.
-            result.warnings.append(
-                f"subscription logins not carried over ({', '.join(kept_root)}): the profile uses the default "
-                f"profile's; run `hermes -p {request.name} auth add <provider>` to sign it in separately")
+        source_home = step("logins source", lambda: get_hermes_home() if request.fresh
+                           else profiles._resolve_clone_source(request.clone_from))
+        if source_home is not None:
+            auth_home = step("logins source", lambda: _logins_home(source_home))
+            share_auth = request.share_auth or auth_home is None
+            if auth_home is None:
+                from hermes_constants import get_default_hermes_root
+                auth_home = get_default_hermes_root()
+            with profile_config_scope(source_home):
+                kept_root = step("source credentials", lambda: mirror_launch_credentials(
+                    path, result.mirrored, share_auth=share_auth, clone_channels=request.clone_channels,
+                    auth_home=auth_home), default=())
+            if kept_root and not _is_root(auth_home):
+                # A named source's own subscription logins can't be copied (single-use refresh
+                # tokens); the copy reads the default profile's for those providers instead.
+                result.warnings.append(
+                    f"subscription logins not carried over ({', '.join(kept_root)}): the profile uses the default "
+                    f"profile's; run `hermes -p {request.name} auth add <provider>` to sign it in separately")
     if request.model and request.provider:
         result.model_set = step("model", lambda: _pin_model(path, request, result), default=False)
     elif request.mirror_credentials and request.fresh:

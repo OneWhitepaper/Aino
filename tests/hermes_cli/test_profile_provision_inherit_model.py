@@ -262,6 +262,19 @@ def test_create_without_clone_keeps_launch_model_inheritance(clone_source_and_la
     assert "launch-gateway" in created["providers"]
 
 
+def test_clone_does_not_fill_source_voice_settings_from_rpc_host(clone_source_and_launch):
+    home = clone_source_and_launch
+    launch_path = home / "profiles" / "launch" / "config.yaml"
+    launch = read_user_config_raw(launch_path)
+    launch["tts"] = {"provider": "openai", "voice": "host-voice"}
+    atomic_config_write(launch_path, launch)
+
+    result, created = _create_profile_model({"clone_from": "default"})
+
+    assert "tts" not in created
+    assert result["mirrored"]["voice"] is False
+
+
 @pytest.mark.parametrize("source_has_key", [False, True])
 @pytest.mark.parametrize("share_auth", [False, True])
 def test_clone_uses_selected_source_credentials_instead_of_rpc_host(

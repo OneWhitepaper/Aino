@@ -151,7 +151,7 @@ def test_unknown_vision_tool_stops_real_byok_turn_before_model_continuation(
     tools = [row for row in result["messages"] if row["role"] == "tool"]
     assert len(tools) == 1 and tools[0]["tool_call_id"] == "vision-1"
     assert tools[0]["display_metadata"]["terminal_failure"]["failure_retryable"] is False
-    rows = agent._session_db.get_messages(agent.session_id)
-    assert rows[-3]["role"] == "assistant" and rows[-3]["tool_calls"][0]["id"] == "vision-1"
-    assert rows[-2]["role"] == "tool" and rows[-2]["tool_call_id"] == "vision-1"
-    assert rows[-1]["display_metadata"]["error_surface"]["retryable"] is False
+    rows = agent.persistence.messages.read_transcript(agent.session_id)
+    assert rows[-3].role == "assistant" and rows[-3].tool_calls[0]["id"] == "vision-1"
+    assert rows[-2].role == "tool" and rows[-2].tool_call_id == "vision-1"
+    assert rows[-1].display_metadata["error_surface"]["retryable"] is False

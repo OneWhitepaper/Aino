@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from hermes_state import SessionDB
+from persistence_assembly import open_persistence, profile_scope
 
 OWNER = {"platform_origin": "https://api.aino.test", "user_id": "10"}
 
@@ -20,12 +20,12 @@ def _request(tmp_path, owner=OWNER):
 
 def _seed(home, *ids, owner=None):
     home.mkdir(parents=True, exist_ok=True)
-    db = SessionDB(db_path=home / "state.db")
+    db = open_persistence(profile_scope(home=home))
     for sid in ids:
         row = {"id": sid, "source": "desktop", "messages": [{"role": "user", "content": sid}]}
         if owner is not None:
             row["model_config"] = {"platform_owner": owner}
-        assert db.import_sessions([row])["ok"]
+        assert db.maintenance.import_sessions([row]).ok
     db.close()
 
 
@@ -140,8 +140,8 @@ def test_owned_only_restore_rekeys_remaining_unknown_history_without_skipping_co
     assert [row["id"] for row in rows] == ["mine"]
     target = Path(request["target_home"])
     target.mkdir(parents=True, exist_ok=True)
-    db = SessionDB(db_path=target / "state.db")
-    assert db.import_sessions(rows)["ok"]
+    db = open_persistence(profile_scope(home=target))
+    assert db.maintenance.import_sessions(rows).ok
     db.close()
     after = run(request)
     assert after["owned"] == 0 and after["unowned"] == 1 and after["showReminder"]

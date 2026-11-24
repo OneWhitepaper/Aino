@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import sqlite3
 import threading
 from contextlib import closing
@@ -207,10 +208,10 @@ def _lockless_gateway_holder(path: Path) -> str | None:
     multiplexer serves named profiles without reserving their per-profile lock, so the lock alone
     misses it. Only holders whose command line is a Hermes ``gateway`` run count; plain readers
     (Desktop, sibling browses, CLI reads) are not owners. Returns a description, else None."""
-    from persistence.sqlite._state.holders import _looks_like_hermes, _read_proc_argv, describe_holder_pid, foreign_state_db_holders
-    for pid, _target in foreign_state_db_holders(path):
-        if pid <= 0:
-            continue
+    from gateway.status import looks_like_gateway_command_line
+    from persistence.sqlite._state.holders import _read_proc_argv, describe_holder_pid, foreign_state_db_holders
+
+    def gateway_process(pid):
         argv = _read_proc_argv(pid)
         if argv is None:
             try:
@@ -218,7 +219,12 @@ def _lockless_gateway_holder(path: Path) -> str | None:
                 argv = psutil.Process(pid).cmdline() or None
             except (ImportError, OSError, psutil.Error):  # gone, denied, or no psutil: not provably ours
                 argv = None
-        if argv and _looks_like_hermes(argv) and 'gateway' in argv[1:]:
+        return bool(argv) and looks_like_gateway_command_line(shlex.join(argv))
+
+    # Reading every process's open files can itself exhaust the browse budget on macOS.
+    # This check concerns legacy gateways only; repair's all-writer proof stays unfiltered.
+    for pid, _target in foreign_state_db_holders(path, process_filter=gateway_process):
+        if pid > 0:
             return describe_holder_pid(pid)
     return None
 
@@ -270,7 +276,6 @@ def _apply_additive_schema(path: Path, budget: _Budget | None = None) -> None:
     budget.check()
     with closing(_connect_tracked_db(path, tracking_path=path, timeout=budget.busy_timeout(),
                                      isolation_level=None)) as conn:
-        _reapply_durability_barriers(conn)
         budget.arm(conn)
         # macOS PRAGMAs can parse a cold schema while gateway.lock is held.
         # Their best-effort helpers swallow interruption, so check the budget before DDL.

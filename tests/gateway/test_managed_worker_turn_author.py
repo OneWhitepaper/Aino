@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
+
 
 def _policy(tmp_path):
     from gateway.session_local import _bypass_policy
@@ -18,7 +20,8 @@ def test_bootstrap_frame_carries_the_admitted_author(tmp_path, monkeypatch):
 
     monkeypatch.setattr('gateway.session_policy.launch_key', lambda authority, policy: None)
     live = SimpleNamespace(source=SimpleNamespace(user_id='u', chat_id='c'), route='route')
-    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path))
+    authority = SimpleNamespace(sessions={'sid': live}, runner=None, profile_id=str(tmp_path),
+                                persistence=storage_handle(tmp_path))
     ref = SimpleNamespace(session_id='sid')
     scope = {'profile_id': str(tmp_path), 'session_id': 'sid', 'execution_id': 'x', 'generation': 1,
              'pid': os.getpid(), 'birth': 0, 'secret': 's', 'epoch': 1}

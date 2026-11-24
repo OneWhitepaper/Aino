@@ -1025,15 +1025,21 @@ class TestTitlesThroughTheStorageInterface:
 
         self._create(handle, "sess-1")
         store = MagicMock()
-        with patch("agent.memory_provider.spawn_context_thread") as thread, \
+        with patch("agent.title_generator.auto_title_session", wraps=auto_title_session) as title_upgrade, \
+                patch("agent.title_generator.generate_title", return_value="Fix flaky login authentication"), \
                 patch("agent.title_generator.start_title_upgrade"), \
                 patch("agent.title_generator._auto_title_enabled", return_value=True), \
                 patch("agent.title_generator._model_title_upgrade_enabled", return_value=True):
-            maybe_auto_title(store, "sess-1", "fix the flaky auth test in login", [], persistence=handle)
-        assert handle.sessions.get_title("sess-1") == "fix the flaky auth test in login"
-        assert handle.sessions.get_title_source("sess-1") is TitleSource.DERIVED
-        thread_handle = thread.call_args.kwargs["kwargs"]["persistence"]
+            upgrade = maybe_auto_title(store, "sess-1", "fix the flaky auth test in login", [], persistence=handle)
+            assert handle.sessions.get_title("sess-1") == "fix the flaky auth test in login"
+            assert handle.sessions.get_title_source("sess-1") is TitleSource.DERIVED
+            upgrade.start()
+            upgrade.join(10)
+        assert not upgrade.is_alive()
+        thread_handle = title_upgrade.call_args.kwargs["persistence"]
         assert thread_handle is not handle and thread_handle.scope == handle.scope
+        assert handle.sessions.get_title("sess-1") == "Fix flaky login authentication"
+        assert handle.sessions.get_title_source("sess-1") is TitleSource.LLM
         assert store.method_calls == []
 
     def test_model_title_and_its_collision_suffix_go_through_the_handle(self, handle):

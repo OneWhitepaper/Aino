@@ -6,6 +6,7 @@ Durable values live in the authority ``meta`` table under string keys with strin
 from __future__ import annotations
 
 import json
+import copy
 from typing import Any, Mapping, Sequence
 
 from persistence.authority.bindings import api_generation_id, generation_request_id, local_session_id, room_session_id
@@ -18,6 +19,7 @@ from persistence.authority.runtime import (
     GenerationPick,
     GenerationRow,
     PinnedIdentity,
+    PreparedMutation,
     RoomGenerations,
     SessionRuntimeState,
     StoredDeferredPick,
@@ -27,13 +29,15 @@ from persistence.authority.runtime import (
 from persistence.core.canonical import canonical_json
 from persistence.core.errors import AuthorityRefusal
 from persistence.core.identity import SessionId
+from persistence.authority.vocabulary import CONVERSATION_MODEL_SELECTION_KEY
 
 from .._authority import session_runtime
 from ..conversation.sessions import _now
 from ..conversation.transcript_store import advance_conversation_generation
+from ..conversation.lineage import compression_tip
 from . import admissions_rows as rows
 from . import mutation_guards as guards
-from .mutation_commands import DEFERRED_PICK_PREFIX, VIEWER_CLOSE_PREFIX
+from .mutation_commands import DEFERRED_PICK_PREFIX, VIEWER_CLOSE_PREFIX, _model
 
 _RECEIPT_PREFIX = "gateway.mutation.v1."
 
@@ -76,6 +80,34 @@ class RuntimeMetaMixin:
     def current_epoch(self) -> int | None:
         epoch = self._state().snapshot["epoch"]
         return epoch or None
+
+    def selection_fence(self, session_id: str) -> tuple[int, int, str | None]:
+        rows.require_session(self._tables(), session_id)
+        authority = self._state().snapshot
+        runtime = authority["sessions"].get(session_id, {})
+        return runtime.get("revision", 0), runtime.get("generation", 0), authority["meta"].get(DEFERRED_PICK_PREFIX + session_id)
+
+    def save_conversation_selection(self, epoch, session_id, value, expected):
+        state = self._state()
+        with state.guarded():
+            state.require_epoch(state.snapshot, epoch)
+            if self.selection_fence(session_id) != expected:
+                raise AuthorityRefusal("model_request_expired")
+            target = compression_tip(self._backend, self._backend.scope, session_id)
+            row = rows.require_session(self._tables(), target)
+            row["model_config"] = {
+                **(row.get("model_config") or {}), CONVERSATION_MODEL_SELECTION_KEY: copy.deepcopy(dict(value))}
+
+    def apply_room_model_policy(self, epoch, session_id, expected_policy, policy):
+        state = self._state()
+        with state.guarded():
+            state.require_epoch(state.snapshot, epoch)
+            snapshot = guards.local_snapshot(self._backend, state.snapshot, self._tables(), session_id)
+            if snapshot.receipt["policy"] != expected_policy:
+                raise AuthorityRefusal("revision_conflict")
+            if expected_policy.get("source") != "bot_room":
+                raise AuthorityRefusal("managed_binding_forbidden")
+            _model(self, session_id, {}, PreparedMutation(snapshot, {"policy": policy}))
 
     def has_mutation_receipt(self, principal_id: str, session_id: str, request_id: str) -> bool:
         for value in (principal_id, session_id, request_id):

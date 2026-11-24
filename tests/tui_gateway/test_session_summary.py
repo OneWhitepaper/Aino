@@ -9,7 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from hermes_state import SessionDB
+from persistence.conversation.messages import NewMessage, TranscriptRead, TranscriptView
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import transcript_rows
 from tui_gateway import server as srv
 from tui_gateway.managed_model_runtime import ManagedModelBinding, ManagedModelOwner, get_registry
 
@@ -18,11 +21,10 @@ from tui_gateway.managed_model_runtime import ManagedModelBinding, ManagedModelO
 def summary_rpc(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setattr("hermes_state.DEFAULT_DB_PATH", tmp_path / "state.db")
-    db = SessionDB(tmp_path / "state.db")
-    db.create_session("stored-summary", "gui")
-    first = db.append_message("stored-summary", "user", "Implement a separate cited session summary. " * 25)
-    db.append_message("stored-summary", "assistant", "The history reader is implemented and verified. " * 25)
+    db = open_persistence(profile_scope(home=tmp_path))
+    seed_session(db, "stored-summary", "gui")
+    first = db.messages.append("stored-summary", NewMessage(role="user", content="Implement a separate cited session summary. " * 25))
+    db.messages.append("stored-summary", NewMessage(role="assistant", content="The history reader is implemented and verified. " * 25))
     requests = []
     request_hooks = []
 
@@ -103,13 +105,13 @@ def test_summary_uses_temporary_session_model_and_rejects_foreign_transport(summ
     from hermes_cli.web_session_summary import session_summary
     refusal = session_summary("stored-summary", language="en", generate=True)
     assert refusal["error_code"] == "runtime_required" and not rig.requests
-    before = rig.db.get_messages("stored-summary", include_inactive=True)
+    before = transcript_rows(rig.db, "stored-summary", TranscriptRead(view=TranscriptView.ALL))
     result = rig.call()
     assert result.get("result", {}).get("summary"), result
     body, headers = rig.requests[0]
     assert body["model"] == rig.agent.model
     assert headers["Authorization"] == "Bearer session-key"
-    assert rig.db.get_messages("stored-summary", include_inactive=True) == before
+    assert transcript_rows(rig.db, "stored-summary", TranscriptRead(view=TranscriptView.ALL)) == before
     foreign = rig.call(rig.Peer(), language="ja")
     assert foreign["error"]["code"] == 4001 and len(rig.requests) == 1
     # A lazy history resume resolves its stored selection without constructing an agent.
@@ -151,9 +153,8 @@ def test_summary_managed_model_uses_authorized_lease_and_billing_headers(summary
     assert headers["X-Aino-Purpose"] == "other_auxiliary"
     assert headers["X-Aino-Task"] == "session_summary"
     assert headers["X-Aino-Session-Id"] and headers["X-Aino-Turn-Id"] and headers["X-Aino-Call-Id"]
-    usage = rig.db._read_one("SELECT billing_provider, input_tokens, output_tokens FROM session_model_usage WHERE task=?",
-                            ("session_summary",))
-    assert tuple(usage) == ("aino", 10, 5)
+    usage, = rig.db.usage_analytics.auxiliary_usage_by_model_task(started_after=0)
+    assert (usage["billing_provider"], usage["input_tokens"], usage["output_tokens"]) == ("aino", 10, 5)
     registry.clear_session("live-summary")
     missing = rig.call(language="ja")
     assert missing["error"]["code"] == 4006 and len(rig.requests) == 1
@@ -192,7 +193,7 @@ def test_foreground_turn_supersedes_summary_without_caching_a_failure(summary_rp
 def test_foreground_start_releases_summary_host_before_provider_response(summary_rpc, starting_agent):
     rig = summary_rpc
     initial = rig.call()["result"]["summary"]
-    rig.db.append_message("stored-summary", "user", "Please verify the completed implementation once more.")
+    rig.db.messages.append("stored-summary", NewMessage(role="user", content="Please verify the completed implementation once more."))
     waiting = threading.Event()
     release = threading.Event()
 

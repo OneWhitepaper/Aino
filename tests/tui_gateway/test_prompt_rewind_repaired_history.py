@@ -6,15 +6,18 @@ import threading
 import pytest
 
 from agent.agent_runtime_helpers import repair_message_sequence
-from hermes_state import SessionDB
+from persistence.conversation.messages import ConversationRequest, NewMessage, TranscriptView
+from persistence_assembly import open_persistence, profile_scope
+from tests.fixtures.storage_seed import seed_session
+from tests.fixtures.storage_read import conversation
 from tui_gateway import server
 
 
 @pytest.fixture
 def rewind_session(tmp_path, monkeypatch):
-    db = SessionDB(db_path=tmp_path / "state.db")
+    db = open_persistence(profile_scope(home=tmp_path))
     key = "repaired-rewind"
-    db.create_session(key, source="desktop")
+    seed_session(db, key, "desktop")
     session = {
         "session_key": key,
         "history": [],
@@ -32,17 +35,17 @@ def test_rewind_restores_durable_boundaries_of_merged_user_turns(
     rewind_session, marker, target_ordinal
 ):
     db, key, session = rewind_session
-    db.append_message(key, "user", "hello")
-    db.append_message(key, "assistant", "hello back")
-    session["history"] = db.get_messages_as_conversation(key, include_row_ids=True)
+    db.messages.append(key, NewMessage(role="user", content="hello"))
+    db.messages.append(key, NewMessage(role="assistant", content="hello back"))
+    session["history"] = conversation(db, key, ConversationRequest(include_row_ids=True))
     if marker:
         server._append_model_switch_marker(session, model="selected-model", provider="aino")
     user_ids = [
-        db.append_message(key, "user", "who are you?"),
-        db.append_message(key, "user", "hello"),
+        db.messages.append(key, NewMessage(role="user", content="who are you?")),
+        db.messages.append(key, NewMessage(role="user", content="hello")),
     ]
-    db.append_message(key, "assistant", "selected-model reply")
-    physical = db.get_messages_as_conversation(key, include_row_ids=True)
+    db.messages.append(key, NewMessage(role="assistant", content="selected-model reply"))
+    physical = conversation(db, key, ConversationRequest(include_row_ids=True))
     session["history"] = deepcopy(physical)
     if marker:
         # Gateway-created pivot and the current prompt are warm-only rows until
@@ -68,24 +71,24 @@ def test_rewind_restores_durable_boundaries_of_merged_user_turns(
     assert error is None, error
     expected = [(message["role"], message["content"]) for message in physical[:target_index]]
     assert [(message["role"], message["content"]) for message in session["history"]] == expected
-    assert [(message["role"], message["content"]) for message in db.get_messages_as_conversation(key)] == expected
-    active = db.get_messages_as_conversation(key, include_row_ids=True)
+    assert [(message["role"], message["content"]) for message in conversation(db, key)] == expected
+    active = conversation(db, key, ConversationRequest(include_row_ids=True))
     assert fields["survivor_row_id_map"] == {
         str(old_id): active[i]["_row_id"] if i < len(active) else None
         for i, old_id in enumerate(original_ids)
     }
-    archived = db.get_messages_as_conversation(key, include_inactive=True, include_row_ids=True)
+    archived = conversation(db, key, ConversationRequest(view=TranscriptView.ALL, include_row_ids=True))
     assert any(message["_row_id"] == target_id for message in archived)
 
 
 def test_rewind_refuses_repaired_history_when_live_content_diverged(rewind_session):
     db, key, session = rewind_session
-    db.append_message(key, "user", "hello")
-    db.append_message(key, "assistant", "hello back")
-    db.append_message(key, "user", "interrupted prompt")
-    target_id = db.append_message(key, "user", "follow-up")
-    db.append_message(key, "assistant", "reply")
-    physical = db.get_messages_as_conversation(key, include_row_ids=True)
+    db.messages.append(key, NewMessage(role="user", content="hello"))
+    db.messages.append(key, NewMessage(role="assistant", content="hello back"))
+    db.messages.append(key, NewMessage(role="user", content="interrupted prompt"))
+    target_id = db.messages.append(key, NewMessage(role="user", content="follow-up"))
+    db.messages.append(key, NewMessage(role="assistant", content="reply"))
+    physical = conversation(db, key, ConversationRequest(include_row_ids=True))
     session["history"] = deepcopy(physical)
     repair_message_sequence(None, session["history"])
     session["history"][-1]["content"] = "a different live answer"
@@ -99,4 +102,4 @@ def test_rewind_refuses_repaired_history_when_live_content_diverged(rewind_sessi
 
     assert error["error"]["code"] == 4018
     assert session["history"] == before
-    assert db.get_messages_as_conversation(key, include_row_ids=True) == physical
+    assert conversation(db, key, ConversationRequest(include_row_ids=True)) == physical

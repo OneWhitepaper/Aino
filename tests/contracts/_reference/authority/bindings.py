@@ -28,7 +28,7 @@ from persistence.authority.vocabulary import LEGACY_LOCAL_SOURCES, OwnerRule
 from persistence.conversation.sessions import SessionLineageKind
 from persistence.core.canonical import canonical_json
 from persistence.core.identity import JsonValue
-from session_rules.legacy_local import binding_names, client_history_row, legacy_history_row, not_client_labels, same_owner, validate_legacy_row
+from session_rules.legacy_local import binding_names, client_history_row, legacy_history_row, not_client_labels, owners_agree, same_owner, validate_legacy_row
 
 from .._authority import AuthorityState, authority_state
 from .._lease_fence import refuse_live_leases
@@ -114,6 +114,12 @@ def _receipt_of(binding: SessionBinding) -> dict[str, Any]:
     if binding.lineage != (binding.session_id,):
         receipt["lineage"] = list(binding.lineage)
     return json.loads(json.dumps(receipt))
+
+
+def _reviewed_handoff(receipt: Mapping[str, Any], row: Mapping[str, Any]) -> dict | None:
+    handoff = json.loads(receipt["policy"]["request_json"]).get("handoff")
+    marker = (row.get("model_config") or {}).get("_branched_from")
+    return handoff if handoff and marker == handoff["source_session_id"] else None
 
 
 def _new_receipt(binding: NewSessionBinding) -> dict[str, Any]:
@@ -318,6 +324,73 @@ class InMemorySessionBindingRepository(ApiBindingVerbs, LineageWriteVerbs):
             or any(row.get("target_session_id") == session_id for row in authority["admissions"].values())
             or any(row.get("session_id") == session_id for row in authority["workers"].values())
             or any(row.get("parent_session_id") == session_id for row in sessions.values()))
+
+    def repair_hosted_empty_policy(self, *, epoch, session_id, expected, repaired, principal_id):
+        state = self._state()
+        with state.transaction() as staged:
+            state.require_epoch(staged.authority, epoch)
+            saved = staged.authority["meta"].get(RECEIPT_PREFIX + session_id)
+            row = staged.scope.get("sessions", {}).get(session_id)
+            if (saved is None or _to_binding(saved) != _to_binding(expected) or row is None
+                    or (row["source"], row.get("session_key"), row.get("chat_id"), row.get("user_id"))
+                    != ("bot_room", expected["route"], session_id, principal_id)):
+                raise AuthorityRefusal("storage_unavailable")
+            staged.authority["meta"][RECEIPT_PREFIX + session_id] = {
+                **decode(saved), "policy": copy.deepcopy(dict(repaired))}
+            if row.get("model") == "":
+                row["model"] = None
+            return True
+
+    def execution_modes(self, session_ids: list[str]) -> dict[str, str]:
+        meta, sessions = self._committed()
+        modes = {}
+        for sid in session_ids:
+            owner = local_lineage_owner(meta, sessions, sid)
+            try:
+                receipt = decode(meta.get(RECEIPT_PREFIX + owner))
+            except (TypeError, ValueError):
+                receipt = None
+            policy = receipt.get("policy") if isinstance(receipt, dict) else None
+            mode = policy.get("execution_mode") if isinstance(policy, dict) else None
+            if mode not in ("work", "code"):
+                mode = (sessions.get(sid, {}).get("model_config") or {}).get("execution_mode")
+            modes[sid] = mode if mode in ("work", "code") else "work"
+        return modes
+
+    def check_work_code_source(self, session_id, principal_id, target_mode, owner):
+        meta, sessions = self._committed()
+        saved = meta.get(RECEIPT_PREFIX + session_id)
+        if session_id not in sessions or saved is None:
+            raise AuthorityRefusal("not_found")
+        receipt = decode(saved)
+        if not same_owner(receipt["principal_id"], principal_id, owner):
+            raise AuthorityRefusal("permission_denied")
+        if receipt["policy"].get("execution_mode", "work") == target_mode:
+            raise AuthorityRefusal("invalid_params", field="execution_mode", detail="handoff must change modes")
+
+    def work_code_links(self, session_id, owner):
+        meta, sessions = self._committed()
+        if session_id not in sessions or RECEIPT_PREFIX + session_id not in meta:
+            return {}
+        receipt = decode(meta[RECEIPT_PREFIX + session_id])
+        handoff = _reviewed_handoff(receipt, sessions[session_id])
+        parent = handoff["source_session_id"] if handoff else None
+        candidates = sorted(
+            ((sid, row) for sid, row in sessions.items()
+             if (row.get("parent_session_id") == session_id or sid == parent) and RECEIPT_PREFIX + sid in meta),
+            key=lambda pair: (pair[1]["started_at"], pair[0]))
+        links = []
+        for sid, row in candidates:
+            linked = decode(meta[RECEIPT_PREFIX + sid])
+            if not owners_agree(receipt["principal_id"], linked["principal_id"], owner):
+                continue
+            relation = "source" if sid == parent else "child"
+            context = _reviewed_handoff(linked, row)
+            if relation == "child" and (not context or context["source_session_id"] != session_id):
+                continue
+            links.append({"session_id": sid, "title": row.get("title") or "",
+                          "execution_mode": linked["policy"].get("execution_mode", "work"), "relation": relation})
+        return {"linked_sessions": links, **({"handoff": copy.deepcopy(handoff)} if handoff else {})}
 
     def receipt(self, session_id: SessionId) -> SessionBinding:
         stored = self._committed()[0].get(RECEIPT_PREFIX + str(session_id))

@@ -45,7 +45,7 @@ def _auto_maintenance(store, admin):
         min_vacuum_freelist_ratio=-1.0)
 
 
-def test_auto_vacuum_skips_while_a_foreign_process_holds_the_store(backend, scope_a):
+def test_auto_vacuum_skips_while_a_foreign_process_holds_the_store(backend, scope_a, owned_holder_processes):
     store = _seeded_store(backend, scope_a)
     db = store.holder()
     admin = backend.open_store_admin(scope_a, read_only=False)
@@ -53,7 +53,9 @@ def test_auto_vacuum_skips_while_a_foreign_process_holds_the_store(backend, scop
         [sys.executable, "-c", _HOLDER, str(db.db_path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:
+        owned_holder_processes.add(holder.pid)
         assert holder.stdout.readline().strip() == "ready"
+        assert (holder.pid, str(db.db_path.resolve())) in admin.vacuum_blockers()
         result = _auto_maintenance(store, admin)
         assert result["pruned"] == 1
         assert result["vacuumed"] is False

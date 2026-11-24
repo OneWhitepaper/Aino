@@ -84,4 +84,4 @@ async def test_canonical_status_reuses_only_the_live_controller_and_key_version(
         await viewer.close()
         await controller.close()
         await replacement.close()
-        authority.db.close()
+        authority.persistence.close()

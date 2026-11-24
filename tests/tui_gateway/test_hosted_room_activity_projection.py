@@ -4,6 +4,7 @@ import threading
 from types import SimpleNamespace
 
 from tests.waiting import wait_until
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
 from tui_gateway.hosted_room_service import HostedRoomService
 
 
@@ -44,7 +45,7 @@ class _ActivityRPC:
 
 
 def test_driver_projects_current_activity_and_refuses_mismatched_attempt(tmp_path: Path):
-    service = HostedRoomService(SimpleNamespace(_methods={}, _sessions={}, _sessions_lock=threading.Lock()), db_path=tmp_path/'state.db')
+    service = HostedRoomService(SimpleNamespace(_methods={}, _sessions={}, _sessions_lock=threading.Lock()), store=storage_handle(tmp_path), placement="profile")
     service.rpc = service.runtime.rpc = _ActivityRPC()
     service.local_profiles = lambda: ('default', 'ops')
     service.create_room(room_id='room', name='Room', members=[

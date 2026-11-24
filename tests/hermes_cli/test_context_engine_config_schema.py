@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from textwrap import dedent
 
 from hermes_constants import reset_hermes_home_override, set_hermes_home_override
+from hermes_cli.config import atomic_config_write, read_user_config_raw
 from hermes_cli.web_server_config import _schema_with_dynamic_provider_options
 
 
@@ -37,6 +38,9 @@ def install_engine(home, name):
     path = home / "plugins" / name
     path.mkdir(parents=True)
     (path / "__init__.py").write_text(_ENGINE.format(name=name), encoding="utf-8")
+    config = read_user_config_raw(home / "config.yaml") or {}
+    config.setdefault("plugins", {}).setdefault("enabled", []).append(name)
+    atomic_config_write(home / "config.yaml", config)
 
 
 def options():
@@ -88,3 +92,24 @@ def test_schema_discovers_only_the_requested_profile_engines(tmp_path, monkeypat
         second_options = options()
     assert "schema_first" in first_options and "schema_second" not in first_options
     assert "schema_second" in second_options and "schema_first" not in second_options
+
+
+def test_schema_does_not_execute_unselected_or_disabled_engines(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    marker = tmp_path / "unexpected-import"
+    for name in ("unselected", "disabled"):
+        engine = tmp_path / "plugins" / name
+        engine.mkdir(parents=True)
+        (engine / "__init__.py").write_text(
+            f"from pathlib import Path\nPath({str(marker)!r}).touch()\n" + _ENGINE.format(name=name),
+            encoding="utf-8",
+        )
+    atomic_config_write(tmp_path / "config.yaml", {
+        "plugins": {"enabled": ["disabled"], "disabled": ["disabled"]},
+    })
+    with home_scope(tmp_path):
+        choices = options()
+    assert "compressor" in choices
+    assert "unselected" not in choices and "disabled" not in choices
+    assert not marker.exists()

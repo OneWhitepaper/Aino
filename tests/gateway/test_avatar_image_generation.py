@@ -67,9 +67,9 @@ async def test_avatar_generation_uses_exact_gui_image_binding_and_retires_its_sc
         reply = await asyncio.wait_for(responses.get(), timeout=10)
         assert reply.get('result', {}).get('success'), reply
         assert captures[0].run(current_image_binding) is None
-        assert authority.db.get_messages(sid) == []
+        assert authority.persistence.messages.read_transcript(sid) == ()
     finally:
         await viewer.close()
         await controller.close()
         await stranger.close()
-        authority.db.close()
+        authority.persistence.close()

@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles, storage_handle
+
 from gateway import session_policy
 from gateway.config import GatewayConfig, Platform
 from gateway.platforms.event import MessageEvent
@@ -177,6 +179,7 @@ def _managed(tmp_path, monkeypatch, text):
                            event_stream=SimpleNamespace(lock=threading.Lock(), publish=lambda *a, **k: None),
                            controls=SimpleNamespace(snapshot=lambda *a: None))
     authority = SimpleNamespace(profile_id=str(tmp_path), sessions={'sid': live}, runner=None, pending_results={},
+                                persistence=storage_handle(tmp_path),
                                 waiters={}, adopt_agent=lambda *a: None, _publish_pending=lambda ref: None)
     row = {'admission_id': 'adm', 'generation': 1, 'principal_id': 'u', 'payload': {'text': text}}
     authority.executing = {'sid': 1}

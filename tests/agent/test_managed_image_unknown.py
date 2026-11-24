@@ -85,10 +85,10 @@ def test_accepted_image_response_loss_stops_real_turn_and_keeps_tool_pair(
         assert payload["failure_reason"] == "managed_operation_unknown"
         assert payload["failure_retryable"] is False
     assert tool_rows[0]["display_metadata"]["terminal_failure"]["failure_retryable"] is False
-    rows = agent._session_db.get_messages(agent.session_id)
-    assert rows[-3]["role"] == "assistant" and rows[-3]["tool_calls"][0]["id"] == "image-1"
-    assert rows[-2]["role"] == "tool" and rows[-2]["tool_call_id"] == "image-1"
-    assert rows[-1]["display_metadata"]["error_surface"]["retryable"] is False
+    rows = agent.persistence.messages.read_transcript(agent.session_id)
+    assert rows[-3].role == "assistant" and rows[-3].tool_calls[0]["id"] == "image-1"
+    assert rows[-2].role == "tool" and rows[-2].tool_call_id == "image-1"
+    assert rows[-1].display_metadata["error_surface"]["retryable"] is False
 
 
 @pytest.mark.parametrize("failure", ["connect", 400, 429])

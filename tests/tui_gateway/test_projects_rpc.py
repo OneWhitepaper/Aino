@@ -813,7 +813,7 @@ def test_projects_tree_leaves_messaging_sessions_to_their_own_section(monkeypatc
 
 def test_project_tree_rows_name_every_lineage_segment():
     """A row names its segments in ``_lineage_ids`` whether or not it has a compression root: a compression tip
-    carries its chain, a local conversation reset once carries both segments with no root, a plain row None."""
+    carries its chain, a local conversation reset once keeps its logical id and both segments with no root, a plain row None."""
     import json
 
     from persistence_assembly import open_persistence, profile_scope
@@ -840,9 +840,12 @@ def test_project_tree_rows_name_every_lineage_segment():
     finally:
         db.close()
 
+    local = next(row for row in sessions if row["id"] == "loc-a")
+    assert local["preview"] == "hello from loc-b"
+    assert local["parent_session_id"] == "loc-a"
     rows = {row["id"]: (row["_lineage_root_id"], row["_lineage_ids"]) for row in sessions}
     assert rows == {
         "plain": (None, None),
         "comp-tip": ("comp-root", ["comp-root", "comp-tip"]),
-        "loc-b": (None, ["loc-a", "loc-b"]),
+        "loc-a": (None, ["loc-a", "loc-b"]),
     }

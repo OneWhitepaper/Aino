@@ -6,7 +6,7 @@ import pytest
 import gateway.run_bootstrap as bootstrap
 from gateway import runtime_ownership
 from gateway.runtime_ownership import OwnershipConflict, ProfileOwnership
-from hermes_state_reconcile import BROWSE_RECONCILE_PURPOSE
+from persistence.core.admin import BROWSE_RECONCILE_PURPOSE
 
 
 def test_boot_reserves_a_profile_freed_before_the_conflicting_holder_probe(tmp_path, monkeypatch):

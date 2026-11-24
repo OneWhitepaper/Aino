@@ -58,7 +58,7 @@ def _turn(result):
     return SimpleNamespace(
         result=result, agent=SimpleNamespace(_session_title_hint=""), terminal_callback=None,
         receipt_committed=True, receipt_attempted=False, marker_key="", error_retained=False,
-        error_detail="", prompt_text="read the plan",
+        error_detail="", prompt_text="read the plan", metrics_start=None,
     )
 
 
@@ -71,7 +71,7 @@ def complete(monkeypatch):
     def run(session, result):
         session.setdefault("pending_title", None)
         session["history_lock"] = contextlib.nullcontext()
-        payload, _raw, status = server._complete_turn_payload(session, _turn(result), None, 80)
+        payload, _raw, status = server._complete_turn_payload(session, _turn(result), None, 80, session["session_key"])
         return payload, status
 
     return run

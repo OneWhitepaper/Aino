@@ -13,6 +13,8 @@ import secrets
 import sys
 import traceback
 
+from tests.fixtures.storage_holder import raw_holder
+
 USER = "owner"
 PASSWORD = "throwaway-" + secrets.token_urlsafe(12)
 
@@ -180,12 +182,13 @@ async def probe(port):
               "providers": sorted(p.name for p in list_providers()),
               "gate_engaged": bool(getattr(web_server.app.state, "auth_required", False)),
               "surface": getattr(web_server.app.state, "ui_surface", None)}
+    holder = raw_holder(runner.session_authority.persistence)
     try:
         report.update(await across_sign_out(runner, api.api_origin, ask))
     finally:
         # Shared stores must close before interpreter teardown runs their import-dependent finalizers.
         await runner.stop()
-    report["database_closed"] = runner.session_authority.db._conn is None
+    report["database_closed"] = holder._conn is None
     return report
 
 

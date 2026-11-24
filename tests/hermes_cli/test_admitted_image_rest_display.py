@@ -2,6 +2,7 @@
 import pytest
 
 from tests.gateway.test_admitted_image_display import _image_turn
+from tests.fixtures.storage_read import transcript_rows
 
 
 @pytest.mark.asyncio
@@ -11,7 +12,7 @@ async def test_rest_image_display_uses_the_same_admitted_turn_as_gateway_history
 
     db, image, enriched = _image_turn(tmp_path, monkeypatch)
     try:
-        rows = db.get_messages('s')
+        rows = transcript_rows(db, 's')
         monkeypatch.setattr(sessions, '_with_db', lambda profile, read, **kwargs: read(db))
         result = await sessions.get_session_messages(
             's', limit=100, offset=0, order='oldest', include_compacted=False, inline_images=False)

@@ -846,7 +846,9 @@ def _reconcile_columns(cursor: sqlite3.Cursor, home: Path) -> None:
     for table_name, declared_cols in expected.items():
         try:
             rows = cursor.execute(f'PRAGMA table_info("{table_name}")').fetchall()
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as exc:
+            if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_INTERRUPT:
+                raise
             continue  # Table doesn't exist yet (shouldn't happen after executescript)
         if not rows:
             continue  # PRAGMA table_info returns [] for a missing table; the DDL creates it whole
@@ -858,6 +860,8 @@ def _reconcile_columns(cursor: sqlite3.Cursor, home: Path) -> None:
             try:
                 cursor.execute(f'ALTER TABLE "{table_name}" ADD COLUMN {_q(col_name)} {col_type}')
             except sqlite3.OperationalError as exc:
+                if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_INTERRUPT:
+                    raise  # A budgeted browse must stop issuing schema work once cancelled.
                 message = str(exc).lower()
                 if "duplicate column" in message:
                     # A sibling process won the ADD race; store is correct.

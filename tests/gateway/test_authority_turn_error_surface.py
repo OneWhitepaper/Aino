@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
+
 from gateway.config import Platform
 
 _FREE_TIER_FULL = {'free_tier': {'kind': 'at_capacity', 'message': 'The free tier is full right now.'},

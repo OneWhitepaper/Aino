@@ -1,6 +1,7 @@
 """Real disk-backed runtime readers for the Desktop's independent account homes."""
 
 from persistence.conversation.messages import NewMessage
+from persistence.conversation.sessions import SessionQuery
 from persistence_assembly import open_persistence, profile_scope
 from tests.fixtures.storage_seed import seed_session
 from tests.fixtures.storage_read import session_row
@@ -60,9 +61,9 @@ def inspect(marker, foreign):
                 "memory": load_on_disk_store().memory_entries,
                 "skills": [s["name"] for s in find_all_skills()],
                 "jobs": [j["name"] for j in list_jobs(include_disabled=True)],
-                "sessions": [s["id"] for s in db.list_sessions_rich()],
-                "own_search": [r["session_id"] for r in db.search_messages(marker)],
-                "foreign_search": db.search_messages(foreign),
+                "sessions": [s.session.session_id for s in db.sessions.list_sessions(SessionQuery())],
+                "own_search": [r.session_id for r in db.search.search_messages(marker)],
+                "foreign_search": [r.session_id for r in db.search.search_messages(foreign)],
                 "foreign_session": session_row(db, foreign),
                 "foreign_messages": transcript_rows(db, foreign)}
     finally:

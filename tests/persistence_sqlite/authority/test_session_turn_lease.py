@@ -789,3 +789,17 @@ def test_killed_unreaped_holder_releases_its_lease_before_ttl(tmp_path, lock_kin
         if proc.stdin is not None:
             proc.stdin.close()
         db.close()
+
+
+@pytest.mark.parametrize("receipt", [
+    "not-json", "null", "[]", "{}", '{"policy": null}', '{"policy": []}',
+    '{"policy": {"execution_mode": "invalid"}}',
+])
+def test_execution_modes_falls_back_to_session_config_for_invalid_receipts(store, receipt):
+    from persistence.sqlite.conversation._store.local import POLICY_PREFIX
+
+    create_session(store.holder(), "historical", "cli", model_config={"execution_mode": "code"})
+    store.state_meta.set(POLICY_PREFIX + "historical", receipt)
+    assert store.bindings.execution_modes(["historical", "missing"]) == {
+        "historical": "code", "missing": "work",
+    }

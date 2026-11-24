@@ -26,7 +26,7 @@ async def probes(tmp_path, monkeypatch):
         for connection in connections:
             await connection.close()
         for authority in list(getattr(runner, 'session_authorities', []) or []):
-            authority.db.close()
+            authority.persistence.close()
         for _, home in homes:
             process_ownership.release(home)
 

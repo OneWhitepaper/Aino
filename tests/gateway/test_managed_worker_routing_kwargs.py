@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.gateway.fixtures.storage_handles import close_storage_handles
+
 from tests.gateway.test_managed_turn_contract import assignment
 
 ROUTING = {'only': ['Anthropic'], 'ignore': ['DeepInfra'], 'order': ['Anthropic'], 'sort': 'price',

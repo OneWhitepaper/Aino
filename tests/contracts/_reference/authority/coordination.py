@@ -83,7 +83,8 @@ def _holder_process_is_dead(holder: str) -> bool:
         return False
     if psutil is not None:
         try:
-            return not bool(psutil.pid_exists(pid))
+            return not psutil.pid_exists(pid) or psutil.Process(pid).status() in (
+                psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD)
         except Exception:
             return False
     if os.name == "nt":
@@ -203,6 +204,16 @@ class InMemoryCoordinationRepository(SubagentRecords, DelegationLedger, Obligati
             return None
         row = self._table("coord_leases").get(str(session_id))
         return row[0] if row is not None and row[1] >= time.time() else None
+
+    def has_active_leases(self, *, session_id: SessionId) -> bool:
+        now = time.time()
+        return any(
+            row is not None and row[1] > now
+            for row in (
+                self._table("coord_turn_leases").get(self._key(str(session_id))),
+                self._table("coord_leases").get(str(session_id)),
+            )
+        )
 
     # ── turn lease ───────────────────────────────────────────────────────
 

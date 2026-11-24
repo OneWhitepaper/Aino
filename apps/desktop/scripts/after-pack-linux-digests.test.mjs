@@ -71,7 +71,11 @@ test('the existing final-byte refresh preserves pinned pnpm identity after the n
 test.runIf(process.platform === 'linux')('Linux afterPack seals copied tool bytes and refuses missing facts without inventing them', async () => {
   const f = await packedFixture()
   try {
-    const context = { electronPlatformName: process.platform, appOutDir: f.directory }
+    const context = {
+      electronPlatformName: process.platform,
+      appOutDir: f.directory,
+      packager: { config: {}, projectDir: repo }
+    }
     await withPython(f.env, () => afterPack(context))
     const facts = path.join(f.payload, 'tools', 'facts.json')
     const after = JSON.parse(fs.readFileSync(facts, 'utf8'))

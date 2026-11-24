@@ -143,7 +143,7 @@ def persistent_record_pidns_checkable(recorded: Optional[str]) -> bool:
 
 
 def holder_process_is_dead(holder: str) -> bool:
-    """True only when a ``pid=<n>`` lock holder's local PID is provably gone.
+    """True only when a ``pid=<n>`` lock holder's local process is provably dead.
     Reclaim on kernel proof only: unstructured/same-process holders (another
     thread's live lease) and any probe doubt keep the lease until TTL expiry
     (PID reuse must never steal a live lease; a wrongly-kept one self-heals).
@@ -156,7 +156,8 @@ def holder_process_is_dead(holder: str) -> bool:
         return False  # foreign / unknown namespace: defer to TTL
     if psutil is not None:
         try:
-            return not psutil.pid_exists(pid)  # recycled PIDs read as alive (conservative)
+            return not psutil.pid_exists(pid) or psutil.Process(pid).status() in (
+                psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD)
         except Exception:  # health: allow BLE001 -- any probe doubt keeps the lease until its TTL
             return False
     # psutil-less fallback is POSIX-only: on Windows os.kill(pid, 0) maps sig=0 to
