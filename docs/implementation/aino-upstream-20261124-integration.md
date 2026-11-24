@@ -31,7 +31,7 @@ push or production service change is included.
 ## Validation record
 
 This section records completed checks and explicitly identifies the remaining
-post-commit and platform gates; it is not a whole-suite green claim.
+platform gates; it is not a whole-suite green claim.
 
 - Before import, 76 Python cases passed across Codex Responses adaptation and
   executable desktop history recovery through `scripts/run_tests.sh`.
@@ -275,9 +275,30 @@ gap. The whole-tree health result is recorded below.
   schema, prompt and documentation freshness passed again (ten cases), as did
   the existing plugin boundary lint. All 25 handbook receipts still match.
 - Independent bounded final review is closed with no remaining actionable
-  finding. Local merge commit and post-merge HEAD-dependent checks are still
-  pending at this checkpoint. No push, shared-main update or publication is
-  authorized.
+  finding.
+
+### Local merge and post-commit verification
+
+The real merge is `4f181f630fa6b9089507508a06dd302d09038712` on
+`codex/aino-upstream-20261124`, with parents
+`0aa0ddf65071d09cc7aacb9c73e046ecdf26fa20` and
+`352b249f67fb6a4a7d7904acaca9dd410db229e0`. Normal pre-commit hooks ran
+successfully; no hook was bypassed. Existing nonblocking ESLint warnings were
+reported, not silently fixed or reclassified. Shared `main` was already an
+ancestor of the Aino input and was not moved.
+
+After that commit, the canonical Python runner executed the complete
+case-collision and commit-release-pipeline files plus the shared storage-proof
+regressions: 21 passed, zero failed, one Linux-specific skip across three files.
+This supersedes the two earlier HEAD/index-dependent failures in the broad
+checkpoint, not the entire earlier suite. All 21 non-health checks passed again
+against the real merge commit. Health comparison from the fully scanned source
+candidate to that commit exited zero with an empty findings list; only the
+three tests/fixture paths and this evidence record differ, with no production
+or health-policy changes. This is a delta check, not another whole-tree scan.
+
+The merge was clean before this documentation-only evidence update. No push,
+shared-main update, installer publication or live-service change was made.
 
 The whole Python suite is not claimed green: the 67 inherited storage failures
 above remain documented and reproduced, not bypassed. Native Windows/Linux,
